@@ -282,14 +282,14 @@
                     <input type="radio" name="estado_movil" value="ingresado"
                            {% if estado_actual_movil == 'ingresado' %}checked{% endif %}>
                     <span class="ico">📋</span>
-                    <span class="txt"><strong>En diagnóstico</strong><small>Revisando, aún sin definir reparación</small></span>
+                    <span class="txt"><strong>En diagnóstico</strong></span>
                 </label>
 
                 <label class="estado-opt rep" data-kind="rep">
                     <input type="radio" name="estado_movil" value="en_reparacion"
                            {% if estado_actual_movil == 'en_reparacion' %}checked{% endif %}>
                     <span class="ico">🔧</span>
-                    <span class="txt"><strong>En reparación</strong><small>El equipo se mantiene aquí en el taller</small></span>
+                    <span class="txt"><strong>En reparación</strong></span>
                 </label>
 
                 <label class="estado-opt ok" data-kind="ok">
