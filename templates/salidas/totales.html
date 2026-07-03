@@ -1,0 +1,251 @@
+{% extends 'base.html' %}
+{% load econotec_extras %}
+
+{% block title %}Ranking de Técnicos — Econotec{% endblock %}
+
+{% block content %}
+<style>
+    .rank-card {
+        background: var(--card-bg);
+        border-radius: 14px;
+        padding: 22px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        margin-bottom: 22px;
+    }
+    .rank-card h3 {
+        color: var(--primary);
+        font-size: 16px;
+        margin-bottom: 14px;
+        text-transform: uppercase;
+        padding-bottom: 8px;
+        border-bottom: 2px solid var(--primary);
+    }
+    .stats-row {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 14px;
+        margin-bottom: 22px;
+    }
+    .stat-card {
+        background: var(--card-bg);
+        padding: 18px;
+        border-radius: 12px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+        border-left: 4px solid var(--primary);
+    }
+    .stat-card .label {
+        font-size: 11px; color: #888;
+        text-transform: uppercase;
+        font-weight: 700; letter-spacing: 0.4px;
+    }
+    .stat-card .value {
+        font-size: 26px; font-weight: 800;
+        color: var(--secondary); margin-top: 4px;
+    }
+    .stat-card.success { border-left-color: var(--success); }
+    .stat-card.success .value { color: var(--success); }
+    .stat-card.alt { border-left-color: var(--primary); }
+    .stat-card.alt .value { color: var(--primary); }
+
+    .filter-bar {
+        background: var(--card-bg);
+        padding: 14px 18px;
+        border-radius: 10px;
+        margin-bottom: 22px;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+        display: flex; gap: 10px; align-items: end; flex-wrap: wrap;
+    }
+    .filter-bar > div { flex: 0 0 auto; }
+
+    .ranking-table th, .ranking-table td { vertical-align: middle; }
+    .pos-1 { background: linear-gradient(90deg, #fff8e1, transparent); }
+    .pos-2 { background: linear-gradient(90deg, #f5f5f5, transparent); }
+    .pos-3 { background: linear-gradient(90deg, #fff3e0, transparent); }
+
+    .medal {
+        display: inline-block;
+        width: 28px; height: 28px;
+        border-radius: 50%;
+        text-align: center;
+        line-height: 28px;
+        font-weight: 800;
+        color: white;
+        font-size: 14px;
+    }
+    .medal.gold { background: #ffc107; }
+    .medal.silver { background: #9e9e9e; }
+    .medal.bronze { background: #cd7f32; }
+    .medal.normal { background: #e0e0e0; color: #666; }
+
+    .efectividad-bar {
+        display: flex; align-items: center; gap: 8px;
+    }
+    .efectividad-bar .bar {
+        flex: 1;
+        height: 8px;
+        background: #f0f0f0;
+        border-radius: 4px;
+        overflow: hidden;
+    }
+    .efectividad-bar .fill {
+        height: 100%;
+        background: linear-gradient(90deg, var(--success), #66bb6a);
+        border-radius: 4px;
+    }
+    .efectividad-bar .fill.low { background: linear-gradient(90deg, var(--danger), #ef5350); }
+    .efectividad-bar .fill.mid { background: linear-gradient(90deg, var(--warning), #ffb74d); }
+    .efectividad-bar .num {
+        font-weight: 800; font-size: 13px;
+        min-width: 45px; text-align: right;
+    }
+</style>
+
+<div class="crumb">
+    <a href="{% url 'econotec:bienvenida' %}">Inicio</a> /
+    <a href="{% url 'econotec:salida_menu' %}">Salidas</a> / Ranking de Técnicos
+</div>
+
+<h2 class="page-title">🏆 Ranking de <span class="accent">Técnicos</span></h2>
+<p class="page-subtitle">Equipos atendidos, retiros positivos y dinero generado por cada técnico.</p>
+
+<form method="get" class="filter-bar">
+    <div>
+        <label class="form-label">Desde</label>
+        <input type="date" name="desde" value="{{ filtros.desde }}" class="form-input">
+    </div>
+    <div>
+        <label class="form-label">Hasta</label>
+        <input type="date" name="hasta" value="{{ filtros.hasta }}" class="form-input">
+    </div>
+    <button type="submit" class="btn btn-primary">Filtrar</button>
+    {% if filtros.desde or filtros.hasta %}
+        <a href="{% url 'econotec:salida_totales' %}" class="btn btn-secondary">Limpiar</a>
+    {% endif %}
+</form>
+
+<!-- Stats globales -->
+<div class="stats-row">
+    <div class="stat-card alt">
+        <div class="label">Equipos ingresados</div>
+        <div class="value">{{ total_equipos }}</div>
+    </div>
+    <div class="stat-card success">
+        <div class="label">Salidas positivas</div>
+        <div class="value">{{ total_positivas_global }} <small style="font-size:14px; color:#888;">/ {{ total_salidas_global }}</small></div>
+    </div>
+    <div class="stat-card">
+        <div class="label">Total acordado</div>
+        <div class="value">{{ total_acordado_global|dinero_signo }}</div>
+    </div>
+    <div class="stat-card success">
+        <div class="label">Total recaudado</div>
+        <div class="value">{{ total_recaudado_global|dinero_signo }}</div>
+    </div>
+    <div class="stat-card" style="border-left-color: var(--warning);">
+        <div class="label" style="font-size: 10px;">Diagnóstico (No reparados)</div>
+        <div class="value" style="color: var(--warning);">{{ total_diag_no_reparado|dinero_signo }}</div>
+    </div>
+</div>
+
+<!-- Ranking principal -->
+<div class="rank-card">
+    <h3>Ranking de Técnicos por Equipos Atendidos</h3>
+
+    {% if ranking %}
+    <div style="overflow-x:auto;">
+        <table class="ranking-table" style="width:100%; border-collapse: collapse; font-size: 13px;">
+            <thead>
+                <tr style="background: var(--primary); color: white;">
+                    <th style="padding: 12px; text-align: center;">Pos.</th>
+                    <th style="padding: 12px; text-align: left;">Técnico</th>
+                    <th style="padding: 12px; text-align: center;">Equipos</th>
+                    <th style="padding: 12px; text-align: center;">Entregados</th>
+                    <th style="padding: 12px; text-align: center;">Pendientes</th>
+                    <th style="padding: 12px; text-align: center;">Salidas +</th>
+                    <th style="padding: 12px; text-align: center;">Salidas −</th>
+                    <th style="padding: 12px; text-align: left;">Efectividad</th>
+                    <th style="padding: 12px; text-align: right;">Acordado</th>
+                    <th style="padding: 12px; text-align: right;">Recaudado</th>
+                    <th style="padding: 12px; text-align: center;">Acción</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for r in ranking %}
+                <tr class="pos-{{ forloop.counter }}" style="border-bottom: 1px solid #f0f0f0;">
+                    <td style="padding: 12px; text-align: center;">
+                        {% if forloop.counter == 1 %}
+                            <span class="medal gold">1</span>
+                        {% elif forloop.counter == 2 %}
+                            <span class="medal silver">2</span>
+                        {% elif forloop.counter == 3 %}
+                            <span class="medal bronze">3</span>
+                        {% else %}
+                            <span class="medal normal">{{ forloop.counter }}</span>
+                        {% endif %}
+                    </td>
+                    <td style="padding: 12px;">
+                        {% if r.sin_asignar %}
+                            <strong style="color: #888; font-style: italic;">— Sin asignar —</strong>
+                            <br><small style="color:#bbb; font-size:10px;">Equipos sin técnico encargado</small>
+                        {% else %}
+                            <strong style="color: var(--secondary);">{{ r.nombre }}</strong>
+                        {% endif %}
+                    </td>
+                    <td style="padding: 12px; text-align: center; font-weight: 800; color: var(--primary); font-size: 16px;">{{ r.num_equipos }}</td>
+                    <td style="padding: 12px; text-align: center; color: var(--success); font-weight: 700;">{{ r.entregados }}</td>
+                    <td style="padding: 12px; text-align: center; color: #e65100; font-weight: 700;">{{ r.pendientes }}</td>
+                    <td style="padding: 12px; text-align: center;">
+                        <span style="background: #e8f5e9; color: var(--success); padding: 3px 9px; border-radius: 10px; font-weight: 700;">{{ r.salidas_positivas }}</span>
+                    </td>
+                    <td style="padding: 12px; text-align: center;">
+                        {% if r.salidas_negativas %}
+                            <span style="background: #ffebee; color: var(--danger); padding: 3px 9px; border-radius: 10px; font-weight: 700;">{{ r.salidas_negativas }}</span>
+                        {% else %}
+                            <span style="color:#bbb;">—</span>
+                        {% endif %}
+                    </td>
+                    <td style="padding: 12px;">
+                        <div class="efectividad-bar">
+                            <div class="bar">
+                                <div class="fill {% if r.efectividad < 50 %}low{% elif r.efectividad < 75 %}mid{% endif %}" style="width: {{ r.efectividad }}%;"></div>
+                            </div>
+                            <span class="num">{{ r.efectividad }}%</span>
+                        </div>
+                    </td>
+                    <td style="padding: 12px; text-align: right; font-weight: 700;">{{ r.total_acordado|dinero_signo }}</td>
+                    <td style="padding: 12px; text-align: right; color: var(--success); font-weight: 800;">{{ r.total_recaudado|dinero_signo }}</td>
+                    <td style="padding: 12px; text-align: center;">
+                        {% if not r.sin_asignar %}
+                            <a href="{% url 'econotec:ingreso_lista' %}?tecnico={{ r.tecnico_id }}" class="btn btn-secondary" style="padding: 6px 12px; font-size: 11px;">Ver detalle</a>
+                        {% endif %}
+                    </td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="empty-state">
+        <div class="icon">👥</div>
+        <h3>No hay datos para mostrar</h3>
+        <p>Aún no se han registrado equipos en el período seleccionado.</p>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Top tipos de equipo -->
+{% if por_tipo %}
+<div class="rank-card">
+    <h3>📊 Tipos de Equipo más Atendidos</h3>
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px;">
+        {% for t in por_tipo %}
+        <div style="background: var(--primary-light); padding: 14px; border-radius: 10px; text-align: center;">
+            <div style="font-size: 11px; color: var(--primary-dark); text-transform: uppercase; font-weight: 700;">{{ t.tipo }}</div>
+            <div style="font-size: 26px; color: var(--primary); font-weight: 800; margin: 4px 0;">{{ t.num }}</div>
+            <div style="font-size: 12px; color: #666;">{{ t.suma|dinero_signo }} acordados</div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+{% endblock %}

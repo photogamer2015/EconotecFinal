@@ -1,0 +1,391 @@
+{% extends 'base.html' %}
+{% load econotec_extras %}
+
+{% block title %}Equipo {{ ingreso.codigo_equipo }} — Econotec{% endblock %}
+
+{% block content %}
+<style>
+    .detail-grid {
+        display: grid;
+        grid-template-columns: 2fr 1fr;
+        gap: 22px;
+    }
+    @media (max-width: 900px) {
+        .detail-grid { grid-template-columns: 1fr; }
+    }
+    .info-card {
+        background: var(--card-bg);
+        border-radius: 12px;
+        padding: 22px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+    }
+    .info-card h3 {
+        color: var(--primary);
+        font-size: 15px;
+        margin-bottom: 14px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        padding-bottom: 8px;
+        border-bottom: 2px solid var(--primary);
+    }
+    .field-row {
+        display: flex;
+        justify-content: space-between;
+        padding: 8px 0;
+        font-size: 13px;
+        border-bottom: 1px dashed #eee;
+    }
+    .field-row:last-child { border-bottom: none; }
+    .field-row .label { color: #666; font-weight: 600; }
+    .field-row .value { color: #1f2937; text-align: right; }
+    .actions-grid {
+        display: grid;
+        gap: 8px;
+        margin-bottom: 14px;
+    }
+    .big-num {
+        font-size: 32px;
+        font-weight: 800;
+        color: var(--primary);
+        text-align: center;
+        padding: 12px;
+        background: var(--primary-light);
+        border-radius: 8px;
+        margin-bottom: 14px;
+    }
+    .money-summary {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 8px;
+        margin-top: 14px;
+    }
+    .money-card {
+        text-align: center;
+        padding: 10px;
+        background: #f9f9f9;
+        border-radius: 6px;
+    }
+    .money-card .label { font-size: 11px; color: #888; text-transform: uppercase; }
+    .money-card .value { font-size: 18px; font-weight: 800; color: var(--secondary); margin-top:4px; }
+    .money-card.pos .value { color: var(--success); }
+    .money-card.neg .value { color: var(--danger); }
+</style>
+
+<div class="crumb">
+    <a href="{% url 'econotec:bienvenida' %}">Inicio</a> /
+    {% if ingreso.sede == 'ventas' %}
+        <a href="{% url 'econotec:venta_lista' %}">Ventas</a> /
+        Venta {{ ingreso.codigo_equipo }}
+    {% else %}
+        <a href="{% url 'econotec:ingreso_lista' %}">Equipos</a> /
+        Equipo {{ ingreso.codigo_equipo }}
+    {% endif %}
+</div>
+
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; flex-wrap: wrap; gap:12px;">
+    <div>
+        {% if ingreso.sede == 'ventas' %}
+            <h2 class="page-title">Venta <span class="accent">{{ ingreso.codigo_equipo }}</span></h2>
+            <p class="page-subtitle">Venta de Producto</p>
+        {% else %}
+            <h2 class="page-title">Equipo <span class="accent">{{ ingreso.codigo_equipo }}</span></h2>
+            <p class="page-subtitle">{{ ingreso.tipo_equipo_display }} — {{ ingreso.marca }} {{ ingreso.modelo_serie }}</p>
+        {% endif %}
+    </div>
+    <div style="display:flex; gap:8px; flex-wrap:wrap;">
+        {% if wa_link %}
+        <a href="{{ wa_link }}" target="_blank" class="btn btn-success" style="background: #25D366; border-color: #25D366; color: white;">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-whatsapp" viewBox="0 0 16 16" style="vertical-align:text-bottom; margin-right:4px;">
+                <path d="M13.601 2.326A7.85 7.85 0 0 0 7.994 0C3.627 0 .068 3.558.064 7.926c0 1.399.366 2.76 1.057 3.965L0 16l4.204-1.102a7.9 7.9 0 0 0 3.79.965h.004c4.368 0 7.926-3.558 7.93-7.93A7.9 7.9 0 0 0 13.6 2.326zM7.994 14.521a6.6 6.6 0 0 1-3.356-.92l-.24-.144-2.494.654.666-2.433-.156-.251a6.56 6.56 0 0 1-1.007-3.505c0-3.626 2.957-6.584 6.591-6.584a6.56 6.56 0 0 1 4.66 1.931 6.56 6.56 0 0 1 1.928 4.66c-.004 3.639-2.961 6.592-6.592 6.592m3.615-4.934c-.197-.099-1.17-.578-1.353-.646-.182-.065-.315-.099-.445.099-.133.197-.513.646-.627.775-.114.133-.232.148-.43.05-.197-.1-.836-.308-1.592-.985-.59-.525-.985-1.175-1.103-1.372-.114-.198-.011-.304.088-.403.087-.088.197-.232.296-.346.1-.114.133-.198.198-.33.065-.134.034-.248-.015-.347-.05-.099-.445-1.076-.612-1.47-.16-.389-.323-.335-.445-.34-.114-.007-.247-.007-.38-.007a.73.73 0 0 0-.529.247c-.182.198-.691.677-.691 1.654s.71 1.916.81 2.049c.098.133 1.394 2.132 3.383 2.992.47.205.84.326 1.129.418.475.152.904.129 1.246.08.38-.058 1.171-.48 1.338-.943.164-.464.164-.86.114-.943-.049-.084-.182-.133-.38-.232"/>
+            </svg> Enviar por WhatsApp
+        </a>
+        {% endif %}
+        <a href="{% url 'econotec:ingreso_pdf' pk=ingreso.pk %}" class="btn btn-primary" target="_blank">📄 Descargar PDF</a>
+        <a href="{% url 'econotec:ingreso_editar' pk=ingreso.pk %}" class="btn btn-secondary">✏ Editar</a>
+        <button type="button" class="btn btn-secondary" onclick="document.getElementById('qr-modal').style.display='flex'">📱 Ver QR</button>
+    </div>
+</div>
+
+<!-- MODAL QR -->
+<div id="qr-modal" onclick="if(event.target===this)this.style.display='none'"
+     style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6);
+            z-index:9999; align-items:center; justify-content:center; padding:20px;">
+    <div style="background:var(--card-bg,#fff); border-radius:16px; padding:24px;
+                max-width:340px; text-align:center; box-shadow:0 10px 40px rgba(0,0,0,0.3);">
+        <h3 style="margin:0 0 4px; color:var(--primary,#f97618);">📱 Hoja del técnico</h3>
+        <p style="font-size:13px; color:var(--text-muted,#6b7280); margin-bottom:14px;">
+            Escanea con el celular del técnico
+        </p>
+        <div style="margin-bottom: 8px;">
+            <div style="font-size: 14px; font-weight: 800; color: #1f2937;">{{ ingreso.cliente.nombres|truncatechars:25 }}</div>
+            <div style="font-size: 13px; font-weight: 700; color: #555;">{{ ingreso.cliente.whatsapp }}</div>
+        </div>
+        <img src="{{ qr_data_uri }}" alt="QR del equipo {{ ingreso.codigo_equipo }}"
+             style="width:240px; height:240px; display:block; margin:0 auto; border:1px solid #eee; border-radius:8px;">
+        <div style="margin-top: 8px;">
+            <div style="font-size: 20px; font-weight: 800; color: #1f2937;">{{ ingreso.codigo_equipo }}</div>
+            <div style="font-size: 14px; font-weight: 800; color: var(--primary,#f97618); text-transform: uppercase;">{{ ingreso.tipo_equipo_display }}</div>
+        </div>
+        <a href="{{ qr_url }}" target="_blank"
+           style="display:inline-block; margin-top:14px; font-size:12px; color:var(--primary,#f97618); word-break:break-all;">
+            Abrir hoja directamente →
+        </a>
+        <div style="margin-top:16px; display:flex; gap:8px; justify-content:center; flex-wrap:wrap;">
+            <a href="{% url 'econotec:ingreso_imprimir_qr' pk=ingreso.pk %}" target="_blank" class="btn btn-secondary">
+                🖨 Imprimir QR
+            </a>
+            <a href="{% url 'econotec:ingreso_qr_png' pk=ingreso.pk %}" class="btn btn-primary" download="QR_{{ ingreso.codigo_equipo }}.png">
+                ⬇ Descargar QR (PNG)
+            </a>
+            <button type="button" onclick="document.getElementById('qr-modal').style.display='none'"
+                    class="btn btn-secondary">Cerrar</button>
+        </div>
+    </div>
+</div>
+
+<div class="detail-grid">
+    <!-- Columna izquierda: datos del equipo -->
+    <div>
+        <div class="info-card">
+            {% if ingreso.sede == 'ventas' %}
+                <h3>📥 Detalles de la Venta</h3>
+            {% else %}
+                <h3>📥 Solicitud de Ingreso</h3>
+            {% endif %}
+            <div class="field-row"><span class="label">Asesora Comercial</span><span class="value">{{ ingreso.asesor_comercial|default:"—" }}</span></div>
+            <div class="field-row"><span class="label">Técnico Encargado</span><span class="value">{{ ingreso.tecnico_encargado_nombre|default:"— Sin asignar —" }}</span></div>
+            <div class="field-row"><span class="label">Fecha de ingreso</span><span class="value">{{ ingreso.fecha_ingreso|date:"d/m/Y" }}</span></div>
+            <div class="field-row"><span class="label">Factura N°</span><span class="value">{{ ingreso.numero_factura|default:"—" }}</span></div>
+            <div class="field-row"><span class="label">Estado</span><span class="value">
+                <span class="badge badge-{{ ingreso.estado }}">{{ ingreso.get_estado_display }}</span>
+                {% if ingreso.estado == 'en_reparacion' and ingreso.subestado_reparacion %}
+                    <br><small style="color:#666; font-size:11px;">↳ {{ ingreso.get_subestado_reparacion_display }}</small>
+                {% elif ingreso.estado == 'entregado' and ingreso.subestado_entregado %}
+                    <br><small style="color:#666; font-size:11px;">↳ {{ ingreso.get_subestado_entregado_display }}</small>
+                {% endif %}
+            </span></div>
+            <div class="field-row">
+                <span class="label">Registrado por (sistema)</span>
+                <span class="value">
+                    {% if ingreso.registrado_por %}
+                        <span style="background: var(--primary-light); color: var(--primary-dark); padding: 3px 9px; border-radius: 10px; font-size: 12px; font-weight: 700;">
+                            👤 {{ ingreso.registrado_por.first_name|default:ingreso.registrado_por.username }}
+                        </span>
+                    {% else %}—{% endif %}
+                </span>
+            </div>
+        </div>
+
+        <div class="info-card" style="margin-top:18px;">
+            <h3>👤 Cliente</h3>
+            <div class="field-row"><span class="label">Nombres</span><span class="value">{{ ingreso.cliente.nombres }}</span></div>
+            <div class="field-row"><span class="label">Cédula / RUC</span><span class="value">{{ ingreso.cliente.cedula }}</span></div>
+            <div class="field-row"><span class="label">WhatsApp</span><span class="value">{{ ingreso.cliente.whatsapp|default:"—" }}</span></div>
+            <div class="field-row"><span class="label">Correo</span><span class="value">{{ ingreso.cliente.correo|default:"—" }}</span></div>
+            <div class="field-row"><span class="label">Sector</span><span class="value">{{ ingreso.cliente.sector_display }}</span></div>
+        </div>
+
+        {% if ingreso.sede == 'ventas' %}
+        <div class="info-card" style="margin-top:18px;">
+            <h3>📦 Productos Vendidos</h3>
+            <div class="field-row"><span class="label">Descripción</span><span class="value" style="text-align: right; max-width: 65%;">{{ ingreso.problema_reportado }}</span></div>
+        </div>
+        {% else %}
+        <div class="info-card" style="margin-top:18px;">
+            <h3>🔧 Detalles del Equipo</h3>
+            <div class="field-row"><span class="label">Tipo</span><span class="value">{{ ingreso.tipo_equipo_display }}</span></div>
+            <div class="field-row"><span class="label">Marca</span><span class="value">{{ ingreso.marca }}</span></div>
+            <div class="field-row"><span class="label">Modelo / Serie</span><span class="value">{{ ingreso.modelo_serie|default:"—" }}</span></div>
+            <div class="field-row"><span class="label">Accesorios entregados</span><span class="value">{{ ingreso.accesorios_entregados|default:"—" }}</span></div>
+        </div>
+
+        <div class="info-card" style="margin-top:18px;">
+            <h3>⚠ Problema y Reporte</h3>
+            <p style="font-size:13px; color:#1f2937; padding:8px; background:#fff8f3; border-radius:6px; margin-bottom:10px;">
+                <strong>Problema reportado:</strong><br>{{ ingreso.problema_reportado }}
+            </p>
+            <p style="font-size:13px; color:#1f2937; padding:8px; background:#f9f9f9; border-radius:6px;">
+                <strong>Reporte del técnico:</strong><br>{{ ingreso.reporte_tecnico|default:"(Sin reporte aún)" }}
+                {% if ingreso.reporte_por_nombre %}
+                <br><small style="color:var(--primary,#f97618); font-weight:700;">✍️ Por {{ ingreso.reporte_por_nombre }}{% if ingreso.reporte_actualizado %} · {{ ingreso.reporte_actualizado|date:"d/m/Y H:i" }}{% endif %}</small>
+                {% endif %}
+            </p>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Columna derecha: pagos, salida, acciones -->
+    <div>
+        {% if ingreso.abono_anticipo > 0 or ingreso.diagnostico_inmediato == 'si' %}
+        <div class="info-card" style="margin-bottom:18px; border-left:4px solid var(--secondary);">
+            <h3>💳 Pago Inicial (Mostrador)</h3>
+            {% if ingreso.abono_anticipo > 0 %}
+            <div class="field-row"><span class="label">Anticipo</span><span class="value" style="font-weight:700; color:var(--primary);">{{ ingreso.abono_anticipo|dinero_signo }}</span></div>
+            {% endif %}
+            {% if ingreso.diagnostico_inmediato == 'si' and ingreso.valor_diagnostico > 0 %}
+            <div class="field-row"><span class="label">Diagnóstico Express</span><span class="value" style="font-weight:700; color:var(--primary);">{{ ingreso.valor_diagnostico|dinero_signo }}</span></div>
+            {% endif %}
+            <div class="field-row">
+                <span class="label">Método</span>
+                <span class="value">
+                    {{ ingreso.get_anticipo_metodo_display }}
+                    {% if ingreso.anticipo_metodo == 'transferencia' %}
+                        ({{ ingreso.anticipo_banco_otro|default:ingreso.get_anticipo_banco_display }})
+                    {% elif ingreso.anticipo_metodo == 'tarjeta' %}
+                        ({{ ingreso.get_anticipo_tarjeta_app_display }})
+                    {% endif %}
+                </span>
+            </div>
+            {% if ingreso.anticipo_comprobante_url %}
+            <div class="field-row" style="border-bottom:none; margin-top:6px;">
+                <a href="{{ ingreso.anticipo_comprobante_url }}" target="_blank" class="btn btn-secondary" style="width:100%; font-size:12px; padding:6px;">📎 Ver Comprobante</a>
+            </div>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        <div class="info-card" style="margin-bottom:18px;">
+            {% if ingreso.diagnostico_inmediato == 'si' and ingreso.valor_diagnostico > 0 %}
+                <div style="background: #fff3e0; border: 1px solid #ffcc80; padding: 12px; border-radius: 8px; margin-bottom: 16px; text-align: center;">
+                    <div style="font-size: 12px; color: #e65100; font-weight: bold; text-transform: uppercase;">⚡ Diagnóstico Rápido (Adicional)</div>
+                    <div style="font-size: 20px; font-weight: 800; color: #e65100;">{{ ingreso.valor_diagnostico|dinero_signo }}</div>
+                    <div style="font-size: 11px; color: #e65100; margin-top: 4px;">Valor extra no restado del saldo</div>
+                </div>
+            {% endif %}
+
+            {% if ingreso.reparacion_cancelada %}
+                <!-- CASO: Cliente no quiso reparar / no se pudo reparar -->
+                <div class="big-num" style="background:#fff8e1; color:#b26a00;">
+                    {{ ingreso.valor_efectivo_a_cobrar|dinero_signo }}
+                </div>
+                <div style="text-align:center; font-size:13px; color:#666;">
+                    {% if ingreso.salida.estado_reparacion == 'cliente_no_acepta' %}
+                        Solo se cobra diagnóstico
+                    {% else %}
+                        No se cobra revisión (Gratuito)
+                    {% endif %}
+                </div>
+                <div style="text-align:center; margin-top:8px; padding:8px; background:#fff8f3; border-radius:6px; font-size:12px; color:#666;">
+                    <span style="color:#999; text-decoration: line-through;">
+                        Valor acordado original: {{ ingreso.valor_acordado|dinero_signo }}
+                    </span><br>
+                    <strong style="color: var(--primary-dark);">
+                        {% if ingreso.salida.estado_reparacion == 'cliente_no_acepta' %}
+                            🚫 Cliente no quiso reparar
+                        {% else %}
+                            ❌ No se pudo reparar
+                        {% endif %}
+                    </strong>
+                </div>
+
+                <div class="money-summary">
+                    <div class="money-card pos">
+                        <div class="label">Pagado</div>
+                        <div class="value">{{ ingreso.total_abonado|dinero_signo }}</div>
+                    </div>
+                    <div class="money-card {% if ingreso.diferencia > 0 %}neg{% endif %}">
+                        <div class="label">Saldo</div>
+                        <div class="value">{{ ingreso.diferencia|dinero_signo }}</div>
+                    </div>
+                    <div class="money-card">
+                        <div class="label">Estado</div>
+                        <div class="value" style="font-size:13px;">
+                            {% if ingreso.estado_pago == 'Pagado' %}
+                                <span class="badge badge-pagado">Pagado</span>
+                            {% elif ingreso.estado_pago == 'Parcial' %}
+                                <span class="badge badge-parcial">Parcial</span>
+                            {% elif ingreso.estado_pago == 'Sin valor' %}
+                                <span class="badge">Sin cobro</span>
+                            {% else %}
+                                <span class="badge badge-pendiente">Pendiente</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            {% else %}
+                <!-- CASO NORMAL -->
+                <div class="big-num">{{ ingreso.valor_acordado|dinero_signo }}</div>
+                <div style="text-align:center; font-size:13px; color:#666;">Valor acordado total</div>
+
+                <div class="money-summary">
+                    <div class="money-card pos">
+                        <div class="label">Pagado</div>
+                        <div class="value">{{ ingreso.total_abonado|dinero_signo }}</div>
+                    </div>
+                    <div class="money-card {% if ingreso.diferencia > 0 %}neg{% endif %}">
+                        <div class="label">Saldo</div>
+                        <div class="value">{{ ingreso.diferencia|dinero_signo }}</div>
+                    </div>
+                    <div class="money-card">
+                        <div class="label">Estado</div>
+                        <div class="value" style="font-size:13px;">
+                            {% if ingreso.estado_pago == 'Pagado' %}
+                                <span class="badge badge-pagado">Pagado</span>
+                            {% elif ingreso.estado_pago == 'Parcial' %}
+                                <span class="badge badge-parcial">Parcial</span>
+                            {% else %}
+                                <span class="badge badge-pendiente">Pendiente</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            {% endif %}
+        </div>
+
+        <div class="info-card" style="margin-top:18px;">
+            <h3>💳 Acciones</h3>
+            <div class="actions-grid">
+                {% if puede_gestionar_pagos %}
+                <a href="{% url 'econotec:abono_crear' ingreso_pk=ingreso.pk %}" class="btn btn-success">Gestionar Pagos</a>
+                <a href="{% url 'econotec:ingreso_abonos' pk=ingreso.pk %}" class="btn btn-secondary">Ver Abonos ({{ abonos.count }})</a>
+                {% endif %}
+
+                {% if ingreso.sede != 'ventas' %}
+                    {% if salida %}
+                        <a href="{% url 'econotec:salida_editar' pk=salida.pk %}" class="btn btn-warning">📤 Editar Salida</a>
+                        <a href="{% url 'econotec:salida_pdf' pk=salida.pk %}" class="btn btn-primary">📄 PDF Salida</a>
+                    {% else %}
+                        <a href="{% url 'econotec:salida_registrar' ingreso_pk=ingreso.pk %}" class="btn btn-primary">📤 Registrar Salida</a>
+                    {% endif %}
+                {% endif %}
+            </div>
+
+            {% if es_admin %}
+            <form method="post" action="{% url 'econotec:ingreso_eliminar' pk=ingreso.pk %}"
+                  onsubmit="confirmDelete(event, this, '¿Eliminar este equipo? Esta acción no se puede deshacer.');"
+                  style="margin-top:12px;">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-danger" style="width:100%;">🗑 Eliminar</button>
+            </form>
+            {% endif %}
+        </div>
+
+        {% if salida %}
+        <div class="info-card" style="margin-top:18px; border-left:4px solid var(--success);">
+            <h3>📤 Salida Registrada</h3>
+            <div class="field-row"><span class="label">Fecha</span><span class="value">{{ salida.fecha_salida|date:"d/m/Y" }}</span></div>
+            <div class="field-row"><span class="label">Estado</span><span class="value"><span class="badge badge-{{ salida.estado_reparacion }}">{{ salida.get_estado_reparacion_display }}</span></span></div>
+            <div class="field-row"><span class="label">Cobrado</span><span class="value">{{ salida.valor_final_cobrado|dinero_signo }}</span></div>
+            <div class="field-row">
+                <span class="label">Técnico responsable</span>
+                <span class="value">
+                    👤 {{ ingreso.tecnico_encargado_nombre|default:"— Sin asignar —" }}
+                </span>
+            </div>
+        </div>
+        {% endif %}
+
+        {% if abonos %}
+        <div class="info-card" style="margin-top:18px;">
+            <h3>📋 Últimos abonos</h3>
+            {% for a in abonos|slice:":5" %}
+                <div class="field-row">
+                    <span class="label">{{ a.numero_recibo }} — {{ a.fecha|date:"d/m/Y" }}</span>
+                    <span class="value">{{ a.monto|dinero_signo }}</span>
+                </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

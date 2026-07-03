@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Acta de Salida {{ ingreso.codigo_equipo }} — Econotec</title>
+    {% load static econotec_extras %}
+    <style>
+        @page { size: A4; margin: 14mm 14mm 12mm 14mm; }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Helvetica', 'Arial', sans-serif; color: #222; font-size: 11px; line-height: 1.4; }
+        :root { --naranja: #f97618; }
+        .sheet {
+            width: 210mm;
+            min-height: 290mm;
+            margin: 0 auto;
+            padding: 6mm;
+            background: white;
+            border: 1.5px solid var(--naranja);
+        }
+        .actions-bar {
+            text-align: center;
+            padding: 12px;
+            background: #fff8f3;
+            margin-bottom: 12px;
+            border-radius: 8px;
+        }
+        .actions-bar button, .actions-bar a {
+            background: var(--naranja); color: white; border: none;
+            padding: 9px 18px; border-radius: 6px; cursor: pointer;
+            font-weight: 600; text-decoration: none; margin: 0 4px;
+            display: inline-block;
+        }
+
+        .header-area { display: grid; grid-template-columns: 1fr 3fr 1fr; align-items: start; gap: 8px; margin-bottom: 12px; }
+        .corner-box { border: 1.5px solid var(--naranja); border-radius: 6px; padding: 6px; min-height: 60px; text-align: center; }
+        .corner-box .lbl { font-size: 10px; color: var(--naranja); font-weight: 700; display: block; }
+        .corner-box .val { font-size: 18px; font-weight: 800; color: #1f2937; display: block; margin-top: 6px; }
+        .header-center { text-align: center; }
+        .logo-circle-print {
+            width: 60px; height: 60px;
+            border-radius: 50%;
+            background: #1a1a1a;
+            display: inline-block;
+            object-fit: cover;
+            padding: 3px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+        .brand-text { font-size: 10px; color: var(--naranja); font-weight: 700; letter-spacing: 1px; }
+        .doc-title { font-size: 22px; color: var(--naranja); font-weight: 800; margin: 2px 0; letter-spacing: -0.5px; }
+        .branch-info { font-size: 8.5px; color: #444; line-height: 1.5; }
+
+        .field-line { display: flex; align-items: baseline; gap: 6px; padding: 5px 0; border-bottom: 1px solid #d0d0d0; }
+        .field-line .label { color: var(--naranja); font-weight: 700; font-size: 11px; white-space: nowrap; }
+        .field-line .value { flex: 1; font-family: 'Courier New', monospace; font-size: 12px; color: #1f2937; font-weight: 700; padding-left: 6px; }
+
+        .section-header {
+            color: var(--naranja); font-weight: 800; font-size: 12px;
+            margin-top: 12px; margin-bottom: 6px; letter-spacing: 0.5px;
+        }
+        .estado-grid {
+            display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px 16px;
+        }
+        .checkbox-item-l {
+            display: flex; align-items: center; gap: 8px;
+            font-weight: 700; color: var(--naranja); font-size: 11px;
+            padding: 4px 0;
+        }
+        .checkbox-item-l.activo { color: #1f2937; background: #fff8e1; padding: 4px 8px; border-radius: 4px; }
+        .check-box {
+            width: 18px; height: 18px;
+            border: 1.5px solid var(--naranja);
+            border-radius: 3px;
+            display: inline-flex; align-items: center; justify-content: center;
+            font-weight: 800; color: #1f2937; font-size: 14px;
+        }
+
+        .underlined-block {
+            border-bottom: 1px solid #d0d0d0;
+            min-height: 18px; padding: 4px 0;
+            font-family: 'Courier New', monospace; font-size: 12px;
+            color: #1f2937; font-weight: 700;
+        }
+
+        .closing-box {
+            border: 1.5px solid var(--naranja); border-radius: 6px;
+            padding: 10px 12px; margin-top: 10px;
+        }
+        .closing-row { display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px dashed #ddd; font-size: 11.5px; }
+        .closing-row:last-child { border-bottom: none; font-weight: 800; color: var(--naranja); padding-top: 8px; }
+        .closing-row .lbl { color: #444; }
+        .closing-row .val { font-family: 'Courier New', monospace; font-weight: 700; }
+
+        .sig-grid {
+            margin-top: 36px;
+            display: grid; grid-template-columns: 1fr 1fr; gap: 32px;
+            text-align: center;
+        }
+        .sig-line {
+            border-top: 1px solid #555; padding-top: 6px;
+            font-size: 9px; color: var(--naranja); font-weight: 700;
+        }
+
+        @media print {
+            .actions-bar { display: none !important; }
+            body { background: white; }
+            .sheet { border: 0; box-shadow: none; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="actions-bar no-print">
+    <button onclick="window.print()">🖨 Imprimir</button>
+    <a href="{% url 'econotec:salida_pdf' pk=salida.pk %}">📄 Descargar PDF</a>
+    <a href="{% url 'econotec:salida_lista' %}" style="background:#666;">← Volver</a>
+</div>
+
+<div class="sheet">
+
+    <div class="header-area">
+        <div class="corner-box">
+            <span class="lbl">EQUIPO</span>
+            <span class="val">{{ ingreso.codigo_equipo }}</span>
+        </div>
+        <div class="header-center">
+            <img src="{% static 'logo.jpg' %}" alt="Econotec" class="logo-circle-print">
+            <div class="brand-text">ECONOTEC</div>
+            <div class="doc-title">ACTA DE SALIDA DE EQUIPO</div>
+            <div class="branch-info">
+                <strong>Guayaquil:</strong> Sauces 8 Mz 454F Solar 6, Primer Piso Oficina 2<br>
+                <strong>Quito:</strong> Sector Centro Norte: La Mariscal - Calles 18 de Septiembre y Av. Amazonas<br>
+                Central: 096 383 6191 — GYE: 096 328 9727 — UIO: 098 075 8747
+            </div>
+        </div>
+        <div class="corner-box">
+            <span class="lbl">FECHA</span>
+            <span class="val" style="font-size:13px;">{{ salida.fecha_salida|date:"d/m/Y" }}</span>
+        </div>
+    </div>
+
+    <!-- DATOS DEL CLIENTE Y EQUIPO -->
+    <div class="field-line"><span class="label">Cliente:</span><span class="value">{{ cliente.nombres }}</span></div>
+    <div class="field-line"><span class="label">Cédula / RUC:</span><span class="value">{{ cliente.cedula }}</span></div>
+    <div class="field-line"><span class="label">WhatsApp:</span><span class="value">{{ cliente.whatsapp }}</span></div>
+    <div class="field-line"><span class="label">Equipo:</span><span class="value">{{ ingreso.tipo_equipo_display }} — {{ ingreso.marca }} {{ ingreso.modelo_serie }}</span></div>
+    <div class="field-line"><span class="label">Fecha de Ingreso:</span><span class="value">{{ ingreso.fecha_ingreso|date:"d/m/Y" }}</span></div>
+    <div class="field-line"><span class="label">Técnico que reparó:</span><span class="value">{{ ingreso.tecnico_encargado_nombre }}</span></div>
+
+    <!-- ESTADO DE LA SALIDA -->
+    <div class="section-header">ESTADO DE LA SALIDA</div>
+    <div class="estado-grid">
+        <div class="checkbox-item-l {% if salida.estado_reparacion == 'pendiente_retiro' %}activo{% endif %}">
+            <span class="check-box">{% if salida.estado_reparacion == 'pendiente_retiro' %}X{% endif %}</span>
+            ✅ RETIRADO / ENTREGADO CONFORME
+        </div>
+        <div class="checkbox-item-l {% if salida.estado_reparacion == 'reparado_parcial' %}activo{% endif %}">
+            <span class="check-box">{% if salida.estado_reparacion == 'reparado_parcial' %}X{% endif %}</span>
+            ⚠️ REPARADO PARCIALMENTE
+        </div>
+        <div class="checkbox-item-l {% if salida.estado_reparacion == 'no_reparable' %}activo{% endif %}">
+            <span class="check-box">{% if salida.estado_reparacion == 'no_reparable' %}X{% endif %}</span>
+            ❌ NO SE PUDO REPARAR
+        </div>
+        <div class="checkbox-item-l {% if salida.estado_reparacion == 'cliente_no_acepta' %}activo{% endif %}">
+            <span class="check-box">{% if salida.estado_reparacion == 'cliente_no_acepta' %}X{% endif %}</span>
+            🚫 CLIENTE NO QUISO REPARAR
+        </div>
+        <div class="checkbox-item-l {% if salida.estado_reparacion == 'garantia' %}activo{% endif %}">
+            <span class="check-box">{% if salida.estado_reparacion == 'garantia' %}X{% endif %}</span>
+            🛡 SALIDA POR GARANTÍA
+        </div>
+    </div>
+
+    <!-- PROBLEMA REPORTADO (del ingreso) -->
+    <div class="section-header">PROBLEMA REPORTADO ORIGINALMENTE</div>
+    <div class="underlined-block">{{ ingreso.problema_reportado|linebreaksbr }}</div>
+
+    <!-- REPORTE DEL TÉCNICO (del ingreso) -->
+    {% if ingreso.reporte_tecnico %}
+    <div class="section-header">REPORTE DEL TÉCNICO (DEL INGRESO)</div>
+    <div class="underlined-block">{{ ingreso.reporte_tecnico|linebreaksbr }}</div>
+    {% endif %}
+
+    <!-- OBSERVACIONES DEL CIERRE -->
+    {% if salida.observaciones %}
+    <div class="section-header">OBSERVACIONES DEL CIERRE</div>
+    <div class="underlined-block">{{ salida.observaciones|linebreaksbr }}</div>
+    {% endif %}
+
+    <!-- CONFORMIDAD Y MÉTODO DE PAGO -->
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 8px;">
+        <div class="field-line"><span class="label">Cliente conforme:</span><span class="value">{{ salida.get_cliente_recibe_conforme_display }}</span></div>
+        <div class="field-line"><span class="label">Método pago:</span><span class="value">{{ salida.get_metodo_pago_final_display }}</span></div>
+        {% if salida.metodo_pago_final == 'mixto' %}
+        <div class="field-line"><span class="label">Método 1:</span><span class="value">{{ salida.get_metodo_1_display }} ({{ salida.monto_1|dinero_signo }})</span></div>
+        <div class="field-line"><span class="label">Método 2:</span><span class="value">{{ salida.get_metodo_2_display }} ({{ salida.monto_2|dinero_signo }})</span></div>
+        {% endif %}
+    </div>
+
+    <!-- CIERRE ECONÓMICO -->
+    <div class="section-header">CIERRE ECONÓMICO</div>
+    <div class="closing-box">
+        {% if salida.estado_reparacion == 'cliente_no_acepta' or salida.estado_reparacion == 'no_reparable' %}
+        <div class="closing-row">
+            <span class="lbl">Valor acordado original (no aplica):</span>
+            <span class="val" style="text-decoration: line-through; color:#999;">{{ ingreso.valor_acordado|dinero_signo }}</span>
+        </div>
+        <div class="closing-row">
+            <span class="lbl">Valor del diagnóstico (lo que se cobra):</span>
+            <span class="val">{{ ingreso.valor_diagnostico|dinero_signo }}</span>
+        </div>
+        {% else %}
+        <div class="closing-row">
+            <span class="lbl">Valor acordado de la reparación:</span>
+            <span class="val">{{ ingreso.valor_acordado|dinero_signo }}</span>
+        </div>
+        {% if ingreso.diagnostico_inmediato == 'si' and ingreso.valor_diagnostico > 0 %}
+        <div class="closing-row">
+            <span class="lbl">Adicional (Diagnóstico Rápido):</span>
+            <span class="val">{{ ingreso.valor_diagnostico|dinero_signo }}</span>
+        </div>
+        {% endif %}
+        {% endif %}
+        <div class="closing-row">
+            <span class="lbl">Anticipo / abono inicial:</span>
+            <span class="val">{{ ingreso.abono_anticipo|dinero_signo }}</span>
+        </div>
+        <div class="closing-row">
+            <span class="lbl">Total abonado previamente (incluye anticipo):</span>
+            <span class="val">{{ ingreso.total_abonado|dinero_signo }}</span>
+        </div>
+        <div class="closing-row">
+            <span class="lbl">Valor cobrado en esta entrega:</span>
+            <span class="val">{{ salida.valor_final_cobrado|dinero_signo }}</span>
+        </div>
+    </div>
+
+    <!-- TÉCNICO QUE GESTIONÓ LA REPARACIÓN -->
+    <div style="margin-top: 14px; padding: 10px 14px; background: #fff8f3; border-radius: 6px; font-size: 11px; color: #555;">
+        <strong>Técnico responsable:</strong>
+        {{ ingreso.tecnico_encargado_nombre|default:"— Sin asignar —" }}
+    </div>
+
+    <!-- FIRMAS -->
+    <div class="sig-grid">
+        <div class="sig-line">FIRMA DEL CLIENTE</div>
+        <div class="sig-line">FIRMA DEL TÉCNICO</div>
+    </div>
+
+</div>
+
+</body>
+</html>

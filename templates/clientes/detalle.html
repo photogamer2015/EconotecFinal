@@ -1,0 +1,100 @@
+{% extends 'base.html' %}
+{% load econotec_extras %}
+
+{% block title %}{{ cliente.nombres }} — Econotec{% endblock %}
+
+{% block content %}
+<div class="crumb">
+    <a href="{% url 'econotec:bienvenida' %}">Inicio</a> /
+    <a href="{% url 'econotec:cliente_lista' %}">Clientes</a> / {{ cliente.nombres }}
+</div>
+
+<h2 class="page-title">{{ cliente.nombres }}</h2>
+<p class="page-subtitle">Cédula / RUC: <strong>{{ cliente.cedula }}</strong></p>
+
+<div style="display: grid; grid-template-columns: 1fr 2fr; gap: 22px; margin-top: 16px;">
+
+    <div>
+        <div class="card-box">
+            <h3 style="color: var(--primary); font-size: 15px; margin-bottom:14px; padding-bottom:8px; border-bottom: 2px solid var(--primary);">DATOS DEL CLIENTE</h3>
+            <div style="display:flex; justify-content:space-between; padding:6px 0; border-bottom:1px dashed #eee;">
+                <strong>WhatsApp:</strong><span>{{ cliente.whatsapp|default:"—" }}</span>
+            </div>
+            <div style="display:flex; justify-content:space-between; padding:6px 0; border-bottom:1px dashed #eee;">
+                <strong>Correo:</strong><span>{{ cliente.correo|default:"—" }}</span>
+            </div>
+            <div style="display:flex; justify-content:space-between; padding:6px 0; border-bottom:1px dashed #eee;">
+                <strong>Sector:</strong><span>{{ cliente.sector_display }}</span>
+            </div>
+            <div style="display:flex; justify-content:space-between; padding:6px 0;">
+                <strong>Cliente desde:</strong><span>{{ cliente.creado|date:"d/m/Y" }}</span>
+            </div>
+        </div>
+
+        <div class="card-box" style="margin-top:18px;">
+            <h3 style="color: var(--primary); font-size: 15px; margin-bottom:14px; padding-bottom:8px; border-bottom: 2px solid var(--primary);">RESUMEN</h3>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                <div style="text-align:center; background:var(--primary-light); padding:14px; border-radius:8px;">
+                    <div style="font-size:11px; color:var(--primary-dark); text-transform:uppercase;">Equipos</div>
+                    <div style="font-size:26px; font-weight:800; color:var(--primary);">{{ total_equipos }}</div>
+                </div>
+                <div style="text-align:center; background:#e8f5e9; padding:14px; border-radius:8px;">
+                    <div style="font-size:11px; color:#2e7d32; text-transform:uppercase;">Pagado</div>
+                    <div style="font-size:26px; font-weight:800; color:#2e7d32;">{{ total_pagado|dinero_signo }}</div>
+                </div>
+            </div>
+            <div style="margin-top:10px; text-align:center; padding:12px; background:#f9f9f9; border-radius:8px;">
+                <div style="font-size:11px; color:#666;">Total acordado histórico</div>
+                <div style="font-size:18px; font-weight:700;">{{ total_acordado|dinero_signo }}</div>
+            </div>
+        </div>
+    </div>
+
+    <div>
+        <div class="card-box">
+            <h3 style="color: var(--primary); font-size: 15px; margin-bottom:14px; padding-bottom:8px; border-bottom: 2px solid var(--primary);">EQUIPOS DE ESTE CLIENTE</h3>
+
+            {% if ingresos %}
+                <div class="table-wrap" style="box-shadow:none;">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>N°</th>
+                                <th>Fecha</th>
+                                <th>Equipo</th>
+                                <th>Marca</th>
+                                <th>Estado</th>
+                                <th>Pago</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                        {% for i in ingresos %}
+                            <tr>
+                                <td><strong style="color: var(--primary);">{{ i.codigo_equipo }}</strong></td>
+                                <td>{{ i.fecha_ingreso|date:"d/m/Y" }}</td>
+                                <td>{{ i.tipo_equipo_display }}</td>
+                                <td>{{ i.marca|truncatechars:25 }}</td>
+                                <td><span class="badge badge-{{ i.estado }}">{{ i.get_estado_display }}</span></td>
+                                <td>
+                                    {% if i.estado_pago == 'Pagado' %}
+                                        <span class="badge badge-pagado">Pagado</span>
+                                    {% elif i.estado_pago == 'Parcial' %}
+                                        <span class="badge badge-parcial">Parcial</span>
+                                    {% else %}
+                                        <span class="badge badge-pendiente">Pendiente</span>
+                                    {% endif %}
+                                </td>
+                                <td><a href="{% url 'econotec:ingreso_detalle' pk=i.pk %}" class="btn btn-sm btn-primary">Ver</a></td>
+                            </tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <p style="text-align:center; padding:30px; color:#888;">Este cliente aún no tiene equipos registrados.</p>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

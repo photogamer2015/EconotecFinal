@@ -1,0 +1,605 @@
+<div class="ecobot no-print" id="ecobot" aria-live="polite">
+    <button type="button" class="ecobot-launcher" id="ecobot-launcher" aria-label="Abrir asistente Econotec">
+        <span class="ecobot-face" aria-hidden="true">
+            <span class="ecobot-eye left"></span>
+            <span class="ecobot-eye right"></span>
+            <span class="ecobot-mouth"></span>
+        </span>
+    </button>
+
+    <section class="ecobot-panel" id="ecobot-panel" aria-label="Asistente de ayuda Econotec" hidden>
+        <div class="ecobot-head">
+            <div class="ecobot-avatar" aria-hidden="true">
+                <span class="ecobot-eye left"></span>
+                <span class="ecobot-eye right"></span>
+                <span class="ecobot-mouth"></span>
+            </div>
+            <div>
+                <strong>EconoBot</strong>
+                <span>Ayuda del sistema Econotec</span>
+            </div>
+            <div class="ecobot-actions" style="margin-left: auto; display: flex; gap: 8px;">
+                <button type="button" class="ecobot-btn" id="ecobot-stop-audio" aria-label="Detener audio" title="Detener audio" style="width: 30px; height: 30px; border: 0; border-radius: 50%; background: rgba(255,255,255,0.16); color: white; cursor: pointer; font-size: 16px; display: flex; align-items: center; justify-content: center; display: none;">🔇</button>
+                <button type="button" class="ecobot-btn" id="ecobot-reset" aria-label="Reiniciar chat" title="Reiniciar chat" style="width: 30px; height: 30px; border: 0; border-radius: 50%; background: rgba(255,255,255,0.16); color: white; cursor: pointer; font-size: 16px; display: flex; align-items: center; justify-content: center;">↻</button>
+                <button type="button" class="ecobot-btn" id="ecobot-close" aria-label="Cerrar asistente" title="Cerrar" style="width: 30px; height: 30px; border: 0; border-radius: 50%; background: rgba(255,255,255,0.16); color: white; cursor: pointer; font-size: 16px; display: flex; align-items: center; justify-content: center;">×</button>
+            </div>
+        </div>
+
+        <div class="ecobot-messages" id="ecobot-messages">
+            <!-- Messages will be loaded here dynamically -->
+        </div>
+
+        <div class="ecobot-chips" aria-label="Preguntas rápidas">
+            <button type="button" data-ecobot-question="Como registro un abono">Abonos</button>
+            <button type="button" data-ecobot-question="Como funciona factura">Factura</button>
+            <button type="button" data-ecobot-question="Como registro una salida">Salidas</button>
+            <button type="button" data-ecobot-question="Que son las alertas">Alertas</button>
+        </div>
+
+        <form class="ecobot-form" id="ecobot-form" autocomplete="off">
+            <button type="button" id="ecobot-mic" aria-label="Hablar por voz" title="Hablar por voz">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"></path>
+                    <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+                    <line x1="12" y1="19" x2="12" y2="22"></line>
+                </svg>
+            </button>
+            <input id="ecobot-input" type="text" placeholder="Pregunta sobre Econotec..." aria-label="Escribe tu pregunta sobre Econotec">
+            <button type="submit" aria-label="Enviar">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="5" y1="12" x2="19" y2="12"></line>
+                    <polyline points="12 5 19 12 12 19"></polyline>
+                </svg>
+            </button>
+        </form>
+    </section>
+</div>
+
+<style>
+    .ecobot {
+        position: fixed;
+        right: 22px;
+        bottom: 22px;
+        z-index: 9999;
+        font-family: inherit;
+    }
+    .ecobot-launcher {
+        width: 62px;
+        height: 62px;
+        border: 0;
+        border-radius: 50%;
+        background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+        box-shadow: 0 14px 34px rgba(249, 118, 24, 0.34);
+        cursor: pointer;
+        display: grid;
+        place-items: center;
+        transition: transform 0.16s, box-shadow 0.16s;
+    }
+    .ecobot-launcher:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 18px 42px rgba(249, 118, 24, 0.42);
+    }
+    .ecobot-face,
+    .ecobot-avatar {
+        position: relative;
+        display: block;
+        width: 38px;
+        height: 32px;
+        border-radius: 14px;
+        background: #ffffff;
+        border: 2px solid rgba(31, 41, 55, 0.08);
+    }
+    .ecobot-face::before,
+    .ecobot-avatar::before {
+        content: "";
+        position: absolute;
+        left: 50%;
+        top: -8px;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: #ffffff;
+        transform: translateX(-50%);
+    }
+    .ecobot-eye {
+        position: absolute;
+        top: 10px;
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: var(--info);
+    }
+    .ecobot-eye.left { left: 10px; }
+    .ecobot-eye.right { right: 10px; }
+    .ecobot-mouth {
+        position: absolute;
+        left: 50%;
+        bottom: 8px;
+        width: 14px;
+        height: 6px;
+        border-bottom: 2px solid var(--primary);
+        border-radius: 0 0 12px 12px;
+        transform: translateX(-50%);
+    }
+    .ecobot-panel {
+        width: min(380px, calc(100vw - 28px));
+        height: 560px;
+        max-height: calc(100vh - 110px);
+        margin-bottom: 14px;
+        background: var(--card-bg);
+        color: var(--text-main);
+        border: 1px solid var(--border-color);
+        border-radius: 14px;
+        box-shadow: 0 24px 70px rgba(15, 23, 42, 0.26);
+        overflow: hidden;
+    }
+    .ecobot-head {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 14px 16px;
+        background: linear-gradient(135deg, var(--secondary), #0d47a1);
+        color: white;
+    }
+    .ecobot-avatar {
+        width: 42px;
+        height: 34px;
+        flex: 0 0 auto;
+    }
+    .ecobot-head strong {
+        display: block;
+        font-size: 15px;
+        line-height: 1.1;
+    }
+    .ecobot-head span {
+        display: block;
+        font-size: 11px;
+        opacity: 0.86;
+        margin-top: 2px;
+    }
+    .ecobot-head .ecobot-btn:hover {
+        background: rgba(255,255,255,0.25);
+    }
+    .ecobot-messages {
+        height: calc(100% - 168px);
+        padding: 16px;
+        overflow-y: auto;
+        background:
+            linear-gradient(rgba(249, 118, 24, 0.04), rgba(13, 71, 161, 0.04)),
+            var(--bg);
+    }
+    .ecobot-msg {
+        max-width: 88%;
+        padding: 10px 12px;
+        border-radius: 12px;
+        font-size: 13px;
+        line-height: 1.45;
+        margin-bottom: 10px;
+        white-space: pre-line;
+    }
+    .ecobot-msg.bot {
+        background: var(--card-bg);
+        border: 1px solid var(--border-color);
+        border-top-left-radius: 4px;
+    }
+    .ecobot-msg.user {
+        margin-left: auto;
+        background: var(--primary);
+        color: white;
+        border-top-right-radius: 4px;
+    }
+    .ecobot-chips {
+        display: flex;
+        gap: 8px;
+        padding: 10px 12px;
+        overflow-x: auto;
+        border-top: 1px solid var(--border-color);
+        background: var(--card-bg);
+    }
+    .ecobot-chips button {
+        flex: 0 0 auto;
+        border: 1px solid rgba(249, 118, 24, 0.38);
+        color: var(--primary-dark);
+        background: var(--primary-light);
+        border-radius: 16px;
+        padding: 7px 10px;
+        font-size: 12px;
+        font-weight: 700;
+        cursor: pointer;
+    }
+    .ecobot-form {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        padding: 10px 16px;
+        background: #1e1e24; /* Dark modern background */
+        border-bottom-left-radius: 18px;
+        border-bottom-right-radius: 18px;
+    }
+    #ecobot-mic {
+        border: 0;
+        background: none;
+        padding: 4px;
+        cursor: pointer;
+        color: #8b8b98;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: color 0.2s;
+    }
+    #ecobot-mic:hover {
+        color: #d1d1d6;
+    }
+    .ecobot-form input {
+        min-width: 0;
+        flex: 1;
+        border: 0;
+        background: transparent;
+        padding: 8px 4px;
+        font-family: inherit;
+        font-size: 14px;
+        color: #f5f5f7;
+    }
+    .ecobot-form input::placeholder {
+        color: #8b8b98;
+    }
+    .ecobot-form input:focus {
+        outline: none;
+    }
+    .ecobot-form button[type="submit"] {
+        border: 0;
+        border-radius: 50%;
+        background: var(--primary);
+        color: white;
+        width: 38px;
+        height: 38px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        padding: 0;
+        transition: transform 0.2s, background 0.2s;
+    }
+    .ecobot-form button[type="submit"]:hover {
+        background: var(--primary-dark);
+        transform: scale(1.05);
+    }
+    @media (max-width: 520px) {
+        .ecobot {
+            right: 10px;
+            bottom: 10px;
+        }
+        .ecobot-launcher {
+            width: 48px;
+            height: 48px;
+        }
+        .ecobot-launcher .ecobot-face {
+            transform: scale(0.78);
+        }
+        .ecobot-panel {
+            height: min(560px, calc(100vh - 92px));
+        }
+    }
+</style>
+
+<script>
+(function() {
+    const launcher = document.getElementById('ecobot-launcher');
+    const panel = document.getElementById('ecobot-panel');
+    const closeBtn = document.getElementById('ecobot-close');
+    const resetBtn = document.getElementById('ecobot-reset');
+    const stopAudioBtn = document.getElementById('ecobot-stop-audio');
+    const form = document.getElementById('ecobot-form');
+    const input = document.getElementById('ecobot-input');
+    const messages = document.getElementById('ecobot-messages');
+    const micBtn = document.getElementById('ecobot-mic');
+    if (!launcher || !panel || !form || !input || !messages) return;
+
+    let chatHistory = [];
+    const initialGreeting = "Hola, ¿en qué te ayudo? Puedo explicarte cómo usar ingresos, pagos, abonos, facturas, salidas, alertas, clientes, historial y reportes de Econotec.";
+
+    function loadHistory() {
+        const saved = sessionStorage.getItem('ecobotHistory');
+        if (saved) {
+            try {
+                chatHistory = JSON.parse(saved);
+            } catch(e) {
+                chatHistory = [];
+            }
+        }
+        
+        messages.innerHTML = '';
+        if (chatHistory.length === 0) {
+            chatHistory.push({ type: 'bot', text: initialGreeting });
+        }
+        
+        chatHistory.forEach(msg => {
+            const div = document.createElement('div');
+            div.className = 'ecobot-msg ' + msg.type;
+            div.textContent = msg.text;
+            messages.appendChild(div);
+        });
+        messages.scrollTop = messages.scrollHeight;
+    }
+    
+    function saveHistory() {
+        sessionStorage.setItem('ecobotHistory', JSON.stringify(chatHistory));
+    }
+    
+    loadHistory();
+
+    const answers = [
+        {
+            keys: ['ingreso', 'registrar equipo', 'solicitud', 'cliente nuevo', 'nueva solicitud'],
+            text: 'Para registrar un equipo en Econotec:\n1. Entra en Inicio > Ingreso de Equipo / Cliente.\n2. Pulsa Nueva Solicitud de Ingreso.\n3. Busca o escribe la cedula del cliente.\n4. Completa equipo, marca, modelo, accesorios, problema reportado, tecnico, asesor y valores.\n5. Guarda y luego imprime o descarga la solicitud si necesitas firma del cliente.'
+        },
+        {
+            keys: ['abono', 'pago', 'pagos', 'saldo', 'recibo', 'registrar abono'],
+            text: 'Para registrar un abono:\n1. Entra en Pagos.\n2. Busca el equipo por codigo, cliente o estado.\n3. Abre Abonos y pulsa Nuevo Abono.\n4. Completa fecha, monto y metodo de pago.\n5. Si es transferencia, selecciona banco. El comprobante es opcional.\n6. Guarda para que el saldo pendiente se actualice y puedas imprimir el recibo.'
+        },
+        {
+            keys: ['factura', 'facturacion', 'ruc', 'cedula factura', 'correo factura'],
+            text: 'En el abono, Factura realizada controla los datos tributarios:\n- Si eliges No, los campos de factura quedan deshabilitados y no se guardan.\n- Si eliges Si, debes llenar nombres, apellidos, cedula/RUC y correo.\nEsto evita registrar facturas incompletas.'
+        },
+        {
+            keys: ['metodo', 'efectivo', 'transferencia', 'tarjeta', 'banco', 'comprobante'],
+            text: 'Metodos de pago en abonos:\n- Efectivo: no pide datos adicionales.\n- Transferencia bancaria: pide banco; si eliges Otro banco, debes escribir el nombre.\n- Tarjeta de credito / Debito: se registra directo como tarjeta.\nEl link de comprobante solo aparece para transferencia y es opcional.'
+        },
+        {
+            keys: ['bodegaje', 'almacenaje', 'dias guardado', 'perdonar', 'aplicar bodegaje'],
+            text: 'El bodegaje aparece cuando un equipo ya acumulo valor por tiempo pendiente de retiro. En un abono puedes decidir:\n- Si: se suma el bodegaje al monto cobrado.\n- No: se perdona y queda registrado en cero.\nEl sistema muestra un resumen para que veas el saldo base y el bodegaje antes de guardar.'
+        },
+        {
+            keys: ['salida', 'entrega', 'retirar', 'acta', 'garantia', 'cerrar equipo'],
+            text: 'Para registrar una salida:\n1. Entra al detalle del equipo.\n2. Pulsa Registrar Salida.\n3. Indica estado de reparacion, observaciones si aplica, valor final cobrado, metodo de pago y conformidad.\n4. Guarda y usa Imprimir o Descargar PDF para entregar el acta al cliente.'
+        },
+        {
+            keys: ['alerta', 'alertas', 'demora', 'pendiente diagnostico', 'listo pendiente'],
+            text: 'Las alertas del inicio ayudan a priorizar trabajo:\n- Demora en diagnostico: equipos ingresados que llevan tiempo sin diagnostico.\n- Bodegaje: equipos listos que no han sido retirados.\nPuedes entrar desde la alerta para revisar el caso y tomar accion.'
+        },
+        {
+            keys: ['cliente', 'clientes', 'cedula', 'whatsapp', 'correo', 'historial cliente'],
+            text: 'En Clientes puedes buscar por nombre, cedula, WhatsApp o correo. El detalle del cliente muestra sus equipos registrados y sirve para revisar historial antes de crear un nuevo ingreso.'
+        },
+        {
+            keys: ['historial', 'buscar antiguo', 'mes', 'exportar'],
+            text: 'Historial agrupa los equipos por mes y ano. Usalo para revisar trabajos anteriores, filtrar registros y exportar informacion cuando necesites respaldo administrativo.'
+        },
+        {
+            keys: ['admin', 'administrativo', 'egreso', 'egresos', 'reporte', 'utilidad', 'balance'],
+            text: 'Registro Administrativo es para usuarios administradores. Resume ingresos por anticipos, abonos y cobros finales; tambien permite registrar egresos, revisar utilidad mensual y exportar reportes.'
+        },
+        {
+            keys: ['rol', 'roles', 'tecnico', 'asesor', 'administrador', 'permisos'],
+            text: 'Roles principales:\n- Administrador: acceso completo, panel administrativo, egresos y eliminaciones.\n- Tecnico: registra y consulta ingresos, salidas, pagos e historial segun permisos.\n- Asesor: trabaja con registros comerciales cuando esta habilitado en grupos.\nLos roles se asignan desde Django Admin en usuarios y grupos.'
+        },
+        {
+            keys: ['imprimir', 'pdf', 'descargar', 'documento'],
+            text: 'Econotec permite imprimir o descargar PDF desde la solicitud de ingreso, recibos de abonos y actas de salida. Abre el detalle del registro y usa el boton Imprimir o Descargar PDF.'
+        }
+    ];
+
+    const econotecTerms = [
+        'econotec', 'ingreso', 'equipo', 'cliente', 'clientes', 'abono', 'abonos',
+        'pago', 'pagos', 'factura', 'salida', 'retirar', 'retiro', 'historial',
+        'admin', 'administrativo', 'egreso', 'reporte', 'alerta', 'bodegaje',
+        'diagnostico', 'tecnico', 'asesor', 'recibo', 'pdf', 'imprimir',
+        'cedula', 'ruc', 'whatsapp', 'garantia', 'metodo', 'transferencia',
+        'banco', 'tarjeta', 'saldo', 'solicitud'
+    ];
+
+    function normalize(text) {
+        return String(text || '')
+            .toLowerCase()
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '');
+    }
+
+    function addMessage(text, type, save = true) {
+        const msg = document.createElement('div');
+        msg.className = 'ecobot-msg ' + type;
+        msg.textContent = text;
+        messages.appendChild(msg);
+        messages.scrollTop = messages.scrollHeight;
+        
+        if (save) {
+            chatHistory.push({ type: type, text: text });
+            saveHistory();
+        }
+    }
+
+    function getAnswer(question) {
+        const q = normalize(question);
+        const inScope = econotecTerms.some((term) => q.includes(term));
+        if (!inScope) {
+            return 'Solo puedo ayudarte con el uso del software Econotec: ingresos, clientes, pagos, abonos, facturas, salidas, alertas, historial, roles y reportes. Escribe una pregunta sobre uno de esos modulos.';
+        }
+        const match = answers.find((item) => item.keys.some((key) => q.includes(normalize(key))));
+        if (match) return match.text;
+        return 'Te puedo orientar dentro de Econotec. Prueba preguntando por: registrar ingreso, registrar abono, factura, metodo de pago, salida de equipo, alertas, clientes, historial, roles o reportes administrativos.';
+    }
+
+    let availableVoices = [];
+    if ('speechSynthesis' in window) {
+        const loadVoices = () => { availableVoices = window.speechSynthesis.getVoices(); };
+        loadVoices();
+        if (speechSynthesis.onvoiceschanged !== undefined) {
+            speechSynthesis.onvoiceschanged = loadVoices;
+        }
+    }
+
+    function speakText(text) {
+        if ('speechSynthesis' in window) {
+            window.speechSynthesis.cancel(); // Stop current before starting new
+            
+            // Clean text from asterisks so the bot doesn't pronounce them
+            const cleanText = text.replace(/\*/g, '');
+            const utterance = new SpeechSynthesisUtterance(cleanText);
+            utterance.lang = 'es-EC';
+            
+            let voice = availableVoices.find(v => v.lang.startsWith('es') && (v.name.includes('Google') || v.name.includes('Natural') || v.name.includes('Premium')));
+            if (!voice) voice = availableVoices.find(v => v.lang.startsWith('es'));
+            if (voice) utterance.voice = voice;
+            
+            utterance.rate = 1.05;
+            utterance.pitch = 1.05;
+            
+            utterance.onstart = () => { if(stopAudioBtn) stopAudioBtn.style.display = 'flex'; };
+            utterance.onend = () => { if(stopAudioBtn) stopAudioBtn.style.display = 'none'; };
+            utterance.onerror = () => { if(stopAudioBtn) stopAudioBtn.style.display = 'none'; };
+            
+            window.speechSynthesis.speak(utterance);
+        }
+    }
+
+    let isWaiting = false;
+
+    function ask(question, fromMic = false) {
+        if (isWaiting) return;
+        const clean = String(question || '').trim();
+        if (!clean) return;
+        
+        isWaiting = true;
+        addMessage(clean, 'user');
+        
+        // Mostrar indicador de "escribiendo"
+        const typingId = 'typing-' + Date.now();
+        const typingMsg = document.createElement('div');
+        typingMsg.id = typingId;
+        typingMsg.className = 'ecobot-msg bot';
+        typingMsg.innerHTML = '<span style="opacity:0.5;">Pensando...</span>';
+        messages.appendChild(typingMsg);
+        messages.scrollTop = messages.scrollHeight;
+        
+        // Enviar TODA consulta a la inteligencia artificial con historial
+        fetch('/bot-query/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                q: clean,
+                history: chatHistory.slice(-10) // enviar últimos 10 mensajes para dar contexto
+            })
+        })
+            .then(r => r.json())
+            .then(data => {
+                isWaiting = false;
+                const tMsg = document.getElementById(typingId);
+                if (tMsg) tMsg.remove();
+                
+                if (data.respuesta) {
+                    addMessage(data.respuesta, 'bot');
+                    if (fromMic) speakText(data.respuesta);
+                    
+                    if (data.redirect) {
+                        setTimeout(() => {
+                            if (data.redirect === 'javascript:history.back()') {
+                                window.history.back();
+                            } else {
+                                window.location.href = data.redirect;
+                            }
+                        }, 1200); // Dar un poco de tiempo para leer/escuchar
+                    }
+                } else {
+                    const ans = getAnswer(clean);
+                    addMessage(ans, 'bot');
+                    if (fromMic) speakText(ans);
+                }
+            })
+            .catch(e => {
+                isWaiting = false;
+                const tMsg = document.getElementById(typingId);
+                if (tMsg) tMsg.remove();
+                
+                const ans = getAnswer(clean);
+                addMessage(ans, 'bot');
+                if (fromMic) speakText(ans);
+            });
+    }
+
+    launcher.addEventListener('click', () => {
+        panel.hidden = !panel.hidden;
+        if (!panel.hidden) input.focus();
+    });
+    closeBtn.addEventListener('click', () => {
+        panel.hidden = true;
+        launcher.focus();
+    });
+    if (stopAudioBtn) {
+        stopAudioBtn.addEventListener('click', () => {
+            if ('speechSynthesis' in window) {
+                window.speechSynthesis.cancel();
+                stopAudioBtn.style.display = 'none';
+            }
+        });
+    }
+    resetBtn.addEventListener('click', () => {
+        if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+        if (stopAudioBtn) stopAudioBtn.style.display = 'none';
+        chatHistory = [{ type: 'bot', text: initialGreeting }];
+        saveHistory();
+        loadHistory();
+    });
+    form.addEventListener('submit', (event) => {
+        event.preventDefault();
+        ask(input.value, false);
+        input.value = '';
+    });
+    document.querySelectorAll('[data-ecobot-question]').forEach((button) => {
+        button.addEventListener('click', () => ask(button.dataset.ecobotQuestion, false));
+    });
+
+    if (micBtn && ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window)) {
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        const recognition = new SpeechRecognition();
+        recognition.lang = 'es-EC';
+        recognition.interimResults = false;
+        recognition.maxAlternatives = 1;
+
+        let isRecording = false;
+
+        const resetMic = () => {
+            isRecording = false;
+            micBtn.style.color = '#8b8b98';
+            input.placeholder = 'Pregunta sobre Econotec...';
+        };
+
+        recognition.onstart = function() {
+            isRecording = true;
+            micBtn.style.color = 'var(--primary)';
+            input.placeholder = 'Escuchando (clic para cancelar)...';
+        };
+
+        recognition.onspeechend = function() {
+            recognition.stop();
+        };
+
+        recognition.onend = function() {
+            resetMic();
+        };
+
+        recognition.onerror = function(event) {
+            resetMic();
+        };
+
+        recognition.onresult = function(event) {
+            const transcript = event.results[0][0].transcript;
+            input.value = transcript;
+            ask(transcript, true);
+            input.value = '';
+        };
+
+        micBtn.addEventListener('click', () => {
+            if (isRecording) {
+                recognition.abort();
+                resetMic();
+            } else {
+                recognition.start();
+            }
+        });
+    } else if (micBtn) {
+        micBtn.style.display = 'none';
+    }
+})();
+</script>

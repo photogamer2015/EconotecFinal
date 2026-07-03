@@ -1,0 +1,486 @@
+{% extends 'base.html' %}
+{% load econotec_extras %}
+
+{% block title %}Registro Administrativo — Econotec{% endblock %}
+
+{% block content %}
+<style>
+    .filter-bar {
+        background: var(--card-bg);
+        padding: 16px 20px;
+        border-radius: 10px;
+        margin-bottom: 22px;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+        display: flex;
+        gap: 12px;
+        align-items: end;
+        flex-wrap: wrap;
+    }
+    .balance-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 16px;
+        margin-bottom: 24px;
+    }
+    .balance-card {
+        background: var(--card-bg);
+        border-radius: 12px;
+        padding: 20px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        border-top: 4px solid var(--primary);
+    }
+    .balance-card .lbl { font-size: 12px; color: var(--text-muted); text-transform: uppercase; font-weight: 600; }
+    .balance-card .val { font-size: 28px; font-weight: 800; color: var(--secondary); margin-top: 6px; }
+    .balance-card.income .val { color: var(--success); }
+    .balance-card.income { border-top-color: var(--success); }
+    .balance-card.expense .val { color: var(--danger); }
+    .balance-card.expense { border-top-color: var(--danger); }
+    .balance-card.utility { border-top-color: var(--primary); }
+    .balance-card.utility .val { color: var(--primary); }
+    .balance-card .sub { font-size: 11px; color: var(--text-muted); margin-top: 4px; opacity: 0.8; }
+    .balance-card.bodegaje { border-top-color: #f39c12; }
+    .balance-card.bodegaje.cobrado { border-top-color: rgba(46,125,50,0.9); }
+    .balance-card.bodegaje.no-cobrado { border-top-color: rgba(198,50,44,0.9); }
+    .balance-card.bodegaje .val { font-size: 22px; font-weight: 800; }
+    .balance-card.bodegaje .sub { margin-top: 6px; font-size: 12px; color: var(--text-muted); }
+    .balance-card.card-link { display: block; color: inherit; text-decoration: none; }
+    .balance-card.card-link:hover { transform: translateY(-3px); box-shadow: 0 6px 14px rgba(0,0,0,0.06); }
+
+    .breakdown-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 22px;
+    }
+    @media (max-width: 800px) {
+        .breakdown-grid { grid-template-columns: 1fr; }
+    }
+    .breakdown-card {
+        background: var(--card-bg);
+        border-radius: 12px;
+        padding: 20px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+    }
+    .breakdown-card h3 {
+        color: var(--primary);
+        font-size: 16px;
+        margin-bottom: 14px;
+        padding-bottom: 8px;
+        border-bottom: 2px solid var(--primary);
+    }
+    .row-item {
+        display: flex; justify-content: space-between;
+        padding: 10px 0; border-bottom: 1px dashed #eee;
+        font-size: 13px;
+    }
+    .row-item:last-child { border-bottom: none; }
+    .row-item .name { color: var(--text-muted); font-weight: 600; }
+    .row-item .info { color: var(--text-main); font-weight: 700; }
+    .cat-emoji {
+        display: inline-block;
+        margin-right: 6px;
+        font-size: 16px;
+    }
+</style>
+
+<div class="crumb">
+    <a href="{% url 'econotec:bienvenida' %}">Inicio</a> / Registro Administrativo
+</div>
+
+<div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 14px;">
+    <div>
+        <h2 class="page-title">Registro <span class="accent">Administrativo</span></h2>
+        <p class="page-subtitle">Balance financiero — {{ mes_nombre }} {{ year }}</p>
+    </div>
+    <div style="display: flex; gap: 8px;">
+        <a href="{% url 'econotec:admin_egresos_lista' %}" class="btn btn-secondary">Ver Egresos</a>
+        <a href="{% url 'econotec:admin_bodegajes' %}?ano={{ year }}&mes={{ month }}" class="btn btn-secondary">Historial Bodegajes</a>
+        <a href="{% url 'econotec:admin_activos_bodegaje' %}" class="btn btn-success">Bodegajes Activos</a>
+        <a href="{% url 'econotec:admin_egreso_crear' %}" class="btn btn-primary">+ Nuevo Egreso</a>
+    </div>
+</div>
+
+<!-- Filtro de mes/año -->
+<form method="get" class="filter-bar">
+    <div>
+        <label class="form-label">Año</label>
+        <select name="ano" class="form-input" style="min-width: 120px;">
+            {% for a in anos_disp %}
+                <option value="{{ a }}" {% if a == year %}selected{% endif %}>{{ a }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div>
+        <label class="form-label">Mes</label>
+        <select name="mes" class="form-input" style="min-width: 160px;">
+            {% for n in "1 2 3 4 5 6 7 8 9 10 11 12"|cut:" "|make_list %}{% endfor %}
+            <option value="1" {% if month == 1 %}selected{% endif %}>Enero</option>
+            <option value="2" {% if month == 2 %}selected{% endif %}>Febrero</option>
+            <option value="3" {% if month == 3 %}selected{% endif %}>Marzo</option>
+            <option value="4" {% if month == 4 %}selected{% endif %}>Abril</option>
+            <option value="5" {% if month == 5 %}selected{% endif %}>Mayo</option>
+            <option value="6" {% if month == 6 %}selected{% endif %}>Junio</option>
+            <option value="7" {% if month == 7 %}selected{% endif %}>Julio</option>
+            <option value="8" {% if month == 8 %}selected{% endif %}>Agosto</option>
+            <option value="9" {% if month == 9 %}selected{% endif %}>Septiembre</option>
+            <option value="10" {% if month == 10 %}selected{% endif %}>Octubre</option>
+            <option value="11" {% if month == 11 %}selected{% endif %}>Noviembre</option>
+            <option value="12" {% if month == 12 %}selected{% endif %}>Diciembre</option>
+        </select>
+    </div>
+    <button type="submit" class="btn btn-primary">Ver mes</button>
+    <a href="{% url 'econotec:admin_export_reporte' %}?ano={{ year }}&mes={{ month }}" class="btn btn-success">📊 Reporte mes</a>
+</form>
+
+<!-- Panel de Gamificación y Perfiles -->
+<div class="filter-bar" style="margin-top: 15px; background: #fff; padding: 15px; border-radius: 8px; border: 1px solid #e5e7eb; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
+    <div>
+        <h3 style="margin: 0; font-size: 16px; color: #111827;">🏆 Ranking de Productividad (Gamificación)</h3>
+        <p style="margin: 0; font-size: 13px; color: #6b7280;">Exporta o reinicia a cero el progreso actual de los técnicos y asesores.</p>
+    </div>
+    <div style="display: flex; gap: 8px; align-items: center;">
+        <a href="{% url 'econotec:admin_perfiles_exportar' formato='pdf' %}" class="btn btn-secondary" style="background: #dc2626; color: white; border: none;">📄 Exportar PDF</a>
+        <a href="{% url 'econotec:admin_perfiles_exportar' formato='excel' %}" class="btn btn-secondary" style="background: #16a34a; color: white; border: none;">📊 Exportar Excel</a>
+        <button type="button" class="btn btn-primary" style="background: #111827; border: none;" onclick="confirmarReinicioPerfiles()">🔄 Reiniciar Perfiles</button>
+    </div>
+</div>
+
+<!-- Balance principal -->
+<div class="balance-grid">
+    <div class="balance-card income">
+        <div class="lbl">Dinero Recibido (Total)</div>
+        <div class="val">{{ dinero_in.total|dinero_signo }}</div>
+        <div class="sub">Reparaciones + Ventas + Extras</div>
+    </div>
+    <div class="balance-card" style="border-top-color: #00bcd4;">
+        <div class="lbl">Ventas de Productos</div>
+        <div class="val" style="color: #0097a7;">{{ dinero_in.cobros_ventas|dinero_signo }}</div>
+        <div class="sub">Total por ventas P</div>
+    </div>
+    <div class="balance-card expense">
+        <div class="lbl">Egresos del Mes</div>
+        <div class="val">{{ egresos_total|dinero_signo }}</div>
+        <div class="sub">Gastos del taller</div>
+    </div>
+    <div class="balance-card utility">
+        <div class="lbl">Utilidad del Mes</div>
+        <div class="val">{{ utilidad|dinero_signo }}</div>
+        <div class="sub">Ingresos − Egresos</div>
+    </div>
+    <div class="balance-card">
+        <div class="lbl">Equipos del Mes</div>
+        <div class="val">{{ equipos_ingresados }}</div>
+        <div class="sub">{{ equipos_entregados }} entregados</div>
+    </div>
+    <a href="{% url 'econotec:admin_bodegajes' %}?ano={{ year }}&mes={{ month }}#cobrados" class="balance-card bodegaje cobrado card-link">
+        <div class="lbl">Bodegaje Cobrado</div>
+        <div class="val">{{ bodegaje_cobrado|dinero_signo }}</div>
+        <div class="sub">Casos: {{ bodegaje_cobrado_count }}</div>
+    </a>
+    <div class="balance-card" style="border-top-color: #f39c12;">
+        <div class="lbl">Diagnósticos Rápidos</div>
+        <div class="val" style="color: #f39c12;">{{ dinero_in.diagnosticos_rapidos|dinero_signo }}</div>
+        <div class="sub">Adicionales cobrados</div>
+    </div>
+    <a href="{% url 'econotec:admin_bodegajes' %}?ano={{ year }}&mes={{ month }}#no-cobrados" class="balance-card bodegaje no-cobrado card-link">
+        <div class="lbl">Bodegaje No Cobrado</div>
+        <div class="val">{{ bodegaje_perdonado|dinero_signo }}</div>
+        <div class="sub">Casos: {{ bodegaje_perdonado_count }}</div>
+    </a>
+</div>
+
+<!-- Desglose detallado -->
+<div class="breakdown-grid">
+    <div class="breakdown-card">
+        <h3><span class="cat-emoji">💵</span> Desglose de Dinero Recibido</h3>
+        <div class="row-item">
+            <span class="name">Anticipos iniciales</span>
+            <span class="info">{{ dinero_in.anticipos|dinero_signo }}</span>
+        </div>
+        <div class="row-item">
+            <span class="name">Diagnósticos rápidos (adicionales)</span>
+            <span class="info">{{ dinero_in.diagnosticos_rapidos|dinero_signo }}</span>
+        </div>
+        <div class="row-item">
+            <span class="name">Abonos intermedios</span>
+            <span class="info">{{ dinero_in.abonos|dinero_signo }}</span>
+        </div>
+        <div class="row-item">
+            <span class="name">Cobros en salida (reparaciones)</span>
+            <span class="info">{{ dinero_in.cobros_finales|dinero_signo }}</span>
+        </div>
+        <div class="row-item">
+            <span class="name">Ventas de productos</span>
+            <span class="info">{{ dinero_in.cobros_ventas|dinero_signo }}</span>
+        </div>
+        <div class="row-item">
+            <span class="name">Cobros por diagnóstico (no reparado)</span>
+            <span class="info">{{ dinero_in.cobros_diagnostico|dinero_signo }}</span>
+        </div>
+        <div class="row-item">
+            <span class="name">Bodegaje cobrado (retiros)</span>
+            <span class="info">{{ bodegaje_cobrado|dinero_signo }}</span>
+        </div>
+        <div class="row-item">
+            <span class="name">Bodegaje no cobrado / perdonado</span>
+            <span class="info">{{ bodegaje_perdonado|dinero_signo }}</span>
+        </div>
+        <div class="row-item" style="border-top: 2px solid var(--success); padding-top: 12px; margin-top: 8px;">
+            <span class="name" style="font-weight: 800;">TOTAL</span>
+            <span class="info" style="color: var(--success); font-size: 16px;">{{ dinero_in.total|dinero_signo }}</span>
+        </div>
+
+        <h3 style="margin-top: 24px;">📤 SALIDAS DEL MES</h3>
+        {% if salidas_resumen %}
+            {% for s in salidas_resumen %}
+            <div class="row-item">
+                <span class="name">{{ s.estado }} ({{ s.count }})</span>
+                <span class="info">{{ s.total|dinero_signo }}</span>
+            </div>
+            {% endfor %}
+        {% else %}
+            <p style="color:#888; padding: 12px 0;">Sin salidas este mes.</p>
+        {% endif %}
+    </div>
+
+    <div class="breakdown-card">
+        <h3>📋 EGRESOS POR CATEGORÍA</h3>
+        {% if egresos_por_cat %}
+            {% for e in egresos_por_cat %}
+            <div class="row-item">
+                <span class="name">
+                    {% if e.categoria__icono %}<span class="cat-emoji">{{ e.categoria__icono }}</span>{% endif %}
+                    {{ e.categoria__nombre }} ({{ e.count }})
+                </span>
+                <span class="info" style="color: var(--danger);">{{ e.total|dinero_signo }}</span>
+            </div>
+            {% endfor %}
+            <div class="row-item" style="border-top: 2px solid var(--danger); padding-top: 12px; margin-top: 8px;">
+                <span class="name" style="font-weight: 800;">TOTAL EGRESOS</span>
+                <span class="info" style="color: var(--danger); font-size: 16px;">{{ egresos_total|dinero_signo }}</span>
+            </div>
+        {% else %}
+            <p style="color:#888; padding: 12px 0;">Sin egresos registrados este mes.</p>
+            <a href="{% url 'econotec:admin_egreso_crear' %}" class="btn btn-primary">+ Registrar primer egreso</a>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Gráficos -->
+<div class="breakdown-grid" style="margin-top: 22px;">
+    <div class="breakdown-card">
+        <h3>📊 TENDENCIA ANUAL</h3>
+        <div style="height: 250px; position: relative;">
+            <canvas id="lineChart"></canvas>
+        </div>
+    </div>
+    <div class="breakdown-card">
+        <h3>💰 BALANCE FINANCIERO (ESTE MES)</h3>
+        <div style="height: 250px; position: relative;">
+            <canvas id="barChart"></canvas>
+        </div>
+    </div>
+    <div class="breakdown-card" style="grid-column: 1 / -1; max-width: 600px; margin: 0 auto; width: 100%;">
+        <h3>👨‍🔧 GANANCIA POR TÉCNICO (Módulo Salidas)</h3>
+        <div style="height: 300px; position: relative;">
+            <canvas id="pieChart"></canvas>
+        </div>
+    </div>
+</div>
+
+<!-- USUARIOS EN LÍNEA -->
+<div class="breakdown-grid" style="margin-top: 22px;">
+    <div class="breakdown-card" style="grid-column: 1 / -1;">
+        <h3>👥 USUARIOS DEL SISTEMA (Estado de Conexión)</h3>
+        <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 10px;">
+            {% for item in lista_usuarios %}
+            <div class="row-item" style="align-items: center;">
+                <div style="display: flex; align-items: center; gap: 12px;">
+                    {% if item.en_linea %}
+                        <div style="width: 12px; height: 12px; border-radius: 50%; background-color: var(--success); box-shadow: 0 0 6px var(--success);"></div>
+                    {% else %}
+                        <div style="width: 12px; height: 12px; border-radius: 50%; background-color: #ccc;"></div>
+                    {% endif %}
+                    <span class="name" style="color: var(--text-main); font-size: 15px; font-weight: 700;">
+                        {{ item.user.username|upper }}
+                        {% if item.user.first_name %}
+                            <span style="font-weight: 400; color: var(--text-muted);">— {{ item.user.first_name }} {{ item.user.last_name }}</span>
+                        {% endif %}
+                    </span>
+                </div>
+                <div class="info" style="color: var(--text-muted); font-size: 13px; font-weight: normal;">
+                    {% if item.en_linea %}
+                        <span style="color: var(--success); font-weight: 600;">En línea ahora</span>
+                    {% elif item.ultima_conexion %}
+                        Última conexión: hace {{ item.ultima_conexion|timesince }}
+                    {% else %}
+                        Nunca se ha conectado
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+<!-- ZONA DE MANTENIMIENTO -->
+<div style="margin-top: 40px; padding: 24px; border: 2px dashed #dc2626; border-radius: 12px; background: #fef2f2; position: relative;">
+    <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px;">
+        <div>
+            <h3 style="color: #b91c1c; margin: 0 0 8px 0; font-size: 20px; display: flex; align-items: center; gap: 8px;">
+                <span>⚠️</span> Zona de mantenimiento
+            </h3>
+            <p style="margin: 0; color: #7f1d1d; font-size: 14px;">Reinicia los datos transaccionales y deja el numerador de órdenes en #1. <strong>Acción irreversible.</strong></p>
+        </div>
+        <div>
+            <a href="{% url 'econotec:admin_mantenimiento_reset' %}" class="btn" style="background: #dc2626; color: white; border: none; padding: 12px 20px; border-radius: 8px; font-weight: 700; text-decoration: none; display: inline-block;">
+                <span>🗑️</span> Reiniciar TODO (incluye clientes)
+            </a>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<script>
+    function confirmarReinicioPerfiles() {
+        Swal.fire({
+            title: '¿Reiniciar Progreso de Gamificación?',
+            html: '<p style="font-size: 14px;">Esto pondrá en 0 los puntos y niveles de <b>TODOS</b> los usuarios para comenzar una nueva temporada.</p>' +
+                  '<p style="font-size: 14px; color: #dc2626;"><b>Nota:</b> ¡No se borrará ningún registro de equipo, solo el contador de progreso visual!</p>' +
+                  '<p style="font-size: 14px; margin-top: 15px;">Por seguridad, ingresa tu contraseña de administrador para continuar:</p>',
+            icon: 'warning',
+            input: 'password',
+            inputPlaceholder: 'Contraseña de admin',
+            inputAttributes: {
+                autocapitalize: 'off',
+                autocorrect: 'off'
+            },
+            showCancelButton: true,
+            confirmButtonColor: '#111827',
+            cancelButtonColor: '#6b7280',
+            confirmButtonText: 'Sí, Reiniciar Todo',
+            cancelButtonText: 'Cancelar',
+            preConfirm: (password) => {
+                if (!password) {
+                    Swal.showValidationMessage('Debes ingresar tu contraseña')
+                }
+                return password
+            }
+        }).then((result) => {
+            if (result.isConfirmed) {
+                // Crear form oculto y enviar
+                const form = document.createElement('form');
+                form.method = 'POST';
+                form.action = "{% url 'econotec:admin_perfiles_reiniciar' %}";
+                
+                const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+                const csrfInput = document.createElement('input');
+                csrfInput.type = 'hidden';
+                csrfInput.name = 'csrfmiddlewaretoken';
+                csrfInput.value = csrfToken;
+                
+                const pwdInput = document.createElement('input');
+                pwdInput.type = 'hidden';
+                pwdInput.name = 'password';
+                pwdInput.value = result.value;
+                
+                form.appendChild(csrfInput);
+                form.appendChild(pwdInput);
+                document.body.appendChild(form);
+                form.submit();
+            }
+        });
+    }
+</script>
+
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+    const commonOptions = {
+        responsive: true,
+        maintainAspectRatio: false,
+    };
+
+    // 1. Line Chart: Tendencia
+    const ctxLine = document.getElementById('lineChart').getContext('2d');
+    new Chart(ctxLine, {
+        type: 'line',
+        data: {
+            labels: {{ chart_tendencia_labels|safe }},
+            datasets: [
+                {
+                    label: 'Ingresos ($)',
+                    data: {{ chart_tendencia_ingresos|safe }},
+                    borderColor: '#2e7d32',
+                    backgroundColor: 'rgba(46, 125, 50, 0.1)',
+                    borderWidth: 2,
+                    fill: true,
+                    tension: 0.3
+                },
+                {
+                    label: 'Egresos ($)',
+                    data: {{ chart_tendencia_egresos|safe }},
+                    borderColor: '#c62828',
+                    backgroundColor: 'rgba(198, 40, 40, 0.1)',
+                    borderWidth: 2,
+                    fill: true,
+                    tension: 0.3
+                }
+            ]
+        },
+        options: commonOptions
+    });
+
+    // 2. Bar Chart: Balance General del Mes
+    const ctxBar = document.getElementById('barChart').getContext('2d');
+    new Chart(ctxBar, {
+        type: 'bar',
+        data: {
+            labels: ['Dinero Recibido', 'Egresos', 'Utilidad', 'Bod. Cobrado', 'Bod. No Cobrado'],
+            datasets: [{
+                label: 'Total ($)',
+                data: [
+                    {{ dinero_in.total|stringformat:"f" }}, 
+                    {{ egresos_total|stringformat:"f" }},
+                    {{ utilidad|stringformat:"f" }},
+                    {{ bodegaje_cobrado|stringformat:"f" }},
+                    {{ bodegaje_perdonado|stringformat:"f" }}
+                ],
+                backgroundColor: ['#2e7d32', '#c62828', '#1976d2', '#f97618', '#8e24aa'],
+                borderRadius: 4
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false }
+            }
+        }
+    });
+
+    // 3. Pie Chart: Ganancias por técnico
+    const ctxPie = document.getElementById('pieChart').getContext('2d');
+    new Chart(ctxPie, {
+        type: 'doughnut',
+        data: {
+            labels: {{ chart_ganancias_labels|safe }},
+            datasets: [{
+                data: {{ chart_ganancias_data|safe }},
+                backgroundColor: ['#f97618', '#2e7d32', '#1976d2', '#fbc02d', '#8e24aa', '#e53935'],
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { position: 'right' }
+            }
+        }
+    });
+});
+</script>
+{% endblock %}

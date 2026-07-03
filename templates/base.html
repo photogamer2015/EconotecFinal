@@ -1,0 +1,1201 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Econotec — Reparación de Tecnología{% endblock %}</title>
+    <style>
+        @keyframes godTecAnim {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+        :root {
+            --primary: #f97618;
+            --primary-dark: #d7642f;
+            --primary-light: #ffe6d3;
+            --secondary: #1f2937;
+            --success: #2e7d32;
+            --danger: #c62828;
+            --warning: #f0ad4e;
+            --info: #0d47a1;
+            
+            --bg: #f5f7fb;
+            --card-bg: #ffffff;
+            --text-main: #1f2937;
+            --text-muted: #6b7280;
+            --border-color: #e0e0e0;
+            --hover-bg: #fff8f3;
+            --shadow: 0 2px 8px rgba(0,0,0,0.06);
+        }
+
+        [data-theme="dark"] {
+            --primary-light: rgba(249, 118, 24, 0.15);
+            --secondary: #e5e7eb;
+            --success: #10b981;
+            --danger: #ef4444;
+            --warning: #f59e0b;
+            --info: #3b82f6;
+            
+            --bg: #111827;
+            --card-bg: #1f2937;
+            --text-main: #f9fafb;
+            --text-muted: #d1d5db;
+            --border-color: #374151;
+            --hover-bg: rgba(249, 118, 24, 0.05);
+            --shadow: 0 4px 16px rgba(0,0,0,0.4);
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', Arial, sans-serif;
+            background: var(--bg);
+            min-height: 100vh;
+            color: var(--text-main);
+            /* Cursor normal color ladrillo */
+            cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><path fill="%23C64E2E" stroke="white" stroke-width="1.5" stroke-linejoin="round" d="M4 2 L4 22 L10 16 L15 24 L18 22 L13 14 L20 14 Z"/></svg>') 4 2, auto;
+        }
+        
+        a, button, input[type="submit"], input[type="button"], select, .cursor-pointer {
+            cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><path fill="%23C64E2E" stroke="white" stroke-width="1.5" stroke-linejoin="round" d="M14.5 9V3c0-1.1-.9-2-2-2s-2 .9-2 2v7.5l-3.5-1.5c-.5-.2-1.2-.1-1.6.3l-1.4 1.5 5 5.2c.8.8 1.8 1.2 3 1.2h3.5c1.9 0 3.5-1.6 3.5-3.5V11c0-1.1-.9-2-2-2h-2.5z"/></svg>') 10 2, pointer !important;
+        }
+
+        /* HEADER */
+        header.top {
+            position: relative;
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+            color: white;
+            padding: 14px 28px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.15);
+        }
+        header.top h1 {
+            font-size: 19px;
+            font-weight: 700;
+            letter-spacing: -0.3px;
+            margin: 0;
+        }
+        header.top h1 .sub {
+            display: block;
+            font-size: 11px;
+            font-weight: 400;
+            opacity: 0.9;
+            letter-spacing: 0.5px;
+        }
+        header.top .brand {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+        }
+        header.top .logo-circle {
+            width: 56px;
+            height: 56px;
+            border-radius: 50%;
+            background: #1a1a1a;
+            display: block;
+            object-fit: cover;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+            border: 2px solid white;
+            padding: 2px;
+        }
+
+        header.top nav { display: flex; gap: 8px; align-items: center; }
+        header.top a, header.top button {
+            color: white; text-decoration: none;
+            background: rgba(255,255,255,0.2);
+            padding: 8px 14px; border: none; border-radius: 6px;
+            font-size: 13px; font-family: inherit; font-weight: 500;
+            cursor: pointer; transition: background 0.2s;
+        }
+        header.top a:hover, header.top button:hover { background: rgba(255,255,255,0.32); }
+        header.top form { margin: 0; display: inline; }
+
+        header.top .user-info {
+            display: flex; flex-direction: column; align-items: flex-end;
+            gap: 5px; padding-right: 18px; margin-right: 18px;
+            border-right: 2px solid rgba(255,255,255,0.3);
+        }
+        header.top .user-info h3 {
+            margin: 0; padding: 0;
+            font-size: 14px; font-weight: 600;
+            color: #ffffff; line-height: 1;
+        }
+        .role-badge {
+            display: inline-block;
+            padding: 3px 9px;
+            border-radius: 12px;
+            font-size: 10px;
+            font-weight: 800;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+            line-height: 1;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.15);
+        }
+        .role-admin { background: #1f2937; color: #fff; }
+        .role-tecnico { background: #2e7d32; color: white; }
+        .role-asesor { background: #0d47a1; color: white; }
+        .role-default { background: rgba(255, 255, 255, 0.94); color: #444; }
+
+        .btn-back-inline {
+            display: inline-flex;
+            align-items: center;
+            background: var(--card-bg);
+            color: var(--text-muted);
+            border: 1px solid var(--border-color);
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            cursor: pointer;
+            transition: all 0.2s;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        }
+        .btn-back-inline:hover {
+            color: var(--primary);
+            border-color: var(--primary);
+            transform: translateX(-3px);
+            box-shadow: 0 2px 6px rgba(249, 118, 24, 0.15);
+        }
+
+        .econoplayer-btn {
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(249, 118, 24, 0.9) !important;
+            color: white !important;
+            padding: 8px 18px !important;
+            border-radius: 20px !important;
+            font-weight: 800 !important;
+            font-size: 13px !important;
+            border: 1px solid rgba(255, 255, 255, 0.5) !important;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2) !important;
+            transition: all 0.2s ease !important;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .econoplayer-btn:hover {
+            background: #f97618 !important;
+            transform: translateX(-50%) scale(1.03);
+            border-color: white !important;
+        }
+
+        .container { max-width: 1280px; margin: 0 auto; padding: 32px 24px; }
+
+        /* FLASHES */
+        .flash {
+            padding: 12px 16px; border-radius: 8px;
+            margin-bottom: 16px; font-size: 14px;
+        }
+        .flash-success { background: #e8f5e9; color: #2e7d32; border-left: 4px solid #2e7d32; }
+        .flash-error   { background: #ffebee; color: #c62828; border-left: 4px solid #c62828; }
+        .flash-warning { background: #fff8e1; color: #856404; border-left: 4px solid #f0ad4e; }
+        .flash-info    { background: #e3f2fd; color: #0d47a1; border-left: 4px solid #0d47a1; }
+
+        /* BUTTONS */
+        .btn {
+            display: inline-block; padding: 10px 18px; border-radius: 8px;
+            font-size: 14px; font-weight: 600; text-decoration: none;
+            cursor: pointer; border: none; font-family: inherit;
+            transition: all 0.15s;
+        }
+        .btn-primary {
+            background: var(--primary); color: white;
+        }
+        .btn-primary:hover { background: var(--primary-dark); }
+        .btn-secondary { background: #e0e0e0; color: #333; }
+        .btn-secondary:hover { background: #cfcfcf; }
+        .btn-success { background: var(--success); color: white; }
+        .btn-success:hover { background: #1b5e20; }
+        .btn-danger { background: var(--danger); color: white; }
+        .btn-danger:hover { background: #8e0000; }
+        .btn-warning { background: var(--warning); color: white; }
+        .btn-info { background: var(--info); color: white; }
+        .btn-sm { padding: 6px 10px; font-size: 12px; }
+
+        .card-box {
+            background: var(--card-bg); border-radius: 12px;
+            box-shadow: var(--shadow);
+            padding: 28px;
+        }
+
+        /* FORM */
+        .form-input {
+            width: 100%; padding: 10px 12px;
+            border: 2px solid var(--border-color); border-radius: 8px;
+            font-size: 14px; font-family: inherit;
+            background: var(--card-bg); color: var(--text-main);
+            transition: border 0.15s, background 0.15s;
+        }
+        .form-input:focus { outline: none; border-color: var(--primary); background: var(--bg); }
+        .form-label {
+            display: block; font-size: 13px; font-weight: 600;
+            color: var(--text-muted); margin-bottom: 6px;
+        }
+        .form-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 16px;
+        }
+        .form-section-title {
+            font-size: 16px; color: var(--primary);
+            font-weight: 700; margin: 24px 0 14px;
+            padding-bottom: 8px; border-bottom: 2px solid var(--primary);
+        }
+        .errorlist {
+            list-style: none; color: var(--danger);
+            font-size: 12px; margin-top: 4px;
+        }
+        textarea.form-input { font-family: inherit; resize: vertical; }
+
+        /* TABLES */
+        .table-wrap {
+            background: var(--card-bg); border-radius: 12px;
+            box-shadow: var(--shadow);
+            overflow-x: auto;
+        }
+        table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        thead tr { background: var(--primary); color: white; }
+        th, td {
+            padding: 12px 14px; text-align: left;
+            border-bottom: 1px solid var(--border-color);
+            white-space: nowrap;
+        }
+        th { font-weight: 700; }
+        tbody tr:hover { background: var(--hover-bg); }
+
+        /* BADGES */
+        .badge {
+            display: inline-block; padding: 3px 10px;
+            border-radius: 12px; font-size: 11px; font-weight: 700;
+            text-transform: uppercase; letter-spacing: 0.3px;
+        }
+        [data-theme="dark"] .badge-pagado    { background: rgba(16, 185, 129, 0.2); color: #34d399; }
+        [data-theme="dark"] .badge-pendiente { background: rgba(239, 68, 68, 0.2); color: #f87171; }
+        [data-theme="dark"] .badge-parcial   { background: rgba(245, 158, 11, 0.2); color: #fbbf24; }
+        [data-theme="dark"] .badge-ingresado { background: rgba(59, 130, 246, 0.2); color: #60a5fa; }
+        [data-theme="dark"] .badge-en_reparacion { background: rgba(249, 118, 24, 0.2); color: #fbd38d; }
+        [data-theme="dark"] .badge-pendiente_retiro { background: rgba(168, 85, 247, 0.2); color: #c084fc; }
+        [data-theme="dark"] .badge-entregado { background: rgba(16, 185, 129, 0.2); color: #34d399; }
+
+        [data-theme="dark"] .badge-no_reparable { background: rgba(239, 68, 68, 0.2); color: #f87171; }
+        [data-theme="dark"] .badge-cliente_no_acepta { background: rgba(245, 158, 11, 0.2); color: #fbbf24; }
+        [data-theme="dark"] .badge-reparado_parcial { background: rgba(249, 118, 24, 0.2); color: #fbd38d; }
+        [data-theme="dark"] .badge-garantia { background: rgba(168, 85, 247, 0.2); color: #c084fc; }
+        
+        .badge-pagado    { background: #e8f5e9; color: #2e7d32; }
+        .badge-pendiente { background: #ffebee; color: #c62828; }
+        .badge-parcial   { background: #fff8e1; color: #856404; }
+        .badge-ingresado { background: #e3f2fd; color: #0d47a1; }
+        .badge-en_reparacion { background: #fff3e0; color: #e65100; }
+        .badge-pendiente_retiro { background: #f3e5f5; color: #6a1b9a; }
+        .badge-entregado { background: #e8f5e9; color: #2e7d32; }
+
+        .badge-no_reparable { background: #ffebee; color: #c62828; }
+        .badge-cliente_no_acepta { background: #fff8e1; color: #856404; }
+        .badge-reparado_parcial { background: #fff3e0; color: #e65100; }
+        .badge-garantia { background: #f3e5f5; color: #6a1b9a; }
+
+        /* MISC */
+        .toast-body { font-size: 15px; color: var(--text-color); margin-bottom: 12px; }
+        .toast-btn { display: inline-block; background: #f97618; color: #fff; padding: 6px 12px; border-radius: 6px; text-decoration: none; font-size: 14px; transition: 0.2s; border: none; cursor: pointer; }
+        .toast-btn:hover { background: #e56510; }
+
+        /* Modal Perfil Gamificado */
+        .perfil-modal {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.5); z-index: 10000;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .perfil-modal-content {
+            background: var(--card-bg, #fff); width: 340px; border-radius: 16px;
+            overflow: hidden; box-shadow: 0 15px 35px rgba(0,0,0,0.2);
+            animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            position: relative;
+        }
+        @keyframes popIn {
+            0% { transform: scale(0.8); opacity: 0; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+        .perfil-close {
+            position: absolute; top: 10px; right: 15px; background: none; border: none;
+            color: white; font-size: 24px; cursor: pointer; text-shadow: 0 1px 3px rgba(0,0,0,0.5);
+        }
+        .perfil-help {
+            position: absolute; top: 10px; left: 15px; background: rgba(255,255,255,0.3); border: none;
+            color: white; font-size: 14px; font-weight: bold; cursor: pointer; width: 26px; height: 26px;
+            border-radius: 50%; text-align: center; line-height: 26px; padding: 0; box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            transition: 0.2s;
+        }
+        .perfil-help:hover { background: rgba(255,255,255,0.5); transform: scale(1.1); }
+        
+        .perfil-header {
+            padding: 30px 20px 20px; text-align: center; color: white;
+            transition: background 0.5s; box-shadow: inset 0 -10px 20px rgba(0,0,0,0.1);
+        }
+        .perfil-avatar {
+            font-size: 40px; background: rgba(255,255,255,0.2); width: 70px; height: 70px;
+            border-radius: 50%; display: flex; align-items: center; justify-content: center;
+            margin: 0 auto 10px; box-shadow: 0 4px 10px rgba(0,0,0,0.2); border: 2px solid rgba(255,255,255,0.5);
+        }
+        .perfil-header h3 { margin: 0; font-size: 20px; font-weight: 700; text-shadow: 0 1px 2px rgba(0,0,0,0.3); }
+        .perfil-nivel { margin: 5px 0 0; font-size: 13px; opacity: 0.9; text-transform: uppercase; letter-spacing: 1px; font-weight: bold;}
+        
+        .perfil-body { padding: 20px; }
+        .perfil-stats { display: flex; justify-content: space-between; margin-bottom: 20px; }
+        .stat-box { text-align: center; flex: 1; }
+        .stat-num { display: block; font-size: 22px; font-weight: 800; color: var(--text-color, #333); }
+        .stat-label { font-size: 11px; color: var(--text-color, #666); opacity: 0.8; text-transform: uppercase; }
+        
+        .perfil-progress { margin-top: 10px; }
+        .progress-bar-bg { background: rgba(150,150,150,0.2); height: 10px; border-radius: 5px; overflow: hidden; margin-bottom: 8px;}
+        .progress-bar-fill { height: 100%; width: 0%; background: #f97618; transition: width 1s ease-out; }
+        .progress-text { font-size: 12px; color: var(--text-color, #666); text-align: center; margin: 0; }
+        
+        #btn-perfil:hover { background: rgba(255,255,255,0.25) !important; transform: translateY(-1px); }
+
+        .crumb { font-size: 13px; color: var(--text-muted); margin-bottom: 16px; }
+        .crumb a { color: var(--primary); text-decoration: none; font-weight: 600; }
+        .crumb a:hover { text-decoration: underline; }
+
+        .row-actions { white-space: nowrap; }
+        .row-actions > * { display: inline-block; vertical-align: middle; margin-right: 4px; margin-top: 0 !important; margin-bottom: 0 !important; }
+        .row-actions > *:last-child { margin-right: 0; }
+        .empty-state {
+            text-align: center; padding: 60px 20px; color: var(--text-muted);
+            background: var(--card-bg); border-radius: 12px; border: 2px dashed var(--border-color);
+        }
+        .empty-state .icon { font-size: 48px; margin-bottom: 16px; opacity: 0.5; }
+        .empty-state h3 { color: var(--text-main); margin-bottom: 8px; }
+
+        h2.page-title {
+            font-size: 26px; color: var(--text-main);
+            margin-bottom: 6px; font-weight: 700;
+        }
+        h2.page-title .accent { color: var(--primary); }
+        .page-subtitle { color: var(--text-muted); font-size: 14px; margin-bottom: 24px; }
+
+        .toolbar {
+            display: flex; gap: 12px; flex-wrap: wrap;
+            margin-bottom: 18px; align-items: center;
+        }
+        .toolbar form { display: flex; gap: 8px; flex: 1; min-width: 240px; }
+
+        .stat-pill {
+            background: var(--primary-light);
+            color: var(--primary-dark);
+            padding: 6px 12px;
+            border-radius: 16px;
+            font-size: 13px;
+            font-weight: 700;
+        }
+
+        .theme-toggle {
+            background: transparent !important;
+            color: white !important;
+            font-size: 18px !important;
+            padding: 8px !important;
+            border-radius: 50% !important;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 38px;
+            height: 38px;
+        }
+        .theme-toggle:hover {
+            background: rgba(255,255,255,0.2) !important;
+        }
+
+        @media print {
+            .no-print { display: none !important; }
+            body { background: white; color: black; }
+            .container { max-width: none; padding: 0; box-shadow: none; border: none; }
+            .toolbar, .crumb, .alert-box, .alerta-block, form { display: none !important; }
+            table { width: 100%; border-collapse: collapse; }
+            th, td { border: 1px solid #ddd; padding: 8px; font-size: 11pt; color: black !important; }
+            th { background-color: #f5f5f5 !important; }
+            a { text-decoration: none; color: black; }
+            .print-hide, td:last-child, th:last-child { display: none !important; }
+        }
+
+        /* iOS/Android style elegant "No molestar" floating pill */
+        .mobile-pill-notification {
+            position: fixed;
+            top: -120px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 100000;
+            background: rgba(28, 28, 30, 0.88); /* Translucent dark iOS-like background */
+            backdrop-filter: blur(20px) saturate(190%);
+            -webkit-backdrop-filter: blur(20px) saturate(190%);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            color: #ffffff;
+            padding: 10px 22px;
+            border-radius: 40px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            box-shadow: 0 12px 30px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            pointer-events: none;
+            transition: top 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.4s, transform 0.4s;
+            opacity: 0;
+            min-width: 280px;
+            max-width: 90vw;
+        }
+
+        .mobile-pill-notification.show {
+            top: 24px;
+            opacity: 1;
+        }
+
+        .mobile-pill-notification .pill-icon {
+            font-size: 22px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            animation: pill-pulse 1.6s ease-in-out infinite;
+        }
+        
+        .mobile-pill-notification .pill-text {
+            display: flex;
+            flex-direction: column;
+            gap: 1px;
+            overflow: hidden;
+        }
+        
+        .mobile-pill-notification .pill-title {
+            font-weight: 700;
+            font-size: 13.5px;
+            letter-spacing: -0.1px;
+            color: #ffffff;
+        }
+        
+        .mobile-pill-notification .pill-desc {
+            font-size: 11px;
+            color: #d1d5db;
+            font-weight: 400;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        @keyframes pill-pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.15); filter: drop-shadow(0 0 5px rgba(249, 118, 24, 0.6)); }
+        }
+
+        /* RESPONSIVE DESIGN */
+        @media (max-width: 768px) {
+            header.top {
+                flex-direction: column;
+                gap: 16px;
+                padding: 16px;
+                text-align: center;
+            }
+            header.top .brand {
+                justify-content: center;
+            }
+            header.top nav {
+                flex-wrap: wrap;
+                justify-content: center;
+                gap: 8px;
+            }
+            header.top .user-info {
+                border-right: none;
+                border-bottom: 1px solid rgba(255,255,255,0.2);
+                padding-right: 0;
+                margin-right: 0;
+                padding-bottom: 10px;
+                margin-bottom: 6px;
+                align-items: center;
+                width: 100%;
+            }
+            .container { padding: 16px 12px; }
+            .toolbar { flex-direction: column; align-items: stretch; }
+            .toolbar form { flex-direction: column; width: 100%; }
+            .form-grid { grid-template-columns: 1fr; }
+            .perfil-modal-content { max-width: 95%; padding: 16px; }
+            .perfil-stats { flex-direction: column; gap: 8px; }
+            .econoplayer-btn { position: relative; left: auto; transform: none; display: inline-flex; justify-content: center; width: 100%; margin-top: 10px; }
+            .btn-back-inline { width: 100%; justify-content: center; margin-bottom: 10px; }
+        }
+    </style>
+    <script>
+        // Init theme early to avoid flash
+        if (localStorage.getItem('theme') === 'dark' || (!localStorage.getItem('theme') && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+            document.documentElement.setAttribute('data-theme', 'dark');
+        }
+    </script>
+    {% block extra_head %}{% endblock %}
+    <!-- SweetAlert2 -->
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+</head>
+<body>
+    <header class="top no-print">
+        <div class="brand">
+            <a href="{% url 'econotec:bienvenida' %}" style="display: flex; align-items: center; gap: 14px; text-decoration: none; color: inherit;">
+                <img src="{% static 'logo.jpg' %}" alt="Econotec" class="logo-circle">
+                <h1>
+                    ECONOTEC
+                    <span class="sub">Reparación de Tecnología</span>
+                </h1>
+            </a>
+        </div>
+        
+
+
+        <nav>
+            {% if user.is_authenticated %}
+                <div class="user-info">
+                    <h3>{{ user.first_name|default:user.username }}</h3>
+                    {% if es_admin %}
+                        <span class="role-badge role-admin">Administrador</span>
+                    {% elif es_tecnico %}
+                        <span class="role-badge role-tecnico">Técnico</span> 
+                    {% elif es_asesor %}
+                        <span class="role-badge role-asesor">Asesor</span>
+                    {% else %}
+                        <span class="role-badge role-default">Sin rol</span>
+                    {% endif %}
+                    {% if sede_actual_display %}
+                        <span class="role-badge" style="background: rgba(255,255,255,0.95); color: #d7642f; margin-left: 4px;">
+                            {{ sede_actual_display }}
+                        </span>
+                    {% endif %}
+                </div>
+                <a href="{% url 'econotec:bienvenida' %}">Inicio</a>
+                {% if alertas_total_count > 0 %}
+                    <a href="{% url 'econotec:bienvenida' %}" class="alert-badge-link"
+                       title="Tienes alertas pendientes: ver dashboard">
+                        🚨
+                        <span class="alert-badge-num">{{ alertas_total_count }}</span>
+                    </a>
+                {% endif %}
+                {% if es_admin %}
+                    <a href="/admin/" title="Panel administrativo de Django">Admin</a>
+                {% endif %}
+                
+                {% if es_tecnico %}
+                <button type="button" id="btn-perfil" title="Ver mi progreso" style="background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.3); color: white; border-radius: 20px; padding: 5px 14px; margin-right: 10px; cursor: pointer; transition: 0.2s; font-weight: bold; margin-left: 5px;">
+                    👤 Perfil
+                </button>
+                {% endif %}
+
+                <button type="button" class="theme-toggle" id="theme-toggle-btn" title="Alternar modo oscuro">
+                    <span class="icon-light" style="display:none;">🌞</span>
+                    <span class="icon-dark">🌙</span>
+                </button>
+                <form method="post" action="{% url 'logout' %}" id="logout-form">
+                    {% csrf_token %}
+                    <button type="button" id="btn-logout" style="background: rgba(26, 26, 26, 0.61);">Cerrar sesión</button>
+                </form>
+            {% endif %}
+        </nav>
+    </header>
+
+    <div class="container">
+        {% if request.resolver_match.url_name != 'bienvenida' %}
+        <div class="no-print" style="margin-bottom: 16px;">
+            <button type="button" onclick="history.back()" class="btn-back-inline" title="Regresar a la pantalla anterior">
+                <span style="font-size:15px; margin-right:6px;">⬅</span> Atrás
+            </button>
+        </div>
+        {% endif %}
+
+        {% if messages %}
+            <script>
+                document.addEventListener('DOMContentLoaded', function() {
+                    const Toast = Swal.mixin({
+                        toast: true,
+                        position: 'top-end',
+                        showConfirmButton: false,
+                        showCloseButton: true,
+                        timer: 4000,
+                        timerProgressBar: true,
+                        didOpen: (toast) => {
+                            toast.addEventListener('mouseenter', Swal.stopTimer)
+                            toast.addEventListener('mouseleave', Swal.resumeTimer)
+                        }
+                    });
+
+                    {% for message in messages %}
+                        if ('{{ message|escapejs }}'.includes('🔕') || '{{ message|escapejs }}'.includes('🔔') || '{{ message|escapejs }}'.includes('silencia') || '{{ message|escapejs }}'.includes('reactiva')) {
+                            mostrarPillCelular('{{ message|escapejs }}');
+                        } else {
+                            {% if 'error' in message.tags %}
+                                Toast.fire({ icon: 'error', title: '{{ message|escapejs }}' });
+                            {% elif 'success' in message.tags %}
+                                Toast.fire({ icon: 'success', title: '{{ message|escapejs }}' });
+                            {% elif 'warning' in message.tags %}
+                                Toast.fire({ icon: 'warning', title: '{{ message|escapejs }}' });
+                            {% else %}
+                                Toast.fire({ icon: 'info', title: '{{ message|escapejs }}' });
+                            {% endif %}
+                        }
+                    {% endfor %}
+                });
+            </script>
+        {% endif %}
+
+        {% block content %}{% endblock %}
+    </div>
+
+
+
+    {% if user.is_authenticated %}
+        {% include 'includes/econobot.html' %}
+    {% endif %}
+
+    {% block extra_js %}{% endblock %}
+    <script>
+
+
+        const themeBtn = document.getElementById('theme-toggle-btn');
+        if (themeBtn) {
+            const iconLight = themeBtn.querySelector('.icon-light');
+            const iconDark = themeBtn.querySelector('.icon-dark');
+            
+            function updateBtnIcon() {
+                if (document.documentElement.getAttribute('data-theme') === 'dark') {
+                    iconLight.style.display = '';
+                    iconDark.style.display = 'none';
+                } else {
+                    iconLight.style.display = 'none';
+                    iconDark.style.display = '';
+                }
+            }
+            updateBtnIcon();
+            
+            themeBtn.addEventListener('click', () => {
+                if (document.documentElement.getAttribute('data-theme') === 'dark') {
+                    document.documentElement.removeAttribute('data-theme');
+                    localStorage.setItem('theme', 'light');
+                } else {
+                    document.documentElement.setAttribute('data-theme', 'dark');
+                    localStorage.setItem('theme', 'dark');
+                }
+                updateBtnIcon();
+            });
+        }
+    </script>
+    <script>
+        function confirmDelete(event, form, text = '¿Estás seguro de eliminar este registro?', confirmText = 'Sí, eliminar', cancelText = 'Cancelar / Volver') {
+            event.preventDefault();
+            Swal.fire({
+                title: '¿Confirmar acción?',
+                text: text,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#d33',
+                cancelButtonColor: '#888',
+                confirmButtonText: confirmText,
+                cancelButtonText: cancelText
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    form.submit();
+                }
+            });
+        }
+
+        function confirmarCierre(event, form, codigo, tieneBodegaje = false, montoBod = 0, diasBod = 0) {
+            event.preventDefault();
+
+            if (tieneBodegaje && tieneBodegaje !== 'false') {
+                // Texto con el monto y días reales del bodegaje acumulado
+                const montoFmt = (parseFloat(montoBod) || 0).toFixed(2);
+                const diasTxt = diasBod ? (diasBod + (diasBod == 1 ? ' día' : ' días')) : '';
+                const detalle = diasTxt
+                    ? 'Este equipo acumula <b>$' + montoFmt + '</b> de bodegaje (' + diasTxt + ').'
+                    : 'Este equipo acumula <b>$' + montoFmt + '</b> de bodegaje.';
+
+                Swal.fire({
+                    title: '¿Desea aplicar el valor de bodegaje?',
+                    html: detalle + '<br><br>Equipo <b>' + codigo + '</b>. ¿Cobrar el bodegaje al cliente o perdonarlo?',
+                    icon: 'question',
+                    showDenyButton: true,
+                    showCancelButton: true,
+                    confirmButtonText: 'Sí, cobrar bodegaje',
+                    denyButtonText: 'No, perdonar',
+                    cancelButtonText: 'Cancelar / Volver',
+                    confirmButtonColor: '#f97618',
+                    denyButtonColor: '#4caf50',
+                    cancelButtonColor: '#888',
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        Swal.fire({
+                            title: '¿Está seguro?',
+                            html: 'Va a cobrar <b>$' + montoFmt + '</b> de bodegaje al equipo <b>' + codigo + '</b>.<br>A continuación elegirá el método de pago.',
+                            icon: 'warning',
+                            showCancelButton: true,
+                            confirmButtonText: 'Sí, continuar',
+                            cancelButtonText: 'Cancelar',
+                            confirmButtonColor: '#f97618',
+                            cancelButtonColor: '#888',
+                        }).then((confirmRes) => {
+                            if(confirmRes.isConfirmed) {
+                                bodegajeTargetForm = form;
+                                // Mostrar el monto dentro del modal de pago
+                                var lbl = document.getElementById('bod_monto_label');
+                                if (lbl) lbl.textContent = '$' + montoFmt + (diasTxt ? ' (' + diasTxt + ')' : '');
+                                document.getElementById('bodegaje-modal').style.display = 'flex';
+                            }
+                        });
+                    } else if (result.isDenied) {
+                        Swal.fire({
+                            title: '¿Está seguro?',
+                            html: 'Va a <b>perdonar</b> el bodegaje de <b>$' + montoFmt + '</b> del equipo <b>' + codigo + '</b>. No se cobrará nada por bodegaje.',
+                            icon: 'warning',
+                            showCancelButton: true,
+                            confirmButtonText: 'Sí, perdonar',
+                            cancelButtonText: 'Cancelar',
+                            confirmButtonColor: '#4caf50',
+                            cancelButtonColor: '#888',
+                        }).then((confirmRes) => {
+                            if(confirmRes.isConfirmed) {
+                                form.querySelector('input[type=hidden][name=aplicar_bodegaje]').value = '';
+                                form.submit();
+                            }
+                        });
+                    }
+                });
+            } else {
+                Swal.fire({
+                    title: '¿Marcar equipo ' + codigo + ' como RETIRADO?',
+                    text: '¿Está seguro de marcar este equipo como retirado por el cliente?',
+                    icon: 'question',
+                    showCancelButton: true,
+                    confirmButtonText: 'Sí, retirar',
+                    cancelButtonText: 'Cancelar',
+                    confirmButtonColor: '#4caf50',
+                    cancelButtonColor: '#888',
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        form.querySelector('input[type=hidden][name=aplicar_bodegaje]').value = '';
+                        form.submit();
+                    }
+                });
+            }
+        }
+
+        function confirmarSilenciar(event, form, codigo, tipo) {
+            event.preventDefault();
+            
+            let titulo = '';
+            let texto = '';
+            
+            if (tipo === 'diagnostico') {
+                titulo = '¿Silenciar alerta de diagnóstico para ' + codigo + '?';
+                texto = 'El equipo seguirá pendiente de diagnóstico, pero no aparecerá en el dashboard.\nSe reactivará automáticamente cuando cambies su estado.';
+            } else {
+                titulo = '¿Silenciar alerta de bodegaje para ' + codigo + '?';
+                texto = 'El bodegaje seguirá acumulándose, pero no aparecerá en el dashboard hasta que reactives la alerta.';
+            }
+            
+            const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+            
+            Swal.fire({
+                title: titulo,
+                text: texto,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonText: 'Sí, silenciar 🔕',
+                cancelButtonText: 'Cancelar',
+                confirmButtonColor: '#f97618',
+                cancelButtonColor: '#757575',
+                background: isDark ? '#1f2937' : '#ffffff',
+                color: isDark ? '#f9fafb' : '#1f2937'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    form.submit();
+                }
+            });
+        }
+
+        function mostrarPillCelular(mensaje) {
+            const container = document.createElement('div');
+            container.className = 'mobile-pill-notification';
+            
+            let icon = '🔕';
+            let title = 'No molestar';
+            let desc = mensaje;
+            
+            if (mensaje.includes('🔕')) {
+                icon = '🔕';
+                title = 'Modo No Molestar: Activado';
+                desc = mensaje.replace('🔕', '').replace(/Alerta silenciada para el equipo [A-Za-z0-9\-\_]+\.?\s*/i, '').trim();
+            } else if (mensaje.includes('🔔')) {
+                icon = '🔔';
+                title = 'Modo No Molestar: Desactivado';
+                desc = mensaje.replace('🔔', '').trim();
+            }
+            
+            // Capitalize first letter of description if it is not empty
+            if (desc.length > 0) {
+                desc = desc.charAt(0).toUpperCase() + desc.slice(1);
+            } else {
+                desc = mensaje;
+            }
+            
+            container.innerHTML = `
+                <div class="pill-icon">${icon}</div>
+                <div class="pill-text">
+                    <span class="pill-title">${title}</span>
+                    <span class="pill-desc">${desc}</span>
+                </div>
+            `;
+            
+            document.body.appendChild(container);
+            
+            // Force layout reflow
+            container.offsetHeight;
+            
+            // Animate entrance
+            container.classList.add('show');
+            
+            // Soft vibration on supported devices
+            try {
+                if ('vibrate' in navigator) {
+                    navigator.vibrate([45, 30, 45]);
+                }
+            } catch(e) {}
+
+            // Dismiss after 4.5 seconds
+            setTimeout(() => {
+                container.classList.remove('show');
+                setTimeout(() => {
+                    container.remove();
+                }, 600);
+            }, 4500);
+        }
+    </script>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            var btnLogout = document.getElementById('btn-logout');
+            var formLogout = document.getElementById('logout-form');
+            if(btnLogout && formLogout) {
+                btnLogout.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    btnLogout.disabled = true;
+                    btnLogout.textContent = 'Cerrando...';
+                    
+                    var played = false;
+                    function finishLogout() {
+                        if (!played) {
+                            played = true;
+                            formLogout.submit();
+                        }
+                    }
+
+                    if ('speechSynthesis' in window) {
+                        window.speechSynthesis.cancel();
+                        var msg = new SpeechSynthesisUtterance("Vuelva pronto. Sesión finalizada.");
+                        msg.lang = "es-ES";
+                        
+                        var availableVoices = window.speechSynthesis.getVoices();
+                        var bestVoice = availableVoices.find(v => v.lang.startsWith('es') && (v.name.includes('Google') || v.name.includes('Natural') || v.name.includes('Premium')));
+                        if (!bestVoice) bestVoice = availableVoices.find(v => v.lang.startsWith('es'));
+                        
+                        if (bestVoice) {
+                            msg.voice = bestVoice;
+                        }
+                        msg.rate = 0.95;
+                        msg.pitch = 1.0;
+                        
+                        msg.onend = finishLogout;
+                        msg.onerror = finishLogout;
+                        
+                        window.speechSynthesis.speak(msg);
+                        
+                        // Fallback in caso de error o demora en el síntesis
+                        setTimeout(finishLogout, 2500);
+                    } else {
+                        finishLogout();
+                    }
+                });
+            }
+        });
+    </script>
+
+    <!-- Modal Cobro de Bodegaje -->
+    <div id="bodegaje-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:9999; align-items:center; justify-content:center; padding:20px;">
+        <div style="background:var(--card-bg,#fff); border-radius:12px; padding:24px; max-width:400px; width:100%; box-shadow:0 10px 40px rgba(0,0,0,0.3); position: relative;">
+            <h3 style="margin:0 0 8px; color:var(--primary,#f97618); font-size:18px;">💳 Cobro de Bodegaje</h3>
+            <div style="background:rgba(249,118,24,0.10); border:1px solid rgba(249,118,24,0.35); border-radius:8px; padding:10px 12px; margin-bottom:14px; text-align:center;">
+                <span style="font-size:12px; color:var(--text-muted,#666); display:block;">Valor de bodegaje a cobrar</span>
+                <strong id="bod_monto_label" style="font-size:22px; color:var(--primary,#f97618);">$0.00</strong>
+            </div>
+            <p style="font-size:13px; color:var(--text-muted,#666); margin-bottom:16px;">Selecciona el método de pago con el que el cliente está cancelando el valor del bodegaje.</p>
+            
+            <div style="margin-bottom: 12px;">
+                <label style="display:block; font-size:13px; font-weight:bold; margin-bottom:4px; color:var(--text-color);">Método de pago</label>
+                <select id="bod_metodo" class="form-input" style="width:100%; box-sizing:border-box; padding:8px;" onchange="toggleBodegajeFields()">
+                    <option value="efectivo">Efectivo</option>
+                    <option value="transferencia">Transferencia Bancaria</option>
+                    <option value="tarjeta">Tarjeta / App (Payphone, Deuna)</option>
+                </select>
+            </div>
+
+            <div id="bod_wrap_banco" style="display:none; margin-bottom: 12px;">
+                <label style="display:block; font-size:13px; font-weight:bold; margin-bottom:4px; color:var(--text-color);">Banco</label>
+                <select id="bod_banco" class="form-input" style="width:100%; box-sizing:border-box; padding:8px;" onchange="toggleBodegajeFields()">
+                    <option value="pichincha">Pichincha</option>
+                    <option value="guayaquil">Guayaquil</option>
+                    <option value="produbanco">Produbanco</option>
+                    <option value="bolivariano">Bolivariano</option>
+                    <option value="pacifico">Pacífico</option>
+                    <option value="internacional">Internacional</option>
+                    <option value="austro">Austro</option>
+                    <option value="cooperativa_jep">Cooperativa JEP</option>
+                    <option value="otro">Otro (Especificar)</option>
+                </select>
+            </div>
+
+            <div id="bod_wrap_banco_otro" style="display:none; margin-bottom: 12px;">
+                <label style="display:block; font-size:13px; font-weight:bold; margin-bottom:4px; color:var(--text-color);">Especificar Banco</label>
+                <input type="text" id="bod_banco_otro" class="form-input" style="width:100%; box-sizing:border-box; padding:8px;" placeholder="Nombre del banco...">
+            </div>
+
+            <div id="bod_wrap_tarjeta" style="display:none; margin-bottom: 12px;">
+                <label style="display:block; font-size:13px; font-weight:bold; margin-bottom:4px; color:var(--text-color);">Tarjeta / App</label>
+                <select id="bod_tarjeta_app" class="form-input" style="width:100%; box-sizing:border-box; padding:8px;">
+                    <option value="payphone">Payphone</option>
+                    <option value="deuna">Deuna</option>
+                    <option value="credito">Tarjeta de Crédito</option>
+                    <option value="debito">Tarjeta de Débito</option>
+                </select>
+            </div>
+
+            <div id="bod_wrap_comprobante" style="display:none; margin-bottom: 16px;">
+                <label style="display:block; font-size:13px; font-weight:bold; margin-bottom:4px; color:var(--text-color);">Enlace al comprobante (Opcional)</label>
+                <input type="url" id="bod_comprobante_url" class="form-input" style="width:100%; box-sizing:border-box; padding:8px;" placeholder="URL de la imagen...">
+            </div>
+
+            <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:20px;">
+                <button type="button" class="btn btn-secondary" onclick="document.getElementById('bodegaje-modal').style.display='none'">Cancelar</button>
+                <button type="button" class="btn btn-primary" onclick="submitBodegajeForm()">Guardar y Retirar</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let bodegajeTargetForm = null;
+
+        function toggleBodegajeFields() {
+            const metodo = document.getElementById('bod_metodo').value;
+            const wrapBanco = document.getElementById('bod_wrap_banco');
+            const wrapBancoOtro = document.getElementById('bod_wrap_banco_otro');
+            const wrapTarjeta = document.getElementById('bod_wrap_tarjeta');
+            const wrapComprobante = document.getElementById('bod_wrap_comprobante');
+            const banco = document.getElementById('bod_banco').value;
+
+            wrapBanco.style.display = (metodo === 'transferencia') ? 'block' : 'none';
+            wrapTarjeta.style.display = (metodo === 'tarjeta') ? 'block' : 'none';
+            wrapComprobante.style.display = (metodo === 'transferencia') ? 'block' : 'none';
+
+            if (metodo === 'transferencia' && banco === 'otro') {
+                wrapBancoOtro.style.display = 'block';
+            } else {
+                wrapBancoOtro.style.display = 'none';
+            }
+        }
+
+        function submitBodegajeForm() {
+            if (!bodegajeTargetForm) return;
+
+            // Create hidden inputs for the payment data
+            const addHiddenInput = (name, value) => {
+                let existing = bodegajeTargetForm.querySelector('[name="' + name + '"]');
+                if (existing) {
+                    existing.value = value;
+                } else {
+                    let input = document.createElement('input');
+                    input.type = 'hidden';
+                    input.name = name;
+                    input.value = value;
+                    bodegajeTargetForm.appendChild(input);
+                }
+            };
+
+            addHiddenInput('pago_bod_metodo', document.getElementById('bod_metodo').value);
+            addHiddenInput('pago_bod_banco', document.getElementById('bod_banco').value);
+            addHiddenInput('pago_bod_banco_otro', document.getElementById('bod_banco_otro').value);
+            addHiddenInput('pago_bod_tarjeta_app', document.getElementById('bod_tarjeta_app').value);
+            addHiddenInput('pago_bod_comprobante_url', document.getElementById('bod_comprobante_url').value);
+            
+            // Set the bodegaje flag robustly
+            addHiddenInput('aplicar_bodegaje', 'on');
+
+            document.getElementById('bodegaje-modal').style.display = 'none';
+            bodegajeTargetForm.submit();
+        }
+    </script>
+
+    <!-- Modal de Perfil (Gamificación) -->
+    <div id="perfil-modal" class="perfil-modal" style="display: none;">
+        <div class="perfil-modal-content" id="perfil-modal-content">
+            <button class="perfil-help" onclick="mostrarAyudaPerfil()" title="¿Cómo funciona esto?">?</button>
+            <button class="perfil-close" onclick="document.getElementById('perfil-modal').style.display='none'">×</button>
+            <div class="perfil-header" id="perfil-header" style="background: #ccc; transition: all 0.5s;">
+                <div class="perfil-avatar" id="perfil-avatar-icon" style="display:flex; justify-content:center; align-items:center;">👤</div>
+                <h3 id="perfil-nombre">Cargando...</h3>
+                <p class="perfil-nivel" id="perfil-nivel-texto">Nivel: ---</p>
+                <div id="god-tec-message"></div>
+            </div>
+            <div class="perfil-body">
+                <div class="perfil-stats">
+                    <div class="stat-box">
+                        <span class="stat-num" id="stat-buenas" style="color: #28a745;">0</span>
+                        <span class="stat-label">Salidas Buenas</span>
+                    </div>
+                    <div class="stat-box">
+                        <span class="stat-num" id="stat-malas" style="color: #dc3545;">0</span>
+                        <span class="stat-label">Salidas Malas</span>
+                    </div>
+                </div>
+                
+                <div class="perfil-progress">
+                    <div class="progress-bar-bg">
+                        <div class="progress-bar-fill" id="perfil-progress-fill"></div>
+                    </div>
+                    <p class="progress-text" id="perfil-progress-text">0 / 10 para el siguiente nivel</p>
+                </div>
+                
+                <div class="perfil-actions" style="margin-top: 20px;">
+                    <a href="{% url 'econotec:ingreso_lista' %}?tecnico={{ request.user.id }}" style="display: flex; align-items: center; justify-content: center; gap: 10px; background: #f0f0f0; color: #333; padding: 12px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 14px; transition: background 0.3s;">
+                        📋 Ver mis equipos asignados
+                        <span style="font-size: 18px; margin-top: -2px;">➔</span>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            var btnPerfil = document.getElementById('btn-perfil');
+            var modalPerfil = document.getElementById('perfil-modal');
+            
+            if (btnPerfil && modalPerfil) {
+                btnPerfil.addEventListener('click', function() {
+                    modalPerfil.style.display = 'flex';
+                    
+                    fetch('/api/perfil/')
+                        .then(r => r.json())
+                        .then(data => {
+                            document.getElementById('perfil-nombre').textContent = data.nombre;
+                            document.getElementById('perfil-nivel-texto').textContent = 'NIVEL: ' + data.nivel;
+                            document.getElementById('perfil-header').style.background = data.color;
+                            
+                            if (data.nivel === 'God Tec Econotec') {
+                                document.getElementById('perfil-header').style.backgroundSize = '200% 200%';
+                                document.getElementById('perfil-header').style.animation = 'godTecAnim 3s ease infinite';
+                                document.getElementById('perfil-avatar-icon').innerHTML = `<img src="{% static 'logo.jpg' %}" style="width: 100%; height: 100%; border-radius: 50%; border: 3px solid #FFD700; box-shadow: 0 0 20px rgba(255, 215, 0, 0.8); object-fit: cover;">`;
+                                document.getElementById('god-tec-message').innerHTML = '<div style="background: rgba(255,215,0,0.2); padding: 10px; border-radius: 8px; margin-top: 15px; color: #fff; text-shadow: 0 0 5px #ff8c00; font-weight: bold; text-align: center; border: 1px solid #FFD700;">¡Felicidades! Eres una LEYENDA de Econotec.<br>Has alcanzado el nivel máximo y tienes privilegios de ORO.</div>';
+                            } else {
+                                document.getElementById('perfil-header').style.backgroundSize = 'auto';
+                                document.getElementById('perfil-header').style.animation = 'none';
+                                document.getElementById('perfil-avatar-icon').innerHTML = '👤';
+                                document.getElementById('god-tec-message').innerHTML = '';
+                            }
+                            
+                            document.getElementById('stat-buenas').textContent = data.salidas_buenas;
+                            document.getElementById('stat-malas').textContent = data.salidas_malas;
+                            
+                            var fill = document.getElementById('perfil-progress-fill');
+                            var pText = document.getElementById('perfil-progress-text');
+                            
+                            if (data.proximo) {
+                                var prev = 0;
+                                if (data.total >= 4000) prev = 3999;
+                                else if (data.total >= 1000) prev = 999;
+                                else if (data.total >= 500) prev = 499;
+                                else if (data.total >= 100) prev = 99;
+                                else if (data.total >= 50) prev = 49;
+                                var current = data.total - prev;
+                                var needed = data.proximo - 1 - prev + 1; // +1 to include current boundary correctly
+                                var percent = (current / needed) * 100;
+                                if (percent > 100) percent = 100;
+                                
+                                fill.style.width = percent + '%';
+                                fill.style.background = data.color;
+                                pText.textContent = data.total + ' / ' + data.proximo + ' para el siguiente nivel';
+                            } else {
+                                fill.style.width = '100%';
+                                fill.style.background = data.color;
+                                pText.textContent = data.total + ' operaciones (Nivel Máximo)';
+                            }
+                        });
+                });
+            }
+        });
+
+        function mostrarAyudaPerfil() {
+            Swal.fire({
+                title: '¿Cómo funciona tu Perfil?',
+                html: `
+                    <div style="text-align: left; font-size: 14px; line-height: 1.6;">
+                        <p>Te saluda con tu nombre de usuario y un icono de avatar.</p>
+                        <p>Contiene estadísticas exactas mostrando tus <b>"Salidas Buenas"</b> que suman a tu puntuación. ¡Ten cuidado, porque las Salidas Malas marcadas como <b>"No se pudo reparar"</b> te restan 1 punto, y las <b>"Salidas por Garantía"</b> te restan 2 puntos por no hacer bien el trabajo a la primera! <i>(Nota: Si el "Cliente no quiso reparar", no te suma ni te resta puntos, ya que no es tu culpa)</i>.</p>
+                        <p><b>Regla de Oro:</b> Tu nivel se calcula <b>EXCLUSIVAMENTE</b> por las Salidas en las que tú eres el Técnico responsable, los ingresos de equipos no dan puntos.</p>
+                        <p>El color de la cabecera y de tu barra de progreso cambiará automáticamente para reflejar tu nivel desbloqueado:</p>
+                        <ul style="padding-left: 10px; list-style-type: none; margin-top: 10px;">
+                            <li style="margin-bottom: 5px;"><span style="color:#8e8e8e; font-size: 18px; margin-right: 5px;">●</span> <b>Nivel Novato</b> (0-49): Gris</li>
+                            <li style="margin-bottom: 5px;"><span style="color:#cd7f32; font-size: 18px; margin-right: 5px;">●</span> <b>Nivel Intermedio</b> (50-99): Bronce</li>
+                            <li style="margin-bottom: 5px;"><span style="color:#c0c0c0; font-size: 18px; margin-right: 5px;">●</span> <b>Nivel Avanzado</b> (100-499): Plata</li>
+                            <li style="margin-bottom: 5px;"><span style="color:#ffd700; font-size: 18px; margin-right: 5px;">●</span> <b>Nivel Experto</b> (500-999): Oro</li>
+                            <li style="margin-bottom: 5px;"><span style="color:#b9f2ff; font-size: 18px; text-shadow: 0 0 5px #b9f2ff; margin-right: 5px;">●</span> <b>Nivel Maestro</b> (1000-3999): Diamante Brillante</li>
+                            <li style="margin-bottom: 5px;"><span style="color:#FFD700; font-size: 18px; text-shadow: 0 0 5px #ff8c00; margin-right: 5px;">👑</span> <b>God Tec Econotec</b> (+4000): Oro Premium (Logo y Privilegios)</li>
+                        </ul>
+                    </div>
+                `,
+                icon: 'info',
+                confirmButtonColor: '#f97618',
+                confirmButtonText: '¡Entendido!'
+            });
+        }
+    </script>
+    {% if request.user.is_authenticated %}
+    <script>
+        (function() {
+            let timeout;
+            const fifteenMinutes = 10 * 60 * 1000; // 10 MINUTOS
+
+            function showLogoutAlert() {
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Sesión inactiva',
+                    text: 'Tu sesión ha sido cerrada por inactividad (10 minutos).',
+                    confirmButtonText: 'Aceptar',
+                    confirmButtonColor: '#f97618',
+                    allowOutsideClick: false,
+                    allowEscapeKey: false
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        window.location.href = "{% url 'logout' %}";
+                    }
+                });
+            }
+
+            function resetTimer() {
+                clearTimeout(timeout);
+                timeout = setTimeout(showLogoutAlert, fifteenMinutes);
+            }
+
+            // Reiniciar temporizador en cualquier actividad del usuario
+            window.onload = resetTimer;
+            document.onmousemove = resetTimer;
+            document.onkeypress = resetTimer;
+            document.onclick = resetTimer;
+            document.onscroll = resetTimer;
+        })();
+    </script>
+    {% endif %}
+</body>
+</html>

@@ -1,0 +1,79 @@
+{% extends 'base.html' %}
+
+{% block title %}Clientes — Econotec{% endblock %}
+
+{% block content %}
+<div class="crumb">
+    <a href="{% url 'econotec:bienvenida' %}">Inicio</a> / Clientes
+</div>
+
+<h2 class="page-title">Directorio de <span class="accent">Clientes</span></h2>
+<p class="page-subtitle">{{ total }} clientes registrados.</p>
+
+<div class="toolbar" style="display: flex; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 20px;">
+    <form method="get" style="display: flex; gap: 8px; flex-wrap: wrap;">
+        <input type="text" name="q" value="{{ q }}" placeholder="Buscar por cédula, nombre, WhatsApp…" class="form-input" style="min-width: 280px;">
+        <select name="sede" class="form-input" style="width: auto;">
+            <option value="">Todas las sedes</option>
+            <option value="guayaquil" {% if sede_filtro == 'guayaquil' %}selected{% endif %}>Guayaquil (G)</option>
+            <option value="quito" {% if sede_filtro == 'quito' %}selected{% endif %}>Quito (U)</option>
+        </select>
+        <button type="submit" class="btn btn-primary">Filtrar</button>
+    </form>
+    <div style="display: flex; gap: 8px;">
+        <button onclick="window.print()" class="btn btn-secondary">🖨️ Imprimir</button>
+        <a href="{% url 'econotec:cliente_export' %}" class="btn btn-success">📊 Exportar Excel</a>
+    </div>
+</div>
+
+{% if clientes %}
+<div class="table-wrap">
+    <table>
+        <thead>
+            <tr>
+                <th>Cédula / RUC</th>
+                <th>Nombres</th>
+                <th>WhatsApp</th>
+                <th>Correo</th>
+                <th>Sector</th>
+                <th>Equipos</th>
+                <th>Acciones</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for c in clientes %}
+            <tr>
+                <td><strong>{{ c.cedula }}</strong></td>
+                <td>{{ c.nombres }}</td>
+                <td>{{ c.whatsapp|default:"—" }}</td>
+                <td>{{ c.correo|default:"—" }}</td>
+                <td>{{ c.sector_display }}</td>
+                <td>
+                    {% if c.ingresos.count > 4 %}
+                        <div style="font-size: 13px; font-weight: bold; color: var(--primary);">
+                            {{ c.ingresos.count }} equipos
+                        </div>
+                    {% elif c.ingresos.all %}
+                        <div style="font-size: 13px; max-width: 150px; line-height: 1.4;">
+                        {% for eq in c.ingresos.all %}
+                            <strong>{{ eq.codigo_equipo }}</strong>{% if not forloop.last %}, {% endif %}
+                        {% endfor %}
+                        </div>
+                    {% else %}
+                        <span class="stat-pill">0</span>
+                    {% endif %}
+                </td>
+                <td><a href="{% url 'econotec:cliente_detalle' pk=c.pk %}" class="btn btn-sm btn-primary">Ver</a></td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="empty-state">
+    <div class="icon">👥</div>
+    <h3>No hay clientes</h3>
+    <p>Los clientes se crean automáticamente cuando registras un ingreso de equipo.</p>
+</div>
+{% endif %}
+{% endblock %}

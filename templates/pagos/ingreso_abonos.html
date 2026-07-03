@@ -1,0 +1,197 @@
+{% extends 'base.html' %}
+{% load econotec_extras %}
+
+{% block title %}Abonos Equipo {{ ingreso.codigo_equipo }} — Econotec{% endblock %}
+
+{% block content %}
+<div class="crumb">
+    <a href="{% url 'econotec:bienvenida' %}">Inicio</a> /
+    <a href="{% url 'econotec:pagos_lista' %}">Pagos</a> /
+    Equipo {{ ingreso.codigo_equipo }}
+</div>
+
+<div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 14px; margin-bottom: 22px;">
+    <div>
+        <h2 class="page-title">Abonos del Equipo <span class="accent">{{ ingreso.codigo_equipo }}</span></h2>
+        <p class="page-subtitle">Cliente: <strong>{{ ingreso.cliente.nombres }}</strong> — {{ ingreso.tipo_equipo_display }} {{ ingreso.marca }}</p>
+    </div>
+    <div style="display: flex; gap: 8px;">
+        <a href="{% url 'econotec:ingreso_detalle' pk=ingreso.pk %}" class="btn btn-secondary">← Volver al equipo</a>
+        <a href="{% url 'econotec:abono_crear' ingreso_pk=ingreso.pk %}" class="btn btn-primary">+ Nuevo Abono</a>
+    </div>
+</div>
+
+<!-- Resumen de pagos -->
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 24px;">
+    <div class="card-box" style="border-left: 4px solid var(--primary); padding: 16px;">
+        <div style="font-size: 11px; color: #888; text-transform: uppercase;">Valor acordado</div>
+        <div style="font-size: 22px; font-weight: 800; color: var(--secondary); margin-top: 4px;">{{ ingreso.valor_acordado|dinero_signo }}</div>
+    </div>
+    {% if ingreso.diagnostico_inmediato == 'si' and ingreso.valor_diagnostico > 0 %}
+    <div class="card-box" style="border-left: 4px solid #f39c12; padding: 16px;">
+        <div style="font-size: 11px; color: #888; text-transform: uppercase;">Adicional (Diag.)</div>
+        <div style="font-size: 22px; font-weight: 800; color: #f39c12; margin-top: 4px;">{{ ingreso.valor_diagnostico|dinero_signo }}</div>
+    </div>
+    {% endif %}
+    <div class="card-box" style="border-left: 4px solid #999; padding: 16px;">
+        <div style="font-size: 11px; color: #888; text-transform: uppercase;">Anticipo inicial</div>
+        <div style="font-size: 22px; font-weight: 800; color: #555; margin-top: 4px;">{{ ingreso.abono_anticipo|dinero_signo }}</div>
+    </div>
+    <div class="card-box" style="border-left: 4px solid var(--success); padding: 16px;">
+        <div style="font-size: 11px; color: #888; text-transform: uppercase;">Total Abonado</div>
+        <div style="font-size: 22px; font-weight: 800; color: var(--success); margin-top: 4px;">{{ ingreso.total_abonado|dinero_signo }}</div>
+    </div>
+    <div class="card-box" style="border-left: 4px solid {% if ingreso.diferencia > 0 %}var(--danger){% else %}var(--success){% endif %}; padding: 16px;">
+        <div style="font-size: 11px; color: #888; text-transform: uppercase;">Saldo</div>
+        <div style="font-size: 22px; font-weight: 800; color: {% if ingreso.diferencia > 0 %}var(--danger){% else %}var(--success){% endif %}; margin-top: 4px;">{{ ingreso.diferencia|dinero_signo }}</div>
+        {% if ingreso.bodegaje_pendiente > 0 %}
+            <div style="font-size: 11px; color: #b54400; font-weight: 700; margin-top: 6px;">
+                📦 + {{ ingreso.bodegaje_pendiente|dinero_signo }} bodegaje
+                <br>
+                <span style="font-weight: 800;">Con bodegaje: {{ ingreso.diferencia_con_bodegaje|dinero_signo }}</span>
+            </div>
+        {% endif %}
+    </div>
+</div>
+
+{% if abonos or ingreso.abono_anticipo > 0 or salida and salida.valor_final_cobrado > 0 or ingreso.diagnostico_inmediato == 'si' and ingreso.valor_diagnostico > 0 %}
+<div class="table-wrap">
+    <table>
+        <thead>
+            <tr>
+                <th>Recibo</th>
+                <th>Fecha</th>
+                <th>Monto</th>
+                <th>Método</th>
+                <th>Banco</th>
+                <th>Observaciones</th>
+                <th>Registró</th>
+                <th>Acciones</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% if ingreso.diagnostico_inmediato == 'si' and ingreso.valor_diagnostico > 0 %}
+            <tr>
+                <td><strong style="color: #f39c12;">DIAGNÓSTICO</strong></td>
+                <td>{{ ingreso.fecha_ingreso|date:"d/m/Y" }}</td>
+                <td style="color: #f39c12; font-weight: 700;">{{ ingreso.valor_diagnostico|dinero_signo }}</td>
+                <td>{{ ingreso.get_anticipo_metodo_display }}{% if ingreso.anticipo_metodo == 'tarjeta' %} ({{ ingreso.get_anticipo_tarjeta_app_display }}){% endif %}</td>
+                <td>
+                    {% if ingreso.anticipo_metodo == 'transferencia' %}
+                        {% if ingreso.anticipo_banco == 'otro' %}{{ ingreso.anticipo_banco_otro }}{% else %}{{ ingreso.get_anticipo_banco_display }}{% endif %}
+                    {% else %}
+                        —
+                    {% endif %}
+                </td>
+                <td>
+                    Pago diagnóstico (Extra)
+                    {% if ingreso.anticipo_comprobante_url %}
+                        <br><a href="{{ ingreso.anticipo_comprobante_url }}" target="_blank" style="font-size:11px; text-decoration:underline;">Ver comprobante</a>
+                    {% endif %}
+                </td>
+                <td style="font-size: 11px; white-space: nowrap; color: var(--text-muted);">
+                    {% if ingreso.registrado_por %}📝 {{ ingreso.registrado_por.first_name|default:ingreso.registrado_por.username }}<br>{{ ingreso.creado|date:"d/m/Y H:i" }}{% else %}—{% endif %}
+                </td>
+                <td class="row-actions">—</td>
+            </tr>
+        {% endif %}
+
+        {% if ingreso.abono_anticipo > 0 %}
+            <tr>
+                <td><strong style="color: var(--primary);">ANTICIPO</strong></td>
+                <td>{{ ingreso.fecha_ingreso|date:"d/m/Y" }}</td>
+                <td style="color: var(--success); font-weight: 700;">{{ ingreso.abono_anticipo|dinero_signo }}</td>
+                <td>
+                    {{ ingreso.get_anticipo_metodo_display }}{% if ingreso.anticipo_metodo == 'tarjeta' %} ({{ ingreso.get_anticipo_tarjeta_app_display }}){% endif %}
+                    {% if ingreso.anticipo_metodo == 'mixto' %}
+                        <br><small style="color:#666;">({{ ingreso.anticipo_monto_1|dinero_signo }} {{ ingreso.get_anticipo_metodo_1_display|default:'' }}, {{ ingreso.anticipo_monto_2|dinero_signo }} {{ ingreso.get_anticipo_metodo_2_display|default:'' }})</small>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if ingreso.anticipo_metodo == 'transferencia' %}
+                        {% if ingreso.anticipo_banco == 'otro' %}{{ ingreso.anticipo_banco_otro }}{% else %}{{ ingreso.get_anticipo_banco_display }}{% endif %}
+                    {% else %}
+                        —
+                    {% endif %}
+                </td>
+                <td>
+                    Pago inicial (Anticipo)
+                    {% if ingreso.anticipo_comprobante_url %}
+                        <br><a href="{{ ingreso.anticipo_comprobante_url }}" target="_blank" style="font-size:11px; text-decoration:underline;">Ver comprobante</a>
+                    {% endif %}
+                </td>
+                <td style="font-size: 11px; white-space: nowrap; color: var(--text-muted);">
+                    {% if ingreso.registrado_por %}📝 {{ ingreso.registrado_por.first_name|default:ingreso.registrado_por.username }}<br>{{ ingreso.creado|date:"d/m/Y H:i" }}{% else %}—{% endif %}
+                </td>
+                <td class="row-actions">—</td>
+            </tr>
+        {% endif %}
+
+        {% for a in abonos %}
+            <tr>
+                <td><strong style="color: var(--primary);">{{ a.numero_recibo }}</strong></td>
+                <td>{{ a.fecha|date:"d/m/Y" }}</td>
+                <td style="color: var(--success); font-weight: 700;">{{ a.monto|dinero_signo }}</td>
+                <td>{{ a.get_metodo_display }}</td>
+                <td>{{ a.get_banco_display|default:"—" }}</td>
+                <td>{{ a.observaciones|truncatechars:40|default:"—" }}</td>
+                <td style="font-size: 11px; white-space: nowrap; color: var(--text-muted);">
+                    {% if a.registrado_por %}📝 {{ a.registrado_por.first_name|default:a.registrado_por.username }}<br>{{ a.creado|date:"d/m/Y H:i" }}{% else %}—{% endif %}
+                </td>
+                <td class="row-actions">
+                    <a href="{% url 'econotec:abono_recibo' abono_pk=a.pk %}" target="_blank" class="btn btn-sm btn-info">🧾</a>
+                    <a href="{% url 'econotec:abono_editar' ingreso_pk=ingreso.pk abono_pk=a.pk %}" class="btn btn-sm btn-secondary">Editar</a>
+                    <form method="post" action="{% url 'econotec:abono_eliminar' ingreso_pk=ingreso.pk abono_pk=a.pk %}"
+                          style="display:inline;" onsubmit="confirmDelete(event, this, '¿Eliminar este abono?');">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-sm btn-danger">🗑</button>
+                    </form>
+                </td>
+            </tr>
+        {% endfor %}
+
+        {% if salida and salida.valor_final_cobrado > 0 %}
+            <tr>
+                <td><strong style="color: var(--primary);">SALIDA</strong></td>
+                <td>{{ salida.fecha_salida|date:"d/m/Y" }}</td>
+                <td style="color: var(--success); font-weight: 700;">{{ salida.valor_final_cobrado|dinero_signo }}</td>
+                <td>
+                    {{ salida.get_metodo_pago_final_display }}{% if salida.metodo_pago_final == 'tarjeta' %} ({{ salida.tarjeta_app }}){% endif %}
+                    {% if salida.metodo_pago_final == 'mixto' %}
+                        <br><small style="color:#666;">({{ salida.monto_1|dinero_signo }} {{ salida.get_metodo_1_display|default:'' }}, {{ salida.monto_2|dinero_signo }} {{ salida.get_metodo_2_display|default:'' }})</small>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if salida.metodo_pago_final == 'transferencia' %}
+                        {% if salida.banco == 'otro' %}{{ salida.banco_otro }}{% else %}{{ salida.get_banco_display }}{% endif %}
+                    {% else %}
+                        —
+                    {% endif %}
+                </td>
+                <td>
+                    Pago al retirar (Salida)
+                    {% if salida.comprobante_url %}
+                        <br><a href="{{ salida.comprobante_url }}" target="_blank" style="font-size:11px; text-decoration:underline;">Ver comprobante</a>
+                    {% endif %}
+                </td>
+                <td style="font-size: 11px; white-space: nowrap; color: var(--text-muted);">
+                    {% if salida.registrado_por %}📝 {{ salida.registrado_por.first_name|default:salida.registrado_por.username }}<br>{{ salida.creado|date:"d/m/Y H:i" }}{% else %}—{% endif %}
+                </td>
+                <td class="row-actions">
+                    <a href="{% url 'econotec:salida_pdf' pk=salida.pk %}" class="btn btn-sm btn-info" target="_blank" title="Ver Acta de Salida">📄 Acta</a>
+                </td>
+            </tr>
+        {% endif %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="empty-state">
+    <div class="icon">💳</div>
+    <h3>No hay pagos registrados</h3>
+    <p>Aún no se ha registrado ningún abono, anticipo o pago de salida.</p>
+    <br>
+    <a href="{% url 'econotec:abono_crear' ingreso_pk=ingreso.pk %}" class="btn btn-primary">+ Registrar primer abono</a>
+</div>
+{% endif %}
+{% endblock %}

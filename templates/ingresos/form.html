@@ -1,0 +1,916 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ titulo }} — Econotec{% endblock %}
+
+{% block content %}
+<style>
+    .form-card {
+        background: var(--card-bg);
+        border-radius: 14px;
+        padding: 28px;
+        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.06);
+        max-width: 980px;
+        margin: 0 auto;
+    }
+
+    .form-section {
+        margin-bottom: 24px;
+        padding-bottom: 22px;
+        border-bottom: 1px dashed #ddd;
+    }
+
+    .form-section:last-child {
+        border-bottom: none;
+    }
+
+    .form-section h3 {
+        color: var(--primary);
+        font-size: 16px;
+        font-weight: 700;
+        margin-bottom: 16px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .form-row {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 14px;
+    }
+
+    .form-row.cols-3 {
+        grid-template-columns: repeat(3, 1fr);
+    }
+
+    .form-row.cols-2 {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    @media (max-width: 768px) {
+        .form-row.cols-3, .form-row.cols-2 {
+            grid-template-columns: 1fr;
+        }
+        .top-meta {
+            flex-direction: column;
+            gap: 12px;
+            align-items: flex-start;
+        }
+    }
+
+    .top-meta {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        background: var(--primary-light);
+        padding: 14px 18px;
+        border-radius: 10px;
+        margin-bottom: 18px;
+    }
+
+    .top-meta .num-equipo {
+        background: white;
+        border: 2px solid var(--primary);
+        padding: 8px 18px;
+        border-radius: 8px;
+        font-weight: 800;
+        color: var(--primary);
+        font-size: 18px;
+    }
+
+    .actions-bar {
+        display: flex;
+        gap: 10px;
+        justify-content: flex-end;
+        margin-top: 24px;
+    }
+
+    /* Mostrar visualmente el estado deshabilitado de los botones */
+    .btn[disabled], .btn:disabled {
+        opacity: 0.55;
+        cursor: not-allowed;
+        pointer-events: none;
+        filter: grayscale(10%);
+    }
+</style>
+
+<div class="crumb">
+    <a href="{% url 'econotec:bienvenida' %}">Inicio</a> /
+    <a href="{% url 'econotec:ingreso_menu' %}">Ingreso de Equipo</a> / {{ titulo }}
+</div>
+
+<form method="post" class="form-card" id="ingreso-form">
+    {% csrf_token %}
+
+    <div class="top-meta">
+        <div>
+            <strong style="color: var(--primary); font-size: 18px;">SOLICITUD DE INGRESO</strong><br>
+            <small style="color: #666;">Llena el formulario tal cual la hoja física de Econotec.</small>
+            {% if sede_actual_display %}
+            <br><small style="color: var(--primary-dark); font-weight:700;">📍 Sede: {{ sede_actual_display }}</small>
+            {% endif %}
+        </div>
+        <div class="num-equipo">EQUIPO {{ siguiente_codigo|default:siguiente_numero }}</div>
+    </div>
+
+    <!-- Datos del personal -->
+    <div class="form-section">
+        <h3>Personal Econotec</h3>
+        <div class="form-row cols-3">
+            <div>
+                <label class="form-label">Asesor Comercial *</label>
+                {{ ing_form.asesor_comercial }}
+            </div>
+            <div>
+                <label class="form-label">Técnico Encargado *</label>
+                {{ ing_form.tecnico_encargado }}
+            </div>
+            <div>
+                <label class="form-label">Fecha de Ingreso *</label>
+                {{ ing_form.fecha_ingreso }}
+                {{ ing_form.fecha_ingreso.errors }}
+            </div>
+        </div>
+        <div class="form-row" style="margin-top:14px;">
+            <div>
+                <label class="form-label">Factura N° (opcional)</label>
+                {{ ing_form.numero_factura }}
+            </div>
+        </div>
+    </div>
+
+    <!-- Datos del cliente -->
+    <div class="form-section">
+        <h3>Datos del Cliente</h3>
+
+        <!-- Aviso dinámico cuando se encuentra cliente por cédula -->
+        <div id="cliente-aviso"
+            style="display:none; margin-bottom:14px; padding:12px 16px; border-radius:8px; background:#e8f5e9; border-left:4px solid #2e7d32; font-size:13px;">
+            <strong style="color:#1b5e20;">✅ Cliente reconocido.</strong>
+            <span id="cliente-aviso-texto" style="color:#1b5e20;"></span>
+        </div>
+
+        <div class="form-row cols-2">
+            <div>
+                <label class="form-label">Cédula o RUC *</label>
+                {{ cli_form.cedula }}
+                {{ cli_form.cedula.errors }}
+                <small style="color:#888; font-size:11px;">Si ya existe, se llenan sus datos automáticamente.</small>
+                <small id="cliente-buscando" style="color: var(--primary); font-size:11px; display:none;">🔎
+                    Buscando...</small>
+            </div>
+            <div>
+                <label class="form-label">Nombres del Cliente *</label>
+                {{ cli_form.nombres }}
+                {{ cli_form.nombres.errors }}
+            </div>
+        </div>
+        <div class="form-row cols-2" style="margin-top:14px;">
+            <div>
+                <label class="form-label">WhatsApp</label>
+                {{ cli_form.whatsapp }}
+            </div>
+            <div>
+                <label class="form-label">Correo</label>
+                {{ cli_form.correo }}
+            </div>
+        </div>
+        <div class="form-row cols-2" style="margin-top:14px;">
+            <div>
+                <label class="form-label">Sector</label>
+                {{ cli_form.sector }}
+            </div>
+            <div>
+                <label class="form-label">Sector (otro)</label>
+                {{ cli_form.sector_otro }}
+            </div>
+        </div>
+    </div>
+
+    <!-- Detalles del equipo -->
+    <div class="form-section">
+        <h3>Detalles del Equipo</h3>
+        <div class="form-row cols-2">
+            <div>
+                <label class="form-label">Tipo de equipo *</label>
+                {{ ing_form.tipo_equipo }}
+                {{ ing_form.tipo_equipo.errors }}
+            </div>
+            <div>
+                <label class="form-label">Tipo "Otro" (especificar)</label>
+                {{ ing_form.tipo_equipo_otro }}
+            </div>
+        </div>
+        <div class="form-row cols-2" style="margin-top:14px;">
+            <div>
+                <label class="form-label">Marca *</label>
+                {{ ing_form.marca }}
+                {{ ing_form.marca.errors }}
+            </div>
+            <div>
+                <label class="form-label">Modelo / Serie</label>
+                {{ ing_form.modelo_serie }}
+            </div>
+        </div>
+        <div style="margin-top:14px;">
+            <label class="form-label" style="margin-bottom:8px;">¿Trajo accesorios? *</label>
+            <div style="display: flex; gap: 20px; align-items: center; margin-bottom: 10px;">
+                <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                    <input type="radio" name="trajo_accesorios" value="si" required onclick="toggleAccesorios(true)">
+                    <span style="font-weight: 600;">Sí</span>
+                </label>
+                <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                    <input type="radio" name="trajo_accesorios" value="no" required onclick="toggleAccesorios(false)">
+                    <span style="font-weight: 600;">No</span>
+                </label>
+            </div>
+            <div id="accesorios-wrap" style="opacity: 0.3; pointer-events: none; transition: 0.3s;">
+                <label class="form-label">Detalle de accesorios entregados</label>
+                {{ ing_form.accesorios_entregados }}
+            </div>
+        </div>
+    </div>
+
+    <!-- Problema y reporte -->
+    <div class="form-section">
+        <h3>Problema y Reporte</h3>
+        <div>
+            <label class="form-label">Problema reportado *</label>
+            {{ ing_form.problema_reportado }}
+            {{ ing_form.problema_reportado.errors }}
+        </div>
+    </div>
+
+    <!-- Diagnóstico y valores -->
+    <div class="form-section">
+        <h3>Diagnóstico y Valores</h3>
+        <div class="form-row cols-2">
+            <div>
+                <label class="form-label">Diagnóstico inmediato</label>
+                {{ ing_form.diagnostico_inmediato }}
+            </div>
+            <div>
+                <label class="form-label">Valor del diagnóstico (USD)</label>
+                {{ ing_form.valor_diagnostico }}
+            </div>
+        </div>
+        <div class="form-row cols-3" style="margin-top:14px;">
+            <div>
+                <label class="form-label">Valor acordado (USD)</label>
+                {{ ing_form.valor_acordado }}
+                <small style="color:#888; font-size:11px; display:block; margin-top:4px;">Si dejas el casillero vacío o pones un punto (.), el valor saldrá como PENDIENTE y en la hoja se mostrará una raya (—).</small>
+            </div>
+            <div>
+                <label class="form-label">Abono / Anticipo (USD)</label>
+                {{ ing_form.abono_anticipo }}
+            </div>
+            <div>
+                <label class="form-label">Estado del equipo</label>
+                {{ ing_form.estado }}
+            </div>
+        </div>
+
+        <!-- Método de Pago Inicial (se muestra dinámicamente) -->
+        <div id="wrap_pago_inicial" style="display:none; margin-top:14px; background:#f5f7fa; padding:15px; border-radius:8px; border:1px solid #e1e4e8;">
+            <h4 style="margin-top:0; margin-bottom:10px; color:#333; font-size:14px;">MÉTODO DE PAGO INICIAL</h4>
+            <div class="form-row cols-2">
+                <div>
+                    <label class="form-label">Método de pago</label>
+                    {{ ing_form.anticipo_metodo }}
+                </div>
+                <div id="wrap_anticipo_banco" style="display:none;">
+                    <label class="form-label">Banco</label>
+                    {{ ing_form.anticipo_banco }}
+                </div>
+                <div id="wrap_anticipo_tarjeta" style="display:none;">
+                    <label class="form-label">Tarjeta / App</label>
+                    {{ ing_form.anticipo_tarjeta_app }}
+                </div>
+            </div>
+            <div class="form-row cols-2" style="margin-top:10px;">
+                <div id="wrap_anticipo_banco_otro" style="display:none;">
+                    <label class="form-label">Especificar Banco</label>
+                    {{ ing_form.anticipo_banco_otro }}
+                </div>
+                <div id="wrap_anticipo_comprobante" style="display:none;">
+                    <label class="form-label">Enlace al comprobante</label>
+                    {{ ing_form.anticipo_comprobante_url }}
+                </div>
+            </div>
+            
+            <div id="wrap_pago_mixto" style="display:none; margin-top:14px; background:#fff; padding:15px; border-radius:8px; border:1px dashed #c4cdd5;">
+                <h5 style="margin-top:0; margin-bottom:10px; color:#1a1f36; font-size:13px;">Pago Mixto (Dividir el valor pagado en dos)</h5>
+                <div class="form-row cols-2">
+                    <div>
+                        <label class="form-label">Monto 1 (USD) *</label>
+                        {{ ing_form.anticipo_monto_1 }}
+                    </div>
+                    <div>
+                        <label class="form-label">Método de pago 1 *</label>
+                        {{ ing_form.anticipo_metodo_1 }}
+                    </div>
+                    <div id="wrap_anticipo_banco_1" style="display:none;">
+                        <label class="form-label">Banco 1 *</label>
+                        {{ ing_form.anticipo_banco_1 }}
+                    </div>
+                </div>
+                <div class="form-row cols-2" style="margin-top:10px;">
+                    <div>
+                        <label class="form-label">Monto 2 (USD) *</label>
+                        {{ ing_form.anticipo_monto_2 }}
+                    </div>
+                    <div>
+                        <label class="form-label">Método de pago 2 *</label>
+                        {{ ing_form.anticipo_metodo_2 }}
+                    </div>
+                    <div id="wrap_anticipo_banco_2" style="display:none;">
+                        <label class="form-label">Banco 2 *</label>
+                        {{ ing_form.anticipo_banco_2 }}
+                    </div>
+                </div>
+                <div id="msg_error_mixto" style="display:none; color:#d32f2f; margin-top:14px; font-weight:600; font-size:13px; text-align:center;">
+                    <!-- Error message for sum will appear here -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Sub-estados condicionales -->
+        <div class="form-row cols-2" style="margin-top:14px;">
+            <div id="wrap_subestado_reparacion" style="display:none;">
+                <label class="form-label" style="color: var(--primary);">
+                    🔧 Detalle (En reparación)
+                </label>
+                {{ ing_form.subestado_reparacion }}
+                {{ ing_form.subestado_reparacion.errors }}
+                <small style="color:#888; font-size:11px;">¿En qué etapa está la reparación?</small>
+            </div>
+            <div id="wrap_subestado_entregado" style="display:none;">
+                <label class="form-label" style="color: var(--primary);">
+                    📦 Detalle (Entregado)
+                </label>
+                {{ ing_form.subestado_entregado }}
+                {{ ing_form.subestado_entregado.errors }}
+                <small style="color:#888; font-size:11px;">¿Cómo se entregó al cliente?</small>
+            </div>
+        </div>
+
+        <div id="wrap_garantia" style="display:none; margin-top:14px; background: #fff3e0; padding: 16px; border-radius: 8px; border: 1px solid #ffcc80;">
+            <h4 style="color: #e65100; margin-bottom: 12px; font-size: 15px;">🛡️ Detalle de Garantía</h4>
+            <div class="form-row cols-2">
+                <div>
+                    <label class="form-label" style="color: #e65100; margin-bottom: 4px;">Selecciona el equipo anterior</label>
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <span style="color:#e65100; font-weight:bold;">—</span>
+                        <div style="flex:1;">
+                            {{ ing_form.equipo_garantia }}
+                        </div>
+                        <span style="color:#e65100; font-weight:bold;">—</span>
+                    </div>
+                    {{ ing_form.equipo_garantia.errors }}
+                    <small style="color:#888; font-size:11px; display:block; margin-top:4px;">Solo se muestran equipos previos de este cliente.</small>
+                    
+                    <div style="margin-top: 10px;">
+                        <label class="form-label" style="color: #e65100; font-size: 12px; margin-bottom: 4px;">¿No está en la lista? (Ingreso manual)</label>
+                        {{ ing_form.equipo_garantia_manual }}
+                        {{ ing_form.equipo_garantia_manual.errors }}
+                    </div>
+                </div>
+                <div>
+                    <label class="form-label" style="color: #e65100;">Motivo de la garantía *</label>
+                    {{ ing_form.motivo_garantia }}
+                    {{ ing_form.motivo_garantia.errors }}
+                </div>
+            </div>
+        </div>
+
+        <!-- Hint auto-salida -->
+        <div id="hint-auto-salida" style="display:none; margin-top:16px; padding:14px 18px; border-radius:10px; background:linear-gradient(135deg,#e8f5e9,#f1f8e9); border-left:4px solid #43a047; font-size:13px; transition: all .3s;">
+            <strong style="color:#2e7d32; font-size:14px;">⚡ Salida automática</strong><br>
+            <span id="hint-auto-salida-texto" style="color:#1b5e20;"></span>
+            <br><small style="color:#388e3c; margin-top:4px; display:block;">💡 Al hacer clic en <strong>Guardar cambios</strong>, se registrará la salida del equipo automáticamente. No tendrás que hacerlo por separado.</small>
+        </div>
+    </div>
+
+    <div class="actions-bar">
+        <a href="{% url 'econotec:ingreso_lista' %}" class="btn btn-secondary">Cancelar</a>
+        <button type="submit" id="btn-registrar" class="btn btn-primary">
+            {% if modo == 'editar' %}Guardar cambios{% else %}Registrar Ingreso{% endif %}
+        </button>
+    </div>
+</form>
+
+<script>
+    // Mostrar/ocultar los sub-estados + hint de salida automática
+    (function () {
+        var selEstado = document.querySelector('[name="ing-estado"]');
+        var wrapRep = document.getElementById('wrap_subestado_reparacion');
+        var wrapEnt = document.getElementById('wrap_subestado_entregado');
+        var wrapGar = document.getElementById('wrap_garantia');
+        var selRep = document.querySelector('[name="ing-subestado_reparacion"]');
+        var selEnt = document.querySelector('[name="ing-subestado_entregado"]');
+        var selGar = document.querySelector('[name="ing-equipo_garantia"]');
+        var inpMotivo = document.querySelector('[name="ing-motivo_garantia"]');
+        var hintBox = document.getElementById('hint-auto-salida');
+        var hintTxt = document.getElementById('hint-auto-salida-texto');
+
+        var MENSAJES = {
+            'con_solucion': '✅ <strong>Con solución — Cliente conforme.</strong> Se registrará la salida como <em>Retirado / Entregado conforme</em>.',
+            'sin_solucion': '❌ <strong>Sin solución — No se pudo reparar.</strong> Se registrará la salida como <em>No se pudo reparar</em>.',
+            'no_quiso_reparar': '🚫 <strong>Sin reparación — Cliente no quiso reparar.</strong> Se registrará la salida como <em>Cliente no quiso reparar</em> y se asignará el cobro de revisión.'
+        };
+
+        function actualizarHint() {
+            var estado = selEstado ? selEstado.value : '';
+            var sub = selEnt ? selEnt.value : '';
+            if (estado === 'entregado' && MENSAJES[sub]) {
+                if (hintTxt) hintTxt.innerHTML = MENSAJES[sub];
+                if (hintBox) hintBox.style.display = '';
+            } else {
+                if (hintBox) hintBox.style.display = 'none';
+            }
+        }
+
+        function actualizar() {
+            var v = selEstado ? selEstado.value : '';
+            if (wrapRep) wrapRep.style.display = (v === 'en_reparacion') ? '' : 'none';
+            if (wrapEnt) wrapEnt.style.display = (v === 'entregado') ? '' : 'none';
+            if (wrapGar) wrapGar.style.display = (v === 'garantia') ? '' : 'none';
+
+            // Hacer obligatorios los campos según el estado para evitar opciones nulas
+            if (selRep) selRep.required = (v === 'en_reparacion');
+            if (selEnt) selEnt.required = (v === 'entregado');
+            if (selGar) selGar.required = (v === 'garantia');
+            if (inpMotivo) inpMotivo.required = (v === 'garantia');
+
+            // Limpia el sub-estado que no corresponde para que no quede dato colgado
+            if (v !== 'en_reparacion' && selRep) selRep.value = '';
+            if (v !== 'entregado' && selEnt) selEnt.value = '';
+            if (v !== 'garantia') {
+                if (selGar) selGar.value = '';
+                if (inpMotivo) inpMotivo.value = '';
+            }
+
+            actualizarHint();
+        }
+
+        if (selEstado) {
+            selEstado.addEventListener('change', actualizar);
+            actualizar();
+        }
+        if (selEnt) {
+            selEnt.addEventListener('change', actualizarHint);
+        }
+    })();
+
+    // Autocompletado de cliente por cédula
+    // Cuando el técnico escribe la cédula, busca al cliente y rellena los campos.
+    (function () {
+        var inpCedula = document.querySelector('input[name="cli-cedula"]');
+        var inpNombres = document.querySelector('input[name="cli-nombres"]');
+        var inpWhatsapp = document.querySelector('input[name="cli-whatsapp"]');
+        var inpCorreo = document.querySelector('input[name="cli-correo"]');
+        var selSector = document.querySelector('select[name="cli-sector"]');
+        var inpSectorOtro = document.querySelector('input[name="cli-sector_otro"]');
+        var aviso = document.getElementById('cliente-aviso');
+        var avisoTxt = document.getElementById('cliente-aviso-texto');
+        var loadingMsg = document.getElementById('cliente-buscando');
+
+        if (!inpCedula) return;
+
+        var URL_BUSCAR = "{% url 'econotec:cliente_buscar_por_cedula' %}";
+        var timer = null;
+        var ultimaCedulaConsultada = '';
+
+        function camposClienteEditables(editable) {
+            // Marca visualmente los campos como "auto-rellenados" cuando vienen de la BD,
+            // pero los deja editables por si el técnico quiere actualizar algún dato.
+            var bg = editable ? '' : '#f0fff4';
+            [inpNombres, inpWhatsapp, inpCorreo, inpSectorOtro].forEach(function (el) {
+                if (el) el.style.backgroundColor = bg;
+            });
+            if (selSector) selSector.style.backgroundColor = bg;
+        }
+
+        function ocultarAviso() {
+            if (aviso) aviso.style.display = 'none';
+            camposClienteEditables(true);
+        }
+
+        function buscar() {
+            var cedula = (inpCedula.value || '').trim();
+            if (cedula.length < 5) {  // muy corta para ser cédula válida
+                ocultarAviso();
+                var selGar = document.querySelector('[name="ing-equipo_garantia"]');
+                if (selGar) {
+                    selGar.innerHTML = '<option value="">— Sin equipo registrado —</option>';
+                }
+                ultimaCedulaConsultada = '';
+                return;
+            }
+            if (cedula === ultimaCedulaConsultada) return;  // evita pegar al servidor sin cambios
+            ultimaCedulaConsultada = cedula;
+
+            if (loadingMsg) loadingMsg.style.display = '';
+
+            fetch(URL_BUSCAR + '?cedula=' + encodeURIComponent(cedula), {
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                credentials: 'same-origin'
+            })
+                .then(function (r) { return r.json(); })
+                .then(function (data) {
+                    if (loadingMsg) loadingMsg.style.display = 'none';
+
+                    if (data && data.existe) {
+                        var c = data.cliente;
+                        if (inpNombres) inpNombres.value = c.nombres || '';
+                        if (inpWhatsapp) inpWhatsapp.value = c.whatsapp || '';
+                        if (inpCorreo) inpCorreo.value = c.correo || '';
+                        if (selSector) selSector.value = c.sector || '';
+                        if (inpSectorOtro) inpSectorOtro.value = c.sector_otro || '';
+
+                        if (aviso && avisoTxt) {
+                            var n = data.num_equipos_anteriores || 0;
+                            var sufijo = (n === 1) ? '1 equipo anterior' : (n + ' equipos anteriores');
+                            avisoTxt.textContent = ' Cliente "' + (c.nombres || '') + '" — ' + sufijo + ' registrados. Los datos pueden editarse si lo necesitas.';
+                            aviso.style.display = '';
+                        }
+                        
+                        var selGar = document.querySelector('[name="ing-equipo_garantia"]');
+                        if (selGar && data.equipos) {
+                            window.__equipos_garantia_data = data.equipos;
+                            if (data.equipos.length > 0) {
+                                var currentVal = selGar.value;
+                                selGar.innerHTML = '<option value="">— Selecciona un equipo anterior —</option>';
+                                data.equipos.forEach(function(eq) {
+                                    var opt = document.createElement('option');
+                                    opt.value = eq.id;
+                                    opt.textContent = eq.label;
+                                    selGar.appendChild(opt);
+                                });
+                                selGar.value = currentVal;
+                            } else {
+                                selGar.innerHTML = '<option value="">— Sin equipo registrado —</option>';
+                            }
+                        }
+                        
+                        camposClienteEditables(false);
+                        if (window.__checkRequired) window.__checkRequired();
+                    } else {
+                        ocultarAviso();
+                        var selGar = document.querySelector('[name="ing-equipo_garantia"]');
+                        if (selGar) {
+                            selGar.innerHTML = '<option value="">— Sin equipo registrado —</option>';
+                        }
+                        if (window.__checkRequired) window.__checkRequired();
+                    }
+                })
+                .catch(function () {
+                    if (loadingMsg) loadingMsg.style.display = 'none';
+                });
+        }
+
+        function programarBusqueda() {
+            clearTimeout(timer);
+            timer = setTimeout(buscar, 350);  // debounce: espera 350ms tras dejar de escribir
+        }
+
+        inpCedula.addEventListener('input', programarBusqueda);
+        inpCedula.addEventListener('blur', buscar);
+
+        // Si el form ya viene con cédula al cargar (ej. modo editar o validación con error), búscala
+        if (inpCedula.value && inpCedula.value.trim().length >= 5) {
+            buscar();
+        }
+    })();
+
+    (function () {
+        var selDiag = document.querySelector('[name="ing-diagnostico_inmediato"]');
+        var inpValorDiag = document.querySelector('[name="ing-valor_diagnostico"]');
+
+        if (selDiag && inpValorDiag) {
+            selDiag.addEventListener('change', function () {
+                var valStr = inpValorDiag.value.replace(',', '.');
+                var numVal = parseFloat(valStr);
+
+                if (this.value === 'si') {
+                    if (!inpValorDiag.value || isNaN(numVal) || numVal === 0) {
+                        inpValorDiag.value = '10.00';
+                    }
+                } else if (this.value === 'no') {
+                    if (numVal === 10) {
+                        inpValorDiag.value = '0.00';
+                    }
+                }
+            });
+        }
+    })();
+
+    (function() {
+        var selDiag = document.querySelector('[name="ing-diagnostico_inmediato"]');
+        var inpAbono = document.querySelector('[name="ing-abono_anticipo"]');
+        var wrapPago = document.getElementById('wrap_pago_inicial');
+        
+        var selMetodo = document.querySelector('[name="ing-anticipo_metodo"]');
+        var wrapBanco = document.getElementById('wrap_anticipo_banco');
+        var wrapTarjeta = document.getElementById('wrap_anticipo_tarjeta');
+        var wrapComprobante = document.getElementById('wrap_anticipo_comprobante');
+        
+        var selBanco = document.querySelector('[name="ing-anticipo_banco"]');
+        var wrapBancoOtro = document.getElementById('wrap_anticipo_banco_otro');
+        
+        var wrapPagoMixto = document.getElementById('wrap_pago_mixto');
+        var selMetodo1 = document.querySelector('[name="ing-anticipo_metodo_1"]');
+        var wrapBanco1 = document.getElementById('wrap_anticipo_banco_1');
+        var selMetodo2 = document.querySelector('[name="ing-anticipo_metodo_2"]');
+        var wrapBanco2 = document.getElementById('wrap_anticipo_banco_2');
+        var inpMonto1 = document.querySelector('[name="ing-anticipo_monto_1"]');
+        var inpMonto2 = document.querySelector('[name="ing-anticipo_monto_2"]');
+        var inpValorDiag = document.querySelector('[name="ing-valor_diagnostico"]');
+        var msgErrorMixto = document.getElementById('msg_error_mixto');
+
+        function checkPagoInicial() {
+            var isDiag = selDiag && selDiag.value === 'si';
+            var abonoVal = parseFloat((inpAbono && inpAbono.value) ? inpAbono.value.replace(',', '.') : 0) || 0;
+            if (isDiag || abonoVal > 0) {
+                wrapPago.style.display = 'block';
+            } else {
+                wrapPago.style.display = 'none';
+            }
+        }
+
+        function checkMetodo() {
+            var metodo = selMetodo ? selMetodo.value : 'efectivo';
+            if (metodo === 'mixto') {
+                if (wrapPagoMixto) wrapPagoMixto.style.display = 'block';
+                if (wrapBanco) wrapBanco.style.display = 'none';
+                if (wrapTarjeta) wrapTarjeta.style.display = 'none';
+                if (wrapComprobante) wrapComprobante.style.display = 'none';
+                if (wrapBancoOtro) wrapBancoOtro.style.display = 'none';
+                checkMetodoMixto();
+            } else {
+                if (wrapPagoMixto) wrapPagoMixto.style.display = 'none';
+                if (wrapBanco) wrapBanco.style.display = (metodo === 'transferencia') ? 'block' : 'none';
+                if (wrapTarjeta) wrapTarjeta.style.display = (metodo === 'tarjeta') ? 'block' : 'none';
+                if (wrapComprobante) wrapComprobante.style.display = (metodo === 'transferencia') ? 'block' : 'none';
+                
+                // Si cambia método, ocultar/mostrar banco otro según corresponda
+                if (metodo !== 'transferencia') {
+                    if (wrapBancoOtro) wrapBancoOtro.style.display = 'none';
+                } else {
+                    checkBanco();
+                }
+            }
+        }
+
+        function checkMetodoMixto() {
+            if (selMetodo1 && wrapBanco1) {
+                wrapBanco1.style.display = (selMetodo1.value === 'transferencia') ? 'block' : 'none';
+            }
+            if (selMetodo2 && wrapBanco2) {
+                wrapBanco2.style.display = (selMetodo2.value === 'transferencia') ? 'block' : 'none';
+            }
+            validarSumaMixto();
+        }
+
+        function validarSumaMixto() {
+            if (!selMetodo || selMetodo.value !== 'mixto') {
+                if (msgErrorMixto) msgErrorMixto.style.display = 'none';
+                if (inpMonto2) inpMonto2.setCustomValidity("");
+                if (window.__checkRequired) window.__checkRequired();
+                return;
+            }
+
+            var isDiag = selDiag && selDiag.value === 'si';
+            var diagVal = isDiag && inpValorDiag ? parseFloat(inpValorDiag.value.replace(',', '.')) || 0 : 0;
+            var abonoVal = inpAbono ? parseFloat(inpAbono.value.replace(',', '.')) || 0 : 0;
+            var totalRequerido = diagVal + abonoVal;
+
+            var m1 = inpMonto1 ? parseFloat(inpMonto1.value) || 0 : 0;
+            var m2 = inpMonto2 ? parseFloat(inpMonto2.value) || 0 : 0;
+            var suma = m1 + m2;
+
+            if (totalRequerido > 0) {
+                if (Math.abs(suma - totalRequerido) > 0.001) {
+                    if (msgErrorMixto) {
+                        msgErrorMixto.textContent = "⚠️ La suma de ambos montos ($" + suma.toFixed(2) + ") debe ser igual al total a pagar ($" + totalRequerido.toFixed(2) + ").";
+                        msgErrorMixto.style.display = 'block';
+                    }
+                    if (inpMonto2) inpMonto2.setCustomValidity("La suma debe ser " + totalRequerido.toFixed(2));
+                } else {
+                    if (msgErrorMixto) msgErrorMixto.style.display = 'none';
+                    if (inpMonto2) inpMonto2.setCustomValidity("");
+                }
+            } else {
+                if (msgErrorMixto) msgErrorMixto.style.display = 'none';
+                if (inpMonto2) inpMonto2.setCustomValidity("");
+            }
+            if (window.__checkRequired) window.__checkRequired();
+        }
+
+        function checkBanco() {
+            if (selMetodo && selMetodo.value === 'transferencia' && selBanco && selBanco.value === 'otro') {
+                wrapBancoOtro.style.display = 'block';
+            } else {
+                wrapBancoOtro.style.display = 'none';
+            }
+        }
+
+        if (selDiag) {
+            selDiag.addEventListener('change', checkPagoInicial);
+            selDiag.addEventListener('change', validarSumaMixto);
+        }
+        if (inpAbono) {
+            inpAbono.addEventListener('input', checkPagoInicial);
+            inpAbono.addEventListener('change', checkPagoInicial);
+            inpAbono.addEventListener('input', validarSumaMixto);
+            inpAbono.addEventListener('change', validarSumaMixto);
+        }
+        if (inpValorDiag) {
+            inpValorDiag.addEventListener('input', validarSumaMixto);
+            inpValorDiag.addEventListener('change', validarSumaMixto);
+        }
+        if (inpMonto1) {
+            inpMonto1.addEventListener('input', validarSumaMixto);
+            inpMonto1.addEventListener('change', validarSumaMixto);
+        }
+        if (inpMonto2) {
+            inpMonto2.addEventListener('input', validarSumaMixto);
+            inpMonto2.addEventListener('change', validarSumaMixto);
+        }
+        if (selMetodo) selMetodo.addEventListener('change', checkMetodo);
+        if (selBanco) selBanco.addEventListener('change', checkBanco);
+        if (selMetodo1) selMetodo1.addEventListener('change', checkMetodoMixto);
+        if (selMetodo2) selMetodo2.addEventListener('change', checkMetodoMixto);
+
+        // Run once on load
+        checkPagoInicial();
+        if (selMetodo) checkMetodo();
+    })();
+
+    (function () {
+        var btn = document.getElementById('btn-registrar');
+        var form = document.querySelector('form.form-card');
+        
+        window.__checkRequired = function() {
+            if (!btn || !form) return;
+            // Si el formulario no es válido, darle apariencia transparente sin desactivarlo
+            // así el usuario aún puede darle clic y ver los mensajes de error del navegador
+            if (!form.checkValidity()) {
+                btn.style.opacity = '0.55';
+                btn.style.filter = 'grayscale(20%)';
+            } else {
+                btn.style.opacity = '1';
+                btn.style.filter = 'none';
+            }
+        };
+
+        if (form) {
+            form.addEventListener('input', window.__checkRequired);
+            form.addEventListener('change', window.__checkRequired);
+            setTimeout(window.__checkRequired, 100);
+            setTimeout(window.__checkRequired, 500);
+        }
+    })();
+
+    function toggleAccesorios(show) {
+        var wrap = document.getElementById('accesorios-wrap');
+        var input = document.getElementById('id_ing-accesorios_entregados');
+        if (!input) return;
+        if (show) {
+            wrap.style.opacity = '1';
+            wrap.style.pointerEvents = 'auto';
+            input.setAttribute('required', 'required');
+            if (input.value === 'Ninguno' || input.value === '') {
+                input.value = input.dataset.savedValue || '';
+            }
+        } else {
+            wrap.style.opacity = '0.3';
+            wrap.style.pointerEvents = 'none';
+            input.removeAttribute('required');
+            if (input.value && input.value !== 'Ninguno') {
+                input.dataset.savedValue = input.value;
+            }
+            input.value = 'Ninguno';
+        }
+        if (window.__checkRequired) window.__checkRequired();
+    }
+    
+    document.addEventListener("DOMContentLoaded", function() {
+        var input = document.getElementById('id_ing-accesorios_entregados');
+        var radioSi = document.querySelector('input[name="trajo_accesorios"][value="si"]');
+        var radioNo = document.querySelector('input[name="trajo_accesorios"][value="no"]');
+        
+        if (input && input.value && input.value.trim().toLowerCase() !== 'ninguno') {
+            if (radioSi) radioSi.checked = true;
+            toggleAccesorios(true);
+        } else if (input) {
+            if (radioNo) radioNo.checked = true;
+            toggleAccesorios(false);
+        }
+    });
+    // Autocompletado de garantía
+    (function () {
+        var selGar = document.querySelector('[name="ing-equipo_garantia"]');
+        var inpTipo = document.querySelector('[name="ing-tipo_equipo"]');
+        var inpMarca = document.querySelector('[name="ing-marca"]');
+        var inpModelo = document.querySelector('[name="ing-modelo_serie"]');
+        var inpMotivo = document.querySelector('[name="ing-motivo_garantia"]');
+        var inpProblema = document.querySelector('[name="ing-problema_reportado"]');
+
+        if (selGar) {
+            selGar.addEventListener('change', function () {
+                var val = this.value;
+                if (val && window.__equipos_garantia_data) {
+                    var eq = window.__equipos_garantia_data.find(function(e) { return String(e.id) === String(val); });
+                    if (eq) {
+                        if (inpTipo && eq.tipo_equipo) inpTipo.value = eq.tipo_equipo;
+                        if (inpMarca && eq.marca) {
+                            inpMarca.value = eq.marca;
+                            inpMarca.style.backgroundColor = '#f0fff4';
+                        }
+                        if (inpModelo && eq.modelo_serie) {
+                            inpModelo.value = eq.modelo_serie;
+                            inpModelo.style.backgroundColor = '#f0fff4';
+                        }
+                    }
+                }
+            });
+        }
+
+        if (inpMotivo && inpProblema) {
+            inpMotivo.addEventListener('input', function() {
+                var selEstado = document.querySelector('[name="ing-estado"]');
+                if (selEstado && selEstado.value === 'garantia') {
+                    inpProblema.value = this.value ? "Garantía - " + this.value : "";
+                }
+            });
+        }
+    })();
+
+    // Auto-guardado en localStorage para evitar pérdida de datos si expira la sesión
+    (function() {
+        const form = document.getElementById('ingreso-form');
+        if (!form) return;
+        const storageKey = 'econotec_ingreso_form_{{ ingreso.pk|default:"nuevo" }}';
+        
+        // Restaurar datos
+        try {
+            const savedData = localStorage.getItem(storageKey);
+            if (savedData) {
+                const data = JSON.parse(savedData);
+                Object.keys(data).forEach(name => {
+                    // Evitar restaurar csrf_token u ocultos raros
+                    if (name === 'csrfmiddlewaretoken') return;
+                    const el = form.querySelector(`[name="${name}"]`);
+                    if (el) {
+                        if (el.type === 'checkbox' || el.type === 'radio') {
+                            const radioEl = form.querySelector(`[name="${name}"][value="${data[name]}"]`);
+                            if (radioEl) radioEl.checked = true;
+                            else if (el.type === 'checkbox') el.checked = data[name] === 'true' || data[name] === true;
+                        } else {
+                            // Solo restaurar si está vacío, o siempre restaurar? 
+                            // Restauramos siempre para recuperar el progreso.
+                            el.value = data[name];
+                        }
+                    }
+                });
+                // Disparar los eventos change para que se actualice la UI
+                setTimeout(() => {
+                    if (window.__checkRequired) window.__checkRequired();
+                    const evt = new Event('change', { bubbles: true });
+                    const selects = form.querySelectorAll('select');
+                    selects.forEach(s => s.dispatchEvent(evt));
+                }, 100);
+            }
+        } catch (e) { console.error('Error restaurando form:', e); }
+
+        // Guardar cambios
+        form.addEventListener('input', function(e) {
+            if (e.target.name && e.target.name !== 'csrfmiddlewaretoken') {
+                saveForm();
+            }
+        });
+        form.addEventListener('change', function(e) {
+            if (e.target.name && e.target.name !== 'csrfmiddlewaretoken') {
+                saveForm();
+            }
+        });
+
+        function saveForm() {
+            try {
+                const formData = new FormData(form);
+                const data = {};
+                formData.forEach((value, key) => {
+                    data[key] = value;
+                });
+                localStorage.setItem(storageKey, JSON.stringify(data));
+            } catch (e) {}
+        }
+
+        // Limpiar al enviar
+        form.addEventListener('submit', function() {
+            localStorage.removeItem(storageKey);
+        });
+    })();
+
+</script>
+{% endblock %}

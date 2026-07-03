@@ -1,0 +1,132 @@
+{% extends 'base.html' %}
+{% load econotec_extras %}
+
+{% block title %}Lista de Ventas — Econotec{% endblock %}
+
+{% block content %}
+<div class="crumb">
+    <a href="{% url 'econotec:bienvenida' %}">Inicio</a> /
+    <a href="{% url 'econotec:venta_menu' %}">Venta de Producto</a> / Lista
+</div>
+
+<h2 class="page-title">Ventas <span class="accent">Registradas</span></h2>
+<p class="page-subtitle">
+    {{ total }} ventas registradas en total.
+</p>
+
+<div class="toolbar">
+    <form method="get">
+        <input type="text" name="q" value="{{ q }}" placeholder="Buscar por N° venta, cliente, cédula, producto…" class="form-input" style="width: 300px;">
+        <button type="submit" class="btn btn-primary">Filtrar</button>
+    </form>
+        <a href="{% url 'econotec:venta_export' %}" class="btn btn-secondary">📥 Exportar Excel</a>
+        <a href="{% url 'econotec:venta_registrar' %}" class="btn btn-primary">+ Nueva Venta</a>
+</div>
+
+{% if ingresos %}
+<div class="table-wrap">
+    <table>
+        <thead>
+            <tr>
+                <th>Código</th>
+                <th>Fecha</th>
+                <th>Cliente</th>
+                <th>Cédula</th>
+                <th>Descripción</th>
+                <th>Registrado por</th>
+                <th>Valor Venta</th>
+                <th>Saldo Pendiente</th>
+                <th>Acciones</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for i in ingresos %}
+            <tr>
+                <td><strong style="color: var(--primary);">{{ i.codigo_equipo }}</strong></td>
+                <td>{{ i.fecha_ingreso|date:"d/m/Y" }}</td>
+                <td>{{ i.cliente.nombres }}</td>
+                <td>{{ i.cliente.cedula }}</td>
+                <td>{{ i.problema_reportado|truncatechars:80 }}</td>
+                <td>
+                    {% if i.registrado_por %}
+                        <span style="background: var(--primary-light); color: var(--primary-dark); padding: 3px 9px; border-radius: 10px; font-size: 11px; font-weight: 700;">
+                            👤 {{ i.registrado_por.first_name|default:i.registrado_por.username }}
+                        </span>
+                    {% else %}
+                        <span style="color:#bbb;">—</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {{ i.valor_acordado|dinero_signo }}
+                </td>
+                <td>
+                    {% if i.diferencia > 0 %}
+                        <span style="color: #d97706; font-weight: 600;">{{ i.diferencia|dinero_signo }}</span>
+                    {% else %}
+                        <span style="color: #16a34a; font-weight: 600;">Pagado</span>
+                    {% endif %}
+                </td>
+                <td class="row-actions">
+                    <a href="{% url 'econotec:ingreso_pdf' pk=i.pk %}" class="btn btn-sm btn-secondary" title="Descargar PDF">Descargar 📄</a>
+                    {% if i.diferencia > 0 %}
+                        <a href="{% url 'econotec:abono_crear' ingreso_pk=i.pk %}" class="btn btn-sm btn-primary" title="Registrar Pago">💵 Pagar</a>
+                    {% endif %}
+                    {% if es_admin %}
+                        <a href="{% url 'econotec:venta_editar' pk=i.pk %}" class="btn btn-sm btn-warning" title="Editar">✏️</a>
+                        <form method="post" action="{% url 'econotec:venta_eliminar' pk=i.pk %}" style="display:inline;" onsubmit="return openDeleteModal(this, event);">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-sm btn-danger" title="Eliminar" style="padding: 4px 8px; font-size: 11px;">🗑️</button>
+                        </form>
+                    {% endif %}
+                </td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="empty-state">
+    <h3>No se encontraron ventas</h3>
+    <p>Ajusta los filtros o registra una nueva venta.</p>
+    <br>
+    <a href="{% url 'econotec:venta_registrar' %}" class="btn btn-primary">+ Registrar Venta</a>
+</div>
+{% endif %}
+
+<!-- Custom Modal para Eliminar Venta -->
+<div id="delete-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 9999; align-items: center; justify-content: center; backdrop-filter: blur(4px);">
+    <div style="background: var(--bg-color, #fff); padding: 32px; border-radius: 16px; max-width: 400px; width: 90%; text-align: center; box-shadow: 0 10px 25px rgba(0,0,0,0.2);">
+        <div style="font-size: 48px; margin-bottom: 16px;">🗑️</div>
+        <h2 style="margin-top: 0; color: var(--text-main, #1f2937); font-size: 20px;">Eliminar Venta</h2>
+        <p style="color: var(--text-muted, #4b5563); margin-bottom: 24px; font-size: 15px;">¿Seguro que deseas eliminar esta venta permanentemente? Esta acción no se puede deshacer.</p>
+        <div style="display: flex; gap: 12px; margin-top: 24px;">
+            <button type="button" onclick="closeDeleteModal()" style="padding: 12px 20px; border-radius: 8px; border: 1px solid #d1d5db; background: transparent; color: var(--text-main, #1f2937); font-weight: 600; cursor: pointer; flex: 1;">Cancelar</button>
+            <button type="button" id="confirm-delete-btn" style="padding: 12px 20px; border-radius: 8px; border: none; background: #dc2626; color: white; font-weight: 700; cursor: pointer; flex: 1;">Sí, eliminar</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    let formToDelete = null;
+
+    function openDeleteModal(formElement, event) {
+        event.preventDefault();
+        formToDelete = formElement;
+        document.getElementById('delete-modal').style.display = 'flex';
+        return false;
+    }
+
+    function closeDeleteModal() {
+        formToDelete = null;
+        document.getElementById('delete-modal').style.display = 'none';
+    }
+
+    document.getElementById('confirm-delete-btn').addEventListener('click', function() {
+        if (formToDelete) {
+            this.innerHTML = 'Eliminando...';
+            this.disabled = true;
+            formToDelete.submit();
+        }
+    });
+</script>
+{% endblock %}

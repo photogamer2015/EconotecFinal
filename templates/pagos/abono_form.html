@@ -1,0 +1,681 @@
+{% extends 'base.html' %}
+{% load econotec_extras %}
+
+{% block title %}{{ titulo }} — Econotec{% endblock %}
+
+{% block content %}
+<style>
+    /* Sección colapsable con borde sutil */
+    .form-block {
+        background: var(--card-bg);
+        border: 1px solid var(--border-color);
+        border-radius: 12px;
+        padding: 18px 20px;
+        margin-top: 18px;
+    }
+    .form-block-title {
+        font-size: 15px;
+        font-weight: 700;
+        color: var(--info);
+        margin-bottom: 14px;
+        padding-bottom: 8px;
+        border-bottom: 2px solid var(--warning);
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    .helper-text { color: var(--text-muted); font-size: 11px; margin-top: 4px; }
+    .hidden { display: none !important; }
+    /* Asterisco rojo: solo visible cuando el label tiene la clase de obligatorio */
+    .req-star { color: var(--danger); font-weight: 700; display: none; }
+    .always-req .req-star { display: inline; }
+    .required-now-label .req-star { display: inline; }
+    /* Inputs marcados con borde rojo cuando se vuelven obligatorios */
+    .required-now {
+        border-color: var(--danger) !important;
+        box-shadow: 0 0 0 1px var(--danger) inset;
+    }
+    /* Banner bodegaje */
+    .bod-banner {
+        background: #fff3e0;
+        border: 1px solid #ffb74d;
+        color: #6b3a00;
+        padding: 12px 16px;
+        border-radius: 8px;
+        margin-top: 12px;
+        font-size: 13px;
+    }
+    [data-theme="dark"] .bod-banner {
+        background: rgba(255, 152, 0, 0.12);
+        border-color: rgba(255, 152, 0, 0.4);
+        color: #ffcc80;
+    }
+    .monto-resumen {
+        background: var(--primary-light);
+        border-radius: 8px;
+        padding: 10px 14px;
+        margin-top: 10px;
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--primary-dark);
+    }
+    /* Sub-bloque destacado para el campo "Tarjeta / App" */
+    .sub-block {
+        background: var(--primary-light);
+        border: 2px solid var(--info);
+        border-radius: 10px;
+        padding: 14px 16px;
+        margin-top: 14px;
+    }
+    .sub-block-title {
+        font-size: 13px;
+        font-weight: 700;
+        color: var(--info);
+        margin-bottom: 8px;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+    .invoice-data {
+        border: 1px solid transparent;
+        border-radius: 10px;
+        padding: 12px;
+        margin: 0 -12px;
+        transition: background 0.18s, border 0.18s, opacity 0.18s;
+    }
+    .invoice-data.is-enabled {
+        background: var(--hover-bg);
+        border-color: rgba(249, 118, 24, 0.22);
+    }
+    .invoice-data.is-disabled {
+        opacity: 0.55;
+        background: rgba(107, 114, 128, 0.06);
+    }
+    .invoice-data.is-disabled .form-label {
+        color: var(--text-muted);
+    }
+    .form-input:disabled {
+        cursor: not-allowed;
+        background: rgba(107, 114, 128, 0.10);
+        color: var(--text-muted);
+        border-color: var(--border-color);
+    }
+    .btn-primary.is-disabled,
+    .btn-primary:disabled {
+        opacity: 0.42;
+        background: transparent;
+        color: var(--primary-dark);
+        border: 2px solid rgba(249, 118, 24, 0.42);
+        cursor: not-allowed;
+        box-shadow: none;
+    }
+    .btn-primary.is-disabled:hover,
+    .btn-primary:disabled:hover {
+        background: transparent;
+        color: var(--primary-dark);
+    }
+    #submit-abono.btn-primary:not(:disabled):not(.is-disabled) {
+        opacity: 1;
+        background: var(--primary);
+        color: #ffffff;
+        border: 2px solid transparent;
+        cursor: pointer;
+    }
+    #submit-abono.btn-primary:not(:disabled):not(.is-disabled):hover {
+        background: var(--primary-dark);
+    }
+    .form-status {
+        color: var(--text-muted);
+        font-size: 12px;
+        align-self: center;
+        margin-right: auto;
+    }
+    .form-status.ready {
+        color: var(--success);
+        font-weight: 700;
+    }
+</style>
+
+<div class="crumb">
+    <a href="{% url 'econotec:bienvenida' %}">Inicio</a> /
+    <a href="{% url 'econotec:pagos_lista' %}">Pagos</a> /
+    <a href="{% url 'econotec:ingreso_abonos' pk=ingreso.pk %}">Equipo {{ ingreso.codigo_equipo }}</a> /
+    {{ titulo }}
+</div>
+
+<form method="post" class="card-box" style="max-width: 820px; margin: 0 auto;" id="abono-form" novalidate>
+    {% csrf_token %}
+
+    <h3 style="color: var(--primary); margin-bottom: 18px;">{{ titulo }}</h3>
+
+    <div style="background: var(--primary-light); padding: 12px 16px; border-radius: 8px; margin-bottom: 18px;">
+        <strong>Cliente:</strong> {{ ingreso.cliente.nombres }}<br>
+        <strong>Equipo:</strong> {{ ingreso.tipo_equipo_display }} — {{ ingreso.marca }}<br>
+        <strong>Saldo pendiente:</strong>
+        <span style="color: var(--primary-dark); font-weight: 800;">{{ ingreso.diferencia|dinero_signo }}</span>
+        {% if ingreso.bodegaje_pendiente > 0 %}
+            <br>
+            <small style="color: #b54400; font-weight: 700;">
+                📦 + {{ ingreso.bodegaje_pendiente|dinero_signo }} bodegaje acumulado —
+                con bodegaje sería <strong>{{ ingreso.diferencia_con_bodegaje|dinero_signo }}</strong>
+            </small>
+        {% endif %}
+    </div>
+
+    {# ────────────── Datos básicos del abono ────────────── #}
+    <div class="form-grid">
+        <div>
+            <label class="form-label always-req">Fecha <span class="req-star">*</span></label>
+            {{ form.fecha }}
+            {{ form.fecha.errors }}
+        </div>
+        <div id="wrap-monto-principal">
+            <label class="form-label always-req">Monto (USD) <span class="req-star">*</span></label>
+            {{ form.monto }}
+            {{ form.monto.errors }}
+        </div>
+    </div>
+
+    {# ────────────── Bodegaje (solo si hay) ────────────── #}
+    {% if ingreso.bodegaje_pendiente > 0 %}
+    <div class="form-block" id="block-bodegaje">
+        <div class="form-block-title">📦 Bodegaje acumulado</div>
+        <div class="bod-banner">
+            Este equipo tiene <strong>{{ ingreso.bodegaje_pendiente|dinero_signo }}</strong>
+            de bodegaje acumulado. Debes decidir qué hacer con ese valor:
+        </div>
+        <div style="margin-top: 14px;">
+            <label class="form-label always-req">
+                ¿Aplicar valor de bodegaje? <span class="req-star">*</span>
+            </label>
+            {{ form.bodegaje_decision }}
+            {{ form.bodegaje_decision.errors }}
+            <div class="helper-text">
+                <strong>Sí</strong>: el bodegaje se suma automáticamente al monto del abono y se cobra al cliente.<br>
+                <strong>No</strong>: el bodegaje se perdona automáticamente (no se cobra) y deja de acumular.
+            </div>
+            <div id="monto-resumen-bodegaje" class="monto-resumen hidden">
+                <span id="resumen-bodegaje-texto"></span>
+            </div>
+        </div>
+        {{ form.bodegaje_monto_aplicado }}
+    </div>
+    {% else %}
+        {# Sin bodegaje: mantener los campos ocultos para que el form sea consistente #}
+        <div style="display:none;">
+            {{ form.bodegaje_decision }}
+            {{ form.bodegaje_monto_aplicado }}
+        </div>
+    {% endif %}
+
+    {# ────────────── Método de pago ────────────── #}
+    <div class="form-block">
+        <div class="form-block-title">💳 Método de pago</div>
+
+        <div>
+            <label class="form-label always-req">Método de pago <span class="req-star">*</span></label>
+            {{ form.metodo }}
+            {{ form.metodo.errors }}
+        </div>
+
+        {# Banco — solo si método = transferencia #}
+        <div id="campo-banco-wrap" class="sub-block hidden">
+            <div class="sub-block-title">🏦 <span id="label-banco">Banco <span class="req-star">*</span></span></div>
+            {{ form.banco }}
+            {{ form.banco.errors }}
+            <div class="helper-text">Selecciona el banco usado para la transferencia.</div>
+        </div>
+
+        {# Banco "otro" — solo si banco = otro #}
+        <div id="campo-banco-otro-wrap" class="hidden" style="margin-top: 14px;">
+            <label class="form-label" id="label-banco-otro">
+                Nombre del banco <span class="req-star">*</span>
+            </label>
+            {{ form.banco_otro }}
+            {{ form.banco_otro.errors }}
+            <div class="helper-text">Escribe el nombre completo del banco usado para la transferencia.</div>
+        </div>
+
+        {# Campo histórico oculto: las apps externas ya no se muestran como método #}
+        <div id="campo-tarjeta-app-wrap" class="sub-block hidden">
+            <div class="sub-block-title">💳 <span id="label-tarjeta-app">Tarjeta / App <span class="req-star">*</span></span></div>
+            {{ form.tarjeta_app }}
+            {{ form.tarjeta_app.errors }}
+            <div class="helper-text">Selecciona la aplicación usada para el pago.</div>
+        </div>
+
+        {# Comprobante — solo si método = transferencia (OPCIONAL) #}
+        <div id="campo-comprobante-wrap" class="hidden" style="margin-top: 14px;">
+            <label class="form-label" id="label-comprobante">
+                Link del comprobante <span style="color: var(--text-muted); font-weight: 400;">(opcional)</span>
+            </label>
+            {{ form.comprobante_url }}
+            {{ form.comprobante_url.errors }}
+            <div class="helper-text">
+                Si tienes el comprobante, súbelo a Google Drive, WhatsApp Web, o cualquier servicio y pega aquí el link.
+            </div>
+        </div>
+        
+        {# Pago Mixto #}
+        <div id="wrap_pago_mixto" class="hidden" style="margin-top:14px; background:#f5f7fa; padding:15px; border-radius:8px; border:1px dashed #c4cdd5;">
+            <h5 style="margin-top:0; margin-bottom:10px; color:#1a1f36; font-size:13px;">Pago Mixto (Dividir el valor pagado en dos)</h5>
+            <div class="form-grid">
+                <div>
+                    <label class="form-label" id="label-monto-1">Monto 1 (USD) <span class="req-star">*</span></label>
+                    <input type="number" name="abono_monto_1" id="abono_monto_1" class="form-input" step="0.01" min="0.01">
+                </div>
+                <div>
+                    <label class="form-label" id="label-metodo-1">Método de pago 1 <span class="req-star">*</span></label>
+                    <select name="abono_metodo_1" id="abono_metodo_1" class="form-input">
+                        <option value="efectivo">Efectivo</option>
+                        <option value="transferencia">Transferencia bancaria</option>
+                        <option value="tarjeta">Tarjeta de crédito / Débito</option>
+                    </select>
+                </div>
+            </div>
+            <div id="wrap_abono_banco_1" class="hidden" style="margin-top: 10px;">
+                <label class="form-label" id="label-banco-1">Banco 1 <span class="req-star">*</span></label>
+                <select name="abono_banco_1" id="abono_banco_1" class="form-input">
+                    {% for value, label in form.fields.banco.choices %}
+                    <option value="{{ value }}">{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-grid" style="margin-top:14px;">
+                <div>
+                    <label class="form-label" id="label-monto-2">Monto 2 (USD) <span class="req-star">*</span></label>
+                    <input type="number" name="abono_monto_2" id="abono_monto_2" class="form-input" step="0.01" min="0.01">
+                </div>
+                <div>
+                    <label class="form-label" id="label-metodo-2">Método de pago 2 <span class="req-star">*</span></label>
+                    <select name="abono_metodo_2" id="abono_metodo_2" class="form-input">
+                        <option value="efectivo" selected>Efectivo</option>
+                        <option value="transferencia">Transferencia bancaria</option>
+                        <option value="tarjeta">Tarjeta de crédito / Débito</option>
+                    </select>
+                </div>
+            </div>
+            <div id="wrap_abono_banco_2" class="hidden" style="margin-top: 10px;">
+                <label class="form-label" id="label-banco-2">Banco 2 <span class="req-star">*</span></label>
+                <select name="abono_banco_2" id="abono_banco_2" class="form-input">
+                    {% for value, label in form.fields.banco.choices %}
+                    <option value="{{ value }}">{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+    </div>
+
+    {# ────────────── Factura ────────────── #}
+    <div class="form-block">
+        <div class="form-block-title">🧾 Factura</div>
+        <script id="cliente-datos-factura" type="application/json">
+            {"nombres": "{{ ingreso.cliente.nombres|escapejs }}", "cedula": "{{ ingreso.cliente.cedula|escapejs }}", "correo": "{{ ingreso.cliente.correo|escapejs }}"}
+        </script>
+
+        <div style="margin-bottom: 14px;">
+            <label class="form-label always-req">¿Factura con datos? <span class="req-star">*</span></label>
+            {{ form.factura_realizada }}
+            {{ form.factura_realizada.errors }}
+        </div>
+
+        <div id="factura-data" class="invoice-data">
+            <div style="font-weight: 700; color: var(--info); margin-bottom: 10px;">Datos para factura</div>
+
+            <div class="form-grid">
+                <div>
+                    <label class="form-label" id="label-factura-nombres">
+                        Nombres / Razón Social <span class="req-star">*</span>
+                    </label>
+                    {{ form.factura_nombres }}
+                    {{ form.factura_nombres.errors }}
+                </div>
+                <div>
+                    <label class="form-label" id="label-factura-cedula">
+                        Número de cédula / RUC <span class="req-star">*</span>
+                    </label>
+                    {{ form.factura_cedula }}
+                    {{ form.factura_cedula.errors }}
+                </div>
+                <div>
+                    <label class="form-label" id="label-factura-correo">
+                        Correo electrónico <span class="req-star">*</span>
+                    </label>
+                    {{ form.factura_correo }}
+                    {{ form.factura_correo.errors }}
+                </div>
+            </div>
+            <div class="helper-text" id="factura-helper" style="margin-top: 8px;">
+                Si seleccionas <strong>Sí</strong>, estos datos quedan habilitados y son obligatorios.
+            </div>
+        </div>
+    </div>
+
+    {# ────────────── Recibo y observaciones ────────────── #}
+    <div style="margin-top: 18px;">
+        <label class="form-label">Número de recibo (opcional)</label>
+        {{ form.numero_recibo }}
+        <div class="helper-text">Si lo dejas vacío, se genera automáticamente.</div>
+    </div>
+
+    <div style="margin-top: 14px;">
+        <label class="form-label">Observaciones</label>
+        {{ form.observaciones }}
+    </div>
+
+    <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 22px; flex-wrap: wrap;">
+        <span class="form-status" id="form-status">Completa los campos obligatorios para registrar.</span>
+        <a href="{% url 'econotec:ingreso_abonos' pk=ingreso.pk %}" class="btn btn-secondary">Cancelar</a>
+        <button type="submit" class="btn btn-primary" id="submit-abono">
+            {% if modo == 'editar' %}Guardar cambios{% else %}Registrar Abono{% endif %}
+        </button>
+    </div>
+</form>
+
+<script>
+(function() {
+    // Datos pasados desde Django
+    const BODEGAJE_PENDIENTE = parseFloat("{{ ingreso.bodegaje_pendiente|default:0|stringformat:'f' }}") || 0;
+    const SALDO_BASE = parseFloat("{{ ingreso.diferencia|default:0|stringformat:'f' }}") || 0;
+
+    const metodo = document.getElementById('id_metodo');
+    const banco = document.getElementById('id_banco');
+    const bancoOtro = document.getElementById('id_banco_otro');
+    const tarjetaApp = document.getElementById('id_tarjeta_app');
+    const comprobante = document.getElementById('id_comprobante_url');
+
+    const wrapBanco = document.getElementById('campo-banco-wrap');
+    const wrapBancoOtro = document.getElementById('campo-banco-otro-wrap');
+    const wrapTarjetaApp = document.getElementById('campo-tarjeta-app-wrap');
+    const wrapComprobante = document.getElementById('campo-comprobante-wrap');
+
+    const labelBanco = document.getElementById('label-banco');
+    const labelBancoOtro = document.getElementById('label-banco-otro');
+    const labelTarjetaApp = document.getElementById('label-tarjeta-app');
+    const labelComprobante = document.getElementById('label-comprobante');
+
+    const factura = document.getElementById('id_factura_realizada');
+    const facturaNombres = document.getElementById('id_factura_nombres');
+    const facturaCorreo = document.getElementById('id_factura_correo');
+    const facturaData = document.getElementById('factura-data');
+    const facturaHelper = document.getElementById('factura-helper');
+    const labelsFactura = [
+        document.getElementById('label-factura-nombres'),
+        document.getElementById('label-factura-cedula'),
+        document.getElementById('label-factura-correo'),
+    ];
+    const camposFactura = [facturaNombres, facturaCedula, facturaCorreo];
+
+    const decision = document.getElementById('id_bodegaje_decision');
+    const decisionMonto = document.getElementById('id_bodegaje_monto_aplicado');
+    const monto = document.getElementById('id_monto');
+    const resumenBod = document.getElementById('monto-resumen-bodegaje');
+    const resumenTexto = document.getElementById('resumen-bodegaje-texto');
+    const form = document.getElementById('abono-form');
+    const submitBtn = document.getElementById('submit-abono');
+    const formStatus = document.getElementById('form-status');
+
+    // Elementos de pago mixto
+    const wrapMontoPrincipal = document.getElementById('wrap-monto-principal');
+    const wrapPagoMixto = document.getElementById('wrap_pago_mixto');
+    const abonoMonto1 = document.getElementById('abono_monto_1');
+    const abonoMonto2 = document.getElementById('abono_monto_2');
+    const abonoMetodo1 = document.getElementById('abono_metodo_1');
+    const abonoMetodo2 = document.getElementById('abono_metodo_2');
+    const wrapAbonoBanco1 = document.getElementById('wrap_abono_banco_1');
+    const wrapAbonoBanco2 = document.getElementById('wrap_abono_banco_2');
+    const abonoBanco1 = document.getElementById('abono_banco_1');
+    const abonoBanco2 = document.getElementById('abono_banco_2');
+
+    // Helpers
+    function setRequired(input, label, requerido) {
+        if (!input) return;
+        if (requerido) {
+            input.setAttribute('required', 'required');
+            input.classList.add('required-now');
+            if (label) label.classList.add('required-now-label');
+        } else {
+            input.removeAttribute('required');
+            input.classList.remove('required-now');
+            if (label) label.classList.remove('required-now-label');
+        }
+    }
+
+    function show(el) { if (el) el.classList.remove('hidden'); }
+    function hide(el) { if (el) el.classList.add('hidden'); }
+
+    function isVisible(el) {
+        if (!el) return false;
+        return !!(el.offsetWidth || el.offsetHeight || el.getClientRects().length);
+    }
+
+    function isRequiredFieldComplete(input) {
+        if (!input || input.disabled || !input.required || !isVisible(input)) return true;
+        if (input.type === 'checkbox' || input.type === 'radio') return input.checked;
+        return String(input.value || '').trim() !== '';
+    }
+
+    function updateSubmitState() {
+        if (!form || !submitBtn) return;
+        const requiredFields = Array.from(form.querySelectorAll('[required]'));
+        const complete = requiredFields.every(isRequiredFieldComplete);
+        submitBtn.disabled = !complete;
+        submitBtn.classList.toggle('is-disabled', !complete);
+        submitBtn.setAttribute(
+            'aria-disabled',
+            complete ? 'false' : 'true'
+        );
+        if (formStatus) {
+            formStatus.textContent = complete
+                ? 'Listo para registrar.'
+                : 'Completa los campos obligatorios para registrar.';
+            formStatus.classList.toggle('ready', complete);
+        }
+    }
+
+    // ──────── MÉTODO DE PAGO ────────
+    function actualizarMetodo() {
+        if (!metodo) return;
+        const v = metodo.value;
+
+        // Reset todo
+        hide(wrapBanco);
+        hide(wrapBancoOtro);
+        hide(wrapTarjetaApp);
+        hide(wrapComprobante);
+        hide(wrapPagoMixto);
+        show(wrapMontoPrincipal);
+        
+        setRequired(banco, labelBanco, false);
+        setRequired(bancoOtro, labelBancoOtro, false);
+        setRequired(tarjetaApp, labelTarjetaApp, false);
+        setRequired(comprobante, labelComprobante, false);
+        setRequired(abonoMonto1, null, false);
+        setRequired(abonoMonto2, null, false);
+        setRequired(abonoBanco1, null, false);
+        setRequired(abonoBanco2, null, false);
+        
+        if (monto) {
+            monto.readOnly = false;
+        }
+
+        if (v === 'transferencia') {
+            show(wrapBanco);
+            show(wrapComprobante);
+            setRequired(banco, labelBanco, true);
+            // El comprobante es OPCIONAL, solo se muestra
+            setRequired(comprobante, labelComprobante, false);
+            actualizarBancoOtro();
+        } else if (v === 'tarjeta') {
+            show(wrapTarjetaApp);
+            setRequired(tarjetaApp, labelTarjetaApp, true);
+        } else if (v === 'mixto') {
+            show(wrapPagoMixto);
+            hide(wrapMontoPrincipal);
+            
+            if (monto) {
+                monto.readOnly = true;
+                actualizarSumaMixto();
+            }
+            
+            setRequired(abonoMonto1, null, true);
+            setRequired(abonoMonto2, null, true);
+            actualizarBancosMixto();
+        }
+        updateSubmitState();
+    }
+    
+    function actualizarBancosMixto() {
+        if (!abonoMetodo1 || !abonoMetodo2) return;
+        
+        if (abonoMetodo1.value === 'transferencia') {
+            show(wrapAbonoBanco1);
+            setRequired(abonoBanco1, null, true);
+        } else {
+            hide(wrapAbonoBanco1);
+            setRequired(abonoBanco1, null, false);
+        }
+        
+        if (abonoMetodo2.value === 'transferencia') {
+            show(wrapAbonoBanco2);
+            setRequired(abonoBanco2, null, true);
+        } else {
+            hide(wrapAbonoBanco2);
+            setRequired(abonoBanco2, null, false);
+        }
+        updateSubmitState();
+    }
+    
+    function actualizarSumaMixto() {
+        if (!monto || metodo.value !== 'mixto') return;
+        var v1 = parseFloat(abonoMonto1.value) || 0;
+        var v2 = parseFloat(abonoMonto2.value) || 0;
+        monto.value = (v1 + v2).toFixed(2);
+        
+        // Trigger bodegaje update by dispatching event if bodegaje exists
+        if (monto) {
+            monto.dispatchEvent(new Event('input'));
+        }
+    }
+
+    function actualizarBancoOtro() {
+        if (!banco || !metodo) return;
+        if (metodo.value === 'transferencia' && banco.value === 'otro') {
+            show(wrapBancoOtro);
+            setRequired(bancoOtro, labelBancoOtro, true);
+        } else {
+            hide(wrapBancoOtro);
+            setRequired(bancoOtro, labelBancoOtro, false);
+        }
+        updateSubmitState();
+    }
+
+    if (metodo) metodo.addEventListener('change', actualizarMetodo);
+    if (banco) banco.addEventListener('change', actualizarBancoOtro);
+    
+    if (abonoMetodo1) abonoMetodo1.addEventListener('change', actualizarBancosMixto);
+    if (abonoMetodo2) abonoMetodo2.addEventListener('change', actualizarBancosMixto);
+    
+    if (abonoMonto1) {
+        abonoMonto1.addEventListener('input', actualizarSumaMixto);
+        abonoMonto1.addEventListener('change', actualizarSumaMixto);
+    }
+    if (abonoMonto2) {
+        abonoMonto2.addEventListener('input', actualizarSumaMixto);
+        abonoMonto2.addEventListener('change', actualizarSumaMixto);
+    }
+
+    // ──────── FACTURA ────────
+    function actualizarFactura() {
+        if (!factura) return;
+        const requerido = factura.value === 'si';
+        camposFactura.forEach((inp, i) => {
+            setRequired(inp, labelsFactura[i], requerido);
+            if (!inp) return;
+            inp.disabled = !requerido;
+            if (!requerido) inp.value = '';
+        });
+        // Autocompletar con los datos del cliente al facturar (sin pisar
+        // lo ya escrito). El cliente del abono es el mismo del equipo.
+        if (requerido) {
+            try {
+                var cd = JSON.parse(document.getElementById('cliente-datos-factura').textContent);
+                if (facturaNombres && !facturaNombres.value.trim() && cd.nombres) facturaNombres.value = cd.nombres;
+                if (facturaCedula && !facturaCedula.value.trim() && cd.cedula) facturaCedula.value = cd.cedula;
+                if (facturaCorreo && !facturaCorreo.value.trim() && cd.correo) facturaCorreo.value = cd.correo;
+            } catch (e) { /* sin datos: se deja en blanco */ }
+        }
+        if (facturaData) {
+            facturaData.classList.toggle('is-enabled', requerido);
+            facturaData.classList.toggle('is-disabled', !requerido);
+        }
+        if (facturaHelper) {
+            facturaHelper.innerHTML = requerido
+                ? 'Completa estos datos para emitir la factura.'
+                : 'Selecciona <strong>Sí</strong> para habilitar los campos de factura.';
+        }
+        updateSubmitState();
+    }
+    if (factura) factura.addEventListener('change', actualizarFactura);
+
+    // ──────── BODEGAJE ────────
+    function actualizarBodegaje() {
+        if (!decision || BODEGAJE_PENDIENTE <= 0) return;
+        const v = decision.value;
+        if (v === 'si') {
+            if (decisionMonto) decisionMonto.value = BODEGAJE_PENDIENTE.toFixed(2);
+            const actual = parseFloat(monto.value) || 0;
+            if (actual === 0 || Math.abs(actual - SALDO_BASE) < 0.01) {
+                const total = SALDO_BASE + BODEGAJE_PENDIENTE;
+                monto.value = total.toFixed(2);
+            }
+            resumenTexto.innerHTML =
+                '✅ Se cobrará el bodegaje. Monto sugerido: <strong>$' +
+                (SALDO_BASE + BODEGAJE_PENDIENTE).toFixed(2) +
+                '</strong> (saldo $' + SALDO_BASE.toFixed(2) +
+                ' + bodegaje $' + BODEGAJE_PENDIENTE.toFixed(2) + ').';
+            show(resumenBod);
+        } else if (v === 'no') {
+            if (decisionMonto) decisionMonto.value = '0.00';
+            const actual = parseFloat(monto.value) || 0;
+            if (Math.abs(actual - (SALDO_BASE + BODEGAJE_PENDIENTE)) < 0.01) {
+                monto.value = SALDO_BASE.toFixed(2);
+            }
+            resumenTexto.innerHTML =
+                '✖️ Se perdona el bodegaje. Solo se cobra el saldo de reparación.';
+            show(resumenBod);
+        } else {
+            hide(resumenBod);
+        }
+        updateSubmitState();
+    }
+    if (decision) decision.addEventListener('change', actualizarBodegaje);
+
+    if (form) {
+        form.querySelectorAll('input, select, textarea').forEach((field) => {
+            field.addEventListener('input', updateSubmitState);
+            field.addEventListener('change', updateSubmitState);
+        });
+
+        form.addEventListener('submit', function(event) {
+            updateSubmitState();
+            if (submitBtn && submitBtn.disabled) {
+                event.preventDefault();
+                const firstMissing = Array.from(form.querySelectorAll('[required]'))
+                    .find((field) => !isRequiredFieldComplete(field));
+                if (firstMissing) {
+                    firstMissing.focus({ preventScroll: true });
+                    firstMissing.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+            }
+        });
+    }
+
+    // ──────── INIT ────────
+    actualizarMetodo();
+    actualizarFactura();
+    actualizarBodegaje();
+    updateSubmitState();
+})();
+</script>
+{% endblock %}

@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Imprimir QR - Equipo {{ ingreso.codigo_equipo }}</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: #f9f9f9;
+        }
+        .page {
+            background: white;
+            padding: 40px;
+            max-width: 800px;
+            margin: 0 auto;
+            border: 1px solid #ddd;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        .qr-container {
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            gap: 30px;
+        }
+        .qr-card {
+            border: 2px dashed #ccc;
+            padding: 25px;
+            text-align: center;
+            width: 340px;
+            border-radius: 12px;
+        }
+        .qr-name {
+            font-size: 22px;
+            font-weight: 900;
+            color: #1f2937;
+            margin-bottom: 4px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .qr-wp {
+            font-size: 18px;
+            font-weight: bold;
+            color: #555;
+            margin-bottom: 12px;
+        }
+        .qr-img {
+            width: 260px;
+            height: 260px;
+            display: block;
+            margin: 0 auto;
+        }
+        .qr-code {
+            font-size: 38px;
+            font-weight: 900;
+            color: #1f2937;
+            margin-top: 12px;
+        }
+        .qr-type {
+            font-size: 20px;
+            font-weight: 900;
+            color: #f97618; /* var(--primary) */
+            text-transform: uppercase;
+            margin-top: 4px;
+        }
+        .print-btn {
+            display: block;
+            width: 200px;
+            margin: 20px auto;
+            padding: 10px;
+            background: #f97618;
+            color: white;
+            text-align: center;
+            font-weight: bold;
+            text-decoration: none;
+            border-radius: 6px;
+            border: none;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        @media print {
+            body {
+                background: white;
+                padding: 0;
+            }
+            .page {
+                box-shadow: none;
+                border: none;
+                margin: 0;
+                padding: 0;
+                max-width: 100%;
+            }
+            .print-btn {
+                display: none;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <button class="print-btn" onclick="window.print()">🖨 Imprimir Ahora</button>
+
+    <div class="page">
+        <div class="qr-container">
+            <!-- QR 1 -->
+            <div class="qr-card">
+                <div class="qr-name">{{ cliente.nombres|truncatechars:25 }}</div>
+                <div class="qr-wp">{{ cliente.whatsapp }}</div>
+                <img src="{{ qr_data_uri }}" alt="QR 1" class="qr-img">
+                <div class="qr-code">{{ ingreso.codigo_equipo }}</div>
+                <div class="qr-type">{{ ingreso.tipo_equipo_display }}</div>
+            </div>
+
+            <!-- QR 2 -->
+            <div class="qr-card">
+                <div class="qr-name">{{ cliente.nombres|truncatechars:25 }}</div>
+                <div class="qr-wp">{{ cliente.whatsapp }}</div>
+                <img src="{{ qr_data_uri }}" alt="QR 2" class="qr-img">
+                <div class="qr-code">{{ ingreso.codigo_equipo }}</div>
+                <div class="qr-type">{{ ingreso.tipo_equipo_display }}</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Imprimir automáticamente al abrir la página
+        window.onload = function() {
+            setTimeout(function() {
+                window.print();
+            }, 500);
+        };
+    </script>
+</body>
+</html>

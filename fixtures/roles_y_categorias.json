@@ -1,0 +1,117 @@
+[
+{
+    "model": "auth.group",
+    "pk": 1,
+    "fields": {
+        "name": "Administradores",
+        "permissions": []
+    }
+},
+{
+    "model": "auth.group",
+    "pk": 2,
+    "fields": {
+        "name": "Tecnicos",
+        "permissions": []
+    }
+},
+{
+    "model": "auth.group",
+    "pk": 3,
+    "fields": {
+        "name": "Asesores",
+        "permissions": []
+    }
+},
+{
+    "model": "econotec.categoriaegreso",
+    "pk": 1,
+    "fields": {
+        "nombre": "Repuestos",
+        "descripcion": "",
+        "color": "#f0ad4e",
+        "icono": "🔧",
+        "orden": 1,
+        "activo": true,
+        "creado": "2026-06-05T20:29:30.765Z"
+    }
+},
+{
+    "model": "econotec.categoriaegreso",
+    "pk": 2,
+    "fields": {
+        "nombre": "Sueldos",
+        "descripcion": "",
+        "color": "#1a237e",
+        "icono": "💰",
+        "orden": 2,
+        "activo": true,
+        "creado": "2026-06-05T20:29:30.766Z"
+    }
+},
+{
+    "model": "econotec.categoriaegreso",
+    "pk": 3,
+    "fields": {
+        "nombre": "Alquiler",
+        "descripcion": "",
+        "color": "#2e7d32",
+        "icono": "🏠",
+        "orden": 3,
+        "activo": true,
+        "creado": "2026-06-05T20:29:30.767Z"
+    }
+},
+{
+    "model": "econotec.categoriaegreso",
+    "pk": 4,
+    "fields": {
+        "nombre": "Servicios básicos",
+        "descripcion": "",
+        "color": "#00838f",
+        "icono": "💡",
+        "orden": 4,
+        "activo": true,
+        "creado": "2026-06-05T20:29:30.767Z"
+    }
+},
+{
+    "model": "econotec.categoriaegreso",
+    "pk": 5,
+    "fields": {
+        "nombre": "Herramientas",
+        "descripcion": "",
+        "color": "#5d4037",
+        "icono": "🛠️",
+        "orden": 5,
+        "activo": true,
+        "creado": "2026-06-05T20:29:30.768Z"
+    }
+},
+{
+    "model": "econotec.categoriaegreso",
+    "pk": 6,
+    "fields": {
+        "nombre": "Marketing",
+        "descripcion": "",
+        "color": "#6a1b9a",
+        "icono": "📣",
+        "orden": 6,
+        "activo": true,
+        "creado": "2026-06-05T20:29:30.769Z"
+    }
+},
+{
+    "model": "econotec.categoriaegreso",
+    "pk": 7,
+    "fields": {
+        "nombre": "Otros",
+        "descripcion": "",
+        "color": "#455a64",
+        "icono": "📦",
+        "orden": 99,
+        "activo": true,
+        "creado": "2026-06-05T20:29:30.769Z"
+    }
+}
+]

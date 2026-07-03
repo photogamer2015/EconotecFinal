@@ -1,0 +1,380 @@
+{% load static econotec_extras %}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Hoja {{ ingreso.codigo_equipo }} — Econotec</title>
+    <style>
+        :root {
+            --naranja: #f97618;
+            --naranja-dark: #d7642f;
+            --bg: #f4f6fb;
+            --card: #ffffff;
+            --text: #1f2937;
+            --muted: #6b7280;
+            --border: #e5e7eb;
+            --ok: #2e7d32;
+            --fail: #c62828;
+            --warn: #b8860b;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', Arial, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            font-size: 15px;
+            line-height: 1.45;
+            padding-bottom: 120px;
+        }
+
+        /* HEADER STICKY */
+        .topbar {
+            position: sticky; top: 0; z-index: 50;
+            background: linear-gradient(135deg, var(--naranja), var(--naranja-dark));
+            color: white;
+            padding: 12px 16px;
+            display: flex; align-items: center; gap: 12px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.18);
+        }
+        .topbar .logo {
+            width: 38px; height: 38px; border-radius: 50%;
+            background: #1a1a1a; object-fit: cover; padding: 3px; flex-shrink: 0;
+        }
+        .topbar .tb-title { font-size: 16px; font-weight: 800; letter-spacing: -0.2px; line-height: 1.1; }
+        .topbar .tb-sub { font-size: 11px; opacity: 0.92; font-weight: 500; }
+        .topbar .tb-eq {
+            background: rgba(255,255,255,0.95); color: var(--naranja-dark);
+            font-weight: 800; font-size: 18px; padding: 4px 12px; border-radius: 10px;
+        }
+
+        .wrap { padding: 14px; max-width: 560px; margin: 0 auto; }
+
+        .card {
+            background: var(--card); border-radius: 14px; padding: 16px;
+            margin-bottom: 14px; box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+            border: 1px solid var(--border);
+        }
+        .card-title {
+            font-size: 12px; font-weight: 800; color: var(--naranja);
+            text-transform: uppercase; letter-spacing: 0.6px;
+            margin-bottom: 12px; padding-bottom: 8px;
+            border-bottom: 2px solid #ffe6d3;
+        }
+
+        .row { display: flex; justify-content: space-between; align-items: baseline;
+               gap: 12px; padding: 7px 0; border-bottom: 1px dashed #eee; }
+        .row:last-child { border-bottom: 0; }
+        .row .k { color: var(--muted); font-size: 12.5px; font-weight: 600; flex-shrink: 0; }
+        .row .v { text-align: right; font-weight: 700; word-break: break-word; }
+
+        .pill {
+            display: inline-block; padding: 3px 11px; border-radius: 999px;
+            font-size: 12px; font-weight: 700;
+        }
+        .pill-eq { background: #ffe6d3; color: var(--naranja-dark); }
+
+        .problema {
+            background: #fff8f3; border-left: 4px solid var(--naranja);
+            border-radius: 8px; padding: 12px; font-weight: 600;
+        }
+
+        /* ESTADO ACTUAL banner */
+        .estado-banner {
+            display: flex; align-items: center; gap: 10px;
+            border-radius: 12px; padding: 12px 14px; font-weight: 800; font-size: 14px;
+        }
+        .eb-ingresado    { background: #eef2ff; color: #3730a3; }
+        .eb-reparacion   { background: #fff7e6; color: var(--warn); }
+        .eb-ok           { background: #e8f5e9; color: var(--ok); }
+        .eb-fail         { background: #fdecea; color: var(--fail); }
+        .estado-banner .dot { font-size: 20px; }
+
+        /* FORM */
+        label.field-label {
+            display: block; font-size: 12.5px; font-weight: 700;
+            color: var(--muted); margin: 14px 0 6px;
+            text-transform: uppercase; letter-spacing: 0.4px;
+        }
+        textarea, select {
+            width: 100%; border: 1.5px solid var(--border); border-radius: 10px;
+            padding: 12px; font-size: 15px; font-family: inherit; color: var(--text);
+            background: #fff;
+        }
+        textarea { min-height: 120px; resize: vertical; line-height: 1.5; }
+        textarea:focus, select:focus { outline: none; border-color: var(--naranja); }
+
+        .reporte-autor {
+            margin-top: 10px; font-size: 12.5px; color: var(--ok);
+            background: #e8f5e9; padding: 8px 11px; border-radius: 9px;
+        }
+        .reporte-sesion {
+            margin-top: 8px; font-size: 12px; color: var(--muted);
+            text-align: right;
+        }
+
+        /* Selector de estado como tarjetas tappables */
+        .estado-opciones { display: grid; gap: 10px; margin-top: 6px; }
+        .estado-opt {
+            display: flex; align-items: center; gap: 12px;
+            border: 2px solid var(--border); border-radius: 12px;
+            padding: 13px 14px; cursor: pointer; transition: all .15s;
+            background: #fff;
+        }
+        .estado-opt .ico { font-size: 22px; flex-shrink: 0; }
+        .estado-opt .txt strong { display: block; font-size: 14.5px; font-weight: 800; }
+        .estado-opt .txt small { color: var(--muted); font-size: 12px; }
+        .estado-opt input { display: none; }
+        .estado-opt.sel { border-color: var(--naranja); background: #fff8f3; box-shadow: 0 2px 8px rgba(249,118,24,0.15); }
+        .estado-opt.sel.ok   { border-color: var(--ok);   background: #e8f5e9; }
+        .estado-opt.sel.fail { border-color: var(--fail); background: #fdecea; }
+        .estado-opt.sel.rep  { border-color: var(--warn); background: #fff7e6; }
+
+        .subestado-box {
+            margin-top: 10px; padding: 12px; background: #fafafa;
+            border-radius: 10px; border: 1px dashed var(--border);
+        }
+        .subestado-box.hidden { display: none; }
+
+        /* Barra de guardar fija abajo */
+        .save-bar {
+            position: fixed; bottom: 0; left: 0; right: 0; z-index: 60;
+            background: #fff; padding: 12px 14px;
+            box-shadow: 0 -2px 14px rgba(0,0,0,0.12);
+            display: flex; gap: 10px; max-width: 560px; margin: 0 auto;
+        }
+        .btn {
+            flex: 1; border: none; border-radius: 12px; padding: 15px;
+            font-size: 16px; font-weight: 800; cursor: pointer; text-align: center;
+            text-decoration: none; display: flex; align-items: center; justify-content: center;
+        }
+        .btn-primary { background: var(--naranja); color: #fff; }
+        .btn-primary:active { background: var(--naranja-dark); }
+
+        .meta-foot { text-align: center; color: var(--muted); font-size: 11.5px; margin-top: 4px; }
+        .badge-tec {
+            display:inline-flex; align-items:center; gap:6px;
+            background:#eef2ff; color:#3730a3; padding:4px 10px; border-radius:999px;
+            font-size:12px; font-weight:700;
+        }
+
+        /* TOAST Y LOGOUT */
+        .tb-logout {
+            background: rgba(255, 255, 255, 0.2);
+            color: white; border: 1px solid rgba(255, 255, 255, 0.4);
+            padding: 5px 10px; border-radius: 8px; font-size: 13px;
+            font-weight: 700; text-decoration: none; margin-left: 10px;
+        }
+        .tb-logout:hover { background: rgba(255, 255, 255, 0.3); }
+
+        .toast {
+            position: fixed; top: 70px; left: 50%; transform: translateX(-50%);
+            background: #2e7d32; color: white; padding: 12px 20px;
+            border-radius: 30px; font-weight: 700; font-size: 14px;
+            box-shadow: 0 4px 15px rgba(46,125,50,0.4); z-index: 200;
+            opacity: 0; pointer-events: none; transition: opacity 0.3s;
+            text-align: center; width: 90%; max-width: 400px;
+        }
+        .toast.show { opacity: 1; }
+    </style>
+</head>
+<body>
+
+<div class="topbar">
+    <img src="{% static 'logo.jpg' %}" alt="Econotec" class="logo">
+    <div>
+        <div class="tb-title">ECONOTEC</div>
+        <div class="tb-sub">Hoja del técnico</div>
+    </div>
+    <div style="margin-left: auto; display: flex; align-items: center; gap: 8px;">
+        <div class="tb-eq">{{ ingreso.codigo_equipo }}</div>
+        <a href="{% url 'logout' %}" class="tb-logout">🚪 Cerrar sesión</a>
+    </div>
+</div>
+
+{% if messages %}
+<div class="toast show" id="toast-msg">
+    {% for message in messages %}
+        {{ message }}<br>
+    {% endfor %}
+</div>
+<script>
+    setTimeout(() => {
+        const toast = document.getElementById('toast-msg');
+        if (toast) toast.classList.remove('show');
+    }, 4000);
+</script>
+{% endif %}
+
+
+
+<div class="wrap">
+
+    <!-- ESTADO ACTUAL -->
+    {% if estado_actual_movil == 'entregado_con_solucion' %}
+        <div class="estado-banner eb-ok"><span class="dot">✅</span> Con solución (Pendiente de retiro)</div>
+    {% elif estado_actual_movil == 'entregado_sin_solucion' %}
+        <div class="estado-banner eb-fail"><span class="dot">❌</span> Sin solución (Pendiente de retiro)</div>
+    {% elif estado_actual_movil == 'entregado_no_quiso' %}
+        <div class="estado-banner eb-fail"><span class="dot">🚫</span> No quiso reparar (Pendiente de retiro)</div>
+    {% elif estado_actual_movil == 'en_reparacion' %}
+        <div class="estado-banner eb-reparacion"><span class="dot">🔧</span> En reparación</div>
+    {% else %}
+        <div class="estado-banner eb-ingresado"><span class="dot">📋</span> Ingresado / En diagnóstico</div>
+    {% endif %}
+    <div class="meta-foot" style="margin-bottom:14px;">
+        Última actualización: {{ ingreso.actualizado|date:"d/m/Y H:i" }}
+    </div>
+
+    <!-- DATOS DEL CLIENTE -->
+    <div class="card">
+        <div class="card-title">📇 Cliente</div>
+        <div class="row"><span class="k">Nombre</span><span class="v">{{ cliente.nombres }}</span></div>
+        <div class="row"><span class="k">Cédula / RUC</span><span class="v">{{ cliente.cedula }}</span></div>
+        {% if cliente.whatsapp %}<div class="row"><span class="k">WhatsApp</span><span class="v">{{ cliente.whatsapp }}</span></div>{% endif %}
+        {% if cliente.correo %}<div class="row"><span class="k">Correo</span><span class="v">{{ cliente.correo }}</span></div>{% endif %}
+        {% if cliente.sector_display and cliente.sector_display != '—' %}<div class="row"><span class="k">Sector</span><span class="v">{{ cliente.sector_display }}</span></div>{% endif %}
+    </div>
+
+    <!-- DATOS DEL EQUIPO -->
+    <div class="card">
+        <div class="card-title">💻 Equipo</div>
+        <div class="row"><span class="k">Tipo</span><span class="v"><span class="pill pill-eq">{{ ingreso.tipo_equipo_display }}</span></span></div>
+        <div class="row"><span class="k">Marca</span><span class="v">{{ ingreso.marca }}</span></div>
+        {% if ingreso.modelo_serie %}<div class="row"><span class="k">Modelo / Serie</span><span class="v">{{ ingreso.modelo_serie }}</span></div>{% endif %}
+        {% if ingreso.accesorios_entregados %}<div class="row"><span class="k">Accesorios</span><span class="v">{{ ingreso.accesorios_entregados }}</span></div>{% endif %}
+        <div class="row"><span class="k">Sede</span><span class="v">{{ ingreso.sede_display_corto }}</span></div>
+        <div class="row"><span class="k">Fecha ingreso</span><span class="v">{{ ingreso.fecha_ingreso|date:"d/m/Y" }}</span></div>
+        {% if ingreso.tecnico_encargado_nombre %}
+        <div class="row"><span class="k">Técnico encargado</span><span class="v"><span class="badge-tec">👤 {{ ingreso.tecnico_encargado_nombre }}</span></span></div>
+        {% endif %}
+    </div>
+
+    <!-- PROBLEMA REPORTADO -->
+    <div class="card">
+        <div class="card-title">⚠️ Problema reportado</div>
+        <div class="problema">{{ ingreso.problema_reportado|linebreaksbr }}</div>
+    </div>
+
+    <!-- FORMULARIO: REPORTE + ESTADO -->
+    <form method="post" action="{% url 'econotec:tecnico_hoja' token=token %}" id="hoja-form">
+        {% csrf_token %}
+
+        <div class="card">
+            <div class="card-title">📝 Reporte del técnico</div>
+            <label class="field-label" for="reporte">Detalla lo que se le realizó al equipo</label>
+            <textarea name="reporte_tecnico" id="reporte"
+                      placeholder="Escribe aquí el diagnóstico, los repuestos usados, el trabajo realizado…">{{ reporte_actual }}</textarea>
+            {% if ingreso.reporte_por_nombre %}
+            <div class="reporte-autor">
+                ✍️ Último reporte por <strong>{{ ingreso.reporte_por_nombre }}</strong>
+                {% if ingreso.reporte_actualizado %} · {{ ingreso.reporte_actualizado|date:"d/m/Y H:i" }}{% endif %}
+            </div>
+            {% endif %}
+            <div class="reporte-sesion">Estás conectado como <strong>{{ user.first_name|default:user.username }}</strong></div>
+        </div>
+
+        <div class="card">
+            <div class="card-title">🔄 Estado del equipo</div>
+            <div class="estado-opciones">
+
+                <label class="estado-opt" data-kind="ingresado">
+                    <input type="radio" name="estado_movil" value="ingresado"
+                           {% if estado_actual_movil == 'ingresado' %}checked{% endif %}>
+                    <span class="ico">📋</span>
+                    <span class="txt"><strong>En diagnóstico</strong><small>Revisando, aún sin definir reparación</small></span>
+                </label>
+
+                <label class="estado-opt rep" data-kind="rep">
+                    <input type="radio" name="estado_movil" value="en_reparacion"
+                           {% if estado_actual_movil == 'en_reparacion' %}checked{% endif %}>
+                    <span class="ico">🔧</span>
+                    <span class="txt"><strong>En reparación</strong><small>El equipo se mantiene aquí en el taller</small></span>
+                </label>
+
+                <label class="estado-opt ok" data-kind="ok">
+                    <input type="radio" name="estado_movil" value="entregado_con_solucion"
+                           {% if estado_actual_movil == 'entregado_con_solucion' %}checked{% endif %}>
+                    <span class="ico">✅</span>
+                    <span class="txt"><strong>Con solución (Pendiente de retiro)</strong><small>Salida positiva</small></span>
+                </label>
+
+                <label class="estado-opt fail" data-kind="fail">
+                    <input type="radio" name="estado_movil" value="entregado_sin_solucion"
+                           {% if estado_actual_movil == 'entregado_sin_solucion' %}checked{% endif %}>
+                    <span class="ico">❌</span>
+                    <span class="txt"><strong>Sin solución (Pendiente de retiro)</strong><small>Salida negativa (No reparable)</small></span>
+                </label>
+
+                <label class="estado-opt fail" data-kind="fail">
+                    <input type="radio" name="estado_movil" value="entregado_no_quiso"
+                           {% if estado_actual_movil == 'entregado_no_quiso' %}checked{% endif %}>
+                    <span class="ico">🚫</span>
+                    <span class="txt"><strong>No quiso reparar (Pendiente de retiro)</strong><small>Salida negativa (Cliente no acepta)</small></span>
+                </label>
+            </div>
+
+            <!-- Subestado solo para "En reparación" -->
+            <div class="subestado-box hidden" id="subestado-box">
+                <label class="field-label" for="subestado" style="margin-top:0;">Detalle (opcional)</label>
+                <select name="subestado_reparacion" id="subestado">
+                    {% for val, txt in subestados_reparacion %}
+                        <option value="{{ val }}" {% if subestado_reparacion_actual == val %}selected{% endif %}>{{ txt }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+
+        <div class="save-bar">
+            <button type="submit" class="btn btn-primary">💾 Guardar cambios</button>
+        </div>
+    </form>
+
+    <div class="meta-foot">Equipo {{ ingreso.codigo_equipo }} · {{ ingreso.sede_display_corto }}</div>
+</div>
+
+<script>
+    // Resaltar la tarjeta de estado seleccionada y mostrar/ocultar subestado.
+    (function () {
+        const opciones = document.querySelectorAll('.estado-opt');
+        const subBox = document.getElementById('subestado-box');
+
+        function refrescar() {
+            opciones.forEach(function (op) {
+                const input = op.querySelector('input');
+                if (input.checked) op.classList.add('sel');
+                else op.classList.remove('sel');
+            });
+            const sel = document.querySelector('input[name="estado_movil"]:checked');
+            if (sel && sel.value === 'en_reparacion') subBox.classList.remove('hidden');
+            else subBox.classList.add('hidden');
+        }
+
+        opciones.forEach(function (op) {
+            op.addEventListener('click', function () {
+                op.querySelector('input').checked = true;
+                refrescar();
+            });
+        });
+        refrescar();
+
+        // Confirmar antes de marcar como entregado (acción importante).
+        document.getElementById('hoja-form').addEventListener('submit', function (e) {
+            const sel = document.querySelector('input[name="estado_movil"]:checked');
+            if (sel && (sel.value === 'entregado_con_solucion' || sel.value === 'entregado_sin_solucion' || sel.value === 'entregado_no_quiso')) {
+                let txt = '¿Confirmar acción?';
+                if (sel.value === 'entregado_con_solucion') {
+                    txt = '¿Confirmar CON SOLUCIÓN? El equipo quedará pendiente de retiro (salida positiva)';
+                } else if (sel.value === 'entregado_sin_solucion') {
+                    txt = '¿Confirmar SIN SOLUCIÓN? El equipo quedará pendiente de retiro (salida negativa)';
+                } else if (sel.value === 'entregado_no_quiso') {
+                    txt = '¿Confirmar NO QUISO REPARAR? El equipo quedará pendiente de retiro (salida negativa)';
+                }
+                if (!window.confirm(txt)) { e.preventDefault(); }
+            }
+        });
+    })();
+</script>
+
+</body>
+</html>

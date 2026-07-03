@@ -1,0 +1,158 @@
+{% extends 'base.html' %}
+{% load econotec_extras %}
+
+{% block title %}Pagos — Econotec{% endblock %}
+
+{% block content %}
+<style>
+    .bod-tag {
+        display: inline-block;
+        margin-left: 4px;
+        background: #ffe0b2;
+        color: #b54400;
+        font-size: 10px;
+        font-weight: 800;
+        padding: 2px 6px;
+        border-radius: 8px;
+        vertical-align: middle;
+    }
+    [data-theme="dark"] .bod-tag { background: rgba(249,118,24,0.25); color: #fbbf73; }
+    .bod-detalle {
+        display: block;
+        font-size: 11px;
+        color: #b54400;
+        font-weight: 700;
+        margin-top: 2px;
+    }
+    [data-theme="dark"] .bod-detalle { color: #fbbf73; }
+</style>
+
+<div class="crumb">
+    <a href="{% url 'econotec:bienvenida' %}">Inicio</a> /
+    {% if modo == 'ventas' %}Pagos de Ventas{% else %}Pagos{% endif %}
+</div>
+
+{% if modo == 'ventas' %}
+<h2 class="page-title">Control de Pagos — <span class="accent">Ventas de Producto</span></h2>
+<p class="page-subtitle">{{ total_count }} venta{{ total_count|pluralize }} de producto en seguimiento.</p>
+<div style="margin: 4px 0 18px;">
+    <a href="{% url 'econotec:pagos_lista' %}" class="btn btn-sm btn-secondary">← Ver pagos de reparaciones</a>
+</div>
+{% else %}
+<h2 class="page-title">Control de <span class="accent">Pagos</span></h2>
+<p class="page-subtitle">{{ total_count }} equipo{{ total_count|pluralize }} en seguimiento (reparaciones).</p>
+<div style="margin: 4px 0 18px;">
+    <a href="{% url 'econotec:pagos_ventas_lista' %}" class="btn btn-sm btn-success">🛒 Ver pagos de ventas de producto</a>
+</div>
+{% endif %}
+
+
+
+<div class="toolbar">
+    <form method="get">
+        <input type="text" name="q" value="{{ q }}" placeholder="Buscar por N° equipo, cliente, marca…" class="form-input">
+        <select name="estado_pago" class="form-input" style="max-width:200px;">
+            <option value="">— Estado de pago —</option>
+            <option value="Pagado" {% if estado_pago == 'Pagado' %}selected{% endif %}>Pagado</option>
+            <option value="Parcial" {% if estado_pago == 'Parcial' %}selected{% endif %}>Parcial</option>
+            <option value="Pendiente" {% if estado_pago == 'Pendiente' %}selected{% endif %}>Pendiente</option>
+        </select>
+        <select name="sede_pago" class="form-input" style="max-width:150px;">
+            <option value="">— Sede —</option>
+            <option value="guayaquil" {% if sede_pago == 'guayaquil' %}selected{% endif %}>Guayaquil (G)</option>
+            <option value="quito" {% if sede_pago == 'quito' %}selected{% endif %}>Quito (U)</option>
+        </select>
+        <button type="submit" class="btn btn-primary">Filtrar</button>
+    </form>
+    <a href="{% url 'econotec:pagos_export' %}" class="btn btn-success">📊 Exportar Excel</a>
+</div>
+
+{% if ingresos %}
+<div class="table-wrap">
+    <table>
+        <thead>
+            <tr>
+                <th>N°</th>
+                <th>Fecha</th>
+                <th>Cliente</th>
+                <th>Equipo</th>
+                <th>Acordado</th>
+                <th>Adicional</th>
+                <th>Abonado</th>
+                <th>Saldo</th>
+                <th>Estado</th>
+                <th>Acciones</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for i in ingresos %}
+            <tr>
+                <td><strong style="color: var(--primary);">{{ i.codigo_equipo }}</strong></td>
+                <td>{{ i.fecha_ingreso|date:"d/m/Y" }}</td>
+                <td>{{ i.cliente.nombres }}<br><small style="color:#888;">{{ i.cliente.cedula }}</small></td>
+                <td>{{ i.tipo_equipo_display }} — {{ i.marca|truncatechars:20 }}</td>
+                <td>
+                    {% if i.reparacion_cancelada %}
+                        <span style="color:#999; text-decoration: line-through; font-size: 12px;">{{ i.valor_acordado|dinero_signo }}</span>
+                        <br><small style="color: var(--primary-dark); font-weight: 700;">→ Revisión</small>
+                    {% else %}
+                        {{ i.valor_acordado|dinero_signo }}
+                    {% endif %}
+                </td>
+                <td>
+                    {% if i.diagnostico_inmediato == 'si' and i.valor_diagnostico > 0 %}
+                        <span style="color: #f39c12; font-weight: 700;">{{ i.valor_diagnostico|dinero_signo }}</span>
+                        <br><small style="color:#888;">Diag. Rápido</small>
+                    {% else %}
+                        <span style="color:#ccc;">—</span>
+                    {% endif %}
+                </td>
+                <td>
+                    <div style="color: var(--success); font-weight: 700;">{{ i.total_abonado|dinero_signo }}</div>
+                    {% if i.resumen_metodos_pago %}
+                        <small style="color:#888; font-size: 10px;">{{ i.resumen_metodos_pago }}</small>
+                    {% endif %}
+                </td>
+                <td {% if i.diferencia > 0 %}style="color: var(--danger); font-weight: 700;"{% endif %}>
+                    {{ i.diferencia|dinero_signo }}
+                    {% if i.bodegaje_pendiente > 0 %}
+                        <span class="bod-tag" title="Bodegaje acumulado pendiente — al momento del retiro decides si lo cobras">
+                            📦 +{{ i.bodegaje_pendiente|dinero_signo }}
+                        </span>
+                        <small class="bod-detalle">
+                            Con bodegaje: {{ i.diferencia_con_bodegaje|dinero_signo }}
+                        </small>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if i.reparacion_cancelada %}
+                        <span class="badge" style="background:#fff3cd; color:#856404;" title="Cliente no quiso reparar / No se pudo reparar">
+                            🚫 No reparado
+                        </span><br>
+                    {% endif %}
+                    {% if i.estado_pago == 'Pagado' %}
+                        <span class="badge badge-pagado">Pagado</span>
+                    {% elif i.estado_pago == 'Parcial' %}
+                        <span class="badge badge-parcial">Parcial</span>
+                    {% elif i.estado_pago == 'Sin valor' %}
+                        <span class="badge">Sin cobro</span>
+                    {% else %}
+                        <span class="badge badge-pendiente">Pendiente</span>
+                    {% endif %}
+                </td>
+                <td class="row-actions">
+                    <a href="{% url 'econotec:ingreso_abonos' pk=i.pk %}" class="btn btn-sm btn-primary">Ver / Ingresar Abonos</a>
+                    <a href="{% url 'econotec:abono_crear' ingreso_pk=i.pk %}" class="btn btn-sm btn-success">Gestionar Pagos</a>
+                </td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="empty-state">
+    <div class="icon">💳</div>
+    <h3>No se encontraron pagos</h3>
+</div>
+{% endif %}
+{% endblock %}

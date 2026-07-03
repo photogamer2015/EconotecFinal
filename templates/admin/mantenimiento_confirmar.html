@@ -1,0 +1,147 @@
+{% extends 'base.html' %}
+{% block title %}Zona de Mantenimiento — Econotec{% endblock %}
+
+{% block content %}
+<style>
+    .maint-container { max-width: 600px; margin: 40px auto; background: var(--card-bg); border-radius: 16px; box-shadow: var(--shadow); overflow: hidden; border: 1px solid var(--border-color); }
+    .maint-header { background: #fee2e2; color: #b91c1c; padding: 24px; text-align: center; border-bottom: 2px solid #fca5a5; }
+    .maint-header h2 { margin: 0 0 8px 0; font-size: 24px; display: flex; align-items: center; justify-content: center; gap: 10px; }
+    .maint-body { padding: 30px; }
+    .maint-step { margin-bottom: 24px; padding-bottom: 24px; border-bottom: 1px dashed var(--border-color); }
+    .maint-step:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
+    .step-title { font-size: 18px; font-weight: 800; margin-bottom: 12px; color: var(--text-main); }
+    
+    .btn-download { display: inline-flex; align-items: center; gap: 8px; background: #10b981; color: white; padding: 14px 24px; border-radius: 12px; text-decoration: none; font-weight: 700; border: none; cursor: pointer; transition: background 0.2s; width: 100%; justify-content: center; font-size: 16px; }
+    .btn-download:hover { background: #059669; }
+    
+    .btn-danger { display: inline-flex; align-items: center; gap: 8px; background: #dc2626; color: white; padding: 14px 24px; border-radius: 12px; text-decoration: none; font-weight: 700; border: none; cursor: pointer; transition: background 0.2s; width: 100%; justify-content: center; font-size: 16px; }
+    .btn-danger:hover { background: #b91c1c; }
+    .btn-danger:disabled { background: #fca5a5; cursor: not-allowed; }
+    
+    .checkbox-wrap { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; background: var(--bg-color); padding: 12px; border-radius: 8px; border: 1px solid var(--border-color); cursor: pointer; }
+    .checkbox-wrap input { width: 20px; height: 20px; cursor: pointer; }
+    .checkbox-wrap label { font-size: 14px; color: var(--text-main); cursor: pointer; font-weight: 600; }
+    
+    [data-theme="dark"] .maint-header { background: #450a0a; color: #fecaca; border-bottom-color: #991b1b; }
+</style>
+
+<div class="crumb">
+    <a href="{% url 'econotec:admin_dashboard' %}">← Volver al Dashboard</a>
+</div>
+
+<div class="maint-container">
+    <div class="maint-header">
+        <h2>⚠️ Zona Crítica: Reinicio Total</h2>
+        <p style="margin:0; opacity:0.9;">Esta acción borrará <strong>TODOS</strong> los clientes, ingresos, pagos y egresos. Los correlativos (G1, U1) empezarán desde cero. Es irreversible.</p>
+    </div>
+    
+    <div class="maint-body">
+        
+        <!-- PASO 1: BACKUP -->
+        <div class="maint-step">
+            <div class="step-title">Paso 1: Copia de Seguridad Obligatoria</div>
+            <p style="color: var(--text-muted); font-size: 14px; margin-bottom: 16px;">Descarga la base de datos actual en formato Excel por seguridad antes de borrar todo.</p>
+            
+            <form method="post" id="form-download">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="download_backup">
+                <button type="submit" class="btn-download" id="btn-download">
+                    <span>📊</span> 1. Descargar Backup en Excel
+                </button>
+            </form>
+        </div>
+        
+        <!-- PASO 2: BORRADO -->
+        <div class="maint-step">
+            <div class="step-title">Paso 2: Confirmar Borrado</div>
+            <p style="color: var(--text-muted); font-size: 14px; margin-bottom: 16px;">Una vez guardado tu Excel a salvo, marca la casilla para habilitar el borrado.</p>
+            
+            <label class="checkbox-wrap">
+                <input type="checkbox" id="check-confirm">
+                <span style="user-select:none;">Confirmo que ya descargué la copia de seguridad.</span>
+            </label>
+            
+            <form method="post" id="form-delete">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="reset_all">
+                <button type="button" class="btn-danger" id="btn-delete" disabled>
+                    <span>🗑️</span> 2. Borrar TODO y Reiniciar a Cero
+                </button>
+            </form>
+        </div>
+        
+    </div>
+</div>
+
+<!-- Custom Floating Modal -->
+<div id="custom-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 9999; align-items: center; justify-content: center; backdrop-filter: blur(4px);">
+    <div style="background: var(--card-bg); width: 90%; max-width: 400px; padding: 24px; border-radius: 16px; box-shadow: 0 10px 25px rgba(0,0,0,0.5); border: 1px solid var(--border-color); text-align: center; animation: popIn 0.3s ease-out forwards;">
+        <div style="font-size: 40px; margin-bottom: 16px;">⚠️</div>
+        <h3 style="margin: 0 0 12px 0; color: var(--text-main); font-size: 20px;">¿ESTÁS ABSOLUTAMENTE SEGURO?</h3>
+        <p style="color: var(--text-muted); font-size: 15px; margin-bottom: 20px;">Se borrará TODO el historial y los clientes de manera permanente.</p>
+        <div style="margin-bottom: 24px; text-align: left;">
+            <label style="display: block; font-size: 14px; font-weight: 600; margin-bottom: 8px; color: var(--text-main);">Por seguridad, ingresa tu contraseña:</label>
+            <input type="password" id="admin-password" name="admin_password" form="form-delete" required placeholder="Contraseña de administrador"
+                   style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-color); color: var(--text-main); font-size: 16px; box-sizing: border-box;">
+        </div>
+        <div style="display: flex; gap: 12px; justify-content: center;">
+            <button type="button" id="modal-cancel" style="padding: 12px 20px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-color); color: var(--text-main); font-weight: 600; cursor: pointer; flex: 1;">Cancelar</button>
+            <button type="submit" id="modal-confirm" form="form-delete" style="padding: 12px 20px; border-radius: 8px; border: none; background: #dc2626; color: white; font-weight: 700; cursor: pointer; flex: 1;">Sí, Borrar TODO</button>
+        </div>
+    </div>
+</div>
+<style>
+    @keyframes popIn {
+        0% { transform: scale(0.9); opacity: 0; }
+        100% { transform: scale(1); opacity: 1; }
+    }
+</style>
+
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        const btnDownload = document.getElementById('btn-download');
+        const checkConfirm = document.getElementById('check-confirm');
+        const btnDelete = document.getElementById('btn-delete');
+        
+        const modal = document.getElementById('custom-modal');
+        const modalCancel = document.getElementById('modal-cancel');
+        const modalConfirm = document.getElementById('modal-confirm');
+        const formDelete = document.getElementById('form-delete');
+        
+        // Cuando descarga, marcamos el checkbox por comodidad, aunque puede hacerlo manual
+        btnDownload.addEventListener('click', function() {
+            setTimeout(() => {
+                checkConfirm.checked = true;
+                btnDelete.disabled = false;
+            }, 1000); // 1 sec delay to feel natural
+        });
+        
+        // Listener manual
+        checkConfirm.addEventListener('change', function() {
+            btnDelete.disabled = !this.checked;
+        });
+        
+        // Modal Logic
+        btnDelete.addEventListener('click', function() {
+            if (!this.disabled) {
+                modal.style.display = 'flex';
+            }
+        });
+        
+        modalCancel.addEventListener('click', function() {
+            modal.style.display = 'none';
+        });
+        
+        modalConfirm.addEventListener('click', function(e) {
+            if (!formDelete.reportValidity()) {
+                e.preventDefault();
+                return;
+            }
+            modalConfirm.innerHTML = 'Borrando...';
+            modalConfirm.disabled = true;
+            formDelete.submit();
+        });
+    });
+</script>
+
+{% endblock %}

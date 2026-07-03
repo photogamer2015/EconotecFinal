@@ -1,0 +1,430 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ titulo }} — Econotec{% endblock %}
+
+{% block content %}
+<style>
+    /* Sección colapsable con borde sutil */
+    .form-block {
+        background: var(--card-bg);
+        border: 1px solid var(--border-color);
+        border-radius: 12px;
+        padding: 18px 20px;
+        margin-top: 18px;
+    }
+    .form-block-title {
+        font-size: 15px;
+        font-weight: 700;
+        color: var(--info);
+        margin-bottom: 14px;
+        padding-bottom: 8px;
+        border-bottom: 2px solid var(--warning);
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    .helper-text { color: var(--text-muted); font-size: 11px; margin-top: 4px; }
+    .hidden { display: none !important; }
+    /* Asterisco rojo: solo visible cuando el label tiene la clase de obligatorio */
+    .req-star { color: var(--danger); font-weight: 700; display: none; }
+    .always-req .req-star { display: inline; }
+    .required-now-label .req-star { display: inline; }
+    /* Inputs marcados con borde rojo cuando se vuelven obligatorios */
+    .required-now {
+        border-color: var(--danger) !important;
+        box-shadow: 0 0 0 1px var(--danger) inset;
+    }
+    /* Sub-bloque destacado para el campo "Tarjeta / App" */
+    .sub-block {
+        background: var(--primary-light);
+        border: 2px solid var(--info);
+        border-radius: 10px;
+        padding: 14px 16px;
+        margin-top: 14px;
+    }
+    .sub-block-title {
+        font-size: 13px;
+        font-weight: 700;
+        color: var(--info);
+        margin-bottom: 8px;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+    .invoice-data {
+        border: 1px solid transparent;
+        border-radius: 10px;
+        padding: 12px;
+        margin: 0 -12px;
+        transition: background 0.18s, border 0.18s, opacity 0.18s;
+    }
+    .invoice-data.is-enabled {
+        background: var(--hover-bg);
+        border-color: rgba(249, 118, 24, 0.22);
+    }
+    .invoice-data.is-disabled {
+        opacity: 0.55;
+        background: rgba(107, 114, 128, 0.06);
+    }
+    .invoice-data.is-disabled .form-label {
+        color: var(--text-muted);
+    }
+    .form-input:disabled {
+        cursor: not-allowed;
+        background: rgba(107, 114, 128, 0.10);
+        color: var(--text-muted);
+        border-color: var(--border-color);
+    }
+    .btn-primary.is-disabled,
+    .btn-primary:disabled {
+        opacity: 0.42;
+        background: transparent;
+        color: var(--primary-dark);
+        border: 2px solid rgba(249, 118, 24, 0.42);
+        cursor: not-allowed;
+        box-shadow: none;
+    }
+    .btn-primary.is-disabled:hover,
+    .btn-primary:disabled:hover {
+        background: transparent;
+        color: var(--primary-dark);
+    }
+    #submit-egreso.btn-primary:not(:disabled):not(.is-disabled) {
+        opacity: 1;
+        background: var(--primary);
+        color: #ffffff;
+        border: 2px solid transparent;
+        cursor: pointer;
+    }
+    #submit-egreso.btn-primary:not(:disabled):not(.is-disabled):hover {
+        background: var(--primary-dark);
+    }
+    .form-status {
+        color: var(--text-muted);
+        font-size: 12px;
+        align-self: center;
+        margin-right: auto;
+    }
+    .form-status.ready {
+        color: var(--success);
+        font-weight: 700;
+    }
+</style>
+
+<div class="crumb">
+    <a href="{% url 'econotec:bienvenida' %}">Inicio</a> /
+    <a href="{% url 'econotec:admin_dashboard' %}">Reg. Administrativo</a> /
+    <a href="{% url 'econotec:admin_egresos_lista' %}">Egresos</a> / {{ titulo }}
+</div>
+
+<form method="post" class="card-box" style="max-width: 820px; margin: 0 auto;" id="egreso-form" novalidate>
+    {% csrf_token %}
+
+    <h3 style="color: var(--primary); margin-bottom: 18px;">{{ titulo }}</h3>
+
+    <div class="form-grid">
+        <div>
+            <label class="form-label always-req">Fecha <span class="req-star">*</span></label>
+            {{ form.fecha }}
+            {{ form.fecha.errors }}
+        </div>
+        <div>
+            <label class="form-label always-req">Categoría <span class="req-star">*</span></label>
+            {{ form.categoria }}
+            {{ form.categoria.errors }}
+        </div>
+    </div>
+
+    <div style="margin-top: 14px;">
+        <label class="form-label always-req">Concepto <span class="req-star">*</span></label>
+        {{ form.concepto }}
+        {{ form.concepto.errors }}
+    </div>
+
+    <div style="margin-top: 14px;">
+        <label class="form-label always-req">Monto (USD) <span class="req-star">*</span></label>
+        {{ form.monto }}
+        {{ form.monto.errors }}
+    </div>
+
+    {# ────────────── Método de pago ────────────── #}
+    <div class="form-block">
+        <div class="form-block-title">💳 Método de pago</div>
+
+        <div>
+            <label class="form-label always-req">Método de pago <span class="req-star">*</span></label>
+            {{ form.metodo }}
+            {{ form.metodo.errors }}
+        </div>
+
+        {# Banco — solo si método = transferencia #}
+        <div id="campo-banco-wrap" class="sub-block hidden">
+            <div class="sub-block-title">🏦 <span id="label-banco">Banco <span class="req-star">*</span></span></div>
+            {{ form.banco }}
+            {{ form.banco.errors }}
+            <div class="helper-text">Selecciona el banco usado para la transferencia.</div>
+        </div>
+
+        {# Banco "otro" — solo si banco = otro #}
+        <div id="campo-banco-otro-wrap" class="hidden" style="margin-top: 14px;">
+            <label class="form-label" id="label-banco-otro">
+                Nombre del banco <span class="req-star">*</span>
+            </label>
+            {{ form.banco_otro }}
+            {{ form.banco_otro.errors }}
+            <div class="helper-text">Escribe el nombre completo del banco.</div>
+        </div>
+
+        {# Campo histórico oculto: las apps externas #}
+        <div id="campo-tarjeta-app-wrap" class="sub-block hidden">
+            <div class="sub-block-title">💳 <span id="label-tarjeta-app">Tarjeta / App <span class="req-star">*</span></span></div>
+            {{ form.tarjeta_app }}
+            {{ form.tarjeta_app.errors }}
+            <div class="helper-text">Selecciona la aplicación usada para el pago.</div>
+        </div>
+
+        {# Comprobante — solo si método = transferencia (OPCIONAL) #}
+        <div id="campo-comprobante-wrap" class="hidden" style="margin-top: 14px;">
+            <label class="form-label" id="label-comprobante">
+                Link del comprobante <span style="color: var(--text-muted); font-weight: 400;">(opcional)</span>
+            </label>
+            {{ form.comprobante_url }}
+            {{ form.comprobante_url.errors }}
+            <div class="helper-text">
+                Si tienes el comprobante, pega aquí el link.
+            </div>
+        </div>
+    </div>
+
+    {# ────────────── Factura ────────────── #}
+    <div class="form-block">
+        <div class="form-block-title">🧾 Factura</div>
+
+        <div style="margin-bottom: 14px;">
+            <label class="form-label always-req">¿Factura realizada? <span class="req-star">*</span></label>
+            {{ form.factura_realizada }}
+            {{ form.factura_realizada.errors }}
+        </div>
+
+        <div id="factura-data" class="invoice-data">
+            <div style="font-weight: 700; color: var(--info); margin-bottom: 10px;">Datos para factura</div>
+
+            <div class="form-grid">
+                <div>
+                    <label class="form-label" id="label-factura-nombres">
+                        Nombres / Razón Social <span class="req-star">*</span>
+                    </label>
+                    {{ form.factura_nombres }}
+                    {{ form.factura_nombres.errors }}
+                </div>
+                <div>
+                    <label class="form-label" id="label-factura-cedula">
+                        Número de cédula / RUC <span class="req-star">*</span>
+                    </label>
+                    {{ form.factura_cedula }}
+                    {{ form.factura_cedula.errors }}
+                </div>
+                <div>
+                    <label class="form-label" id="label-factura-correo">
+                        Correo electrónico <span class="req-star">*</span>
+                    </label>
+                    {{ form.factura_correo }}
+                    {{ form.factura_correo.errors }}
+                </div>
+            </div>
+            <div class="helper-text" id="factura-helper" style="margin-top: 8px;">
+                Si seleccionas <strong>Sí</strong>, estos datos quedan habilitados y son obligatorios.
+            </div>
+        </div>
+    </div>
+
+    {# ────────────── Recibo y observaciones ────────────── #}
+    <div style="margin-top: 18px;">
+        <label class="form-label">Número de recibo (opcional)</label>
+        {{ form.numero_recibo }}
+        <div class="helper-text">Si lo dejas vacío, se genera automáticamente.</div>
+    </div>
+
+    <div style="margin-top: 14px;">
+        <label class="form-label">Notas (opcional)</label>
+        {{ form.notas }}
+    </div>
+
+    <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 22px; flex-wrap: wrap;">
+        <span class="form-status" id="form-status">Completa los campos obligatorios para registrar.</span>
+        <a href="{% url 'econotec:admin_egresos_lista' %}" class="btn btn-secondary">Cancelar</a>
+        <button type="submit" class="btn btn-primary" id="submit-egreso">
+            {% if modo == 'editar' %}Guardar cambios{% else %}Registrar Egreso{% endif %}
+        </button>
+    </div>
+</form>
+
+<script>
+(function() {
+    const metodo = document.getElementById('id_metodo');
+    const banco = document.getElementById('id_banco');
+    const bancoOtro = document.getElementById('id_banco_otro');
+    const tarjetaApp = document.getElementById('id_tarjeta_app');
+    const comprobante = document.getElementById('id_comprobante_url');
+
+    const wrapBanco = document.getElementById('campo-banco-wrap');
+    const wrapBancoOtro = document.getElementById('campo-banco-otro-wrap');
+    const wrapTarjetaApp = document.getElementById('campo-tarjeta-app-wrap');
+    const wrapComprobante = document.getElementById('campo-comprobante-wrap');
+
+    const labelBanco = document.getElementById('label-banco');
+    const labelBancoOtro = document.getElementById('label-banco-otro');
+    const labelTarjetaApp = document.getElementById('label-tarjeta-app');
+    const labelComprobante = document.getElementById('label-comprobante');
+
+    const factura = document.getElementById('id_factura_realizada');
+    const facturaNombres = document.getElementById('id_factura_nombres');
+    const facturaCedula = document.getElementById('id_factura_cedula');
+    const facturaCorreo = document.getElementById('id_factura_correo');
+    const facturaData = document.getElementById('factura-data');
+    const facturaHelper = document.getElementById('factura-helper');
+    const labelsFactura = [
+        document.getElementById('label-factura-nombres'),
+        document.getElementById('label-factura-cedula'),
+        document.getElementById('label-factura-correo'),
+    ];
+    const camposFactura = [facturaNombres, facturaCedula, facturaCorreo];
+
+    const form = document.getElementById('egreso-form');
+    const submitBtn = document.getElementById('submit-egreso');
+    const formStatus = document.getElementById('form-status');
+
+    function setRequired(input, label, requerido) {
+        if (!input) return;
+        if (requerido) {
+            input.setAttribute('required', 'required');
+            input.classList.add('required-now');
+            if (label) label.classList.add('required-now-label');
+        } else {
+            input.removeAttribute('required');
+            input.classList.remove('required-now');
+            if (label) label.classList.remove('required-now-label');
+        }
+    }
+
+    function show(el) { if (el) el.classList.remove('hidden'); }
+    function hide(el) { if (el) el.classList.add('hidden'); }
+
+    function isVisible(el) {
+        if (!el) return false;
+        return !!(el.offsetWidth || el.offsetHeight || el.getClientRects().length);
+    }
+
+    function isRequiredFieldComplete(input) {
+        if (!input || input.disabled || !input.required || !isVisible(input)) return true;
+        if (input.type === 'checkbox' || input.type === 'radio') return input.checked;
+        return String(input.value || '').trim() !== '';
+    }
+
+    function updateSubmitState() {
+        if (!form || !submitBtn) return;
+        const requiredFields = Array.from(form.querySelectorAll('[required]'));
+        const complete = requiredFields.every(isRequiredFieldComplete);
+        submitBtn.disabled = !complete;
+        submitBtn.classList.toggle('is-disabled', !complete);
+        submitBtn.setAttribute(
+            'aria-disabled',
+            complete ? 'false' : 'true'
+        );
+        if (formStatus) {
+            formStatus.textContent = complete
+                ? 'Listo para registrar.'
+                : 'Completa los campos obligatorios para registrar.';
+            formStatus.classList.toggle('ready', complete);
+        }
+    }
+
+    function actualizarMetodo() {
+        if (!metodo) return;
+        const v = metodo.value;
+
+        hide(wrapBanco);
+        hide(wrapBancoOtro);
+        hide(wrapTarjetaApp);
+        hide(wrapComprobante);
+        setRequired(banco, labelBanco, false);
+        setRequired(bancoOtro, labelBancoOtro, false);
+        setRequired(tarjetaApp, labelTarjetaApp, false);
+        setRequired(comprobante, labelComprobante, false);
+
+        if (v === 'transferencia') {
+            show(wrapBanco);
+            show(wrapComprobante);
+            setRequired(banco, labelBanco, true);
+            setRequired(comprobante, labelComprobante, false);
+            actualizarBancoOtro();
+        } else if (v === 'tarjeta') {
+            show(wrapTarjetaApp);
+            setRequired(tarjetaApp, labelTarjetaApp, true);
+        }
+        updateSubmitState();
+    }
+
+    function actualizarBancoOtro() {
+        if (!banco || !metodo) return;
+        if (metodo.value === 'transferencia' && banco.value === 'otro') {
+            show(wrapBancoOtro);
+            setRequired(bancoOtro, labelBancoOtro, true);
+        } else {
+            hide(wrapBancoOtro);
+            setRequired(bancoOtro, labelBancoOtro, false);
+        }
+        updateSubmitState();
+    }
+
+    if (metodo) metodo.addEventListener('change', actualizarMetodo);
+    if (banco) banco.addEventListener('change', actualizarBancoOtro);
+
+    function actualizarFactura() {
+        if (!factura) return;
+        const requerido = factura.value === 'si';
+        camposFactura.forEach((inp, i) => {
+            setRequired(inp, labelsFactura[i], requerido);
+            if (!inp) return;
+            inp.disabled = !requerido;
+            if (!requerido) inp.value = '';
+        });
+        if (facturaData) {
+            facturaData.classList.toggle('is-enabled', requerido);
+            facturaData.classList.toggle('is-disabled', !requerido);
+        }
+        if (facturaHelper) {
+            facturaHelper.innerHTML = requerido
+                ? 'Completa estos datos para emitir la factura.'
+                : 'Selecciona <strong>Sí</strong> para habilitar los campos de factura.';
+        }
+        updateSubmitState();
+    }
+    if (factura) factura.addEventListener('change', actualizarFactura);
+
+    if (form) {
+        form.querySelectorAll('input, select, textarea').forEach((field) => {
+            field.addEventListener('input', updateSubmitState);
+            field.addEventListener('change', updateSubmitState);
+        });
+
+        form.addEventListener('submit', function(event) {
+            updateSubmitState();
+            if (submitBtn && submitBtn.disabled) {
+                event.preventDefault();
+                const firstMissing = Array.from(form.querySelectorAll('[required]'))
+                    .find((field) => !isRequiredFieldComplete(field));
+                if (firstMissing) {
+                    firstMissing.focus({ preventScroll: true });
+                    firstMissing.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+            }
+        });
+    }
+
+    actualizarMetodo();
+    actualizarFactura();
+    updateSubmitState();
+})();
+</script>
+{% endblock %}

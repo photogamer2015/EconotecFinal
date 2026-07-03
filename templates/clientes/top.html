@@ -1,0 +1,257 @@
+{% extends 'base.html' %}
+
+{% block title %}Top 10 Clientes Recurrentes — Econotec{% endblock %}
+
+{% block content %}
+<style>
+    .sede-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 24px;
+        margin-top: 24px;
+    }
+    
+    @media (max-width: 900px) {
+        .sede-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    .sede-column {
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+    }
+
+    .sede-title {
+        font-size: 20px;
+        font-weight: 800;
+        color: var(--text-main);
+        padding-bottom: 12px;
+        border-bottom: 2px solid var(--border-color);
+        margin-bottom: 8px;
+    }
+    
+    .ranking-card {
+        background: var(--card-bg);
+        border-radius: 16px;
+        box-shadow: var(--shadow);
+        padding: 20px;
+        display: flex;
+        align-items: center;
+        gap: 20px;
+        transition: transform 0.2s, box-shadow 0.2s;
+        border: 1px solid var(--border-color);
+        position: relative;
+        overflow: hidden;
+    }
+    
+    .ranking-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+        border-color: var(--primary);
+    }
+    
+    .rank-number {
+        font-size: 28px;
+        font-weight: 900;
+        color: var(--text-muted);
+        min-width: 50px;
+        text-align: center;
+    }
+    
+    .rank-1 .rank-number { color: #FFD700; font-size: 36px; text-shadow: 0 2px 4px rgba(255, 215, 0, 0.3); }
+    .rank-2 .rank-number { color: #C0C0C0; font-size: 32px; text-shadow: 0 2px 4px rgba(192, 192, 192, 0.3); }
+    .rank-3 .rank-number { color: #CD7F32; font-size: 32px; text-shadow: 0 2px 4px rgba(205, 127, 50, 0.3); }
+    
+    .rank-1 {
+        background: linear-gradient(135deg, rgba(255,215,0,0.1) 0%, var(--card-bg) 100%);
+        border: 2px solid rgba(255, 215, 0, 0.5);
+    }
+    .rank-2 {
+        background: linear-gradient(135deg, rgba(192,192,192,0.1) 0%, var(--card-bg) 100%);
+        border: 1px solid rgba(192, 192, 192, 0.5);
+    }
+    .rank-3 {
+        background: linear-gradient(135deg, rgba(205,127,50,0.1) 0%, var(--card-bg) 100%);
+        border: 1px solid rgba(205, 127, 50, 0.5);
+    }
+
+    [data-theme="dark"] .rank-1 {
+        background: linear-gradient(135deg, rgba(255,215,0,0.15) 0%, var(--card-bg) 100%);
+    }
+    [data-theme="dark"] .rank-2 {
+        background: linear-gradient(135deg, rgba(192,192,192,0.15) 0%, var(--card-bg) 100%);
+    }
+    [data-theme="dark"] .rank-3 {
+        background: linear-gradient(135deg, rgba(205,127,50,0.15) 0%, var(--card-bg) 100%);
+    }
+    
+    .client-info {
+        flex: 1;
+    }
+    
+    .client-name {
+        font-size: 18px;
+        font-weight: 700;
+        color: var(--text-main);
+        margin-bottom: 4px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    
+    .client-details {
+        font-size: 13px;
+        color: var(--text-muted);
+        display: flex;
+        gap: 12px;
+        flex-wrap: wrap;
+    }
+    
+    .client-stat {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+    }
+    
+    .stat-badge {
+        background: var(--primary-light);
+        color: var(--primary-dark);
+        padding: 8px 16px;
+        border-radius: 20px;
+        font-weight: 800;
+        font-size: 14px;
+        text-align: center;
+        box-shadow: inset 0 0 0 1px rgba(249, 118, 24, 0.2);
+        white-space: nowrap;
+    }
+    
+    .action-btn {
+        background: var(--primary);
+        color: white;
+        padding: 10px 16px;
+        border-radius: 12px;
+        font-weight: 600;
+        font-size: 13px;
+        text-decoration: none;
+        transition: background 0.2s, transform 0.1s;
+        white-space: nowrap;
+    }
+    
+    .action-btn:hover {
+        background: var(--primary-dark);
+        transform: scale(1.02);
+    }
+</style>
+
+<div class="crumb">
+    <a href="{% url 'econotec:bienvenida' %}">Inicio</a> / Top 10 Clientes
+</div>
+
+<div class="toolbar" style="display: flex; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 10px;">
+    <div>
+        <h2 class="page-title">Top 10 Clientes <span class="accent">Recurrentes</span></h2>
+        <p class="page-subtitle">Ranking de los clientes con mayor número de equipos ingresados, separado por sede.</p>
+    </div>
+    <div style="display: flex; align-items: center; gap: 8px;">
+        <a href="{% url 'econotec:cliente_lista' %}" class="btn btn-secondary">Directorio completo</a>
+    </div>
+</div>
+
+<div class="sede-grid">
+    <!-- COLUMNA GUAYAQUIL -->
+    <div class="sede-column">
+        <div class="sede-title" style="color: #d7642f;">Sede Guayaquil (G)</div>
+        {% if clientes_guayaquil %}
+            {% for c in clientes_guayaquil %}
+                <div class="ranking-card {% if forloop.counter == 1 %}rank-1{% elif forloop.counter == 2 %}rank-2{% elif forloop.counter == 3 %}rank-3{% endif %}">
+                    
+                    <div class="rank-number">
+                        {% if forloop.counter == 1 %}
+                            1º
+                        {% elif forloop.counter == 2 %}
+                            2º
+                        {% elif forloop.counter == 3 %}
+                            3º
+                        {% else %}
+                            #{{ forloop.counter }}
+                        {% endif %}
+                    </div>
+                    
+                    <div class="client-info">
+                        <div class="client-name">
+                            {{ c.nombres }}
+                        </div>
+                        <div class="client-details">
+                            <span class="client-stat"><strong>Cel:</strong> {{ c.whatsapp|default:"Sin WhatsApp" }}</span>
+                            <span class="client-stat"><strong>ID:</strong> {{ c.cedula }}</span>
+                        </div>
+                    </div>
+                    
+                    <div style="display: flex; flex-direction: column; gap: 8px; align-items: flex-end;">
+                        <div class="stat-badge">
+                            {{ c.total_ingresos }} equipos
+                        </div>
+                        <a href="{% url 'econotec:cliente_detalle' pk=c.pk %}" class="action-btn">
+                            Ver
+                        </a>
+                    </div>
+                </div>
+            {% endfor %}
+        {% else %}
+            <div class="empty-state">
+                <h3>No hay clientes recurrentes</h3>
+                <p>En la sede Guayaquil.</p>
+            </div>
+        {% endif %}
+    </div>
+
+    <!-- COLUMNA QUITO -->
+    <div class="sede-column">
+        <div class="sede-title" style="color: #1976d2;">Sede Quito (U)</div>
+        {% if clientes_quito %}
+            {% for c in clientes_quito %}
+                <div class="ranking-card {% if forloop.counter == 1 %}rank-1{% elif forloop.counter == 2 %}rank-2{% elif forloop.counter == 3 %}rank-3{% endif %}">
+                    
+                    <div class="rank-number">
+                        {% if forloop.counter == 1 %}
+                            1º
+                        {% elif forloop.counter == 2 %}
+                            2º
+                        {% elif forloop.counter == 3 %}
+                            3º
+                        {% else %}
+                            #{{ forloop.counter }}
+                        {% endif %}
+                    </div>
+                    
+                    <div class="client-info">
+                        <div class="client-name">
+                            {{ c.nombres }}
+                        </div>
+                        <div class="client-details">
+                            <span class="client-stat"><strong>Cel:</strong> {{ c.whatsapp|default:"Sin WhatsApp" }}</span>
+                            <span class="client-stat"><strong>ID:</strong> {{ c.cedula }}</span>
+                        </div>
+                    </div>
+                    
+                    <div style="display: flex; flex-direction: column; gap: 8px; align-items: flex-end;">
+                        <div class="stat-badge">
+                            {{ c.total_ingresos }} equipos
+                        </div>
+                        <a href="{% url 'econotec:cliente_detalle' pk=c.pk %}" class="action-btn">
+                            Ver
+                        </a>
+                    </div>
+                </div>
+            {% endfor %}
+        {% else %}
+            <div class="empty-state">
+                <h3>No hay clientes recurrentes</h3>
+                <p>En la sede Quito.</p>
+            </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

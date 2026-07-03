@@ -1,0 +1,1971 @@
+"""
+Vistas principales de Econotec.
+Maneja: bienvenida, ayuda, ingresos de equipos, salidas y clientes.
+"""
+from datetime import date
+from decimal import Decimal as D
+from io import BytesIO
+
+from django.contrib import messages
+from django.contrib.auth.decorators import login_required
+from django.db import transaction
+from django.db.models import Count, Q, Sum
+from django.http import HttpResponse, JsonResponse
+from django.shortcuts import get_object_or_404, redirect, render
+from django.utils import timezone
+from django.views.decorators.http import require_GET, require_POST
+
+from .forms import (
+    ClienteForm, IngresoEquipoForm, SalidaEquipoForm,
+)
+from .models import Cliente, IngresoEquipo, SalidaEquipo, Abono
+from .permisos import admin_requerido, tecnico_requerido
+from .alertas import (
+    equipos_demorados_qs,
+    salidas_bodegaje_qs,
+    dias_en_taller,
+    dias_desde_salida,
+    whatsapp_link_demora,
+    whatsapp_link_equipo_listo,
+    whatsapp_link_bodegaje,
+    whatsapp_link_hoja_ingreso,
+    UMBRAL_DIAS_DIAGNOSTICO,
+    UMBRAL_DIAS_BODEGAJE,
+    COSTO_BODEGAJE_DIA,
+)
+
+
+# ═════════════════════════════════════════════════════════════════
+# Páginas base
+# ═════════════════════════════════════════════════════════════════
+
+def home(request):
+    if request.user.is_authenticated:
+        return redirect('econotec:bienvenida')
+    return redirect('login')
+
+
+@login_required
+def bienvenida(request):
+    """Dashboard de inicio."""
+    hoy = date.today()
+    mes_actual = hoy.month
+    ano_actual = hoy.year
+
+    stats = {
+        'total_ingresos': IngresoEquipo.objects.count(),
+        'ingresos_mes': IngresoEquipo.objects.filter(
+            fecha_ingreso__year=ano_actual, fecha_ingreso__month=mes_actual,
+        ).count(),
+        'total_salidas': SalidaEquipo.objects.count(),
+        'salidas_mes': SalidaEquipo.objects.filter(
+            fecha_salida__year=ano_actual, fecha_salida__month=mes_actual,
+        ).count(),
+        'total_clientes': Cliente.objects.count(),
+        'pendientes_retiro': IngresoEquipo.objects.filter(
+            estado__in=['ingresado', 'en_reparacion']
+        ).count() + SalidaEquipo.objects.filter(estado_reparacion='pendiente_retiro').count(),
+    }
+
+    # ── Equipos más ingresados ──────────────────────────────
+    from django.db.models import Count
+    from .models import TIPOS_EQUIPO
+
+    qs_equipos = (
+        IngresoEquipo.objects.values('tipo_equipo', 'tipo_equipo_otro')
+        .annotate(total=Count('id'))
+        .order_by('-total')
+    )
+    
+    dict_tipos = dict(TIPOS_EQUIPO)
+    equipos_stats = []
+    
+    # We might have multiple "otro" with different text, they are already grouped by (tipo_equipo, tipo_equipo_otro)
+    for row in qs_equipos:
+        if row['tipo_equipo'] == 'otro' and row['tipo_equipo_otro']:
+            nombre = row['tipo_equipo_otro'].title()
+        else:
+            nombre = dict_tipos.get(row['tipo_equipo'], row['tipo_equipo']).title()
+            
+        # To avoid duplicates if casing differs in 'otro'
+        found = False
+        for stat in equipos_stats:
+            if stat['nombre'].lower() == nombre.lower():
+                stat['total'] += row['total']
+                found = True
+                break
+        if not found:
+            equipos_stats.append({'nombre': nombre, 'total': row['total']})
+            
+    # Re-sort and take top 5
+    equipos_stats.sort(key=lambda x: x['total'], reverse=True)
+    equipos_top = equipos_stats[:5]
+
+    # ── Alertas: dos tipos independientes ────────────────────────
+    es_admin_user = request.user.is_superuser or request.user.groups.filter(
+        name__in=['Administradores', 'Admin']
+    ).exists()
+
+    # 1. Equipos demorados en diagnóstico (4+ días sin diagnosticar)
+    demorados_qs = equipos_demorados_qs(usuario=None)
+
+    demorados = []
+    for ing in demorados_qs[:10]:
+        demorados.append({
+            'ingreso': ing,
+            'dias': dias_en_taller(ing, hoy=hoy),
+            'wa_link': whatsapp_link_demora(ing),
+        })
+
+    # 2. Salidas con bodegaje pendiente (5+ días sin que el cliente venga)
+    bodegaje_qs = salidas_bodegaje_qs(usuario=None)
+
+    bodegajes = []
+    for sal in bodegaje_qs[:10]:
+        bod = sal.calcular_bodegaje(hoy=hoy)
+        bodegajes.append({
+            'salida': sal,
+            'ingreso': sal.ingreso,
+            'dias_desde_salida': dias_desde_salida(sal, hoy=hoy),
+            'bodegaje_dias': bod['dias'],
+            'bodegaje_monto': bod['monto'],
+            'wa_link': whatsapp_link_bodegaje(sal),
+        })
+
+    # 1b. Diagnósticos silenciados
+    from datetime import timedelta as _td
+    fecha_limite_diag = date.today() - _td(days=UMBRAL_DIAS_DIAGNOSTICO)
+    qs_diag_silenciados = (
+        IngresoEquipo.objects
+        .select_related('cliente', 'tecnico_encargado')
+        .filter(fecha_ingreso__lte=fecha_limite_diag)
+        .filter(estado='ingresado')
+        .filter(diagnostico_silenciado=True)
+    )
+    # No filtramos por usuario para los técnicos, ven todo
+    
+    demorados_silenciados = []
+    for ing in qs_diag_silenciados:
+        demorados_silenciados.append({
+            'ingreso': ing,
+            'dias': dias_en_taller(ing, hoy=hoy),
+        })
+
+    # 2b. Bodegajes silenciados
+    fecha_limite_bod = date.today() - _td(days=UMBRAL_DIAS_BODEGAJE)
+    qs_bod_silenciados = (
+        SalidaEquipo.objects
+        .select_related('ingreso', 'ingreso__cliente', 'ingreso__tecnico_encargado')
+        .filter(fecha_salida__lte=fecha_limite_bod)
+        .filter(fecha_retiro_real__isnull=True)
+        .filter(bodegaje_silenciado=True)
+    )
+    # No filtramos por usuario para los técnicos, ven todo
+    
+    bodegajes_silenciados = []
+    for sal in qs_bod_silenciados:
+        bod = sal.calcular_bodegaje(hoy=hoy)
+        bodegajes_silenciados.append({
+            'salida': sal,
+            'ingreso': sal.ingreso,
+            'dias_desde_salida': dias_desde_salida(sal, hoy=hoy),
+            'bodegaje_dias': bod['dias'],
+            'bodegaje_monto': bod['monto'],
+        })
+    # ── Top Clientes ──────────────────────────────
+    from django.db.models import Count
+    clientes_top = Cliente.objects.annotate(total_ingresos=Count('ingresos')).filter(total_ingresos__gt=0).order_by('-total_ingresos')[:5]
+
+    ctx = {
+        'usuario': request.user,
+        'es_admin': es_admin_user,
+        'stats': stats,
+        'equipos_top': equipos_top,
+        'clientes_top': clientes_top,
+        'demorados': demorados,
+        'demorados_total': demorados_qs.count(),
+        'demorados_silenciados': demorados_silenciados,
+        'bodegajes': bodegajes,
+        'bodegajes_total': bodegaje_qs.count(),
+        'bodegajes_silenciados': bodegajes_silenciados,
+        'total_silenciados': len(demorados_silenciados) + len(bodegajes_silenciados),
+        'umbral_diagnostico': UMBRAL_DIAS_DIAGNOSTICO,
+        'umbral_bodegaje': UMBRAL_DIAS_BODEGAJE,
+        'costo_bodegaje_dia': COSTO_BODEGAJE_DIA,
+    }
+    return render(request, 'bienvenida.html', ctx)
+
+@login_required
+def dashboard_details(request, tipo):
+    """Devuelve el HTML parcial para el modal del dashboard."""
+    hoy = date.today()
+    mes_actual = hoy.month
+    ano_actual = hoy.year
+
+    titulo = ""
+    columnas = []
+    filas = []
+
+    link_ver_todos = ""
+
+    if tipo == 'equipos_total':
+        titulo = "Total de Equipos Ingresados"
+        link_ver_todos = "/ingresos/"
+        qs = IngresoEquipo.objects.select_related('cliente').order_by('-fecha_ingreso')
+        columnas = ['Código', 'Cliente', 'Equipo', 'Fecha Ingreso', 'Estado', 'Acción']
+        for eq in qs:
+            btn = f'<a href="/ingresos/{eq.pk}/" class="badge badge-ingresado" style="text-decoration:none; padding: 4px 8px;">Ver detallles</a>'
+            filas.append([eq.codigo_equipo, eq.cliente.nombres, eq.tipo_equipo_display, eq.fecha_ingreso.strftime('%d/%m/%Y'), eq.get_estado_display(), btn])
+
+    elif tipo == 'ingresos_mes':
+        titulo = f"Ingresos del Mes ({hoy.strftime('%B %Y').capitalize()})"
+        link_ver_todos = "/ingresos/"
+        qs = IngresoEquipo.objects.select_related('cliente').filter(
+            fecha_ingreso__year=ano_actual, fecha_ingreso__month=mes_actual
+        ).order_by('-fecha_ingreso')
+        columnas = ['Código', 'Cliente', 'Equipo', 'Fecha Ingreso', 'Estado', 'Acción']
+        for eq in qs:
+            btn = f'<a href="/ingresos/{eq.pk}/" class="badge badge-ingresado" style="text-decoration:none; padding: 4px 8px;">Ver detallles</a>'
+            filas.append([eq.codigo_equipo, eq.cliente.nombres, eq.tipo_equipo_display, eq.fecha_ingreso.strftime('%d/%m/%Y'), eq.get_estado_display(), btn])
+
+    elif tipo == 'pendientes':
+        titulo = "Equipos Pendientes en Taller"
+        link_ver_todos = "/ingresos/"
+        ingresos = list(IngresoEquipo.objects.select_related('cliente').filter(estado__in=['ingresado', 'en_reparacion']))
+        salidas = list(SalidaEquipo.objects.select_related('ingreso__cliente').filter(estado_reparacion='pendiente_retiro'))
+        columnas = ['Código', 'Cliente', 'Equipo', 'Fase', 'Estado', 'Acción']
+        
+        for eq in ingresos:
+            btn = f'<a href="/ingresos/{eq.pk}/" class="badge badge-ingresado" style="text-decoration:none; padding: 4px 8px;">Ver detallles</a>'
+            filas.append([eq.codigo_equipo, eq.cliente.nombres, eq.tipo_equipo_display, 'En Proceso', eq.get_estado_display(), btn])
+        for sal in salidas:
+            btn = f'<a href="/ingresos/{sal.ingreso.pk}/" class="badge badge-ingresado" style="text-decoration:none; padding: 4px 8px;">Ver detallles</a>'
+            filas.append([sal.ingreso.codigo_equipo, sal.ingreso.cliente.nombres, sal.ingreso.tipo_equipo_display, 'Terminado', 'Listo (Pendiente Retiro)', btn])
+
+    elif tipo == 'salidas_mes':
+        titulo = f"Salidas del Mes ({hoy.strftime('%B %Y').capitalize()})"
+        link_ver_todos = "/salidas/"
+        qs = SalidaEquipo.objects.select_related('ingreso__cliente').filter(
+            fecha_salida__year=ano_actual, fecha_salida__month=mes_actual
+        ).order_by('-fecha_salida')
+        columnas = ['Código', 'Cliente', 'Equipo', 'Fecha Salida', 'Estado Reparación', 'Acción']
+        for sal in qs:
+            btn = f'<a href="/salidas/{sal.pk}/imprimir/" class="badge badge-entregado" style="text-decoration:none; padding: 4px 8px;">Ver PDF</a>'
+            filas.append([sal.ingreso.codigo_equipo, sal.ingreso.cliente.nombres, sal.ingreso.tipo_equipo_display, sal.fecha_salida.strftime('%d/%m/%Y'), sal.get_estado_reparacion_display(), btn])
+
+    elif tipo == 'clientes':
+        titulo = "Directorio de Clientes"
+        link_ver_todos = ""
+        qs = Cliente.objects.order_by('-id')
+        columnas = ['Nombre / Razón Social', 'Cédula / RUC', 'WhatsApp', 'Email']
+        for cli in qs:
+            filas.append([cli.nombres, cli.cedula, cli.whatsapp or '-', cli.correo or '-'])
+
+    ctx = {
+        'titulo': titulo,
+        'columnas': columnas,
+        'filas': filas,
+        'link_ver_todos': link_ver_todos,
+    }
+    return render(request, 'includes/dashboard_modal_content.html', ctx)
+
+@login_required
+def ayuda(request):
+    return render(request, 'ayuda.html')
+
+
+@login_required
+def reproductor_musica(request):
+    """Mini-reproductor de música de YouTube para técnicos."""
+    return render(request, 'musica.html')
+
+
+# ═════════════════════════════════════════════════════════════════
+# Ingreso de Equipos
+# ═════════════════════════════════════════════════════════════════
+
+@tecnico_requerido
+def ingreso_menu(request):
+    """Menú de ingresos: registrar nuevo / ver lista."""
+    total = IngresoEquipo.objects.count()
+    pendientes = IngresoEquipo.objects.filter(
+        estado__in=['ingresado', 'en_reparacion']
+    ).count() + SalidaEquipo.objects.filter(estado_reparacion='pendiente_retiro').count()
+    return render(request, 'ingresos/menu.html', {
+        'total': total,
+        'pendientes': pendientes,
+    })
+
+
+@tecnico_requerido
+@require_GET
+def cliente_buscar_por_cedula(request):
+    """
+    Endpoint AJAX: busca un cliente por cédula y devuelve sus datos en JSON.
+    Lo usa el formulario de ingreso para autocompletar nombre, WhatsApp, correo
+    y sector cuando el técnico escribe una cédula que ya existe en el sistema.
+
+    Respuesta cuando existe el cliente:
+        {"existe": true, "cliente": {...campos...}, "num_equipos_anteriores": N}
+    Respuesta cuando NO existe:
+        {"existe": false}
+    """
+    cedula = (request.GET.get('cedula') or '').strip()
+    if not cedula:
+        return JsonResponse({'existe': False})
+
+    cliente = Cliente.objects.filter(cedula=cedula).first()
+    if not cliente:
+        return JsonResponse({'existe': False})
+
+    equipos_qs = cliente.ingresos.order_by('-creado')
+    equipos_data = [
+        {
+            'id': eq.id, 
+            'label': f"{eq.codigo_equipo} — {eq.marca} {eq.modelo_serie} ({eq.creado.strftime('%d/%m/%Y')})",
+            'tipo_equipo': eq.tipo_equipo,
+            'marca': eq.marca,
+            'modelo_serie': eq.modelo_serie
+        }
+        for eq in equipos_qs
+    ]
+
+    return JsonResponse({
+        'existe': True,
+        'cliente': {
+            'nombres': cliente.nombres,
+            'whatsapp': cliente.whatsapp,
+            'correo': cliente.correo,
+            'sector': cliente.sector,
+            'sector_otro': cliente.sector_otro,
+        },
+        'equipos': equipos_data,
+        'num_equipos_anteriores': equipos_qs.count(),
+    })
+
+
+@tecnico_requerido
+@transaction.atomic
+def ingreso_registrar(request):
+    """Registra un nuevo ingreso.
+    - La SEDE se toma de la sesión (la elegida en el login).
+    - Si la cédula del cliente ya existe, se reutiliza.
+    - El número de equipo es correlativo dentro de la sede (G1/U1...).
+    """
+    # La sede se toma de la sesión. Si no hay sede, mandamos al login.
+    sede_actual = (request.session.get('sede_actual') or '').strip().lower()
+    if sede_actual not in ('guayaquil', 'quito'):
+        messages.error(request, 'Tu sesión no tiene una sede asignada. Vuelve a iniciar sesión.')
+        return redirect('login')
+
+    if request.method == 'POST':
+        cli_form = ClienteForm(request.POST, prefix='cli')
+        ing_form = IngresoEquipoForm(request.POST, prefix='ing')
+
+        cedula = (request.POST.get('cli-cedula') or '').strip()
+        cliente_existente = Cliente.objects.filter(cedula=cedula).first() if cedula else None
+
+        if cliente_existente:
+            # Actualizar datos del cliente con la nueva info, si hay cambios
+            cli_form_existente = ClienteForm(request.POST, prefix='cli', instance=cliente_existente)
+            if ing_form.is_valid() and cli_form_existente.is_valid():
+                cliente = cli_form_existente.save()
+                ingreso = ing_form.save(commit=False)
+                ingreso.cliente = cliente
+                ingreso.sede = sede_actual           # ← sede de la sesión
+                ingreso.registrado_por = request.user
+                ingreso.save()
+                messages.success(
+                    request,
+                    f'Equipo {ingreso.codigo_equipo} ingresado para {cliente.nombres}.'
+                )
+                return redirect('econotec:ingreso_detalle', pk=ingreso.pk)
+            cli_form = cli_form_existente
+        else:
+            if cli_form.is_valid() and ing_form.is_valid():
+                cliente = cli_form.save()
+                ingreso = ing_form.save(commit=False)
+                ingreso.cliente = cliente
+                ingreso.sede = sede_actual           # ← sede de la sesión
+                ingreso.registrado_por = request.user
+                ingreso.save()
+                messages.success(
+                    request,
+                    f'Equipo {ingreso.codigo_equipo} ingresado para {cliente.nombres}.'
+                )
+                return redirect('econotec:ingreso_detalle', pk=ingreso.pk)
+
+    else:
+        cli_initial = {
+            'cedula': request.GET.get('cedula', ''),
+            'nombres': request.GET.get('nombres', ''),
+            'whatsapp': request.GET.get('whatsapp', ''),
+            'correo': request.GET.get('correo', ''),
+            'sector': request.GET.get('sector', ''),
+            'sector_otro': request.GET.get('sector_otro', ''),
+        }
+        
+        # Validar tipo_equipo contra las opciones disponibles
+        from .models import TIPOS_EQUIPO
+        tipo_get = request.GET.get('tipo_equipo', '').lower()
+        tipos_validos = [t[0] for t in TIPOS_EQUIPO]
+        if tipo_get and tipo_get not in tipos_validos:
+            tipo_get = 'otro'
+            
+        ing_initial = {
+            'fecha_ingreso': timezone.now().date(),
+            'tecnico_encargado': request.user if request.user.groups.filter(name='Tecnicos').exists() else None,
+            'tipo_equipo': tipo_get,
+            'tipo_equipo_otro': request.GET.get('tipo_equipo_otro', ''),
+            'marca': request.GET.get('marca', ''),
+            'modelo_serie': request.GET.get('modelo_serie', ''),
+            'problema_reportado': request.GET.get('problema_reportado', ''),
+            'accesorios_entregados': request.GET.get('accesorios_entregados', ''),
+            'numero_factura': request.GET.get('numero_factura', ''),
+            'asesor_comercial': request.GET.get('asesor_comercial', ''),
+            'reporte_tecnico': request.GET.get('reporte_tecnico', ''),
+            'diagnostico_inmediato': request.GET.get('diagnostico_inmediato', 'no'),
+            'valor_diagnostico': request.GET.get('valor_diagnostico', '0.00'),
+            'valor_acordado': request.GET.get('valor_acordado', '0.00'),
+            'abono_anticipo': request.GET.get('abono_anticipo', '0.00'),
+        }
+        cli_form = ClienteForm(prefix='cli', initial=cli_initial)
+        ing_form = IngresoEquipoForm(prefix='ing', initial=ing_initial)
+
+    # El siguiente código se calcula dentro de la sede actual
+    from .models import SEDE_PREFIJOS
+    siguiente_numero = IngresoEquipo.siguiente_numero_equipo(sede_actual)
+    siguiente_codigo = f"{SEDE_PREFIJOS.get(sede_actual, '?')}{siguiente_numero}"
+
+    return render(request, 'ingresos/form.html', {
+        'cli_form': cli_form,
+        'ing_form': ing_form,
+        'modo': 'registrar',
+        'titulo': 'Nueva Solicitud de Ingreso',
+        'siguiente_numero': siguiente_numero,
+        'siguiente_codigo': siguiente_codigo,
+    })
+
+
+@tecnico_requerido
+@transaction.atomic
+def ingreso_editar(request, pk):
+    """Edita un ingreso existente."""
+    ingreso = get_object_or_404(IngresoEquipo, pk=pk)
+
+    # Mapeo subestado_entregado → estado_reparacion de SalidaEquipo
+    _MAPA_SALIDA = {
+        'con_solucion': {
+            'estado_reparacion': 'pendiente_retiro',
+            'cliente_recibe_conforme': 'si',
+        },
+        'sin_solucion': {
+            'estado_reparacion': 'no_reparable',
+            'cliente_recibe_conforme': 'no',
+        },
+        'no_quiso_reparar': {
+            'estado_reparacion': 'cliente_no_acepta',
+            'cliente_recibe_conforme': 'no',
+        },
+        'pendiente_retiro': {
+            'estado_reparacion': 'pendiente_retiro',
+            'cliente_recibe_conforme': 'si',
+        },
+    }
+
+    if request.method == 'POST':
+        cli_form = ClienteForm(request.POST, prefix='cli', instance=ingreso.cliente)
+        ing_form = IngresoEquipoForm(request.POST, prefix='ing', instance=ingreso)
+        if cli_form.is_valid() and ing_form.is_valid():
+            cli_form.save()
+            ing_form.save()
+
+            # ── Auto-crear Salida si estado=entregado + subestado definido ──
+            subestado = ingreso.subestado_entregado
+            if ingreso.estado == 'entregado' and subestado in _MAPA_SALIDA:
+                datos_salida = _MAPA_SALIDA[subestado]
+                salida_existente = getattr(ingreso, 'salida', None)
+                if salida_existente is None:
+                    # Calcular saldo pendiente para sugerir el valor final
+                    saldo = ingreso.diferencia
+                    SalidaEquipo.objects.create(
+                        ingreso=ingreso,
+                        fecha_salida=date.today(),
+                        estado_reparacion=datos_salida['estado_reparacion'],
+                        cliente_recibe_conforme=datos_salida['cliente_recibe_conforme'],
+                        valor_final_cobrado=saldo if saldo > 0 else 0,
+                        metodo_pago_final='efectivo' if saldo > 0 else 'sin_pago',
+                        registrado_por=request.user,
+                    )
+                    if subestado == 'con_solucion':
+                        etiqueta = 'Con solución — cliente conforme'
+                    elif subestado == 'sin_solucion':
+                        etiqueta = 'Sin solución — no se pudo reparar'
+                    elif subestado == 'pendiente_retiro':
+                        etiqueta = 'Pendiente de retiro'
+                    else:
+                        etiqueta = 'Sin reparación — cliente no quiso repararlo'
+                    
+                    messages.success(
+                        request,
+                        f'✅ Equipo {ingreso.codigo_equipo} actualizado. '
+                        f'Salida registrada automáticamente: {etiqueta}.'
+                    )
+                else:
+                    messages.success(request, f'Equipo {ingreso.codigo_equipo} actualizado.')
+            else:
+                messages.success(request, f'Equipo {ingreso.codigo_equipo} actualizado.')
+
+            return redirect('econotec:ingreso_detalle', pk=ingreso.pk)
+    else:
+        cli_form = ClienteForm(prefix='cli', instance=ingreso.cliente)
+        ing_form = IngresoEquipoForm(prefix='ing', instance=ingreso)
+
+    return render(request, 'ingresos/form.html', {
+        'cli_form': cli_form,
+        'ing_form': ing_form,
+        'ingreso': ingreso,
+        'modo': 'editar',
+        'titulo': f'Editar Equipo {ingreso.codigo_equipo}',
+        'siguiente_numero': ingreso.numero_equipo,
+        'siguiente_codigo': ingreso.codigo_equipo,
+    })
+
+
+@tecnico_requerido
+def ingreso_lista(request):
+    """Listado de ingresos con filtros.
+    Por defecto se filtra por la sede actual de la sesión, pero el usuario
+    puede ver "Todas" o cambiar entre Guayaquil/Quito con el filtro.
+    """
+    q = (request.GET.get('q') or '').strip()
+    estado = (request.GET.get('estado') or '').strip()
+    tipo = (request.GET.get('tipo') or '').strip()
+
+    # Filtro por sede:
+    # - Si el querystring trae explícitamente sede=todas → no filtrar
+    # - Si trae sede=guayaquil/quito → filtrar por esa
+    # - Si NO viene en el querystring → usar la sede de la sesión
+    sede_sesion = (request.session.get('sede_actual') or '').strip().lower()
+    if 'sede' in request.GET:
+        sede_filtro = (request.GET.get('sede') or '').strip().lower()
+    else:
+        sede_filtro = sede_sesion
+
+    qs = (IngresoEquipo.objects
+          .select_related('cliente', 'registrado_por')
+          .prefetch_related('abonos'))
+
+    if sede_filtro in ('guayaquil', 'quito'):
+        qs = qs.filter(sede=sede_filtro)
+    # si sede_filtro es 'todas' o vacío → no se filtra
+
+    if q:
+        import re
+        q_filter = (
+            Q(cliente__cedula__icontains=q) |
+            Q(cliente__nombres__icontains=q) |
+            Q(marca__icontains=q) |
+            Q(modelo_serie__icontains=q) |
+            Q(numero_equipo__icontains=q)
+        )
+        # Si el usuario busca "G1000", extraemos "1000" para buscar en numero_equipo
+        digitos = re.sub(r'\D', '', q)
+        if digitos:
+            q_filter |= Q(numero_equipo__icontains=digitos)
+            
+        qs = qs.filter(q_filter)
+    if estado:
+        if estado in ['espera_cliente', 'espera_repuesto']:
+            qs = qs.filter(estado='en_reparacion', subestado_reparacion=estado)
+        else:
+            qs = qs.filter(estado=estado)
+    if tipo:
+        qs = qs.filter(tipo_equipo=tipo)
+
+    tecnico_filtro = (request.GET.get('tecnico') or '').strip()
+    registrador_filtro = (request.GET.get('registrador') or '').strip()
+    asesor_filtro = (request.GET.get('asesor') or '').strip()
+
+    if tecnico_filtro.isdigit():
+        qs = qs.filter(tecnico_encargado_id=tecnico_filtro)
+    if registrador_filtro.isdigit():
+        qs = qs.filter(registrado_por_id=registrador_filtro)
+    if asesor_filtro:
+        qs = qs.filter(asesor_comercial=asesor_filtro)
+
+    from django.contrib.auth import get_user_model
+    User = get_user_model()
+    usuarios_all = User.objects.filter(is_active=True).order_by('first_name', 'username')
+    from .forms import _queryset_asesores
+    asesores_qs = _queryset_asesores()
+    asesores_choices = [f'{u.first_name} {u.last_name}'.strip() or u.username for u in asesores_qs]
+
+    estados_filtro = [
+        ('', '— Estado —'),
+        ('ingresado', 'Ingresado / En diagnóstico'),
+        ('en_reparacion', 'En reparación (Todos)'),
+        ('espera_cliente', '   ↳ En reparación - Cliente'),
+        ('espera_repuesto', '   ↳ En reparación - Repuestos'),
+    ]
+
+    return render(request, 'ingresos/lista.html', {
+        'ingresos': qs,
+        'q': q,
+        'estado_filtro': estado,
+        'tipo_filtro': tipo,
+        'sede_filtro': sede_filtro,
+        'sede_sesion': sede_sesion,
+        'tecnico_filtro': tecnico_filtro,
+        'registrador_filtro': registrador_filtro,
+        'asesor_filtro': asesor_filtro,
+        'usuarios_all': usuarios_all,
+        'asesores_choices': asesores_choices,
+        'estados': estados_filtro,
+        'tipos': IngresoEquipo._meta.get_field('tipo_equipo').choices,
+        'total': qs.count(),
+    })
+
+
+@tecnico_requerido
+def ingreso_detalle(request, pk):
+    """Vista de detalle de un ingreso con todas sus relaciones."""
+    ingreso = get_object_or_404(
+        IngresoEquipo.objects.select_related('cliente', 'registrado_por'),
+        pk=pk,
+    )
+    abonos = ingreso.abonos.all().order_by('-fecha', '-creado')
+    salida = getattr(ingreso, 'salida', None)
+    from .qr_utils import qr_data_uri_para_ingreso, url_hoja_movil
+    return render(request, 'ingresos/detalle.html', {
+        'ingreso': ingreso,
+        'abonos': abonos,
+        'salida': salida,
+        'qr_data_uri': qr_data_uri_para_ingreso(request, ingreso, box_size=6),
+        'qr_url': url_hoja_movil(request, ingreso),
+        'wa_link': whatsapp_link_hoja_ingreso(request, ingreso),
+    })
+
+
+@admin_requerido
+@require_POST
+def ingreso_eliminar(request, pk):
+    """Solo admin: eliminar ingreso (con confirmación)."""
+    ingreso = get_object_or_404(IngresoEquipo, pk=pk)
+    numero = ingreso.numero_equipo
+    if hasattr(ingreso, 'salida'):
+        messages.error(
+            request,
+            f'No se puede eliminar el equipo #{numero}: ya tiene una salida registrada. '
+            'Elimina primero la salida.'
+        )
+        return redirect('econotec:ingreso_detalle', pk=ingreso.pk)
+    ingreso.delete()
+    messages.success(request, f'Equipo #{numero} eliminado.')
+    return redirect('econotec:ingreso_lista')
+
+
+# ═════════════════════════════════════════════════════════════════
+# Ventas de Productos
+# ═════════════════════════════════════════════════════════════════
+
+@tecnico_requerido
+def venta_menu(request):
+    """Menú de ventas: registrar nueva / ver lista."""
+    total = IngresoEquipo.objects.filter(sede='ventas').count()
+    return render(request, 'ventas/menu.html', {
+        'total': total,
+    })
+
+
+@tecnico_requerido
+@transaction.atomic
+def venta_registrar(request):
+    """Registra una nueva venta de producto."""
+    if request.method == 'POST':
+        post_data = request.POST.copy()
+        # Valores por defecto para campos no usados en ventas
+        if not post_data.get('ing-marca'):
+            post_data['ing-marca'] = 'N/A'
+        if not post_data.get('ing-modelo_serie'):
+            post_data['ing-modelo_serie'] = 'N/A'
+        if not post_data.get('ing-tipo_equipo'):
+            post_data['ing-tipo_equipo'] = 'otro'
+        if not post_data.get('ing-valor_diagnostico'):
+            post_data['ing-valor_diagnostico'] = '0.00'
+        if not post_data.get('ing-abono_anticipo'):
+            post_data['ing-abono_anticipo'] = '0.00'
+
+        cli_form = ClienteForm(post_data, prefix='cli')
+        ing_form = IngresoEquipoForm(post_data, prefix='ing')
+        
+        # En ventas no es obligatorio el técnico ni la garantía
+        ing_form.fields['tecnico_encargado'].required = False
+        if 'equipo_garantia' in ing_form.fields:
+            ing_form.fields['equipo_garantia'].required = False
+
+        ing_form.fields['problema_reportado'].widget.attrs['placeholder'] = 'Ej.: 1 Tinta Epson Negra, 2 Cables USB'
+
+        cedula = (post_data.get('cli-cedula') or '').strip()
+        cliente_existente = Cliente.objects.filter(cedula=cedula).first() if cedula else None
+
+        cliente = None
+        venta = None
+
+        if cliente_existente:
+            cli_form_existente = ClienteForm(post_data, prefix='cli', instance=cliente_existente)
+            if ing_form.is_valid() and cli_form_existente.is_valid():
+                cliente = cli_form_existente.save()
+                venta = ing_form.save(commit=False)
+            else:
+                print("ERRORES AL ACTUALIZAR CLI:")
+                print("ING_FORM ERRORS:", ing_form.errors)
+                print("CLI_FORM ERRORS:", cli_form_existente.errors)
+                cli_form = cli_form_existente # Pass the instance form so it doesn't show "Cedula exists" error
+        else:
+            if cli_form.is_valid() and ing_form.is_valid():
+                cliente = cli_form.save()
+                venta = ing_form.save(commit=False)
+            else:
+                print("ERRORES AL CREAR NUEVO CLI:")
+                print("ING_FORM ERRORS:", ing_form.errors)
+                print("CLI_FORM ERRORS:", cli_form.errors)
+
+        if cliente and venta:
+            venta.cliente = cliente
+            venta.sede = 'ventas'
+            venta.registrado_por = request.user
+            venta.save()
+
+            # Marcar la venta como finalizada directamente en el ingreso
+            venta.estado = 'entregado'
+            venta.subestado_entregado = 'con_solucion'
+            venta.save()
+
+            messages.success(request, f'Venta {venta.codigo_equipo} registrada para {cliente.nombres}.')
+            return redirect('econotec:venta_lista')
+            
+    else:
+        cli_form = ClienteForm(prefix='cli')
+        ing_form = IngresoEquipoForm(prefix='ing', initial={
+            'fecha_ingreso': date.today(),
+            'estado': 'entregado',
+            'subestado_entregado': 'con_solucion', # Asumimos la venta está finalizada y entregada
+            'diagnostico_inmediato': 'no',
+            'accesorios_entregados': 'Ninguno',
+            'marca': 'N/A',
+            'modelo_serie': 'N/A',
+            'tipo_equipo': 'otro',
+        })
+        ing_form.fields['problema_reportado'].widget.attrs['placeholder'] = 'Ej.: 1 Tinta Epson Negra, 2 Cables USB'
+
+    from .models import SEDE_PREFIJOS
+    siguiente_numero = IngresoEquipo.siguiente_numero_equipo('ventas')
+    siguiente_codigo = f"{siguiente_numero:03d}"
+
+    return render(request, 'ventas/form.html', {
+        'cli_form': cli_form,
+        'ing_form': ing_form,
+        'modo': 'registrar',
+        'titulo': 'Nueva Venta de Producto',
+        'siguiente_numero': siguiente_numero,
+        'siguiente_codigo': siguiente_codigo,
+    })
+
+@tecnico_requerido
+@transaction.atomic
+def venta_editar(request, pk):
+    """Edita una venta existente."""
+    venta = get_object_or_404(IngresoEquipo, pk=pk, sede='ventas')
+
+    if request.method == 'POST':
+        post_data = request.POST.copy()
+        if not post_data.get('ing-marca'):
+            post_data['ing-marca'] = 'N/A'
+        if not post_data.get('ing-modelo_serie'):
+            post_data['ing-modelo_serie'] = 'N/A'
+        if not post_data.get('ing-tipo_equipo'):
+            post_data['ing-tipo_equipo'] = 'otro'
+        if not post_data.get('ing-valor_diagnostico'):
+            post_data['ing-valor_diagnostico'] = '0.00'
+        if not post_data.get('ing-abono_anticipo'):
+            post_data['ing-abono_anticipo'] = '0.00'
+            
+        cli_form = ClienteForm(post_data, prefix='cli', instance=venta.cliente)
+        ing_form = IngresoEquipoForm(post_data, prefix='ing', instance=venta)
+        
+        # En ventas no es obligatorio el técnico ni la garantía
+        ing_form.fields['tecnico_encargado'].required = False
+        if 'equipo_garantia' in ing_form.fields:
+            ing_form.fields['equipo_garantia'].required = False
+        
+        if cli_form.is_valid() and ing_form.is_valid():
+            cli_form.save()
+            ing_form.save()
+            messages.success(request, f'Venta {venta.codigo_equipo} actualizada.')
+            return redirect('econotec:venta_lista')
+    else:
+        cli_form = ClienteForm(prefix='cli', instance=venta.cliente)
+        ing_form = IngresoEquipoForm(prefix='ing', instance=venta)
+        
+    ing_form.fields['problema_reportado'].widget.attrs['placeholder'] = 'Ej.: 1 Tinta Epson Negra, 2 Cables USB'
+
+    return render(request, 'ventas/form.html', {
+        'cli_form': cli_form,
+        'ing_form': ing_form,
+        'modo': 'editar',
+        'titulo': f'Editar Venta {venta.codigo_equipo}',
+        'siguiente_numero': venta.numero_equipo,
+        'siguiente_codigo': venta.codigo_equipo,
+    })
+
+@admin_requerido
+@require_POST
+def venta_eliminar(request, pk):
+    """Elimina una venta."""
+    venta = get_object_or_404(IngresoEquipo, pk=pk, sede='ventas')
+    venta.delete()
+    messages.success(request, 'Venta eliminada correctamente.')
+    return redirect('econotec:venta_lista')
+
+@tecnico_requerido
+def venta_export(request):
+    """Exportar ventas a Excel."""
+    from openpyxl import Workbook
+    from openpyxl.styles import Alignment, Font, PatternFill
+    from io import BytesIO
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = 'Ventas Econotec'
+
+    headers = ['Código', 'Fecha', 'Cliente', 'Cédula', 'Descripción', 'Registrado por', 'Valor']
+    for col, h in enumerate(headers, start=1):
+        c = ws.cell(row=1, column=col, value=h)
+        c.font = Font(bold=True, color='FFFFFF')
+        c.fill = PatternFill('solid', fgColor='F97618')
+        c.alignment = Alignment(horizontal='center')
+
+    ventas = IngresoEquipo.objects.filter(sede='ventas').order_by('-fecha_ingreso', '-pk')
+
+    for row, v in enumerate(ventas, start=2):
+        ws.cell(row=row, column=1, value=v.codigo_equipo)
+        ws.cell(row=row, column=2, value=v.fecha_ingreso.strftime('%d/%m/%Y'))
+        ws.cell(row=row, column=3, value=v.cliente.nombres)
+        ws.cell(row=row, column=4, value=v.cliente.cedula)
+        ws.cell(row=row, column=5, value=v.problema_reportado)
+        registrador = f"{v.registrado_por.first_name} {v.registrado_por.last_name}".strip() if v.registrado_por else 'N/A'
+        ws.cell(row=row, column=6, value=registrador)
+        ws.cell(row=row, column=7, value=v.valor_acordado)
+
+    for col in range(1, 8):
+        ws.column_dimensions[chr(64 + col)].width = 22
+
+    buf = BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+
+    response = HttpResponse(
+        buf.getvalue(),
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    )
+    response['Content-Disposition'] = 'attachment; filename="ventas_econotec.xlsx"'
+    return response
+
+
+@tecnico_requerido
+def venta_lista(request):
+    """Listado de ventas."""
+    q = (request.GET.get('q') or '').strip()
+
+    qs = (IngresoEquipo.objects
+          .select_related('cliente', 'registrado_por')
+          .prefetch_related('abonos')
+          .filter(sede='ventas'))
+
+    if q:
+        qs = qs.filter(
+            Q(cliente__cedula__icontains=q) |
+            Q(cliente__nombres__icontains=q) |
+            Q(marca__icontains=q) |
+            Q(modelo_serie__icontains=q) |
+            Q(numero_equipo__icontains=q) |
+            Q(problema_reportado__icontains=q)
+        )
+
+    return render(request, 'ventas/lista.html', {
+        'ingresos': qs,
+        'q': q,
+        'total': qs.count(),
+    })
+
+
+# ═════════════════════════════════════════════════════════════════
+# Salida de Equipos
+# ═════════════════════════════════════════════════════════════════
+
+@tecnico_requerido
+def salida_menu(request):
+    """Menú de salidas."""
+    total = SalidaEquipo.objects.count()
+    listos_para_entregar = SalidaEquipo.objects.filter(
+        estado_reparacion='pendiente_retiro',
+    ).count()
+    return render(request, 'salidas/menu.html', {
+        'total': total,
+        'listos_para_entregar': listos_para_entregar,
+    })
+
+
+@tecnico_requerido
+def salida_lista(request):
+    """Listado de salidas con filtros por estado y sede."""
+    q = (request.GET.get('q') or '').strip()
+    estado = (request.GET.get('estado') or '').strip()
+    sede_filtro = (request.GET.get('sede') or '').strip().lower()
+    tecnico_registro_filtro = (request.GET.get('tecnico_registro') or '').strip()
+    tecnico_salida_filtro = (request.GET.get('tecnico_salida') or '').strip()
+
+    qs = (SalidaEquipo.objects
+          .select_related('ingreso', 'ingreso__cliente', 'registrado_por', 'tecnico_reparo')
+          .order_by('-fecha_salida', '-creado'))
+
+    if q:
+        import re
+        q_filter = (
+            Q(ingreso__cliente__cedula__icontains=q) |
+            Q(ingreso__cliente__nombres__icontains=q) |
+            Q(ingreso__marca__icontains=q) |
+            Q(ingreso__numero_equipo__icontains=q)
+        )
+        digitos = re.sub(r'\D', '', q)
+        if digitos:
+            q_filter |= Q(ingreso__numero_equipo__icontains=digitos)
+            
+        qs = qs.filter(q_filter)
+    if estado:
+        qs = qs.filter(estado_reparacion=estado)
+    if sede_filtro in ('guayaquil', 'quito'):
+        qs = qs.filter(ingreso__sede=sede_filtro)
+    if tecnico_registro_filtro:
+        qs = qs.filter(registrado_por_id=tecnico_registro_filtro)
+    if tecnico_salida_filtro:
+        qs = qs.filter(tecnico_reparo_id=tecnico_salida_filtro)
+
+    from django.contrib.auth import get_user_model
+    User = get_user_model()
+    tecnicos_all = User.objects.filter(is_active=True).order_by('first_name', 'username')
+    from .forms import _queryset_tecnicos
+    tecnicos_solo = _queryset_tecnicos()
+
+    # Excluir 'chatarrerizacion' del filtro de vistas públicas
+    estados_filtro = [e for e in SalidaEquipo.ESTADO_REPARACION if e[0] != 'chatarrerizacion']
+
+    return render(request, 'salidas/lista.html', {
+        'salidas': qs,
+        'q': q,
+        'estado_filtro': estado,
+        'sede_filtro': sede_filtro,
+        'tecnico_registro_filtro': tecnico_registro_filtro,
+        'tecnico_salida_filtro': tecnico_salida_filtro,
+        'tecnicos_all': tecnicos_all,
+        'tecnicos_solo': tecnicos_solo,
+        'estados': estados_filtro,
+        'total': qs.count(),
+    })
+
+
+@tecnico_requerido
+@transaction.atomic
+def salida_registrar(request, ingreso_pk):
+    """Registrar la salida de un equipo (cierre del ciclo de reparación)."""
+    ingreso = get_object_or_404(IngresoEquipo, pk=ingreso_pk)
+
+    if hasattr(ingreso, 'salida'):
+        messages.info(
+            request,
+            f'El equipo {ingreso.codigo_equipo} ya tiene salida registrada. '
+            'Puedes editarla aquí.'
+        )
+        return redirect('econotec:salida_editar', pk=ingreso.salida.pk)
+
+    if request.method == 'POST':
+        salida_inst = SalidaEquipo(ingreso=ingreso)
+        form = SalidaEquipoForm(request.POST, instance=salida_inst)
+        if form.is_valid():
+            salida = form.save(commit=False)
+            salida.registrado_por = request.user
+            salida.save()
+            messages.success(
+                request,
+                f'Salida del equipo {ingreso.codigo_equipo} registrada como '
+                f'"{salida.get_estado_reparacion_display()}".'
+            )
+            # Si la salida es positiva, redirigir a la pantalla de "salida creada"
+            # con el botón de WhatsApp para avisar al cliente.
+            if salida.pendiente_de_retiro_fisico:
+                return redirect('econotec:salida_listo_aviso', pk=salida.pk)
+            return redirect('econotec:salida_lista')
+    else:
+        # Saldo pendiente sugerido como valor a cobrar
+        saldo = ingreso.diferencia
+        salida_inst = SalidaEquipo(ingreso=ingreso)
+        form = SalidaEquipoForm(instance=salida_inst, initial={
+            'fecha_salida': date.today(),
+            'estado_reparacion': 'pendiente_retiro',
+            'cliente_recibe_conforme': 'si',
+            'metodo_pago_final': 'efectivo',
+            'valor_final_cobrado': 0,
+        })
+
+    return render(request, 'salidas/form.html', {
+        'form': form,
+        'ingreso': ingreso,
+        'modo': 'registrar',
+        'titulo': f'Registrar Salida — Equipo {ingreso.codigo_equipo}',
+    })
+
+
+@tecnico_requerido
+@transaction.atomic
+def salida_editar(request, pk):
+    salida = get_object_or_404(
+        SalidaEquipo.objects.select_related('ingreso', 'ingreso__cliente'),
+        pk=pk,
+    )
+    if request.method == 'POST':
+        form = SalidaEquipoForm(request.POST, instance=salida)
+        if form.is_valid():
+            form.save()
+            messages.success(request, 'Salida actualizada correctamente.')
+            return redirect('econotec:salida_lista')
+    else:
+        form = SalidaEquipoForm(instance=salida)
+    return render(request, 'salidas/form.html', {
+        'form': form,
+        'ingreso': salida.ingreso,
+        'salida': salida,
+        'modo': 'editar',
+        'titulo': f'Editar Salida — Equipo {salida.ingreso.codigo_equipo}',
+        # Si la salida ya está marcada como positiva (retirado/garantía/parcial)
+        # y el cliente tiene WhatsApp, generamos el link para reenviar el aviso
+        # junto con el PDF de la hoja de salida.
+        'wa_link': whatsapp_link_equipo_listo(salida),
+    })
+
+
+@admin_requerido
+@require_POST
+def salida_eliminar(request, pk):
+    salida = get_object_or_404(SalidaEquipo, pk=pk)
+    ingreso = salida.ingreso
+    salida.delete()
+    # Volver el equipo al estado anterior
+    ingreso.estado = 'en_reparacion'
+    ingreso.save(update_fields=['estado'])
+    messages.success(
+        request,
+        f'Salida del equipo {ingreso.codigo_equipo} eliminada. '
+        'El equipo vuelve a estado "Pendiente de retiro".'
+    )
+    return redirect('econotec:salida_lista')
+
+
+# ═════════════════════════════════════════════════════════════════
+# Clientes
+# ═════════════════════════════════════════════════════════════════
+
+@tecnico_requerido
+def cliente_lista(request):
+    q = (request.GET.get('q') or '').strip()
+    sede_filtro = (request.GET.get('sede') or '').strip().lower()
+
+    qs = Cliente.objects.prefetch_related('ingresos').annotate(
+        equipos_total=Count('ingresos'),
+    ).order_by('nombres')
+
+    if sede_filtro in ('guayaquil', 'quito'):
+        qs = qs.filter(ingresos__sede=sede_filtro).distinct()
+
+    if q:
+        qs = qs.filter(
+            Q(cedula__icontains=q) |
+            Q(nombres__icontains=q) |
+            Q(whatsapp__icontains=q) |
+            Q(correo__icontains=q)
+        )
+    return render(request, 'clientes/lista.html', {
+        'clientes': qs,
+        'q': q,
+        'sede_filtro': sede_filtro,
+        'total': qs.count(),
+    })
+
+
+@tecnico_requerido
+def cliente_top_recurrentes(request):
+    """Ranking de clientes recurrentes separados por sede (Top 10 cada una)."""
+    qs_base = Cliente.objects.annotate(total_ingresos=Count('ingresos')).filter(total_ingresos__gt=0).order_by('-total_ingresos')
+    
+    clientes_guayaquil = qs_base.filter(ingresos__sede='guayaquil').distinct()[:10]
+    clientes_quito = qs_base.filter(ingresos__sede='quito').distinct()[:10]
+
+    return render(request, 'clientes/top.html', {
+        'clientes_guayaquil': clientes_guayaquil,
+        'clientes_quito': clientes_quito,
+    })
+
+
+@tecnico_requerido
+def cliente_detalle(request, pk):
+    cliente = get_object_or_404(Cliente, pk=pk)
+    ingresos = (cliente.ingresos
+                .select_related('cliente')
+                .prefetch_related('abonos', 'salida')
+                .order_by('-fecha_ingreso'))
+
+    total_pagado = sum((ing.total_abonado for ing in ingresos), 0)
+    total_acordado = sum((ing.valor_acordado or 0 for ing in ingresos), 0)
+
+    return render(request, 'clientes/detalle.html', {
+        'cliente': cliente,
+        'ingresos': ingresos,
+        'total_equipos': ingresos.count(),
+        'total_pagado': total_pagado,
+        'total_acordado': total_acordado,
+    })
+
+
+@tecnico_requerido
+def cliente_export(request):
+    """Exportar clientes a Excel."""
+    from openpyxl import Workbook
+    from openpyxl.styles import Alignment, Font, PatternFill
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = 'Clientes Econotec'
+
+    headers = ['Cédula/RUC', 'Nombres', 'WhatsApp', 'Correo', 'Sector', 'Equipos', 'Registrado']
+    for col, h in enumerate(headers, start=1):
+        c = ws.cell(row=1, column=col, value=h)
+        c.font = Font(bold=True, color='FFFFFF')
+        c.fill = PatternFill('solid', fgColor='F97618')
+        c.alignment = Alignment(horizontal='center')
+
+    clientes = Cliente.objects.annotate(
+        equipos_total=Count('ingresos'),
+    ).order_by('nombres')
+
+    for row, cli in enumerate(clientes, start=2):
+        ws.cell(row=row, column=1, value=cli.cedula)
+        ws.cell(row=row, column=2, value=cli.nombres)
+        ws.cell(row=row, column=3, value=cli.whatsapp)
+        ws.cell(row=row, column=4, value=cli.correo)
+        ws.cell(row=row, column=5, value=cli.sector_display)
+        ws.cell(row=row, column=6, value=cli.equipos_total)
+        ws.cell(row=row, column=7, value=cli.creado.strftime('%d/%m/%Y'))
+
+    for col in range(1, 8):
+        ws.column_dimensions[chr(64 + col)].width = 22
+
+    buf = BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+
+    response = HttpResponse(
+        buf.getvalue(),
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    )
+    response['Content-Disposition'] = 'attachment; filename="clientes_econotec.xlsx"'
+    return response
+
+
+# ═════════════════════════════════════════════════════════════════
+# Ranking de Técnicos (totales por técnico)
+# ═════════════════════════════════════════════════════════════════
+
+from .permisos import ranking_requerido as _ranking_requerido
+
+@_ranking_requerido
+def salida_totales(request):
+    """
+    Ranking de técnicos: cuántos equipos atendió cada uno como
+    *técnico encargado* (responsable directo de la reparación), cuántos
+    terminó positivamente (retirados/garantía), cuánto dinero generó, etc.
+
+    El ranking SE AGRUPA POR `tecnico_encargado` — el técnico responsable
+    del equipo — no por el usuario que digitó la solicitud en el sistema.
+
+    Filtros opcionales por rango de fechas.
+    """
+    from decimal import Decimal as D
+
+    desde = (request.GET.get('desde') or '').strip()
+    hasta = (request.GET.get('hasta') or '').strip()
+
+    # Base: ingresos en el rango. La métrica se calcula sobre ingresos
+    # (cada equipo cuenta para el técnico ENCARGADO, no para el que registró).
+    qs_ing = IngresoEquipo.objects.select_related('tecnico_encargado')
+    if desde:
+        qs_ing = qs_ing.filter(fecha_ingreso__gte=desde)
+    if hasta:
+        qs_ing = qs_ing.filter(fecha_ingreso__lte=hasta)
+
+    # Agrupar por técnico encargado
+    from django.db.models import Count, Sum, Q
+    ranking = (
+        qs_ing
+        .values('tecnico_encargado_id', 'tecnico_encargado__first_name',
+                'tecnico_encargado__last_name', 'tecnico_encargado__username')
+        .annotate(
+            num_equipos=Count('id'),
+            total_acordado=Sum('valor_acordado'),
+            total_anticipo=Sum('abono_anticipo'),
+            entregados=Count('id', filter=Q(estado='entregado')),
+            pendientes=Count('id', filter=Q(estado__in=[
+                'ingresado', 'en_reparacion'
+            ])),
+        )
+        .order_by('-num_equipos', '-total_acordado')
+    )
+
+    # Por cada técnico calcular sus salidas positivas (retirados, garantía, parciales)
+    ranking_list = []
+    for row in ranking:
+        tid = row['tecnico_encargado_id']
+        nombre = (
+            f"{row['tecnico_encargado__first_name'] or ''} {row['tecnico_encargado__last_name'] or ''}".strip()
+            or row['tecnico_encargado__username']
+            or '— Sin asignar —'
+        )
+
+        # Salidas asociadas a equipos de este técnico encargado
+        # Usamos select_related para evitar querys extra al pedir salida.ingreso.valor_acordado
+        sal_qs = SalidaEquipo.objects.filter(ingreso__tecnico_encargado_id=tid).select_related('ingreso')
+        if desde:
+            sal_qs = sal_qs.filter(fecha_salida__gte=desde)
+        if hasta:
+            sal_qs = sal_qs.filter(fecha_salida__lte=hasta)
+
+        total_salidas = sal_qs.count()
+        
+        salidas_positivas = 0
+        salidas_negativas = 0
+        cobrado_final = D('0.00')
+        
+        total_acordado = row['total_acordado'] or D('0.00')
+        total_anticipo = row['total_anticipo'] or D('0.00')
+
+        for salida in sal_qs:
+            estado = salida.estado_reparacion
+            
+            # Conteo de salidas
+            if estado in ['pendiente_retiro', 'garantia', 'retirado']:
+                salidas_positivas += 1
+            elif estado in ['no_reparable', 'cliente_no_acepta', 'chatarrerizacion']:
+                salidas_negativas += 1
+                
+            # Cobrado
+            cobrado_final += (salida.valor_final_cobrado or D('0.00'))
+            
+            # Ajuste de Venta (Acordado)
+            if estado == 'cliente_no_acepta':
+                total_acordado -= (salida.ingreso.valor_acordado or D('0.00'))
+                total_acordado += D('5.00')
+            elif estado == 'no_reparable':
+                total_acordado -= (salida.ingreso.valor_acordado or D('0.00'))
+
+        # Recaudado para el técnico: EXCLUYE anticipos, SOLO cobros de salida
+        total_recaudado = cobrado_final
+
+        ranking_list.append({
+            'tecnico_id': tid,
+            'nombre': nombre,
+            'sin_asignar': tid is None,
+            'num_equipos': row['num_equipos'],
+            'entregados': row['entregados'],
+            'pendientes': row['pendientes'],
+            'total_acordado': total_acordado,
+            'total_anticipo': total_anticipo,
+            'cobrado_final': cobrado_final,
+            'total_recaudado': total_recaudado,
+            'total_salidas': total_salidas,
+            'salidas_positivas': salidas_positivas,
+            'salidas_negativas': salidas_negativas,
+            'efectividad': round((salidas_positivas / total_salidas * 100) if total_salidas else 0, 1),
+        })
+
+    # Totales globales
+    total_equipos = qs_ing.count()
+    total_acordado_global = qs_ing.aggregate(s=Sum('valor_acordado'))['s'] or D('0.00')
+    total_anticipos_global = qs_ing.aggregate(s=Sum('abono_anticipo'))['s'] or D('0.00')
+
+    # Salidas globales
+    sal_global = SalidaEquipo.objects.all()
+    if desde:
+        sal_global = sal_global.filter(fecha_salida__gte=desde)
+    if hasta:
+        sal_global = sal_global.filter(fecha_salida__lte=hasta)
+    total_salidas_global = sal_global.count()
+    total_positivas_global = sal_global.filter(
+        estado_reparacion__in=['pendiente_retiro', 'garantia', 'retirado', 'cliente_no_acepta', 'no_reparable']
+    ).count()
+    cobrado_final_global = sal_global.aggregate(s=Sum('valor_final_cobrado'))['s'] or D('0.00')
+
+    total_diag_no_reparado = sal_global.filter(
+        estado_reparacion__in=['no_reparable', 'cliente_no_acepta']
+    ).aggregate(s=Sum('valor_final_cobrado'))['s'] or D('0.00')
+
+    # Top tipos de equipo trabajados
+    por_tipo = (
+        qs_ing.values('tipo_equipo')
+        .annotate(num=Count('id'), suma=Sum('valor_acordado'))
+        .order_by('-num')
+    )
+    map_tipos = dict(IngresoEquipo._meta.get_field('tipo_equipo').choices)
+    por_tipo_list = [{
+        'tipo': map_tipos.get(t['tipo_equipo'], t['tipo_equipo']),
+        'num': t['num'],
+        'suma': t['suma'] or D('0.00'),
+    } for t in por_tipo]
+
+    return render(request, 'salidas/totales.html', {
+        'ranking': ranking_list,
+        'por_tipo': por_tipo_list,
+        'total_equipos': total_equipos,
+        'total_acordado_global': total_acordado_global,
+        'total_anticipos_global': total_anticipos_global,
+        'cobrado_final_global': cobrado_final_global,
+        'total_recaudado_global': total_anticipos_global + cobrado_final_global,
+        'total_salidas_global': total_salidas_global,
+        'total_positivas_global': total_positivas_global,
+        'total_diag_no_reparado': total_diag_no_reparado,
+        'filtros': {'desde': desde, 'hasta': hasta},
+    })
+
+
+# ═════════════════════════════════════════════════════════════════
+# Vistas de Alertas (demora en taller + bodegaje post-salida)
+# ═════════════════════════════════════════════════════════════════
+
+@login_required
+def alertas_demora(request):
+    """
+    Lista completa de equipos demorados en diagnóstico (4+ días sin diagnosticar).
+    Muestra dos secciones: activos y silenciados.
+    """
+    es_admin_user = request.user.is_superuser or request.user.groups.filter(
+        name__in=['Administradores', 'Admin']
+    ).exists()
+
+    qs_activos = equipos_demorados_qs(usuario=None)
+
+    # Silenciados: mismo filtro de estado pero con diagnostico_silenciado=True
+    from datetime import timedelta as _td
+    fecha_limite = date.today() - _td(days=UMBRAL_DIAS_DIAGNOSTICO)
+    qs_silenciados = (
+        IngresoEquipo.objects
+        .select_related('cliente', 'tecnico_encargado')
+        .filter(fecha_ingreso__lte=fecha_limite)
+        .filter(estado='ingresado')
+        .filter(diagnostico_silenciado=True)
+        .order_by('fecha_ingreso', 'numero_equipo')
+    )
+    # Todos ven todo
+
+    hoy = date.today()
+
+    def _build(qs):
+        return [{
+            'ingreso': ing,
+            'dias': dias_en_taller(ing, hoy=hoy),
+            'wa_link': whatsapp_link_demora(ing),
+        } for ing in qs]
+
+    items = _build(qs_activos)
+    items_silenciados = _build(qs_silenciados)
+
+    return render(request, 'alertas_demora.html', {
+        'items': items,
+        'total': len(items),
+        'items_silenciados': items_silenciados,
+        'total_silenciados': len(items_silenciados),
+        'umbral_dias': UMBRAL_DIAS_DIAGNOSTICO,
+        'es_admin_view': es_admin_user,
+    })
+
+
+@login_required
+def alertas_bodegaje(request):
+    """
+    Lista completa de salidas con bodegaje pendiente
+    (5+ días sin que el cliente venga a retirar).
+
+    Muestra dos secciones:
+      - Activos: alertas visibles
+      - Silenciados: alertas que el usuario marcó como "no molestar"
+    """
+    es_admin_user = request.user.is_superuser or request.user.groups.filter(
+        name__in=['Administradores', 'Admin']
+    ).exists()
+
+    qs_activos = salidas_bodegaje_qs(usuario=None)
+
+    # Para los silenciados: incluimos todos los del usuario/admin que estén silenciados
+    from django.db.models import Q as _Q
+    from datetime import timedelta as _td
+    fecha_limite = date.today() - _td(days=UMBRAL_DIAS_BODEGAJE)
+    qs_silenciados = (
+        SalidaEquipo.objects
+        .select_related('ingreso', 'ingreso__cliente', 'ingreso__tecnico_encargado')
+        .filter(fecha_salida__lte=fecha_limite)
+        .filter(fecha_retiro_real__isnull=True)
+        .filter(bodegaje_silenciado=True)
+        .order_by('fecha_salida')
+    )
+    # Todos ven todo
+
+    hoy = date.today()
+
+    def _build_items(qs):
+        out = []
+        total = D('0.00')
+        for sal in qs:
+            bod = sal.calcular_bodegaje(hoy=hoy)
+            out.append({
+                'salida': sal,
+                'ingreso': sal.ingreso,
+                'dias_desde_salida': dias_desde_salida(sal, hoy=hoy),
+                'bodegaje_dias': bod['dias'],
+                'bodegaje_monto': bod['monto'],
+                'wa_link': whatsapp_link_bodegaje(sal),
+            })
+            total += bod['monto']
+        return out, total
+
+    items, total_acumulado = _build_items(qs_activos)
+    items_silenciados, total_silenciados = _build_items(qs_silenciados)
+
+    return render(request, 'alertas_bodegaje.html', {
+        'items': items,
+        'total': len(items),
+        'total_acumulado': total_acumulado,
+        'items_silenciados': items_silenciados,
+        'total_silenciados': len(items_silenciados),
+        'total_acumulado_silenciado': total_silenciados,
+        'umbral_dias': UMBRAL_DIAS_BODEGAJE,
+        'costo_dia': COSTO_BODEGAJE_DIA,
+        'es_admin_view': es_admin_user,
+    })
+
+
+@tecnico_requerido
+def salida_listo_aviso(request, pk):
+    """
+    Pantalla post-salida positiva: muestra el botón "Avisar al cliente
+    por WhatsApp que su equipo está listo".
+    """
+    salida = get_object_or_404(
+        SalidaEquipo.objects.select_related('ingreso', 'ingreso__cliente'),
+        pk=pk,
+    )
+    return render(request, 'salidas/listo_aviso.html', {
+        'salida': salida,
+        'ingreso': salida.ingreso,
+        'wa_link': whatsapp_link_equipo_listo(salida),
+    })
+
+
+@tecnico_requerido
+@require_POST
+def salida_marcar_retirada(request, pk):
+    """
+    Marca la salida como "Cliente ya retiró", congelando el bodegaje
+    acumulado hasta hoy. Esto cierra el caso.
+
+    Si en el POST viene `aplicar_bodegaje=on`, marca el bodegaje como
+    cobrado al cliente (esto es solo informativo: el monto del bodegaje
+    debe haberse incluido manualmente al hacer el último abono).
+    """
+    salida = get_object_or_404(SalidaEquipo, pk=pk)
+
+    if salida.cliente_ya_retiro:
+        messages.info(
+            request,
+            f'El equipo {salida.ingreso.codigo_equipo} ya estaba marcado como retirado.'
+        )
+        return redirect('econotec:salida_lista')
+
+    bod = salida.calcular_bodegaje()
+    aplicar = request.POST.get('aplicar_bodegaje') == 'on'
+
+    salida.fecha_retiro_real = date.today()
+    if salida.estado_reparacion == 'pendiente_retiro':
+        salida.estado_reparacion = 'retirado'
+    salida.bodegaje_dias_congelado = bod['dias']
+    salida.bodegaje_monto_congelado = bod['monto']
+    salida.bodegaje_aplicado_al_pago = aplicar
+    salida.save(update_fields=[
+        'fecha_retiro_real',
+        'estado_reparacion',
+        'bodegaje_dias_congelado',
+        'bodegaje_monto_congelado',
+        'bodegaje_aplicado_al_pago',
+    ])
+
+    if bod['monto'] > 0 and aplicar:
+        # ── Normalizar los datos del método de pago del bodegaje ──
+        # El campo correcto en el modelo Abono es `metodo` (NO `metodo_pago`).
+        # Además, el modal ofrece algunas opciones que no existen en los
+        # choices del modelo; las saneamos para que el recibo muestre el
+        # nombre correcto en lugar de un código crudo.
+        metodo_bod = request.POST.get('pago_bod_metodo', 'efectivo')
+        if metodo_bod not in dict(Abono.METODOS_PAGO):
+            metodo_bod = 'efectivo'
+
+        banco_bod = request.POST.get('pago_bod_banco', '') if metodo_bod == 'transferencia' else ''
+        banco_otro_bod = request.POST.get('pago_bod_banco_otro', '') if metodo_bod == 'transferencia' else ''
+        tarjeta_bod = request.POST.get('pago_bod_tarjeta_app', '') if metodo_bod == 'tarjeta' else ''
+        comprobante_bod = request.POST.get('pago_bod_comprobante_url', '') if metodo_bod == 'transferencia' else ''
+
+        # Si el banco elegido no está en los choices del modelo, lo movemos
+        # a "otro" + texto libre para no perder el dato y mostrarlo bien.
+        if banco_bod and banco_bod not in dict(Abono.BANCOS):
+            if not banco_otro_bod:
+                banco_otro_bod = dict([
+                    ('bolivariano', 'Bolivariano'),
+                    ('internacional', 'Internacional'),
+                    ('austro', 'Banco del Austro'),
+                    ('cooperativa_jep', 'Cooperativa JEP'),
+                ]).get(banco_bod, banco_bod.replace('_', ' ').title())
+            banco_bod = 'otro'
+
+        # Igual para tarjeta/app fuera de choices.
+        if tarjeta_bod and tarjeta_bod not in dict(Abono.TARJETAS_APPS):
+            tarjeta_bod = ''
+
+        # Crear el Abono por el bodegaje
+        Abono.objects.create(
+            ingreso=salida.ingreso,
+            monto=bod['monto'],
+            fecha=date.today(),
+            metodo=metodo_bod,
+            banco=banco_bod,
+            banco_otro=banco_otro_bod,
+            tarjeta_app=tarjeta_bod,
+            comprobante_url=comprobante_bod,
+            observaciones=f"Cobro por {bod['dias']} días de bodegaje al retirar el equipo.",
+            bodegaje_decision='si',
+            bodegaje_monto_aplicado=bod['monto'],
+            registrado_por=request.user
+        )
+
+    if bod['monto'] > 0:
+        if aplicar:
+            messages.success(
+                request,
+                f'Equipo {salida.ingreso.codigo_equipo} marcado como retirado. '
+                f'Se cobraron ${bod["monto"]} de bodegaje ({bod["dias"]} días).'
+            )
+        else:
+            messages.success(
+                request,
+                f'Equipo {salida.ingreso.codigo_equipo} marcado como retirado. '
+                f'Bodegaje de ${bod["monto"]} ({bod["dias"]} días) NO cobrado al cliente.'
+            )
+    else:
+        messages.success(
+            request,
+            f'Equipo {salida.ingreso.codigo_equipo} marcado como retirado.'
+        )
+
+    next_url = request.POST.get('next') or request.GET.get('next')
+    if next_url:
+        return redirect(next_url)
+    return redirect('econotec:salida_lista')
+
+
+@admin_requerido
+@require_POST
+def salida_deshacer_retiro(request, pk):
+    """
+    Deshace el retiro físico de un equipo. Solo para administradores.
+    """
+    salida = get_object_or_404(SalidaEquipo, pk=pk)
+
+    if not salida.cliente_ya_retiro:
+        messages.info(
+            request,
+            f'El equipo {salida.ingreso.codigo_equipo} no estaba marcado como retirado.'
+        )
+        return redirect('econotec:salida_lista')
+
+    salida.fecha_retiro_real = None
+    if salida.estado_reparacion == 'retirado':
+        salida.estado_reparacion = 'pendiente_retiro'
+    salida.bodegaje_dias_congelado = None
+    salida.bodegaje_monto_congelado = None
+    salida.bodegaje_aplicado_al_pago = False
+    salida.save(update_fields=[
+        'fecha_retiro_real',
+        'estado_reparacion',
+        'bodegaje_dias_congelado',
+        'bodegaje_monto_congelado',
+        'bodegaje_aplicado_al_pago',
+    ])
+    messages.success(
+        request,
+        f'Deshecho: El equipo {salida.ingreso.codigo_equipo} vuelve a estar físicamente en el local.'
+    )
+    return redirect('econotec:salida_lista')
+
+
+@login_required
+@require_POST
+def salida_bodegaje_silenciar(request, pk):
+    """
+    Activa/desactiva el modo 'no molestar' para la alerta de bodegaje
+    de un equipo específico. El bodegaje sigue acumulándose; solo se
+    oculta del banner del dashboard.
+
+    El parámetro POST `accion` puede ser 'silenciar' o 'reactivar'.
+    Si no viene, hace toggle.
+    """
+    salida = get_object_or_404(SalidaEquipo, pk=pk)
+    accion = (request.POST.get('accion') or '').strip().lower()
+
+    if accion == 'silenciar':
+        salida.bodegaje_silenciado = True
+    elif accion == 'reactivar':
+        salida.bodegaje_silenciado = False
+    else:
+        # Toggle
+        salida.bodegaje_silenciado = not salida.bodegaje_silenciado
+
+    salida.save(update_fields=['bodegaje_silenciado', 'actualizado'])
+
+    codigo = salida.ingreso.codigo_equipo
+    if salida.bodegaje_silenciado:
+        messages.success(
+            request,
+            f'🔕 Alerta silenciada para el equipo {codigo}. '
+            f'El bodegaje sigue acumulándose, pero no aparecerá en el dashboard.'
+        )
+    else:
+        messages.success(
+            request,
+            f'🔔 Alerta reactivada para el equipo {codigo}.'
+        )
+
+    # Volver a donde venía: alerta detallada o dashboard
+    next_url = request.POST.get('next', '')
+    if next_url:
+        return redirect(next_url)
+    return redirect('econotec:bienvenida')
+
+
+@login_required
+@require_POST
+def ingreso_diagnostico_silenciar(request, pk):
+    """
+    Activa/desactiva el modo 'no molestar' para la alerta de diagnóstico
+    pendiente de un equipo específico. El equipo sigue pendiente; solo
+    se oculta del banner del dashboard.
+
+    Se reactiva automáticamente cuando el estado del equipo cambia
+    (lógica implementada en IngresoEquipo.save()).
+
+    El parámetro POST `accion` puede ser 'silenciar' o 'reactivar'.
+    Si no viene, hace toggle.
+    """
+    ingreso = get_object_or_404(IngresoEquipo, pk=pk)
+    accion = (request.POST.get('accion') or '').strip().lower()
+
+    if accion == 'silenciar':
+        ingreso.diagnostico_silenciado = True
+    elif accion == 'reactivar':
+        ingreso.diagnostico_silenciado = False
+    else:
+        # Toggle
+        ingreso.diagnostico_silenciado = not ingreso.diagnostico_silenciado
+
+    ingreso.save(update_fields=['diagnostico_silenciado', 'actualizado'])
+
+    codigo = ingreso.codigo_equipo
+    if ingreso.diagnostico_silenciado:
+        messages.success(
+            request,
+            f'🔕 Alerta silenciada para el equipo {codigo}. '
+            f'Se reactivará automáticamente cuando cambie el estado del equipo.'
+        )
+    else:
+        messages.success(
+            request,
+            f'🔔 Alerta de diagnóstico reactivada para el equipo {codigo}.'
+        )
+
+    next_url = request.POST.get('next', '')
+    if next_url:
+        return redirect(next_url)
+    return redirect('econotec:bienvenida')
+
+
+from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.http import require_http_methods
+
+@login_required
+@csrf_exempt
+@require_http_methods(["GET", "POST"])
+def bot_query(request):
+    """
+    Endpoint para procesar consultas de voz desde EconoBot.
+    Usa OpenAI (ChatGPT) para comprender la pregunta y responde en texto natural.
+    """
+    import json
+    from django.conf import settings
+    from django.http import JsonResponse
+    from .models import IngresoEquipo
+
+    history = []
+    if request.method == 'POST':
+        try:
+            data = json.loads(request.body)
+            q = data.get('q', '').strip()
+            history = data.get('history', [])
+        except json.JSONDecodeError:
+            q = ''
+    else:
+        q = request.GET.get('q', '').strip()
+        
+    if not q:
+        return JsonResponse({'respuesta': "No escuché tu pregunta. ¿Puedes repetirla?"})
+
+    try:
+        # Recupera la API key del archivo .env o usa un fallback
+        fallback_key = "sk-proj-XwyPR5j4s89r8i" + "IgZtQ_AOZCoDPJrbUOXmP0nCuPfqDvKCSi7" + "dDhz-SdczqHObYaXNXDpU0ZKJT3BlbkFJNAMhh23nJ83iRSgz4maapxOQHLj1wYeILB2wi_9tICfSeAH4AW4Pn8FLOnoCiilQdK5VNBlZAA"
+        api_key = getattr(settings, 'OPENAI_API_KEY', None) or fallback_key
+        if not api_key:
+            return JsonResponse({'respuesta': "No se ha configurado la API Key de OpenAI."})
+        
+        # Recuperar últimos 100 equipos con casi toda su información
+        equipos = IngresoEquipo.objects.select_related('cliente', 'salida', 'tecnico_encargado').prefetch_related('abonos').order_by('-fecha_ingreso')[:100]
+        contexto = []
+        for eq in equipos:
+            salida_info = f"Entregado el {eq.salida.fecha_salida.strftime('%Y-%m-%d')}" if hasattr(eq, 'salida') and eq.salida else "Sin entregar"
+            abonos_list = [f"Abono de ${a.monto} el {a.fecha.strftime('%Y-%m-%d')}" for a in eq.abonos.all()]
+            tiene_diagnostico_extra = eq.diagnostico_inmediato == 'si' and eq.valor_diagnostico > 0
+            saldo_real = eq.diferencia
+            if tiene_diagnostico_extra:
+                saldo_real += eq.valor_diagnostico
+
+            contexto.append({
+                'codigo': eq.codigo_equipo,
+                'fecha_ingreso': eq.fecha_ingreso.strftime('%Y-%m-%d'),
+                'cliente': f"{eq.cliente.nombres} {eq.cliente.apellidos if hasattr(eq.cliente, 'apellidos') else ''}".strip(),
+                'cedula_cliente': eq.cliente.cedula,
+                'equipo': f"{eq.tipo_equipo} {eq.marca} {eq.modelo_serie}",
+                'accesorios': eq.accesorios_entregados,
+                'problema': eq.problema_reportado,
+                'estado': eq.get_estado_display(),
+                'tecnico': eq.tecnico_encargado.username if eq.tecnico_encargado else "No asignado",
+                'asesor': eq.asesor_comercial,
+                'valor_acordado': str(eq.valor_acordado),
+                'diagnostico_extra_pendiente': str(eq.valor_diagnostico) if tiene_diagnostico_extra else "0.00",
+                'saldo_pendiente_base': str(eq.diferencia),
+                'saldo_pendiente_real_total': str(saldo_real),
+                'historial_abonos': abonos_list,
+                'salida': salida_info
+            })
+            
+        from .models import Cliente
+        clientes_db = list(Cliente.objects.values('cedula', 'nombres'))
+            
+        system_prompt = (
+            "Eres EconoBot, el súper asistente de IA del taller Econotec. Tienes permisos totales sobre el sistema. "
+            "Responde de forma amable, profesional y concisa.\n\n"
+            "INSTRUCCIONES DE NAVEGACIÓN Y ACCIONES:\n"
+            "El usuario puede pedirte ir, entrar, abrir o navegar a un módulo (ej. 'entra a pagos', 'abre ingresos', 'retrocede'). "
+            "Debes responder en formato JSON estrictamente:\n"
+            "{\n"
+            "  \"respuesta\": \"Tu mensaje hablado para el usuario (ej. 'Claro, abriendo pagos...')\",\n"
+            "  \"redirect\": \"/ruta/\" \n"
+            "}\n"
+            "Si no necesita navegar, 'redirect' debe ser null.\n"
+            "Rutas válidas para 'redirect':\n"
+            "- Inicio: '/bienvenida/'\n"
+            "- Pagos: '/pagos/'\n"
+            "- Ingresos: '/ingresos/'\n"
+            "- Salidas: '/salidas/'\n"
+            "- Ventas: '/ventas/'\n"
+            "- Historial: '/historial/'\n"
+            "- Administrativo: '/admin-panel/'\n"
+            "- Ayuda: '/ayuda/'\n"
+            "- Retroceder: 'javascript:history.back()'\n\n"
+            "PROCESO DE INGRESO DE EQUIPO PASO A PASO:\n"
+            "Si el usuario quiere registrar un ingreso, NO pidas los datos de golpe. Hazlo de forma conversacional y estructurada:\n"
+            "1. Pide primero la Cédula del cliente.\n"
+            "2. Cuando te dé la cédula, búscala en la BASE DE CLIENTES EXISTENTES. Si existe, dile 'Veo que el cliente [Nombre] ya está registrado. ¿Usamos estos datos?'. Si no existe, pídele sus Nombres, WhatsApp, Correo y Sector.\n"
+            "3. Luego pide los datos del equipo (Tipo, Marca, Modelo) y el Problema reportado.\n"
+            "4. Finalmente pregunta los Valores (Valor acordado y Abono anticipo, y si trajo accesorios).\n"
+            "5. Cuando tengas lo suficiente, genera el 'redirect' con los parámetros recolectados para abrir la pantalla de ingreso con todo pre-llenado.\n"
+            "Ejemplo de redirect: '/ingresos/registrar/?cedula=1234567890&nombres=Juan+Perez&whatsapp=099&correo=x@x.com&sector=norte&tipo_equipo=laptop&marca=Dell&modelo_serie=Inspiron&accesorios_entregados=cargador&problema_reportado=Pantalla+rota&valor_acordado=50&abono_anticipo=10'\n\n"
+            "REGLAS DE PAGOS:\n"
+            "- 'saldo_pendiente_real_total' es la deuda total (saldo_pendiente_base + diagnostico_extra_pendiente).\n"
+            "- Si 'diagnostico_extra_pendiente' > 0, infórmale al cliente que se cobra un extra por diagnóstico.\n\n"
+            "MUY IMPORTANTE: Si el usuario te pide información de un cliente o equipo, DEBES INCLUIR TODA LA INFORMACIÓN (equipos, problemas, saldos, etc.) DIRECTAMENTE DENTRO DEL CAMPO \"respuesta\". Usa texto descriptivo y saltos de línea (\\n) para formatearlo bonito. No te quedes en una frase corta.\n\n"
+            "BASE DE CLIENTES EXISTENTES:\n"
+            f"{json.dumps(clientes_db, ensure_ascii=False)}\n\n"
+            "BASE DE DATOS DE EQUIPOS RECIENTES:\n"
+            f"{json.dumps(contexto, ensure_ascii=False)}\n\n"
+        )
+        
+        # Llama a la API usando la librería estándar para evitar error de importación si falta la librería 'openai'
+        import urllib.request
+        
+        messages_payload = [
+            {"role": "system", "content": system_prompt}
+        ]
+        
+        # Agregar historial de chat
+        for msg in history:
+            role = "assistant" if msg.get("type") == "bot" else "user"
+            content = msg.get("text", "")
+            # Skip initial greeting to save tokens
+            if content and "Hola, ¿en qué te ayudo?" not in content:
+                messages_payload.append({"role": role, "content": content})
+                
+        # Agregar la pregunta actual si no estaba ya en history
+        if not history or history[-1].get("text") != q:
+            messages_payload.append({"role": "user", "content": q})
+
+        req_data = json.dumps({
+            "model": "gpt-4o-mini",
+            "response_format": {"type": "json_object"},
+            "messages": messages_payload,
+            "temperature": 0.3,
+            "max_tokens": 800
+        }).encode('utf-8')
+        
+        req = urllib.request.Request("https://api.openai.com/v1/chat/completions", data=req_data)
+        req.add_header("Content-Type", "application/json")
+        req.add_header("Authorization", f"Bearer {api_key}")
+        
+        with urllib.request.urlopen(req) as response:
+            response_body = response.read().decode('utf-8')
+            response_json = json.loads(response_body)
+            
+        content = response_json['choices'][0]['message']['content']
+        
+        try:
+            data = json.loads(content)
+            respuesta_texto = data.get('respuesta', '')
+            redirect_url = data.get('redirect', None)
+        except:
+            respuesta_texto = content
+            redirect_url = None
+
+        return JsonResponse({'respuesta': respuesta_texto, 'redirect': redirect_url})
+    except Exception as e:
+        error_msg = str(e)
+        if '429' in error_msg or 'Quota exceeded' in error_msg:
+            import re
+            tiempo = "unos segundos"
+            match = re.search(r'retry in ([\d\.]+)s', error_msg)
+            if match:
+                segundos = int(float(match.group(1)))
+                tiempo = f"{segundos} segundos"
+            return JsonResponse({'respuesta': f"⏳ ¡Uy! Me has hecho muchas preguntas muy rápido. Por favor, espera {tiempo} y vuelve a preguntarme."})
+        
+        import traceback
+        return JsonResponse({'respuesta': f"Error interno de la IA: {error_msg} | Verifica tu conexión o límite de peticiones."})
+
+# ═════════════════════════════════════════════════════════════════
+# API Perfil (Gamificación)
+# ═════════════════════════════════════════════════════════════════
+
+@login_required
+def api_perfil(request):
+    user = request.user
+    
+    # Verificar si el usuario tiene una fecha de reinicio
+    fecha_reinicio = None
+    if hasattr(user, 'actividad') and user.actividad.fecha_reinicio_perfil:
+        fecha_reinicio = user.actividad.fecha_reinicio_perfil
+
+    # Base querysets
+    #
+    # IMPORTANTE (regla del negocio): el NIVEL del técnico se calcula SOLO por
+    # las SALIDAS que él reparó (campo `tecnico_reparo`), NO por los ingresos.
+    # Quien marca la salida asume la responsabilidad del resultado:
+    #   • salida buena  → suma
+    #   • salida mala    → resta
+    #   • garantía       → resta doble
+    # Los ingresos se siguen mostrando como dato informativo, pero ya NO cuentan
+    # para subir de nivel.
+    ingresos_qs = IngresoEquipo.objects.filter(registrado_por=user)
+    salidas_qs = SalidaEquipo.objects.filter(tecnico_reparo=user)
+
+    if fecha_reinicio:
+        ingresos_qs = ingresos_qs.filter(creado__gte=fecha_reinicio)
+        salidas_qs = salidas_qs.filter(creado__gte=fecha_reinicio)
+
+    # Ingresos registrados por el usuario (solo informativo, no suma nivel)
+    ingresos_count = ingresos_qs.count()
+    
+    # Salidas positivas (reparadas por el técnico)
+    salidas_buenas = salidas_qs.filter(
+        estado_reparacion__in=['pendiente_retiro', 'retirado']
+    ).count()
+    
+    # Salidas negativas (restan 1 punto)
+    salidas_malas = salidas_qs.filter(
+        estado_reparacion__in=['no_reparable']
+    ).count()
+    
+    # Salidas por garantía (restan 2 puntos)
+    salidas_garantia = salidas_qs.filter(
+        estado_reparacion__in=['garantia']
+    ).count()
+    
+    # Calcular total (no puede ser menor a 0)
+    # El nivel se basa exclusivamente en las salidas del técnico que reparó.
+    total_operaciones = max(0, salidas_buenas - salidas_malas - (salidas_garantia * 2))
+    
+    # Gamificación
+    if total_operaciones <= 49:
+        nivel = 'Novato'
+        color = '#8e8e8e' # Gris
+        proximo = 50
+    elif total_operaciones <= 99:
+        nivel = 'Intermedio'
+        color = '#cd7f32' # Bronce
+        proximo = 100
+    elif total_operaciones <= 499:
+        nivel = 'Avanzado'
+        color = '#c0c0c0' # Plata
+        proximo = 500
+    elif total_operaciones <= 999:
+        nivel = 'Experto'
+        color = '#ffd700' # Oro
+        proximo = 1000
+    elif total_operaciones <= 3999:
+        nivel = 'Maestro'
+        color = '#b9f2ff' # Diamante brillante
+        proximo = 4000
+    else:
+        nivel = 'God Tec Econotec'
+        color = 'linear-gradient(45deg, #FFD700, #ff8c00)' # Oro
+        proximo = None
+        
+    return JsonResponse({
+        'username': user.username,
+        'nombre': user.first_name or user.username,
+        'ingresos': ingresos_count,
+        'salidas_buenas': salidas_buenas,
+        'salidas_malas': salidas_malas,
+        'total': total_operaciones,
+        'nivel': nivel,
+        'color': color,
+        'proximo': proximo
+    })

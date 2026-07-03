@@ -1,0 +1,83 @@
+{% extends 'base.html' %}
+{% load econotec_extras %}
+
+{% block title %}Avisos del panel — Econotec{% endblock %}
+
+{% block content %}
+<div class="crumb">
+    <a href="{% url 'econotec:bienvenida' %}">Inicio</a> /
+    Avisos del panel
+</div>
+
+<div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:14px;">
+    <div>
+        <h2 class="page-title">📣 Avisos del <span class="accent">panel principal</span></h2>
+        <p class="page-subtitle">
+            Mensajes que ven todos los usuarios en la pantalla de inicio.
+            {{ vigentes }} vigentes de {{ total }} en total.
+        </p>
+    </div>
+    <div>
+        <a href="{% url 'econotec:aviso_crear' %}" class="btn btn-primary">+ Nuevo aviso</a>
+    </div>
+</div>
+
+<hr style="margin: 16px 0 22px; border: none; border-top: 1px solid var(--border);">
+
+{% if avisos %}
+<div class="table-wrap">
+    <table>
+        <thead>
+            <tr>
+                <th>Título</th>
+                <th>Tipo</th>
+                <th>Desde</th>
+                <th>Hasta</th>
+                <th>Estado</th>
+                <th>Creado por</th>
+                <th>Acciones</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for a in avisos %}
+            <tr>
+                <td>
+                    <strong>{{ a.titulo }}</strong><br>
+                    <small style="color: var(--text-muted);">{{ a.mensaje|truncatechars:70 }}</small>
+                </td>
+                <td>{{ a.get_tipo_display }}</td>
+                <td>{{ a.fecha_inicio|date:"d/m/Y" }}</td>
+                <td>{{ a.fecha_fin|date:"d/m/Y" }}</td>
+                <td>
+                    {% if a.estado_texto == 'Vigente' %}
+                        <span style="background:#e6f4ea; color:#1b7f3b; padding:3px 9px; border-radius:10px; font-size:11px; font-weight:700;">● Vigente</span>
+                    {% elif a.estado_texto == 'Programado' %}
+                        <span style="background:#fff3cd; color:#8a6d1b; padding:3px 9px; border-radius:10px; font-size:11px; font-weight:700;">◔ Programado</span>
+                    {% elif a.estado_texto == 'Expirado' %}
+                        <span style="background:#f1f1f1; color:#777; padding:3px 9px; border-radius:10px; font-size:11px; font-weight:700;">✔ Expirado</span>
+                    {% else %}
+                        <span style="background:#fde8e8; color:#b02a2a; padding:3px 9px; border-radius:10px; font-size:11px; font-weight:700;">✖ Inactivo</span>
+                    {% endif %}
+                </td>
+                <td>{{ a.creado_por.first_name|default:a.creado_por.username|default:"—" }}</td>
+                <td class="row-actions">
+                    <a href="{% url 'econotec:aviso_editar' pk=a.pk %}" class="btn btn-sm btn-secondary">Editar</a>
+                    <form method="post" action="{% url 'econotec:aviso_eliminar' pk=a.pk %}"
+                          style="display:inline;" onsubmit="confirmDelete(event, this, '¿Eliminar este aviso?');">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-sm btn-danger">🗑</button>
+                    </form>
+                </td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="empty-state" style="background: var(--card-bg); border-radius: 14px; padding: 40px; text-align:center;">
+    <h3>Aún no has creado ningún aviso.</h3>
+    <p>Crea uno para comunicar algo a todo el equipo en el panel de inicio.</p>
+    <a href="{% url 'econotec:aviso_crear' %}" class="btn btn-primary" style="margin-top: 10px;">+ Crear primer aviso</a>
+</div>
+{% endif %}
+{% endblock %}

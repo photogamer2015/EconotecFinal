@@ -1,0 +1,171 @@
+{% extends 'base.html' %}
+{% load econotec_extras %}
+
+{% block title %}Bodegajes Activos y Chatarrerización | Econotec{% endblock %}
+
+{% block content %}
+<div class="header-actions">
+    <div>
+        <h2 class="page-title">Bodegajes Activos y Chatarrerización</h2>
+        <p class="page-subtitle">Equipos que aún no han sido retirados por el cliente</p>
+    </div>
+    <a href="{% url 'econotec:admin_dashboard' %}" class="btn btn-secondary">← Volver al Dashboard</a>
+</div>
+<br>
+<hr>
+
+<div class="card" style="margin-bottom: 24px;">
+    <h3>📦 Equipos en Bodegaje Activo</h3>
+    <p class="text-sm text-muted" style="margin-bottom: 16px;">
+        Equipos con más de 5 días desde su salida y que no han sido retirados.
+    </p>
+
+    <div class="table-responsive">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Código</th>
+                    <th>Tipo</th>
+                    <th>Modelo</th>
+                    <th>Cliente</th>
+                    <th>Días</th>
+                    <th>Saldo</th>
+                    <th>Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in activos %}
+                <tr>
+                    <td><strong>{{ item.salida.ingreso.codigo_equipo }}</strong></td>
+                    <td>{{ item.salida.ingreso.tipo_equipo_display }}</td>
+                    <td>{{ item.salida.ingreso.modelo_serie }}</td>
+                    <td>
+                        {{ item.salida.ingreso.cliente.nombres }}<br>
+                        <small class="text-muted">{{ item.salida.ingreso.cliente.whatsapp }}</small>
+                    </td>
+                    <td><strong style="color:var(--danger)">{{ item.dias_totales }} días</strong><br><small class="text-muted">(Cobrando {{ item.dias_bodegaje }} días)</small></td>
+                    <td style="vertical-align: middle;">
+                        {% if item.salida.ingreso.diferencia > 0 %}
+                            <span class="status-badge status-pendiente" style="font-size: 12px; display:inline-block; white-space:nowrap;">Pendiente: {{ item.salida.ingreso.diferencia|dinero_signo }}</span>
+                        {% else %}
+                            <span class="status-badge status-pagado" style="font-size: 12px; display:inline-block; white-space:nowrap;">Pagado</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <div style="display:flex; flex-direction:column; gap:8px;">
+                            <div style="display:flex; gap:8px; justify-content: center;">
+                                <a href="{{ item.wa_link }}" 
+                                   target="_blank" class="btn btn-primary btn-sm">
+                                    💬 Enviar WhatsApp
+                                </a>
+                                
+                                <form method="post" action="{% url 'econotec:salida_marcar_retirada' item.salida.pk %}" style="margin:0; min-width:0;"
+                                      onsubmit="{% if item.salida.ingreso.diferencia > 0 %}event.preventDefault(); Swal.fire({icon: 'error', title: 'Saldo Pendiente', text: 'No se puede retirar. El cliente tiene un saldo pendiente de {{ item.salida.ingreso.diferencia|dinero_signo }}. Debe pagar todo antes de retirar el equipo.', confirmButtonColor: '#d33'}); return false;{% else %}confirmarCierre(event, this, '{{ item.salida.ingreso.codigo_equipo }}', {% if item.monto_bodegaje > 0 %}true{% else %}false{% endif %}, {{ item.monto_bodegaje|default:0|stringformat:'.2f' }}, {{ item.dias_bodegaje|default:0 }});{% endif %}">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                                    <button type="submit" class="btn btn-secondary btn-sm" {% if item.salida.ingreso.diferencia > 0 %}disabled style="opacity: 0.5; cursor: not-allowed;" title="Saldo Pendiente"{% endif %}>
+                                        ✅ Cliente Retiró
+                                    </button>
+                                </form>
+
+                                <button class="btn btn-danger btn-sm" onclick="cambiarEstado({{ item.salida.pk }}, 'chatarrerizacion')">
+                                    ♻️ Chatarrerización
+                                </button>
+                            </div>
+                        </div>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="7" class="text-center text-muted" style="padding: 20px;">
+                        No hay equipos acumulando bodegaje actualmente.
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="card">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+        <h3 style="margin: 0;">♻️ Equipos en Chatarrerización</h3>
+        <div class="status-badge status-pagado">Total: {{ count_chatarrerizacion }}</div>
+    </div>
+
+    <div class="table-responsive">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Código</th>
+                    <th>Fecha Ingreso</th>
+                    <th>Fecha Retiro (Chatarrerización)</th>
+                    <th>Cliente</th>
+                    <th>Equipo</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for salida in chatarrerizacion %}
+                <tr>
+                    <td><strong>{{ salida.ingreso.codigo_equipo }}</strong></td>
+                    <td>{{ salida.ingreso.fecha_ingreso|date:"d/m/Y" }}</td>
+                    <td>{{ salida.fecha_retiro_real|date:"d/m/Y" }}</td>
+                    <td>{{ salida.ingreso.cliente.nombres }}</td>
+                    <td>{{ salida.ingreso.tipo_equipo_display }} — {{ salida.ingreso.modelo_serie }}</td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="5" class="text-center text-muted" style="padding: 20px;">
+                        No hay equipos en chatarrerización.
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+function cambiarEstado(salidaId, estado) {
+    let titulo = estado === 'retirado' ? '¿Marcar como RETIRADO?' : '¿Enviar a CHATARRERIZACIÓN?';
+    let mensaje = estado === 'retirado' 
+        ? '¿Está seguro de marcar este equipo como retirado por el cliente? Esto cerrará el bodegaje y detendrá el contador de días.' 
+        : '¿Está seguro de enviar este equipo a chatarrerización? Esto cerrará el bodegaje de forma definitiva.';
+    let colorBtn = estado === 'retirado' ? '#4caf50' : '#d33';
+        
+    Swal.fire({
+        title: titulo,
+        text: mensaje,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: colorBtn,
+        cancelButtonColor: '#888',
+        confirmButtonText: 'Sí, estoy seguro',
+        cancelButtonText: 'Cancelar'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            fetch("{% url 'econotec:admin_activos_bodegaje' %}", {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': '{{ csrf_token }}'
+                },
+                body: JSON.stringify({
+                    'accion': estado,
+                    'salida_id': salidaId
+                })
+            }).then(response => response.json())
+              .then(data => {
+                  if(data.status === 'ok') {
+                      window.location.reload();
+                  } else {
+                      Swal.fire('Error', data.msg, 'error');
+                  }
+              }).catch(err => {
+                  Swal.fire('Error', 'Error de conexión', 'error');
+              });
+        }
+    });
+}
+</script>
+{% endblock %}

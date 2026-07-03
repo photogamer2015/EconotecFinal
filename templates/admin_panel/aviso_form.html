@@ -1,0 +1,69 @@
+{% extends 'base.html' %}
+{% load econotec_extras %}
+
+{% block title %}{{ titulo }} — Econotec{% endblock %}
+
+{% block content %}
+<div class="crumb">
+    <a href="{% url 'econotec:bienvenida' %}">Inicio</a> /
+    <a href="{% url 'econotec:avisos_lista' %}">Avisos del panel</a> / {{ titulo }}
+</div>
+
+<h2 class="page-title">📣 {{ titulo }}</h2>
+<p class="page-subtitle">El aviso se mostrará en el inicio de todos los usuarios entre las fechas indicadas.</p>
+
+<form method="post" class="form-card" style="max-width: 720px;">
+    {% csrf_token %}
+
+    {% if form.non_field_errors %}
+        <div style="background:#fde8e8; color:#b02a2a; padding:10px 12px; border-radius:8px; margin-bottom:14px;">
+            {{ form.non_field_errors }}
+        </div>
+    {% endif %}
+
+    <div class="form-section">
+        <div style="margin-bottom: 14px;">
+            <label class="form-label">Título del aviso *</label>
+            {{ form.titulo }}
+            {{ form.titulo.errors }}
+        </div>
+
+        <div style="margin-bottom: 14px;">
+            <label class="form-label">Mensaje *</label>
+            {{ form.mensaje }}
+            {{ form.mensaje.errors }}
+        </div>
+
+        <div style="margin-bottom: 14px;">
+            <label class="form-label">Tipo / color</label>
+            {{ form.tipo }}
+            {{ form.tipo.errors }}
+        </div>
+
+        <div class="form-row cols-2">
+            <div>
+                <label class="form-label">Fecha de inicio *</label>
+                {{ form.fecha_inicio }}
+                {{ form.fecha_inicio.errors }}
+            </div>
+            <div>
+                <label class="form-label">Fecha final *</label>
+                {{ form.fecha_fin }}
+                {{ form.fecha_fin.errors }}
+            </div>
+        </div>
+
+        <div style="margin-top: 16px; display:flex; align-items:center; gap:8px;">
+            {{ form.activo }}
+            <label class="form-label" for="{{ form.activo.id_for_label }}" style="margin:0;">Activo (mostrar el aviso)</label>
+        </div>
+    </div>
+
+    <div class="actions-bar" style="display:flex; gap:10px; margin-top: 18px;">
+        <a href="{% url 'econotec:avisos_lista' %}" class="btn btn-secondary">Cancelar</a>
+        <button type="submit" class="btn btn-primary">
+            {% if modo == 'crear' %}Crear aviso{% else %}Guardar cambios{% endif %}
+        </button>
+    </div>
+</form>
+{% endblock %}

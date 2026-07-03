@@ -1,0 +1,39 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hoja no encontrada — Econotec</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+            background: #f4f6fb; color: #1f2937;
+            min-height: 100vh; display: flex; align-items: center; justify-content: center;
+            padding: 24px;
+        }
+        .box {
+            background: #fff; border-radius: 16px; padding: 32px 24px; text-align: center;
+            max-width: 380px; box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+            border: 1px solid #e5e7eb;
+        }
+        .box .ico { font-size: 54px; }
+        .box h1 { font-size: 20px; margin: 14px 0 8px; color: #c62828; }
+        .box p { color: #6b7280; font-size: 14px; line-height: 1.5; }
+        .box a {
+            display: inline-block; margin-top: 20px; background: #f97618; color: #fff;
+            padding: 12px 22px; border-radius: 10px; text-decoration: none; font-weight: 700;
+        }
+    </style>
+</head>
+<body>
+    <div class="box">
+        <div class="ico">🔍</div>
+        <h1>Hoja no encontrada</h1>
+        <p>Este código QR no corresponde a ningún equipo, o el enlace fue modificado.
+           Vuelve a escanear el QR de la hoja física del equipo.</p>
+        <a href="{% url 'econotec:bienvenida' %}">← Ir al inicio</a>
+    </div>
+</body>
+</html>

@@ -1,0 +1,177 @@
+{% extends 'base.html' %}
+{% load econotec_extras %}
+
+{% block title %}Salidas — Econotec{% endblock %}
+
+{% block content %}
+<style>
+    .wa-mini, .ret-mini, .cerrar-form {
+        display: inline-block;
+    }
+    .wa-mini {
+        background: #25D366; color: white;
+        padding: 4px 8px; border-radius: 5px;
+        font-size: 11px; font-weight: 700;
+        text-decoration: none;
+    }
+    .wa-mini:hover { background: #1da851; }
+    .ret-pill {
+        background: #2e7d32; color: white;
+        padding: 3px 9px; border-radius: 10px;
+        font-size: 10px; font-weight: 700;
+    }
+    .pendiente-pill {
+        background: #ffe0b2; color: #b54400;
+        padding: 3px 9px; border-radius: 10px;
+        font-size: 10px; font-weight: 700;
+    }
+    [data-theme="dark"] .pendiente-pill { background: rgba(249,118,24,0.25); color: #fbbf73; }
+    .cerrar-btn {
+        background: #2e7d32; color: white;
+        padding: 4px 10px; border-radius: 5px;
+        font-size: 11px; font-weight: 700;
+        border: none; cursor: pointer;
+    }
+    .cerrar-btn:hover { background: #1b5e20; }
+    .bod-mini {
+        font-size: 11px; color: #d7642f; font-weight: 700;
+        display: block; margin-top: 2px;
+    }
+</style>
+
+<div class="crumb">
+    <a href="{% url 'econotec:bienvenida' %}">Inicio</a> /
+    <a href="{% url 'econotec:salida_menu' %}">Salidas</a> / Lista
+</div>
+
+<h2 class="page-title">Salidas <span class="accent">Registradas</span></h2>
+<p class="page-subtitle">{{ total }} actas en total.</p>
+
+<div class="toolbar">
+    <form method="get" style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
+        <input type="text" name="q" value="{{ q }}" placeholder="Buscar por N°, cliente, marca…" class="form-input">
+        <select name="estado" class="form-input" style="max-width:220px;">
+            <option value="">— Estado de reparación —</option>
+            {% for value, label in estados %}
+                <option value="{{ value }}" {% if estado_filtro == value %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+        </select>
+        <select name="sede" class="form-input" style="max-width:180px;">
+            <option value="">🌐 Todas las sedes</option>
+            <option value="guayaquil" {% if sede_filtro == 'guayaquil' %}selected{% endif %}>📍 Guayaquil (G)</option>
+            <option value="quito" {% if sede_filtro == 'quito' %}selected{% endif %}>📍 Quito (U)</option>
+        </select>
+        <select name="tecnico_registro" class="form-input" style="max-width:180px;">
+            <option value="">📝 Registrado por...</option>
+            {% for t in tecnicos_all %}
+            <option value="{{ t.id }}" {% if tecnico_registro_filtro == t.id|stringformat:"s" %}selected{% endif %}>{{ t.first_name|default:t.username }}</option>
+            {% endfor %}
+        </select>
+        <select name="tecnico_salida" class="form-input" style="max-width:180px;">
+            <option value="">🔧 Téc. que reparó...</option>
+            {% for t in tecnicos_solo %}
+            <option value="{{ t.id }}" {% if tecnico_salida_filtro == t.id|stringformat:"s" %}selected{% endif %}>{{ t.first_name|default:t.username }}</option>
+            {% endfor %}
+        </select>
+        <button type="submit" class="btn btn-primary">Filtrar</button>
+    </form>
+</div>
+
+{% if salidas %}
+<div class="table-wrap">
+    <table>
+        <thead>
+            <tr>
+                <th>Equipo N°</th>
+                <th>Fecha Salida</th>
+                <th>Cliente</th>
+                <th>Equipo</th>
+                <th>Técnico / Registró</th>
+                <th>Estado</th>
+                <th>Retiro</th>
+                <th>Cobrado</th>
+                <th>Saldo</th>
+                <th>Acciones</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for s in salidas %}
+            <tr>
+                <td><strong style="color: var(--primary);">{{ s.ingreso.codigo_equipo }}</strong></td>
+                <td>{{ s.fecha_salida|date:"d/m/Y" }}</td>
+                <td>{{ s.ingreso.cliente.nombres }}</td>
+                <td>{{ s.ingreso.tipo_equipo_display }} — {{ s.ingreso.marca|truncatechars:25 }}</td>
+                <td style="white-space: nowrap; font-size: 12px;">
+                    {% if s.tecnico_reparo %}
+                        <span title="Técnico que reparó">🔧 <strong>{{ s.tecnico_reparo.first_name|default:s.tecnico_reparo.username }}</strong></span>
+                    {% else %}
+                        <span style="color: var(--text-muted);">🔧 —</span>
+                    {% endif %}
+                    <br>
+                    <span style="color: var(--text-muted);" title="Quién registró la salida">
+                        📝 {{ s.registrado_por.first_name|default:s.registrado_por.username|default:"—" }}
+                    </span>
+                </td>
+                <td><span class="badge badge-{{ s.estado_reparacion }}">{{ s.get_estado_reparacion_display }}</span></td>
+                <td>
+                    {% if s.cliente_ya_retiro %}
+                        <div style="display: flex; gap: 4px; align-items: center; white-space: nowrap;">
+                            <span class="ret-pill">✅ Retirado {{ s.fecha_retiro_real|date:"d/m/Y" }}</span>
+                            {% if es_admin %}
+                            <form method="post" action="{% url 'econotec:salida_deshacer_retiro' pk=s.pk %}" onsubmit="confirmDelete(event, this, '¿Seguro que deseas DESHACER el retiro de este equipo? Volverá a estar pendiente de retiro en el local.', 'Sí, deshacer', 'Cancelar');" style="margin:0; display:inline-block;">
+                                {% csrf_token %}
+                                <button type="submit" class="btn btn-sm btn-danger" style="padding: 2px 6px; font-size: 11px; margin:0;" title="Deshacer Retiro">✖</button>
+                            </form>
+                            {% endif %}
+                        </div>
+                        {% if s.bodegaje_monto_congelado and s.bodegaje_monto_congelado > 0 %}
+                            <span class="bod-mini" style="display:block; margin-top:4px;">
+                                Bodegaje: {{ s.bodegaje_monto_congelado|dinero_signo }}
+                                {% if s.bodegaje_aplicado_al_pago %}(cobrado){% else %}(no cobrado){% endif %}
+                            </span>
+                        {% endif %}
+                    {% elif s.pendiente_de_retiro_fisico %}
+                        <span class="pendiente-pill">⏳ Sin retirar</span>
+                        <form method="post" action="{% url 'econotec:salida_marcar_retirada' pk=s.pk %}"
+                              class="cerrar-form" style="margin-top: 4px;"
+                              onsubmit="{% if s.ingreso.diferencia > 0 %}event.preventDefault(); Swal.fire({icon: 'error', title: 'Saldo Pendiente', text: 'No se puede retirar. El cliente tiene un saldo pendiente de {{ s.ingreso.diferencia|dinero_signo }}. Debe pagar todo antes de retirar el equipo.', confirmButtonColor: '#d33'}); return false;{% else %}confirmarCierre(event, this, '{{ s.ingreso.codigo_equipo }}', {% if s.ingreso.bodegaje_pendiente > 0 %}true{% else %}false{% endif %}, {{ s.ingreso.bodegaje_pendiente|default:0|stringformat:'.2f' }}, {{ s.ingreso.bodegaje_dias_pendiente|default:0 }});{% endif %}">
+                            {% csrf_token %}
+                            <input type="hidden" name="aplicar_bodegaje" id="aplicar_{{ s.pk }}" value="">
+                            <span >Da clic -></span>
+                            <button type="submit" class="cerrar-btn" {% if s.ingreso.diferencia > 0 %}style="background: #9e9e9e; cursor: not-allowed;" title="Saldo pendiente: {{ s.ingreso.diferencia|dinero_signo }}"{% endif %}>✓ Cliente retiró su equipo</button>
+                            
+                        </form>
+                    {% else %}
+                        <span style="color: var(--text-muted); font-size: 11px;">N/A</span>
+                    {% endif %}
+                </td>
+                <td>{{ s.valor_final_cobrado|dinero_signo }}</td>
+                <td>
+                    <span style="color: {% if s.ingreso.diferencia > 0 %}var(--danger){% else %}var(--success){% endif %}; font-weight: bold;">
+                        {{ s.ingreso.diferencia|dinero_signo }}
+                    </span>
+                </td>
+                <td class="row-actions">
+                    {% if s.pendiente_de_retiro_fisico and not s.cliente_ya_retiro %}
+                        <a href="{% url 'econotec:salida_listo_aviso' pk=s.pk %}" class="wa-mini" title="Avisar por WhatsApp">💬</a>
+                    {% endif %}
+                    <a href="{% url 'econotec:salida_editar' pk=s.pk %}" class="btn btn-sm btn-secondary">Editar Salida</a>
+                    <a href="{% url 'econotec:salida_imprimir' pk=s.pk %}" target="_blank" class="btn btn-sm btn-info">🖨 </a>
+                    <a href="{% url 'econotec:salida_pdf' pk=s.pk %}" class="btn btn-sm btn-primary"> Descargar 📄</a>
+                </td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+
+
+{% else %}
+<div class="empty-state">
+    <div class="icon">📤</div>
+    <h3>No hay salidas registradas</h3>
+    <p>Las salidas se registran desde el detalle de cada equipo.</p>
+</div>
+{% endif %}
+{% endblock %}

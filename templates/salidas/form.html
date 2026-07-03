@@ -1,0 +1,792 @@
+{% extends 'base.html' %}
+{% load econotec_extras %}
+
+{% block title %}{{ titulo }} — Econotec{% endblock %}
+
+{% block content %}
+<style>
+    .form-card { background: var(--card-bg); border-radius: 14px; padding: 28px; box-shadow: 0 4px 14px rgba(0,0,0,0.06); max-width: 760px; margin: 0 auto; }
+    .form-section { margin-bottom: 22px; }
+    .form-section h3 { color: var(--primary); font-size: 15px; font-weight: 700; margin-bottom: 14px; text-transform: uppercase; letter-spacing: 0.5px; padding-bottom: 6px; border-bottom: 2px solid var(--primary); }
+    .form-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; }
+    .form-row.cols-3 { grid-template-columns: repeat(3, 1fr); }
+    .form-row.cols-2 { grid-template-columns: repeat(2, 1fr); }
+
+    @media (max-width: 768px) {
+        .form-row.cols-3, .form-row.cols-2 {
+            grid-template-columns: 1fr;
+        }
+        .top-meta {
+            flex-direction: column;
+            gap: 12px;
+            align-items: flex-start;
+        }
+    }
+
+    .equipo-summary {
+        background: linear-gradient(135deg, var(--primary-light), #ffe6d3);
+        padding: 18px 22px;
+        border-radius: 12px;
+        margin-bottom: 22px;
+        border-left: 4px solid var(--primary);
+    }
+    .equipo-summary .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+        gap: 14px;
+    }
+    .equipo-summary .item .lbl {
+        color: var(--primary-dark);
+        font-size: 11px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.4px;
+    }
+    .equipo-summary .item .val {
+        color: #1f2937;
+        font-size: 15px;
+        font-weight: 700;
+        margin-top: 2px;
+    }
+    .equipo-summary .item .val.big {
+        font-size: 22px;
+        color: var(--primary);
+        font-weight: 800;
+    }
+
+    .info-banner {
+        background: #e3f2fd;
+        border-left: 4px solid #0d47a1;
+        padding: 14px 18px;
+        border-radius: 8px;
+        margin-bottom: 22px;
+        font-size: 13px;
+        color: #0d47a1;
+    }
+    .info-banner strong { display: block; margin-bottom: 4px; }
+
+    .actions-bar { display: flex; gap: 10px; justify-content: flex-end; margin-top: 22px; }
+
+    select[name="estado_reparacion"] {
+        font-size: 15px !important;
+        font-weight: 600;
+        padding: 14px 12px !important;
+    }
+
+    /* ── Tarjeta para enviar PDF por WhatsApp (solo en modo editar
+       cuando el estado de la salida es positivo) ───────────────── */
+    .envio-pdf-card {
+        background: linear-gradient(135deg, #25D366, #1da851);
+        color: white;
+        border-radius: 12px;
+        padding: 20px 22px;
+        margin-bottom: 22px;
+        display: none; /* se muestra desde JS según el estado */
+    }
+    .envio-pdf-card h3 {
+        font-size: 16px;
+        margin: 0 0 6px;
+        font-weight: 800;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    .envio-pdf-card p {
+        font-size: 13px;
+        margin: 0 0 14px;
+        opacity: 0.95;
+        line-height: 1.5;
+    }
+    .envio-pdf-card .botones {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+    }
+    .envio-pdf-card .btn-pdf,
+    .envio-pdf-card .btn-wa {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 10px 18px;
+        border-radius: 8px;
+        font-weight: 700;
+        font-size: 13px;
+        text-decoration: none;
+    }
+    .envio-pdf-card .btn-pdf {
+        background: white;
+        color: #1da851;
+    }
+    .envio-pdf-card .btn-wa {
+        background: rgba(0,0,0,0.18);
+        color: white;
+        border: 1px solid rgba(255,255,255,0.4);
+    }
+    .envio-pdf-card .btn-pdf:hover,
+    .envio-pdf-card .btn-wa:hover {
+        transform: translateY(-2px);
+    }
+    .envio-pdf-card .nota {
+        margin-top: 12px;
+        font-size: 12px;
+        opacity: 0.9;
+        background: rgba(0,0,0,0.12);
+        padding: 8px 12px;
+        border-radius: 6px;
+    }
+
+    /* Aviso cuando el estado es positivo pero no hay WhatsApp registrado */
+    .envio-pdf-card-sinwa {
+        background: #fff8e1;
+        color: #6d4c00;
+        border-left: 4px solid #f9a825;
+        border-radius: 10px;
+        padding: 14px 18px;
+        margin-bottom: 22px;
+        font-size: 13px;
+        display: none;
+    }
+    [data-theme="dark"] .envio-pdf-card-sinwa {
+        background: rgba(249, 168, 37, 0.15);
+        color: #fbbf24;
+    }
+    .envio-pdf-card-sinwa a {
+        display: inline-block;
+        margin-top: 8px;
+        background: #1976d2;
+        color: white;
+        padding: 8px 14px;
+        border-radius: 6px;
+        text-decoration: none;
+        font-weight: 700;
+        font-size: 12px;
+    }
+</style>
+
+<div class="crumb">
+    <a href="{% url 'econotec:bienvenida' %}">Inicio</a> /
+    <a href="{% url 'econotec:salida_lista' %}">Salidas</a> / {{ titulo }}
+</div>
+
+<form method="post" class="form-card">
+    {% csrf_token %}
+
+    <div class="equipo-summary">
+        <div class="grid">
+            <div class="item">
+                <div class="lbl">Equipo N°</div>
+                <div class="val big">{{ ingreso.codigo_equipo }}</div>
+            </div>
+            <div class="item">
+                <div class="lbl">Cliente</div>
+                <div class="val">{{ ingreso.cliente.nombres }}</div>
+            </div>
+            <div class="item">
+                <div class="lbl">Equipo</div>
+                <div class="val">{{ ingreso.tipo_equipo_display }} — {{ ingreso.marca }}</div>
+            </div>
+            <div class="item">
+                <div class="lbl">Saldo pendiente</div>
+                <div id="saldo-display" class="val" style="color: {% if ingreso.diferencia > 0 %}var(--danger){% else %}var(--success){% endif %};">{{ ingreso.diferencia|dinero_signo }}</div>
+                <div id="saldo-nota" style="font-size:10px; color:#888; margin-top:2px; display:none;">
+                    Se cobra solo el diagnóstico
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {% if modo == 'editar' %}
+        {% comment %}
+        Tarjeta de envío PDF/WhatsApp: visible cuando el estado de la salida
+        es positivo (pendiente de retiro, garantía o reparado parcial) y el
+        cliente tiene un WhatsApp registrado. Su visibilidad la controla el
+        JS de abajo, según el select de estado.
+        {% endcomment %}
+        {% if wa_link %}
+            <div id="envio-pdf-card" class="envio-pdf-card">
+                <h3>📄 Enviar hoja de salida al cliente</h3>
+                <p>
+                    El equipo está marcado como <strong>reparado - pendiente de retiro</strong>.
+                    Descarga la hoja de salida en PDF y envíasela al cliente por WhatsApp
+                    como respaldo de la entrega.
+                </p>
+                <div class="botones">
+                    <a href="{% url 'econotec:salida_pdf' pk=salida.pk %}"
+                       target="_blank"
+                       class="btn-pdf">
+                        📄 Descargar PDF de la hoja
+                    </a>
+                    <a href="{{ wa_link }}"
+                       target="_blank"
+                       rel="noopener"
+                       class="btn-wa">
+                        💬 Abrir WhatsApp de {{ ingreso.cliente.nombres|truncatechars:22 }}
+                    </a>
+                </div>
+                <div class="nota">
+                    📎 <strong>Cómo enviarlo:</strong> primero descarga el PDF, luego abre
+                    WhatsApp con el botón y adjunta el archivo descargado en el chat del cliente.
+                </div>
+            </div>
+        {% else %}
+            {# Estado positivo pero sin WhatsApp registrado: aviso suave #}
+            <div id="envio-pdf-card-sinwa" class="envio-pdf-card-sinwa">
+                ℹ️ El equipo está marcado como entregado, pero el cliente
+                <strong>no tiene WhatsApp registrado</strong>, así que no podemos generar
+                el enlace automático. Aun así puedes descargar el PDF de la hoja de salida:
+                <br>
+                <a href="{% url 'econotec:salida_pdf' pk=salida.pk %}" target="_blank">
+                    📄 Descargar PDF de la hoja
+                </a>
+            </div>
+        {% endif %}
+    {% endif %}
+
+    <div class="form-section">
+        <h3>Reporte del Técnico</h3>
+        <div class="form-row cols-1">
+            <div>
+                <label class="form-label" for="{{ form.reporte_tecnico.id_for_label }}">
+                    Reporte del técnico (lo que se le realizó al equipo)
+                </label>
+                {{ form.reporte_tecnico }}
+                {{ form.reporte_tecnico.errors }}
+            </div>
+        </div>
+    </div>
+
+    <div class="form-section">
+        <h3>Estado de la Salida</h3>
+        <div class="form-row cols-2">
+            <div>
+                <label class="form-label">Fecha de salida *</label>
+                {{ form.fecha_salida }}
+                {{ form.fecha_salida.errors }}
+            </div>
+            <div>
+                <label class="form-label">¿Cómo termina este equipo? *</label>
+                {{ form.estado_reparacion }}
+                {{ form.estado_reparacion.errors }}
+            </div>
+        </div>
+
+        <div class="form-row cols-1" style="margin-top: 14px;">
+            <div>
+                <label class="form-label" for="{{ form.tecnico_reparo.id_for_label }}">
+                    🔧 Técnico que reparó el equipo *
+                </label>
+                {{ form.tecnico_reparo }}
+                {{ form.tecnico_reparo.errors }}
+                <p class="form-help" style="margin-top: 6px; color: #856404; background:#fff3cd; padding:8px 10px; border-radius:8px; border:1px solid #ffeeba;">
+                    <b>Importante:</b> quien marca la salida es el responsable de la reparación.
+                    Este técnico es el que suma o resta puntos en su perfil según el resultado
+                    (salida buena = suma, salida mala = resta). Es obligatorio seleccionarlo.
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <div class="form-section">
+        <h3>Cierre Económico</h3>
+        
+        <div id="wrap-cobrar-diagnostico" style="display:none; margin-bottom: 14px; background: #fff3cd; padding: 10px; border-radius: 8px; border: 1px solid #ffeeba;">
+            <label class="form-label" style="color: #856404; margin-bottom: 8px;">¿Cobrar diagnóstico / revisión?</label>
+            <select id="cobrar_diagnostico_select" class="form-input" style="width: 100%; border-color: #ffeeba;">
+                <option value="no">No, no cobrar nada</option>
+                <option value="si">Sí, cobrar valor manual ($5 min)</option>
+            </select>
+        </div>
+
+        <div class="form-row cols-2">
+            <div>
+                <label class="form-label">Valor cobrado ahora (USD)</label>
+                {{ form.valor_final_cobrado }}
+                <small id="ayuda-valor-cobrado" style="color:#888; font-size:11px; transition: color 0.3s; display: block; margin-top: 4px; line-height: 1.4;">Si ya estaba pagado o si aún no ha pagado, déjalo en 0 para que se registre como saldo pendiente. Si está pagando ahora mismo, ingresa el valor aquí.</small>
+            </div>
+            <div>
+                <label class="form-label">Método de pago</label>
+                {{ form.metodo_pago_final }}
+            </div>
+        </div>
+
+        {# Banco — solo si método = transferencia #}
+        <div id="campo-banco-wrap" style="display:none; margin-top: 14px; background: var(--primary-light); padding: 14px; border-radius: 8px; border: 1px solid var(--info);">
+            <div style="font-weight: 700; color: var(--info); margin-bottom: 8px;">🏦 <span id="label-banco">Banco</span></div>
+            <div class="form-row cols-2">
+                <div>
+                    {{ form.banco }}
+                </div>
+                <div id="campo-banco-otro-wrap" style="display:none;">
+                    {{ form.banco_otro }}
+                </div>
+            </div>
+        </div>
+
+        {# Tarjeta App — solo si método = tarjeta #}
+        <div id="campo-tarjeta-app-wrap" style="display:none; margin-top: 14px; background: var(--primary-light); padding: 14px; border-radius: 8px; border: 1px solid var(--info);">
+            <div style="font-weight: 700; color: var(--info); margin-bottom: 8px;">💳 <span id="label-tarjeta-app">Tarjeta / App</span></div>
+            {{ form.tarjeta_app }}
+        </div>
+
+        {# Comprobante — solo si método = transferencia (OPCIONAL) #}
+        <div id="campo-comprobante-wrap" style="display:none; margin-top: 14px;">
+            <label class="form-label" id="label-comprobante">Link del comprobante <span style="color: var(--text-muted); font-weight: 400;">(opcional)</span></label>
+            {{ form.comprobante_url }}
+        </div>
+
+        <div id="wrap_pago_mixto" style="display:none; margin-top:14px; background:#fff; padding:15px; border-radius:8px; border:1px dashed #c4cdd5;">
+            <h5 style="margin-top:0; margin-bottom:10px; color:#1a1f36; font-size:13px;">Pago Mixto (Dividir el valor pagado en dos)</h5>
+            <div class="form-row cols-2">
+                <div>
+                    <label class="form-label">Monto 1 (USD) *</label>
+                    {{ form.monto_1 }}
+                </div>
+                <div>
+                    <label class="form-label">Método de pago 1 *</label>
+                    {{ form.metodo_1 }}
+                </div>
+                <div id="wrap_abono_banco_1" style="display:none;">
+                    <label class="form-label">Banco 1 *</label>
+                    {{ form.banco_1 }}
+                </div>
+            </div>
+            <div class="form-row cols-2" style="margin-top:10px;">
+                <div>
+                    <label class="form-label">Monto 2 (USD) *</label>
+                    {{ form.monto_2 }}
+                </div>
+                <div>
+                    <label class="form-label">Método de pago 2 *</label>
+                    {{ form.metodo_2 }}
+                </div>
+                <div id="wrap_abono_banco_2" style="display:none;">
+                    <label class="form-label">Banco 2 *</label>
+                    {{ form.banco_2 }}
+                </div>
+            </div>
+            <div id="msg_error_mixto" style="display:none; color:#d32f2f; margin-top:14px; font-weight:600; font-size:13px; text-align:center;">
+                <!-- Error message for sum will appear here -->
+            </div>
+        </div>
+
+        <div style="margin-top: 14px;">
+            <label class="form-label">Número de recibo (opcional)</label>
+            {{ form.numero_recibo }}
+            <small style="color:#888; font-size:11px;">Si lo dejas vacío y hay un cobro, se genera automáticamente.</small>
+        </div>
+    </div>
+
+    <div class="form-section">
+        <h3>🧾 Factura</h3>
+        <script id="cliente-datos-factura" type="application/json">
+            {"nombres": "{{ ingreso.cliente.nombres|escapejs }}", "cedula": "{{ ingreso.cliente.cedula|escapejs }}", "correo": "{{ ingreso.cliente.correo|escapejs }}"}
+        </script>
+        <div style="margin-bottom: 14px;">
+            <label class="form-label">¿Factura realizada?</label>
+            {{ form.factura_realizada }}
+        </div>
+        <div id="factura-data" style="display:none; background: var(--hover-bg); border: 1px solid rgba(249, 118, 24, 0.22); border-radius: 8px; padding: 12px; margin-top: 10px;">
+            <div style="font-weight: 700; color: var(--info); margin-bottom: 10px;">Datos para factura</div>
+            <div class="form-row cols-2">
+                <div>
+                    <label class="form-label">Nombres / Razón Social</label>
+                    {{ form.factura_nombres }}
+                </div>
+                <div style="margin-top:0px;">
+                    <label class="form-label">Número de cédula / RUC</label>
+                    {{ form.factura_cedula }}
+                </div>
+                <div style="margin-top:10px;">
+                    <label class="form-label">Correo electrónico</label>
+                    {{ form.factura_correo }}
+                </div>
+                <div></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="form-section">
+        <h3>Confirmación</h3>
+        <div class="form-row cols-2">
+            <div>
+                <label class="form-label">Cliente recibe conforme</label>
+                {{ form.cliente_recibe_conforme }}
+            </div>
+        </div>
+        <div style="margin-top:14px;">
+            <label class="form-label">Observaciones (opcional)</label>
+            {{ form.observaciones }}
+        </div>
+    </div>
+
+    <div class="actions-bar">
+        <a href="{% url 'econotec:ingreso_detalle' pk=ingreso.pk %}" class="btn btn-secondary">Cancelar</a>
+        <button type="submit" id="btn-registrar" class="btn btn-primary">
+            {% if modo == 'editar' %}Guardar cambios{% else %}Registrar Salida{% endif %}
+        </button>
+    </div>
+</form>
+
+<script>
+    // Si el usuario marca "Cliente no quiso reparar" o "No se pudo reparar",
+    // mostramos que el saldo efectivo es solo el del diagnóstico
+    // (no el valor acordado completo).
+    //
+    // Además: si el estado es positivo (pendiente retiro/garantía/reparado parcial),
+    // mostramos la tarjeta para enviar el PDF de la hoja por WhatsApp.
+    (function() {
+        var selEstado = document.querySelector('select[name="estado_reparacion"]');
+        var saldoDisplay = document.getElementById('saldo-display');
+        var saldoNota = document.getElementById('saldo-nota');
+        var envioCard = document.getElementById('envio-pdf-card');
+        var envioCardSinWA = document.getElementById('envio-pdf-card-sinwa');
+
+        // Datos del ingreso (vienen de Django)
+        var valorDiagnostico = parseFloat("{{ ingreso.valor_diagnostico|default:0 }}") || 0;
+        var totalAbonado = parseFloat("{{ ingreso.total_abonado|default:0 }}") || 0;
+        var diferenciaNormal = parseFloat("{{ ingreso.valor_acordado|default:0 }}") - totalAbonado;
+
+        // Estados considerados "positivos" → permiten enviar la hoja
+        var ESTADOS_POSITIVOS = ['pendiente_retiro', 'garantia', 'reparado_parcial', 'retirado'];
+
+        function actualizar() {
+            if (!selEstado) return;
+            var v = selEstado.value;
+            var wrapCobrar = document.getElementById('wrap-cobrar-diagnostico');
+            if (wrapCobrar) wrapCobrar.style.display = 'none';
+
+            // ── Lógica del saldo ──────────────────────────
+            if (saldoDisplay) {
+                var saldoCancelado = valorDiagnostico - totalAbonado;
+                if (saldoCancelado < 0) saldoCancelado = 0;
+
+                var inputCobrado = document.querySelector('input[name="valor_final_cobrado"]');
+                var metodoPago = document.querySelector('select[name="metodo_pago_final"]');
+                var ayudaValor = document.getElementById('ayuda-valor-cobrado');
+
+                // Reiniciamos el texto de ayuda por defecto
+                if (ayudaValor) {
+                    ayudaValor.innerHTML = 'Si ya estaba pagado o si aún no ha pagado, déjalo en 0 para que se registre como saldo pendiente. Si está pagando ahora mismo, ingresa el valor aquí.';
+                    ayudaValor.style.color = '#888';
+                }
+
+                if (v === 'garantia') {
+                    saldoDisplay.textContent = '$0.00';
+                    saldoDisplay.style.color = 'var(--success)';
+                    if (saldoNota) {
+                        saldoNota.style.display = '';
+                        saldoNota.textContent = 'Salida por garantía (sin cobro).';
+                    }
+                    if (inputCobrado) {
+                        inputCobrado.value = '0';
+                        inputCobrado.setAttribute('readonly', 'readonly');
+                    }
+                    if (metodoPago) metodoPago.value = 'sin_pago';
+                } else if (v === 'cliente_no_acepta' || v === 'no_reparable') {
+                    if (wrapCobrar) wrapCobrar.style.display = 'block';
+                    var cobrarDiag = document.getElementById('cobrar_diagnostico_select');
+                    var cobrarSiNo = cobrarDiag ? cobrarDiag.value : 'no';
+
+                    if (cobrarSiNo === 'no') {
+                        saldoDisplay.textContent = '$0.00';
+                        saldoDisplay.style.color = 'var(--success)';
+                        if (saldoNota) {
+                            saldoNota.style.display = '';
+                            saldoNota.textContent = 'No se cobra revisión/diagnóstico adicional.';
+                        }
+                        if (inputCobrado) {
+                            inputCobrado.value = '0';
+                            inputCobrado.setAttribute('readonly', 'readonly');
+                        }
+                        if (ayudaValor) {
+                            ayudaValor.innerHTML = 'Diagnóstico ya cobrado al ingreso o no se cobrará.';
+                            ayudaValor.style.color = '#888';
+                        }
+                        if (metodoPago && metodoPago.value !== 'sin_pago') {
+                            metodoPago.value = 'sin_pago';
+                            metodoPago.dispatchEvent(new Event('change'));
+                        }
+                    } else {
+                        saldoDisplay.textContent = 'Cobro manual';
+                        saldoDisplay.style.color = 'var(--danger)';
+                        if (saldoNota) {
+                            saldoNota.style.display = '';
+                            saldoNota.textContent = 'Se habilita cobro manual ($5 o más)';
+                        }
+                        if (inputCobrado) {
+                            if (parseFloat(inputCobrado.value) < 5 || inputCobrado.hasAttribute('readonly') || inputCobrado.value === '0') {
+                                inputCobrado.value = '5';
+                            }
+                            inputCobrado.removeAttribute('readonly');
+                        }
+                        if (ayudaValor) {
+                            ayudaValor.innerHTML = '<strong>Nota:</strong> Ingresa el valor a cobrar (puede ser 5 o mayor).';
+                            ayudaValor.style.color = 'var(--primary)';
+                        }
+                        if (metodoPago && (metodoPago.value === 'sin_pago' || metodoPago.value === '')) {
+                            metodoPago.value = 'efectivo';
+                            metodoPago.dispatchEvent(new Event('change'));
+                        }
+                    }
+                } else {
+                    saldoDisplay.textContent = '$' + diferenciaNormal.toFixed(2);
+                    saldoDisplay.style.color = diferenciaNormal > 0 ? 'var(--danger)' : 'var(--success)';
+                    if (saldoNota) saldoNota.style.display = 'none';
+                    if (inputCobrado) {
+                        if (diferenciaNormal <= 0) {
+                            inputCobrado.value = '0';
+                            inputCobrado.setAttribute('readonly', 'readonly');
+                        } else {
+                            inputCobrado.removeAttribute('readonly');
+                        }
+                    }
+                }
+            }
+
+            // ── Mostrar/ocultar tarjeta de envío PDF ──────
+            var esPositivo = ESTADOS_POSITIVOS.indexOf(v) !== -1;
+            if (envioCard) {
+                envioCard.style.display = esPositivo ? 'block' : 'none';
+            }
+            if (envioCardSinWA) {
+                envioCardSinWA.style.display = esPositivo ? 'block' : 'none';
+            }
+        }
+
+        if (selEstado) {
+            selEstado.addEventListener('change', actualizar);
+        }
+        var cobrarDiagSel = document.getElementById('cobrar_diagnostico_select');
+        if (cobrarDiagSel) {
+            cobrarDiagSel.addEventListener('change', actualizar);
+        }
+        if (selEstado) {
+            actualizar();
+        }
+    })();
+
+    // Lógica para validar campos requeridos y cambiar opacidad del botón
+    (function () {
+        var btn = document.getElementById('btn-registrar');
+        var form = document.querySelector('form.form-card');
+        
+        const metodoPago = document.querySelector('select[name="metodo_pago_final"]');
+        const banco = document.getElementById('id_banco');
+        const bancoOtro = document.getElementById('id_banco_otro');
+        const tarjetaApp = document.getElementById('id_tarjeta_app');
+        const comprobante = document.getElementById('id_comprobante_url');
+        const factura = document.getElementById('id_factura_realizada');
+        
+        const wrapBanco = document.getElementById('campo-banco-wrap');
+        const wrapBancoOtro = document.getElementById('campo-banco-otro-wrap');
+        const wrapTarjetaApp = document.getElementById('campo-tarjeta-app-wrap');
+        const wrapComprobante = document.getElementById('campo-comprobante-wrap');
+        const wrapFactura = document.getElementById('factura-data');
+
+        const wrapPagoMixto = document.getElementById('wrap_pago_mixto');
+        const wrapBanco1 = document.getElementById('wrap_abono_banco_1');
+        const wrapBanco2 = document.getElementById('wrap_abono_banco_2');
+        const inputMonto1 = document.getElementById('id_monto_1');
+        const inputMonto2 = document.getElementById('id_monto_2');
+        const inputMetodo1 = document.getElementById('id_metodo_1');
+        const inputMetodo2 = document.getElementById('id_metodo_2');
+        const inputBanco1 = document.getElementById('id_banco_1');
+        const inputBanco2 = document.getElementById('id_banco_2');
+        const msgErrorMixto = document.getElementById('msg_error_mixto');
+        const inputValorCobrado = document.getElementById('id_valor_final_cobrado');
+
+        const camposFactura = [
+            document.getElementById('id_factura_nombres'),
+            document.getElementById('id_factura_cedula'),
+            document.getElementById('id_factura_correo')
+        ];
+
+        function setRequired(input, requerido) {
+            if (!input) return;
+            if (requerido) {
+                input.setAttribute('required', 'required');
+            } else {
+                input.removeAttribute('required');
+                if (typeof input.setCustomValidity === 'function') {
+                    input.setCustomValidity('');
+                }
+            }
+        }
+
+        window.__checkRequired = function() {
+            if (!btn || !form) return;
+            
+            var isValid = true;
+
+            // Revisamos requeridos manualmente para bancos y factura
+            if (metodoPago && metodoPago.value === 'transferencia') {
+                if (!banco || !banco.value) isValid = false;
+                if (banco && banco.value === 'otro' && (!bancoOtro || !bancoOtro.value.trim())) isValid = false;
+            }
+
+            if (metodoPago && (metodoPago.value === 'tarjeta')) {
+                if (!tarjetaApp || !tarjetaApp.value) isValid = false;
+            }
+
+            if (metodoPago && metodoPago.value === 'mixto') {
+                var totalStr = inputValorCobrado ? inputValorCobrado.value : '0';
+                var total = parseFloat(totalStr) || 0;
+                var m1 = parseFloat(inputMonto1.value) || 0;
+                var m2 = parseFloat(inputMonto2.value) || 0;
+
+                if (Math.abs((m1 + m2) - total) > 0.001) {
+                    isValid = false;
+                    msgErrorMixto.style.display = 'block';
+                    msgErrorMixto.innerHTML = '⚠️ La suma de los montos ($' + (m1 + m2).toFixed(2) + ') no coincide con el valor total a cobrar ($' + total.toFixed(2) + ').';
+                } else {
+                    msgErrorMixto.style.display = 'none';
+                    msgErrorMixto.innerHTML = '';
+                }
+
+                if (!inputMonto1.value || !inputMetodo1.value || !inputMonto2.value || !inputMetodo2.value) isValid = false;
+                if (inputMetodo1.value === 'transferencia' && !inputBanco1.value) isValid = false;
+                if (inputMetodo2.value === 'transferencia' && !inputBanco2.value) isValid = false;
+            } else {
+                if (msgErrorMixto) msgErrorMixto.style.display = 'none';
+            }
+
+            if (factura && factura.value === 'si') {
+                camposFactura.forEach(function(inp) {
+                    if (!inp || !inp.value.trim()) isValid = false;
+                });
+            }
+
+            // También verificamos el checkValidity del html
+            if (!form.checkValidity()) {
+                isValid = false;
+            }
+
+            if (!isValid) {
+                btn.style.opacity = '0.55';
+                btn.style.filter = 'grayscale(20%)';
+            } else {
+                btn.style.opacity = '1';
+                btn.style.filter = 'none';
+            }
+        };
+
+        function actualizarMetodo() {
+            if (!metodoPago) return;
+            const v = metodoPago.value;
+
+            wrapBanco.style.display = 'none';
+            wrapBancoOtro.style.display = 'none';
+            wrapTarjetaApp.style.display = 'none';
+            wrapComprobante.style.display = 'none';
+            if (wrapPagoMixto) wrapPagoMixto.style.display = 'none';
+
+            setRequired(banco, false);
+            setRequired(bancoOtro, false);
+            setRequired(tarjetaApp, false);
+            setRequired(inputMonto1, false);
+            setRequired(inputMetodo1, false);
+            setRequired(inputMonto2, false);
+            setRequired(inputMetodo2, false);
+            setRequired(inputBanco1, false);
+            setRequired(inputBanco2, false);
+
+            if (v === 'transferencia') {
+                wrapBanco.style.display = 'block';
+                wrapComprobante.style.display = 'block';
+                setRequired(banco, true);
+                if (banco.value === 'otro') {
+                    wrapBancoOtro.style.display = 'block';
+                    setRequired(bancoOtro, true);
+                }
+            } else if (v === 'tarjeta') {
+                wrapTarjetaApp.style.display = 'block';
+                setRequired(tarjetaApp, true);
+            } else if (v === 'mixto') {
+                if (wrapPagoMixto) wrapPagoMixto.style.display = 'block';
+                setRequired(inputMonto1, true);
+                setRequired(inputMetodo1, true);
+                setRequired(inputMonto2, true);
+                setRequired(inputMetodo2, true);
+
+                if (inputMetodo1 && inputMetodo1.value === 'transferencia') {
+                    if (wrapBanco1) wrapBanco1.style.display = 'block';
+                    setRequired(inputBanco1, true);
+                } else {
+                    if (wrapBanco1) wrapBanco1.style.display = 'none';
+                    setRequired(inputBanco1, false);
+                }
+
+                if (inputMetodo2 && inputMetodo2.value === 'transferencia') {
+                    if (wrapBanco2) wrapBanco2.style.display = 'block';
+                    setRequired(inputBanco2, true);
+                } else {
+                    if (wrapBanco2) wrapBanco2.style.display = 'none';
+                    setRequired(inputBanco2, false);
+                }
+            }
+            window.__checkRequired();
+        }
+
+        function actualizarFactura() {
+            if (!factura) return;
+            const req = factura.value === 'si';
+            wrapFactura.style.display = req ? 'block' : 'none';
+            camposFactura.forEach(function(inp) {
+                setRequired(inp, req);
+            });
+            // Autocompletar con los datos del cliente cuando se factura,
+            // solo si los campos están vacíos (no pisa lo que ya se escribió).
+            if (req) {
+                try {
+                    var cd = JSON.parse(document.getElementById('cliente-datos-factura').textContent);
+                    var fN = document.getElementById('id_factura_nombres');
+                    var fC = document.getElementById('id_factura_cedula');
+                    var fE = document.getElementById('id_factura_correo');
+                    if (fN && !fN.value.trim() && cd.nombres) fN.value = cd.nombres;
+                    if (fC && !fC.value.trim() && cd.cedula) fC.value = cd.cedula;
+                    if (fE && !fE.value.trim() && cd.correo) fE.value = cd.correo;
+                } catch (e) { /* si no hay datos, se deja en blanco */ }
+            }
+            window.__checkRequired();
+        }
+
+        if (metodoPago) metodoPago.addEventListener('change', actualizarMetodo);
+        if (banco) banco.addEventListener('change', actualizarMetodo);
+        if (bancoOtro) bancoOtro.addEventListener('input', window.__checkRequired);
+        if (tarjetaApp) tarjetaApp.addEventListener('change', window.__checkRequired);
+        if (factura) factura.addEventListener('change', actualizarFactura);
+        
+        if (inputValorCobrado) inputValorCobrado.addEventListener('input', window.__checkRequired);
+        if (inputMonto1) inputMonto1.addEventListener('input', window.__checkRequired);
+        if (inputMonto2) inputMonto2.addEventListener('input', window.__checkRequired);
+        if (inputMetodo1) inputMetodo1.addEventListener('change', actualizarMetodo);
+        if (inputMetodo2) inputMetodo2.addEventListener('change', actualizarMetodo);
+        if (inputBanco1) inputBanco1.addEventListener('change', window.__checkRequired);
+        if (inputBanco2) inputBanco2.addEventListener('change', window.__checkRequired);
+
+        if (form) {
+            form.addEventListener('input', window.__checkRequired);
+            form.addEventListener('change', window.__checkRequired);
+            setTimeout(window.__checkRequired, 100);
+            setTimeout(window.__checkRequired, 500);
+        }
+
+        actualizarMetodo();
+        actualizarFactura();
+    })();
+
+    // Deshabilitar la opción "Retirado por el cliente" si hay saldo pendiente
+    (function() {
+        var tieneSaldo = {% if ingreso.diferencia > 0 %}true{% else %}false{% endif %};
+        var selEstado = document.querySelector('[name="estado_reparacion"]');
+        if (selEstado && tieneSaldo) {
+            for (var i = 0; i < selEstado.options.length; i++) {
+                if (selEstado.options[i].value === 'retirado') {
+                    selEstado.options[i].disabled = true;
+                    selEstado.options[i].text += ' ❌ (Requiere pagar saldo)';
+                }
+            }
+        }
+    })();
+</script>
+{% endblock %}

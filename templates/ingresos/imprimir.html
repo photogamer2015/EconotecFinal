@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Solicitud de Ingreso {{ ingreso.codigo_equipo }} — Econotec</title>
+    {% load static econotec_extras %}
+    <style>
+        @page { size: A4; margin: 14mm 14mm 12mm 14mm; }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Helvetica', 'Arial', sans-serif;
+            color: #222;
+            font-size: 11px;
+            line-height: 1.35;
+        }
+        :root { --naranja: #f97618; }
+        .sheet {
+            width: 210mm;
+            min-height: 290mm;
+            margin: 0 auto;
+            padding: 6mm;
+            background: white;
+            border: 1.5px solid var(--naranja);
+            position: relative;
+        }
+        .actions-bar {
+            text-align: center;
+            padding: 12px;
+            background: #fff8f3;
+            margin-bottom: 12px;
+            border-radius: 8px;
+        }
+        .actions-bar button, .actions-bar a {
+            background: var(--naranja);
+            color: white;
+            border: none;
+            padding: 9px 18px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            text-decoration: none;
+            margin: 0 4px;
+            display: inline-block;
+        }
+
+        /* Header con cajas EQUIPO N° y FACTURA N° */
+        .header-area {
+            display: grid;
+            grid-template-columns: 1fr 3fr 1fr;
+            align-items: start;
+            gap: 8px;
+            margin-bottom: 10px;
+        }
+        .corner-box {
+            border: 1.5px solid var(--naranja);
+            border-radius: 6px;
+            padding: 6px;
+            min-height: 60px;
+            text-align: center;
+        }
+        .corner-box .lbl {
+            font-size: 10px;
+            color: var(--naranja);
+            font-weight: 700;
+            display: block;
+        }
+        .corner-box .val {
+            font-size: 22px;
+            font-weight: 800;
+            color: #1f2937;
+            display: block;
+            margin-top: 6px;
+        }
+        .qr-box {
+            margin-top: 6px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .qr-img {
+            width: 78px; height: 78px;
+            display: block;
+        }
+        .qr-cap {
+            font-size: 7px;
+            color: var(--naranja);
+            font-weight: 700;
+            line-height: 1.15;
+            margin-top: 2px;
+            text-transform: uppercase;
+            letter-spacing: 0.2px;
+        }
+        .qr-codigo {
+            display: block;
+            font-size: 15px;
+            font-weight: 800;
+            color: #1f2937;
+            margin-top: 3px;
+            letter-spacing: 0.5px;
+        }
+        .header-center {
+            text-align: center;
+        }
+        .logo-circle-print {
+            width: 60px; height: 60px;
+            border-radius: 50%;
+            background: #1a1a1a;
+            display: inline-block;
+            object-fit: cover;
+            padding: 3px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+        .brand-text {
+            font-size: 10px;
+            color: var(--naranja);
+            font-weight: 700;
+            letter-spacing: 1px;
+        }
+        .doc-title {
+            font-size: 24px;
+            color: var(--naranja);
+            font-weight: 800;
+            letter-spacing: -0.5px;
+            margin: 2px 0;
+        }
+        .branch-info {
+            font-size: 8.5px;
+            color: #444;
+            line-height: 1.5;
+        }
+        .branch-info a { color: var(--naranja); text-decoration: none; }
+
+        /* Filas tipo formulario "Etiqueta: ___________" */
+        .field-line {
+            display: flex;
+            align-items: baseline;
+            gap: 6px;
+            padding: 4px 0;
+            border-bottom: 1px solid #d0d0d0;
+        }
+        .field-line .label {
+            color: var(--naranja);
+            font-weight: 700;
+            font-size: 11px;
+            white-space: nowrap;
+        }
+        .field-line .value {
+            flex: 1;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            color: #1f2937;
+            font-weight: 700;
+            padding-left: 6px;
+        }
+
+        .section-header {
+            color: var(--naranja);
+            font-weight: 800;
+            font-size: 12px;
+            margin-top: 10px;
+            margin-bottom: 6px;
+            letter-spacing: 0.5px;
+        }
+
+        .equipos-grid {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 6px;
+            margin-bottom: 6px;
+        }
+        .equipos-grid.row2 { grid-template-columns: repeat(4, 1fr); }
+        .checkbox-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-weight: 700;
+            color: var(--naranja);
+            font-size: 10.5px;
+        }
+        .check-box {
+            width: 16px; height: 16px;
+            border: 1.2px solid var(--naranja);
+            border-radius: 3px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 800;
+            color: #1f2937;
+            font-size: 14px;
+        }
+
+        .problem-area {
+            margin-top: 8px;
+        }
+        .problem-area .underlined-block {
+            border-bottom: 1px solid #d0d0d0;
+            min-height: 16px;
+            padding: 3px 0;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            color: #1f2937;
+            font-weight: 700;
+        }
+
+        .diag-row {
+            display: grid;
+            grid-template-columns: 1.4fr 0.5fr 0.5fr 1.4fr;
+            gap: 8px;
+            align-items: center;
+            margin-top: 8px;
+        }
+
+        .values-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 12px;
+            margin-top: 8px;
+        }
+
+        .nota-importante {
+            margin-top: 12px;
+            border: 1.5px solid var(--naranja);
+            border-radius: 6px;
+            padding: 8px 10px;
+            font-size: 9.5px;
+            line-height: 1.45;
+            color: #333;
+        }
+        .nota-importante .nota-title {
+            color: var(--naranja);
+            font-weight: 800;
+            font-size: 11px;
+            margin-bottom: 4px;
+        }
+        .nota-importante .highlighted {
+            background: #fff3a0;
+            padding: 1px 3px;
+        }
+
+        .signatures {
+            margin-top: 28px;
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 16px;
+            text-align: center;
+        }
+        .signatures .sig-line {
+            border-top: 1px solid #555;
+            padding-top: 4px;
+            font-size: 8.5px;
+            color: var(--naranja);
+            font-weight: 700;
+        }
+
+        @media print {
+            .actions-bar { display: none !important; }
+            body { background: white; }
+            .sheet { border: 0; box-shadow: none; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="actions-bar no-print">
+    <button onclick="window.print()">🖨 Imprimir</button>
+    <a href="{% url 'econotec:ingreso_pdf' pk=ingreso.pk %}">📄 Descargar PDF</a>
+    <a href="{% url 'econotec:ingreso_qr_png' pk=ingreso.pk %}" download="QR_{{ ingreso.codigo_equipo }}.png">⬇ Descargar QR</a>
+    <a href="{% url 'econotec:ingreso_detalle' pk=ingreso.pk %}" style="background:#666;">← Volver</a>
+</div>
+
+<div class="sheet">
+
+    <!-- HEADER -->
+    <div class="header-area">
+        <div class="corner-box">
+            <span class="lbl">EQUIPO</span>
+            <span class="val">{{ ingreso.codigo_equipo }}</span>
+        </div>
+        <div class="header-center">
+            <img src="{% static 'logo.jpg' %}" alt="Econotec" class="logo-circle-print">
+            <div class="brand-text">ECONOTEC</div>
+            <div class="doc-title">SOLICITUD DE INGRESO</div>
+            <div class="branch-info">
+                <strong>Guayaquil:</strong> Sauces 8 Mz 454F Solar 6, Primer Piso Oficina 2<br>
+                <strong>Quito:</strong> Sector Centro Norte: La Mariscal - Calles 18 de Septiembre y Av. Amazonas<br>
+                Central: 096 383 6191 — GYE: 096 328 9727 — UIO: 098 075 8747<br>
+                Web: <a href="#">www.econotec-ec.com</a>  Correo: <a href="#">contacto@econotec-ec.com</a>
+            </div>
+        </div>
+        <div class="corner-box">
+            <span class="lbl">FACTURA N°</span>
+            <span class="val">{{ ingreso.numero_factura|default:"" }}</span>
+            <div class="qr-box">
+                <span style="font-size: 10px; font-weight: 800; color: #1f2937; text-align: center; line-height: 1.1; margin-bottom: 2px;">{{ cliente.nombres|truncatechars:20 }}</span>
+                <span style="font-size: 9px; font-weight: 700; color: #555; text-align: center; margin-bottom: 5px;">{{ cliente.whatsapp }}</span>
+                <img src="{{ qr_data_uri }}" alt="QR del equipo {{ ingreso.codigo_equipo }}" class="qr-img" style="width: 70px; height: 70px;">
+                <span class="qr-codigo" style="margin-top: 4px; font-size: 16px;">{{ ingreso.codigo_equipo }}</span>
+                <span style="font-size: 10px; font-weight: 800; color: var(--naranja); text-align: center; margin-top: 2px; text-transform: uppercase;">{{ ingreso.tipo_equipo_display }}</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- DATOS PERSONAL Y CLIENTE -->
+    <div class="field-line"><span class="label">Asesora Comercial:</span><span class="value">{{ ingreso.asesor_comercial }}</span></div>
+    <div class="field-line"><span class="label">Técnico Encargado:</span><span class="value">{{ ingreso.tecnico_encargado_nombre }}</span></div>
+    <div class="field-line"><span class="label">Fecha de Ingreso:</span><span class="value">{{ ingreso.fecha_ingreso|date:"d/m/Y" }}</span></div>
+    <div class="field-line"><span class="label">Nombres del Cliente:</span><span class="value">{{ cliente.nombres }}</span></div>
+    <div class="field-line"><span class="label">Cédula o Ruc / Para la emisión de la factura:</span><span class="value">{{ cliente.cedula }}</span></div>
+    <div class="field-line"><span class="label">WhatsApp:</span><span class="value">{{ cliente.whatsapp }}</span></div>
+
+    <div style="display:grid; grid-template-columns: 2.2fr 1fr; gap: 12px;">
+        <div class="field-line"><span class="label">Correo:</span><span class="value">{{ cliente.correo|default:"" }}</span></div>
+        <div class="field-line"><span class="label">Sector:</span><span class="value">{{ cliente.sector_display }}</span></div>
+    </div>
+
+    <!-- DETALLES DEL EQUIPO -->
+    <div class="section-header">DETALLES DEL EQUIPO</div>
+
+    <div class="equipos-grid">
+        <div class="checkbox-item">IMPRESORA <span class="check-box">{% if ingreso.tipo_equipo == 'impresora' %}X{% endif %}</span></div>
+        <div class="checkbox-item">LAPTOP <span class="check-box">{% if ingreso.tipo_equipo == 'laptop' %}X{% endif %}</span></div>
+        <div class="checkbox-item">PC <span class="check-box">{% if ingreso.tipo_equipo == 'pc' %}X{% endif %}</span></div>
+        <div class="checkbox-item">MONITOR <span class="check-box">{% if ingreso.tipo_equipo == 'monitor' %}X{% endif %}</span></div>
+        <div class="checkbox-item">CPU <span class="check-box">{% if ingreso.tipo_equipo == 'cpu' %}X{% endif %}</span></div>
+    </div>
+    <div class="equipos-grid row2">
+        <div class="checkbox-item">CELULAR <span class="check-box">{% if ingreso.tipo_equipo == 'celular' %}X{% endif %}</span></div>
+        <div class="checkbox-item">TABLET <span class="check-box">{% if ingreso.tipo_equipo == 'tablet' %}X{% endif %}</span></div>
+        <div class="checkbox-item">CONSOLA <span class="check-box">{% if ingreso.tipo_equipo == 'consola' %}X{% endif %}</span></div>
+        <div class="checkbox-item">OTROS EQUIPOS <span class="check-box">{% if ingreso.tipo_equipo == 'otro' %}X{% endif %}</span></div>
+    </div>
+
+    <div class="field-line"><span class="label">MARCA:</span><span class="value">{{ ingreso.marca }}{% if ingreso.tipo_equipo == 'otro' and ingreso.tipo_equipo_otro %} ({{ ingreso.tipo_equipo_otro }}){% endif %}</span></div>
+    <div class="field-line"><span class="label">MODELO / SERIE:</span><span class="value">{{ ingreso.modelo_serie }}</span></div>
+    <div class="field-line"><span class="label">ACCESORIOS ENTREGADOS:</span><span class="value">{{ ingreso.accesorios_entregados|linebreaksbr }}</span></div>
+
+    <!-- PROBLEMA REPORTADO -->
+    <div class="problem-area">
+        <div class="section-header">PROBLEMA REPORTADO</div>
+        <div class="underlined-block">{{ ingreso.problema_reportado }}</div>
+        <div class="underlined-block">&nbsp;</div>
+    </div>
+
+    <!-- REPORTE DEL TÉCNICO -->
+    <div class="problem-area">
+        <div class="section-header">REPORTE DEL TÉCNICO DETALLAR LO QUE SE LE REALIZÓ AL EQUIPO:</div>
+        <div class="underlined-block">{{ ingreso.reporte_tecnico|default:"" }}</div>
+        <div class="underlined-block">&nbsp;</div>
+        <div class="underlined-block">&nbsp;</div>
+        <div class="underlined-block">&nbsp;</div>
+        {% if ingreso.reporte_por_nombre %}
+        <div style="font-size:9px; color:var(--naranja); font-weight:700; margin-top:3px;">
+            Reporte realizado por: {{ ingreso.reporte_por_nombre }}{% if ingreso.reporte_actualizado %} — {{ ingreso.reporte_actualizado|date:"d/m/Y H:i" }}{% endif %}
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- DIAGNÓSTICO -->
+    <div class="diag-row">
+        <div style="font-weight:700; color: var(--naranja);">
+            Diagnóstico Inmediato:
+            SI <span class="check-box">{% if ingreso.diagnostico_inmediato == 'si' %}X{% endif %}</span>
+            NO <span class="check-box">{% if ingreso.diagnostico_inmediato == 'no' %}X{% endif %}</span>
+        </div>
+        <div></div>
+        <div></div>
+        <div class="field-line" style="border:none;"><span class="label">Valor del Diagnóstico:</span><span class="value">{{ ingreso.valor_diagnostico|dinero_signo }}</span></div>
+    </div>
+
+    <!-- VALORES -->
+    <div class="values-row">
+        <div class="field-line"><span class="label">Valor acordado:</span><span class="value">{{ ingreso.valor_acordado|dinero_signo }}</span></div>
+        <div class="field-line"><span class="label">Abono/Anticipo:</span><span class="value">{{ ingreso.abono_anticipo|dinero_signo }}</span></div>
+        <div class="field-line"><span class="label">Diferencia:</span><span class="value">{{ ingreso.diferencia|dinero_signo }}</span></div>
+    </div>
+
+    <!-- NOTA IMPORTANTE -->
+    <div class="nota-importante">
+        <div class="nota-title">NOTA IMPORTANTE</div>
+        <p>
+            <span class="highlighted">El tiempo de revisión <strong>GRATUITA</strong> es de 24 a 96 horas</span>, tiempo en el cual el cliente recibirá un mensaje con el informe técnico y la respectiva cotización. Sin embargo, si el presupuesto es menor a $40,00 se procederá a reparar el equipo.
+        </p>
+        <p style="margin-top:5px;">
+            <span class="highlighted">Si el técnico encargado le otorga el diagnóstico del equipo y usted decide NO REPARARLO porque el valor de la reparación no se ajusta a su presupuesto, deberá pagar el valor de $5,00</span> que es el costo de la revisión profunda del equipo, valor que deberá cancelar antes de retirarlo de las instalaciones. Pero si en el diagnóstico gratuito se determina que el equipo NO TIENE SOLUCIÓN, la revisión no tendrá ningún costo y deberá acercarse a las instalaciones a retirarlo.
+        </p>
+        <p style="margin-top:5px;">
+            <strong>ADICIONAL:</strong> pasados 5 DÍAS a partir de que el técnico le indique que puede retirar el equipo ya sea porque está listo o porque decidió no repararlo y el cliente no se acerque a las instalaciones deberá cancelar $1,00 diario por concepto de bodegaje.
+        </p>
+    </div>
+
+    <!-- FIRMAS -->
+    <div class="signatures">
+        <div class="sig-line">FIRMA DEL CLIENTE</div>
+        <div class="sig-line">FIRMA DEL TÉCNICO QUE RECIBE EL EQUIPO</div>
+        <div class="sig-line">FIRMA DEL TÉCNICO QUE REPARA EL EQUIPO</div>
+    </div>
+
+</div>
+
+</body>
+</html>

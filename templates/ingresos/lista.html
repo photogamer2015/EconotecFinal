@@ -1,0 +1,167 @@
+{% extends 'base.html' %}
+{% load econotec_extras %}
+
+{% block title %}Lista de Equipos — Econotec{% endblock %}
+
+{% block content %}
+<div class="crumb">
+    <a href="{% url 'econotec:bienvenida' %}">Inicio</a> /
+    <a href="{% url 'econotec:ingreso_menu' %}">Ingreso de Equipo</a> / Lista
+</div>
+
+<h2 class="page-title">Equipos <span class="accent">Registrados</span></h2>
+<p class="page-subtitle">
+    {{ total }} equipos
+    {% if sede_filtro == 'guayaquil' %}en sede Guayaquil
+    {% elif sede_filtro == 'quito' %}en sede Quito
+    {% else %}en total (todas las sedes)
+    {% endif %}.
+</p>
+
+<div class="toolbar">
+    <form method="get">
+        <input type="text" name="q" value="{{ q }}" placeholder="Buscar por N° equipo, cliente, cédula, marca…" class="form-input">
+        <select name="sede" class="form-input" style="max-width:180px;">
+            <option value="todas" {% if sede_filtro == 'todas' or not sede_filtro %}selected{% endif %}>— Todas las sedes —</option>
+            <option value="guayaquil" {% if sede_filtro == 'guayaquil' %}selected{% endif %}>Guayaquil</option>
+            <option value="quito" {% if sede_filtro == 'quito' %}selected{% endif %}>Quito</option>
+        </select>
+        <select name="estado" class="form-input" style="max-width:240px;">
+            {% for value, label in estados %}
+                <option value="{{ value }}" {% if estado_filtro == value %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+        </select>
+        <select name="tipo" class="form-input" style="max-width:140px;">
+            <option value="">— Tipo —</option>
+            {% for value, label in tipos %}
+                <option value="{{ value }}" {% if tipo_filtro == value %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+        </select>
+        <select name="registrador" class="form-input" style="max-width:160px;">
+            <option value="">📝 Registró...</option>
+            {% for u in usuarios_all %}
+                <option value="{{ u.id }}" {% if registrador_filtro == u.id|stringformat:"s" %}selected{% endif %}>{{ u.first_name|default:u.username }}</option>
+            {% endfor %}
+        </select>
+        <select name="asesor" class="form-input" style="max-width:160px;">
+            <option value="">💼 Asesor...</option>
+            {% for nombre in asesores_choices %}
+                <option value="{{ nombre }}" {% if asesor_filtro == nombre %}selected{% endif %}>{{ nombre }}</option>
+            {% endfor %}
+        </select>
+        <button type="submit" class="btn btn-primary">Filtrar</button>
+    </form>
+    <a href="{% url 'econotec:ingreso_registrar' %}" class="btn btn-primary">+ Nuevo Ingreso</a>
+</div>
+
+{% if ingresos %}
+<div class="table-wrap">
+    <table>
+        <thead>
+            <tr>
+                <th>Código</th>
+                <th>Fecha</th>
+                <th>Cliente</th>
+                <th>Cédula</th>
+                <th>Equipo</th>
+                <th>Marca / Modelo</th>
+                <th>Técnico</th>
+                <th>Asesor</th>
+                <th>Registró</th>
+                <th>Adicional</th>
+                <th>Valor</th>
+                <th>Estado</th>
+                <th>Pago</th>
+                <th>Acciones</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for i in ingresos %}
+            <tr>
+                <td><strong style="color: var(--primary);">{{ i.codigo_equipo }}</strong></td>
+                <td>{{ i.fecha_ingreso|date:"d/m/Y" }}</td>
+                <td>{{ i.cliente.nombres }}</td>
+                <td>{{ i.cliente.cedula }}</td>
+                <td>{{ i.tipo_equipo_display }}</td>
+                <td>{{ i.marca }}<br><small style="color:#888;">{{ i.modelo_serie|truncatechars:30 }}</small></td>
+                <td>
+                    {% if i.tecnico_encargado_nombre %}
+                        <span style="background: var(--primary-light); color: var(--primary-dark); padding: 3px 9px; border-radius: 10px; font-size: 11px; font-weight: 700;">
+                            👤 {{ i.tecnico_encargado_nombre }}
+                        </span>
+                    {% else %}
+                        <span style="color:#bbb;">—</span>
+                    {% endif %}
+                </td>
+                <td style="font-size: 12px; white-space: nowrap;">
+                    {% if i.asesor_comercial %}
+                        <span style="color: var(--primary-dark); font-weight: 600;" title="Asesor Comercial">
+                            💼 {{ i.asesor_comercial|truncatechars:15 }}
+                        </span>
+                    {% else %}
+                        <span style="color:#bbb;">—</span>
+                    {% endif %}
+                </td>
+                <td style="font-size: 12px; white-space: nowrap;">
+                    {% if i.registrado_por %}
+                        <span style="color: var(--text-muted);" title="Asesor que registró el equipo">
+                            📝 {{ i.registrado_por.first_name|default:i.registrado_por.username }}
+                        </span>
+                    {% else %}
+                        <span style="color:#bbb;">—</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if i.diagnostico_inmediato == 'si' and i.valor_diagnostico > 0 %}
+                        <span style="color: #f39c12; font-weight: 700;">{{ i.valor_diagnostico|dinero_signo }}</span>
+                    {% else %}
+                        <span style="color:#ccc;">—</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if i.reparacion_cancelada %}
+                        <span style="color:#999; text-decoration: line-through; font-size: 12px;">{{ i.valor_acordado|dinero_signo }}</span>
+                    {% else %}
+                        {{ i.valor_acordado|dinero_signo }}
+                    {% endif %}
+                </td>
+                <td>
+                    <span class="badge badge-{{ i.estado }}">{{ i.get_estado_display }}</span>
+                    {% if i.estado == 'en_reparacion' and i.subestado_reparacion %}
+                        <div style="font-size: 11px; margin-top: 4px; color: #555; font-weight: 600;">
+                            ↳ {{ i.get_subestado_reparacion_display }}
+                        </div>
+                    {% elif i.estado == 'entregado' and i.subestado_entregado %}
+                        <div style="font-size: 11px; margin-top: 4px; color: #555; font-weight: 600;">
+                            ↳ {{ i.get_subestado_entregado_display }}
+                        </div>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if i.estado_pago == 'Pagado' %}
+                        <span class="badge badge-pagado">Pagado</span>
+                    {% elif i.estado_pago == 'Parcial' %}
+                        <span class="badge badge-parcial">Parcial</span>
+                    {% else %}
+                        <span class="badge badge-pendiente">Pendiente</span>
+                    {% endif %}
+                </td>
+                <td class="row-actions">
+                    <a href="{% url 'econotec:ingreso_detalle' pk=i.pk %}" class="btn btn-sm btn-primary">Ver Detalles</a>
+                    <a href="{% url 'econotec:ingreso_pdf' pk=i.pk %}" class="btn btn-sm btn-secondary" title="Descargar PDF">Descargar 📄</a>
+                </td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="empty-state">
+    <div class="icon">📥</div>
+    <h3>No se encontraron equipos</h3>
+    <p>Ajusta los filtros o registra una nueva Solicitud de Ingreso.</p>
+    <br>
+    <a href="{% url 'econotec:ingreso_registrar' %}" class="btn btn-primary">+ Registrar Equipo</a>
+</div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,117 @@
+{% extends 'base.html' %}
+{% load econotec_extras %}
+
+{% block title %}Control de Registro — Econotec{% endblock %}
+
+{% block content %}
+<style>
+    .cr-tabs { display:flex; gap:6px; border-bottom:2px solid var(--border); margin: 18px 0 20px; }
+    .cr-tab {
+        padding:10px 16px; cursor:pointer; font-weight:700; color:var(--text-muted);
+        border:none; background:none; border-bottom:3px solid transparent; margin-bottom:-2px;
+    }
+    .cr-tab.active { color: var(--secondary); border-bottom-color: var(--secondary); }
+    .cr-panel { display:none; }
+    .cr-panel.active { display:block; }
+</style>
+
+<div class="crumb">
+    <a href="{% url 'econotec:bienvenida' %}">Inicio</a> / Control de Registro
+</div>
+
+<h2 class="page-title">📋 Control de <span class="accent">Registro (Auditoría)</span></h2>
+<p class="page-subtitle">Últimos registros de equipos y pagos realizados en el sistema (máx. {{ limite }}).</p>
+
+<div class="cr-tabs">
+    <button class="cr-tab active" data-panel="equipos">🖥 Equipos Registrados</button>
+    <button class="cr-tab" data-panel="pagos">💰 Pagos Registrados</button>
+</div>
+
+<!-- ── EQUIPOS ── -->
+<div class="cr-panel active" id="panel-equipos">
+    {% if equipos %}
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th>Fecha y Hora</th>
+                    <th>Equipo</th>
+                    <th>Cliente</th>
+                    <th>Asesor / Vendedor</th>
+                    <th>Registrado por</th>
+                    <th>Técnico</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for i in equipos %}
+                <tr>
+                    <td><strong>{{ i.creado|date:"d/m/Y" }}</strong><br><small style="color:var(--text-muted);">{{ i.creado|date:"H:i" }}</small></td>
+                    <td>
+                        <strong style="color:var(--primary);">{{ i.codigo_equipo }}</strong><br>
+                        <small style="color:var(--text-muted);">{{ i.tipo_equipo_display }} — {{ i.marca|truncatechars:20 }}</small>
+                    </td>
+                    <td>{{ i.cliente.nombres }}<br><small style="color:var(--text-muted);">{{ i.cliente.cedula }}</small></td>
+                    <td>{{ i.asesor_comercial|default:"—" }}</td>
+                    <td>{{ i.registrado_por.first_name|default:i.registrado_por.username|default:"—" }}</td>
+                    <td>{{ i.tecnico_encargado_nombre|default:"—" }}</td>
+                    <td class="row-actions">
+                        <a href="{% url 'econotec:ingreso_detalle' pk=i.pk %}" class="btn btn-sm btn-secondary">Ver</a>
+                    </td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="empty-state"><h3>Sin equipos registrados aún.</h3></div>
+    {% endif %}
+</div>
+
+<!-- ── PAGOS ── -->
+<div class="cr-panel" id="panel-pagos">
+    {% if abonos %}
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th>Fecha y Hora</th>
+                    <th>Recibo</th>
+                    <th>Equipo</th>
+                    <th>Cliente</th>
+                    <th>Monto</th>
+                    <th>Método</th>
+                    <th>Registrado por</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for a in abonos %}
+                <tr>
+                    <td><strong>{{ a.creado|date:"d/m/Y" }}</strong><br><small style="color:var(--text-muted);">{{ a.creado|date:"H:i" }}</small></td>
+                    <td><strong style="color:var(--primary);">{{ a.numero_recibo }}</strong></td>
+                    <td>{{ a.ingreso.codigo_equipo }}</td>
+                    <td>{{ a.ingreso.cliente.nombres }}</td>
+                    <td style="color:var(--success); font-weight:700;">{{ a.monto|dinero_signo }}</td>
+                    <td>{{ a.get_metodo_display }}{% if a.banco %} ({{ a.get_banco_display }}){% endif %}</td>
+                    <td>{{ a.registrado_por.first_name|default:a.registrado_por.username|default:"—" }}</td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="empty-state"><h3>Sin pagos registrados aún.</h3></div>
+    {% endif %}
+</div>
+
+<script>
+    document.querySelectorAll('.cr-tab').forEach(function(tab) {
+        tab.addEventListener('click', function() {
+            document.querySelectorAll('.cr-tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.cr-panel').forEach(p => p.classList.remove('active'));
+            tab.classList.add('active');
+            document.getElementById('panel-' + tab.dataset.panel).classList.add('active');
+        });
+    });
+</script>
+{% endblock %}

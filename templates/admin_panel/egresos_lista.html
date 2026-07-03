@@ -1,0 +1,99 @@
+{% extends 'base.html' %}
+{% load econotec_extras %}
+
+{% block title %}Egresos — Econotec{% endblock %}
+
+{% block content %}
+<div class="crumb">
+    <a href="{% url 'econotec:bienvenida' %}">Inicio</a> /
+    <a href="{% url 'econotec:admin_dashboard' %}">Reg. Administrativo</a> / Egresos
+</div>
+
+<div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:14px;">
+    <div>
+        <h2 class="page-title">Lista de <span class="accent">Egresos</span></h2>
+        <p class="page-subtitle">Total filtrado: <strong style="color: var(--danger);">{{ total|dinero_signo }}</strong></p>
+    </div>
+    <div style="display:flex; gap:8px;">
+        <a href="{% url 'econotec:admin_export_egresos' %}" class="btn btn-success">📊 Exportar Excel</a>
+        <a href="{% url 'econotec:admin_egreso_crear' %}" class="btn btn-primary">+ Nuevo Egreso</a>
+    </div>
+</div>
+
+<form method="get" class="toolbar" style="margin-top: 18px;">
+    <select name="cat" class="form-input" style="max-width:220px;">
+        <option value="">— Todas las categorías —</option>
+        {% for c in categorias %}
+            <option value="{{ c.id }}" {% if cat_filtro == c.id|stringformat:"s" %}selected{% endif %}>{{ c.icono }} {{ c.nombre }}</option>
+        {% endfor %}
+    </select>
+    <select name="ano" class="form-input" style="max-width:120px;">
+        <option value="">Año</option>
+        {% for a in "2024 2025 2026 2027"|cut:" "|make_list %}{% endfor %}
+        <option value="2024" {% if ano_filtro == '2024' %}selected{% endif %}>2024</option>
+        <option value="2025" {% if ano_filtro == '2025' %}selected{% endif %}>2025</option>
+        <option value="2026" {% if ano_filtro == '2026' %}selected{% endif %}>2026</option>
+        <option value="2027" {% if ano_filtro == '2027' %}selected{% endif %}>2027</option>
+    </select>
+    <select name="mes" class="form-input" style="max-width:160px;">
+        <option value="">Mes</option>
+        <option value="1" {% if mes_filtro == '1' %}selected{% endif %}>Enero</option>
+        <option value="2" {% if mes_filtro == '2' %}selected{% endif %}>Febrero</option>
+        <option value="3" {% if mes_filtro == '3' %}selected{% endif %}>Marzo</option>
+        <option value="4" {% if mes_filtro == '4' %}selected{% endif %}>Abril</option>
+        <option value="5" {% if mes_filtro == '5' %}selected{% endif %}>Mayo</option>
+        <option value="6" {% if mes_filtro == '6' %}selected{% endif %}>Junio</option>
+        <option value="7" {% if mes_filtro == '7' %}selected{% endif %}>Julio</option>
+        <option value="8" {% if mes_filtro == '8' %}selected{% endif %}>Agosto</option>
+        <option value="9" {% if mes_filtro == '9' %}selected{% endif %}>Septiembre</option>
+        <option value="10" {% if mes_filtro == '10' %}selected{% endif %}>Octubre</option>
+        <option value="11" {% if mes_filtro == '11' %}selected{% endif %}>Noviembre</option>
+        <option value="12" {% if mes_filtro == '12' %}selected{% endif %}>Diciembre</option>
+    </select>
+    <button type="submit" class="btn btn-primary">Filtrar</button>
+</form>
+
+{% if egresos %}
+<div class="table-wrap">
+    <table>
+        <thead>
+            <tr>
+                <th>Fecha</th>
+                <th>Categoría</th>
+                <th>Concepto</th>
+                <th>Monto</th>
+                <th>Notas</th>
+                <th>Por</th>
+                <th>Acciones</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for e in egresos %}
+            <tr>
+                <td>{{ e.fecha|date:"d/m/Y" }}</td>
+                <td>{{ e.categoria.icono }} {{ e.categoria.nombre }}</td>
+                <td><strong>{{ e.concepto }}</strong></td>
+                <td style="color: var(--danger); font-weight: 700;">{{ e.monto|dinero_signo }}</td>
+                <td>{{ e.notas|truncatechars:35|default:"—" }}</td>
+                <td>{{ e.registrado_por.username|default:"—" }}</td>
+                <td class="row-actions">
+                    <a href="{% url 'econotec:admin_egreso_editar' pk=e.pk %}" class="btn btn-sm btn-secondary">Editar</a>
+                    <form method="post" action="{% url 'econotec:admin_egreso_eliminar' pk=e.pk %}"
+                          style="display:inline;" onsubmit="confirmDelete(event, this, '¿Eliminar este egreso?');">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-sm btn-danger">🗑</button>
+                    </form>
+                </td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="empty-state">
+    <div class="icon">📋</div>
+    <h3>No hay egresos registrados</h3>
+    <a href="{% url 'econotec:admin_egreso_crear' %}" class="btn btn-primary">+ Registrar primer egreso</a>
+</div>
+{% endif %}
+{% endblock %}

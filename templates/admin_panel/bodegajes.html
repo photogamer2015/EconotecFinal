@@ -1,0 +1,76 @@
+{% extends 'base.html' %}
+{% load econotec_extras %}
+
+{% block title %}Bodegajes — Econotec{% endblock %}
+
+{% block content %}
+<div class="crumb">
+    <a href="{% url 'econotec:bienvenida' %}">Inicio</a> / Registro Administrativo / Bodegajes
+</div>
+
+<h2 class="page-title">Bodegajes <span class="accent">Casos</span></h2>
+<p class="page-subtitle">Listado de retiros con bodegaje congelado — filtrado por mes/año</p>
+
+<form method="get" style="display:flex; gap:12px; margin-bottom:16px; align-items:end;">
+    <div>
+        <label class="form-label">Año</label>
+        <select name="ano" class="form-input">
+            {% for a in anos_disp %}
+                <option value="{{ a }}" {% if a == year %}selected{% endif %}>{{ a }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div>
+        <label class="form-label">Mes</label>
+        <select name="mes" class="form-input">
+            {% for n in meses_es|slice:"1:13" %}
+                {% with forloop.counter0 as idx %}
+                    <option value="{{ forloop.counter }}" {% if forloop.counter == month %}selected{% endif %}>{{ n }}</option>
+                {% endwith %}
+            {% endfor %}
+        </select>
+    </div>
+    <button type="submit" class="btn btn-primary">Filtrar</button>
+</form>
+
+<div style="display:grid; grid-template-columns: 1fr 1fr; gap:18px;">
+    <div class="breakdown-card">
+        <h3 id="cobrados">✅ Bodegaje Cobrado ({{ bodegaje_cobrado_count }})</h3>
+        {% if cobrados %}
+            {% for s in cobrados %}
+            <div class="row-item">
+                <div>
+                    <strong>{{ s.ingreso.codigo_equipo }}</strong> — {{ s.ingreso.cliente.nombres }}<br>
+                    <small>{{ s.fecha_retiro_real|date:"d/m/Y" }} — {{ s.ingreso.tipo_equipo_display }}</small>
+                </div>
+                <div style="text-align:right;">
+                    <div class="info">{{ s.bodegaje_monto_congelado|dinero_signo }}</div>
+                </div>
+            </div>
+            {% endfor %}
+        {% else %}
+            <p style="color:#888;">No hay casos cobrados en este periodo.</p>
+        {% endif %}
+    </div>
+
+    <div class="breakdown-card">
+        <h3 id="no-cobrados">❌ Bodegaje No Cobrado ({{ bodegaje_perdonado_count }})</h3>
+        {% if no_cobrados %}
+            {% for s in no_cobrados %}
+            <div class="row-item">
+                <div>
+                    <strong>{{ s.ingreso.codigo_equipo }}</strong> — {{ s.ingreso.cliente.nombres }}<br>
+                    <small>{{ s.fecha_retiro_real|date:"d/m/Y" }} — {{ s.ingreso.tipo_equipo_display }}</small>
+                </div>
+                <div style="text-align:right;">
+                    <div class="info">{{ s.bodegaje_monto_congelado|dinero_signo }}</div>
+                </div>
+            </div>
+            {% endfor %}
+        {% else %}
+            <p style="color:#888;">No hay casos no cobrados en este periodo.</p>
+        {% endif %}
+    </div>
+</div>
+
+{% endblock %}

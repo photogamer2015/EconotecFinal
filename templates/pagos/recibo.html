@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Recibo {{ abono.numero_recibo }} — Econotec</title>
+    {% load static econotec_extras %}
+    <style>
+        @page { size: A5; margin: 10mm; }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Helvetica', 'Arial', sans-serif; color: #222; font-size: 12px; padding: 20px; background: #f5f5f5; }
+        :root { --naranja: #f97618; }
+        .recibo {
+            background: white;
+            padding: 24px;
+            max-width: 520px;
+            margin: 0 auto;
+            border: 2px solid var(--naranja);
+            border-radius: 10px;
+        }
+        .actions-bar { text-align: center; padding: 12px; margin-bottom: 12px; }
+        .actions-bar button, .actions-bar a {
+            background: var(--naranja); color: white; border: none;
+            padding: 9px 18px; border-radius: 6px; cursor: pointer;
+            font-weight: 600; text-decoration: none; margin: 0 4px;
+        }
+
+        .header { text-align: center; margin-bottom: 18px; padding-bottom: 14px; border-bottom: 2px dashed var(--naranja); }
+        .logo-circle {
+            width: 70px; height: 70px;
+            border-radius: 50%;
+            background: #1a1a1a;
+            display: inline-block;
+            object-fit: cover;
+            padding: 3px;
+            margin-bottom: 6px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+        .brand { font-size: 12px; color: var(--naranja); font-weight: 700; letter-spacing: 1px; }
+        .title { font-size: 22px; color: var(--naranja); font-weight: 800; margin-top: 4px; }
+        .subtitle { font-size: 11px; color: #666; margin-top: 4px; }
+
+        .recibo-num {
+            background: var(--naranja);
+            color: white;
+            text-align: center;
+            padding: 10px;
+            border-radius: 6px;
+            font-size: 18px;
+            font-weight: 800;
+            margin-bottom: 16px;
+            letter-spacing: 1px;
+        }
+
+        .row { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px dotted #ccc; }
+        .row .lbl { color: #555; font-weight: 600; }
+        .row .val { color: #1f2937; font-weight: 700; }
+
+        .monto-grande {
+            background: #e8f5e9;
+            color: #2e7d32;
+            text-align: center;
+            padding: 18px;
+            border-radius: 8px;
+            font-size: 32px;
+            font-weight: 800;
+            margin: 16px 0;
+        }
+
+        .footer { text-align: center; font-size: 10px; color: #888; margin-top: 18px; padding-top: 14px; border-top: 1px dashed #ccc; }
+        .firma { margin-top: 32px; text-align: center; }
+        .firma .line { border-top: 1px solid #555; padding-top: 4px; font-size: 10px; color: var(--naranja); font-weight: 700; max-width: 240px; margin: 0 auto; }
+
+        @media print {
+            .actions-bar { display: none !important; }
+            body { background: white; padding: 0; }
+            .recibo { border: 1.5px solid var(--naranja); }
+        }
+    </style>
+</head>
+<body>
+
+<div class="actions-bar no-print">
+    <button onclick="window.print()">🖨 Imprimir Recibo</button>
+    <a href="{% url 'econotec:ingreso_abonos' pk=abono.ingreso.pk %}" style="background:#666;">← Volver</a>
+</div>
+
+<div class="recibo">
+    <div class="header">
+        <img src="{% static 'logo.jpg' %}" alt="Econotec" class="logo-circle">
+        <div class="brand">ECONOTEC</div>
+        <div class="title">RECIBO DE PAGO</div>
+        <div class="subtitle">Reparación de Tecnología</div>
+    </div>
+
+    <div class="recibo-num">{{ abono.numero_recibo }}</div>
+
+    <div class="row"><span class="lbl">Fecha:</span><span class="val">{{ abono.fecha|date:"d/m/Y" }}</span></div>
+    <div class="row"><span class="lbl">Cliente:</span><span class="val">{{ abono.ingreso.cliente.nombres }}</span></div>
+    <div class="row"><span class="lbl">Cédula / RUC:</span><span class="val">{{ abono.ingreso.cliente.cedula }}</span></div>
+    <div class="row"><span class="lbl">Equipo:</span><span class="val">{{ abono.ingreso.codigo_equipo }} — {{ abono.ingreso.marca }}</span></div>
+    <div class="row"><span class="lbl">Concepto:</span><span class="val">Abono por reparación</span></div>
+
+    <div class="monto-grande">
+        {{ abono.monto|dinero_signo }}
+    </div>
+
+    <div class="row"><span class="lbl">Método de pago:</span><span class="val">{{ abono.get_metodo_display }}</span></div>
+    {% if abono.banco %}
+    <div class="row"><span class="lbl">Banco:</span><span class="val">{{ abono.get_banco_display }}</span></div>
+    {% endif %}
+    {% if abono.observaciones %}
+    <div class="row"><span class="lbl">Observaciones:</span><span class="val">{{ abono.observaciones }}</span></div>
+    {% endif %}
+
+    <div class="row"><span class="lbl">Recibido por:</span><span class="val">{{ abono.registrado_por.get_full_name|default:abono.registrado_por.username|default:"—" }}</span></div>
+
+    <div class="firma">
+        <div class="line">FIRMA DE QUIEN RECIBE</div>
+    </div>
+
+    <div class="footer">
+        <strong>ECONOTEC</strong><br>
+        Guayaquil: Sauces 8 Mz 454F Solar 6, Primer Piso Oficina 2<br>
+        Quito: Sector Centro Norte: La Mariscal - Calles 18 de Septiembre y Av. Amazonas<br>
+        Central: 096 383 6191 — GYE: 096 328 9727 — UIO: 098 075 8747<br>
+        www.econotec-ec.com
+    </div>
+</div>
+
+</body>
+</html>

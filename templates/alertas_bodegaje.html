@@ -1,0 +1,318 @@
+{% extends 'base.html' %}
+{% load econotec_extras %}
+
+{% block title %}Bodegaje pendiente — Econotec{% endblock %}
+
+{% block content %}
+<style>
+    .pg-header {
+        background: linear-gradient(135deg, #f97618, #d7642f);
+        color: white;
+        padding: 24px 28px;
+        border-radius: 14px;
+        margin-bottom: 24px;
+        box-shadow: 0 6px 22px rgba(249, 118, 24, 0.35);
+    }
+    .pg-header h1 {
+        font-size: 26px; font-weight: 800;
+        margin: 0 0 6px;
+        display: flex; align-items: center; gap: 12px;
+    }
+    .pg-header p { font-size: 14px; opacity: 0.95; margin: 0; }
+    .pg-header .total {
+        display: inline-block; background: white; color: #d7642f;
+        padding: 4px 12px; border-radius: 12px;
+        font-weight: 800; margin-left: 8px;
+    }
+    .pg-header .acumulado {
+        display: inline-block;
+        background: rgba(255,255,255,0.18);
+        padding: 6px 14px;
+        border-radius: 8px;
+        font-weight: 800;
+        margin-top: 10px;
+    }
+
+    .vacio {
+        text-align: center; padding: 60px 20px;
+        background: #e8f5e9; border-radius: 14px; color: #2e7d32;
+    }
+    .vacio .icon { font-size: 64px; margin-bottom: 12px; }
+    .vacio h3 { font-size: 22px; margin-bottom: 6px; }
+    [data-theme="dark"] .vacio { background: rgba(16,185,129,0.12); color: #34d399; }
+
+    .tabla {
+        background: var(--card-bg); border-radius: 12px;
+        overflow: hidden; box-shadow: var(--shadow);
+        border: 2px solid #ffe0b2;
+    }
+    [data-theme="dark"] .tabla { border-color: rgba(249, 118, 24, 0.4); }
+    .row {
+        display: grid;
+        grid-template-columns: auto 1.4fr 1fr auto auto auto;
+        gap: 14px; padding: 16px 20px; align-items: center;
+        border-bottom: 1px solid var(--border-color);
+    }
+    .row:last-child { border-bottom: none; }
+    .row:hover { background: var(--hover-bg); }
+    .row .codigo {
+        background: #f97618; color: white;
+        padding: 8px 14px; border-radius: 8px;
+        font-weight: 800; font-size: 14px;
+        min-width: 56px; text-align: center;
+    }
+    .row .cliente .nombre { font-weight: 700; font-size: 14px; }
+    .row .cliente .equipo { color: var(--text-muted); font-size: 12px; margin-top: 3px; }
+    .row .tecnico { font-size: 13px; }
+    .row .tecnico .label {
+        font-size: 10px; text-transform: uppercase;
+        color: var(--text-muted); font-weight: 700; letter-spacing: 0.5px;
+    }
+    .row .tecnico .valor { font-weight: 600; margin-top: 2px; }
+    .row .dias-pill {
+        background: #ffe0b2; color: #b54400;
+        padding: 6px 12px; border-radius: 16px;
+        font-weight: 800; font-size: 11px;
+    }
+    [data-theme="dark"] .row .dias-pill { background: rgba(249,118,24,0.25); color: #fbbf73; }
+
+    .row .monto {
+        background: #2e7d32; color: white;
+        padding: 8px 14px; border-radius: 18px;
+        font-weight: 800; font-size: 13px;
+        min-width: 70px; text-align: center;
+    }
+    .row .monto small { font-weight: 600; opacity: 0.85; font-size: 10px; display: block; }
+
+    .btn-wa {
+        background: #25D366; color: white;
+        padding: 8px 14px; border-radius: 8px;
+        font-size: 13px; font-weight: 700; text-decoration: none;
+        display: inline-flex; align-items: center; gap: 4px;
+    }
+    .btn-wa:hover { background: #1da851; }
+    .btn-wa.disabled { background: #cfd8dc; color: #607d8b; cursor: not-allowed; pointer-events: none; }
+    .btn-cerrar {
+        background: #2e7d32; color: white;
+        padding: 8px 14px; border-radius: 8px;
+        font-size: 13px; font-weight: 700; text-decoration: none;
+        border: none; cursor: pointer; font-family: inherit;
+    }
+    .btn-cerrar:hover { background: #1b5e20; }
+    .btn-ver { background: var(--primary); color: white;
+        padding: 8px 14px; border-radius: 8px;
+        font-size: 13px; font-weight: 700; text-decoration: none; }
+
+    .btn-silenciar {
+        background: #757575; color: white;
+        padding: 8px 14px; border-radius: 8px;
+        font-size: 13px; font-weight: 700;
+        border: none; cursor: pointer; font-family: inherit;
+        display: inline-flex; align-items: center; gap: 4px;
+    }
+    .btn-silenciar:hover { background: #424242; }
+    .btn-reactivar {
+        background: var(--info, #1976d2); color: white;
+        padding: 8px 14px; border-radius: 8px;
+        font-size: 13px; font-weight: 700;
+        border: none; cursor: pointer; font-family: inherit;
+        display: inline-flex; align-items: center; gap: 4px;
+    }
+    .btn-reactivar:hover { filter: brightness(0.9); }
+    .btn-silenciar[disabled], .btn-reactivar[disabled] {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+    .silenciar-form { display: inline-block; margin: 0; }
+
+    /* Sección de silenciados con visual diferente */
+    .seccion-silenciados {
+        margin-top: 36px;
+        opacity: 0.85;
+    }
+    .seccion-silenciados-header {
+        background: #eceff1;
+        color: #455a64;
+        padding: 14px 20px;
+        border-radius: 12px 12px 0 0;
+        font-weight: 700;
+        font-size: 15px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        border: 1px solid #cfd8dc;
+        border-bottom: none;
+    }
+    [data-theme="dark"] .seccion-silenciados-header {
+        background: rgba(96, 125, 139, 0.18);
+        color: #b0bec5;
+        border-color: rgba(96, 125, 139, 0.35);
+    }
+    .seccion-silenciados .tabla {
+        border-color: #cfd8dc;
+        border-radius: 0 0 12px 12px;
+        background: var(--card-bg);
+        opacity: 0.95;
+    }
+    [data-theme="dark"] .seccion-silenciados .tabla {
+        border-color: rgba(96, 125, 139, 0.35);
+    }
+    .seccion-silenciados .row {
+        background: transparent;
+    }
+    .seccion-silenciados .row .codigo {
+        background: #90a4ae;
+    }
+
+    @media (max-width: 800px) {
+        .row {
+            grid-template-columns: auto 1fr auto;
+            grid-template-areas:
+                "codigo cliente monto"
+                "tecnico tecnico tecnico"
+                "dias dias dias"
+                "acciones acciones acciones";
+        }
+        .row .codigo { grid-area: codigo; }
+        .row .cliente { grid-area: cliente; }
+        .row .tecnico { grid-area: tecnico; }
+        .row .dias-pill { grid-area: dias; justify-self: start; }
+        .row .monto { grid-area: monto; }
+        .row .acciones { grid-area: acciones; display: flex; gap: 8px; flex-wrap: wrap; }
+    }
+</style>
+
+<div class="crumb">
+    <a href="{% url 'econotec:bienvenida' %}">← Volver al inicio</a>
+</div>
+
+<div class="pg-header">
+    <h1>
+        📦 Bodegaje pendiente
+        {% if total > 0 %}<span class="total">{{ total }}</span>{% endif %}
+    </h1>
+    <p>
+        {% if umbral_dias > 0 %}
+            Equipos entregados hace <strong>{{ umbral_dias }} día{{ umbral_dias|pluralize }} o más</strong> que el cliente aún NO ha venido
+            a retirar físicamente.
+        {% else %}
+            Equipos listos pendientes de que el cliente venga a retirarlos físicamente.
+        {% endif %}
+        Se cobra <strong>{{ costo_dia|dinero_signo }}/día</strong> de bodegaje.
+        El monto NO se aplica al saldo automáticamente — al momento del pago hay opción de aplicarlo o perdonarlo.
+    </p>
+    {% if total > 0 %}
+        <div class="acumulado">💰 Total acumulado del taller: <strong>{{ total_acumulado|dinero_signo }}</strong></div>
+    {% endif %}
+</div>
+
+{% if total == 0 %}
+    <div class="vacio">
+        <div class="icon">✅</div>
+        <h3>¡Sin bodegaje pendiente!</h3>
+        <p>Todos los clientes han retirado sus equipos a tiempo.</p>
+    </div>
+{% else %}
+    <div class="tabla">
+        {% for b in items %}
+            <div class="row">
+                <span class="codigo">{{ b.ingreso.codigo_equipo }}</span>
+                <div class="cliente">
+                    <div class="nombre">{{ b.ingreso.cliente.nombres }}</div>
+                    <div class="equipo">
+                        {{ b.ingreso.tipo_equipo_display }} {{ b.ingreso.marca }}
+                        {% if b.ingreso.modelo_serie %} — {{ b.ingreso.modelo_serie }}{% endif %}
+                        <br>Listo desde {{ b.salida.fecha_salida|date:"d/m/Y" }}
+                        ({{ b.dias_desde_salida }} día{{ b.dias_desde_salida|pluralize }})
+                    </div>
+                </div>
+                <div class="tecnico">
+                    <div class="label">Técnico encargado</div>
+                    <div class="valor">
+                        {% if b.ingreso.tecnico_encargado %}{{ b.ingreso.tecnico_encargado_nombre }}
+                        {% else %}<em style="color: var(--text-muted);">— Sin asignar —</em>{% endif %}
+                    </div>
+                </div>
+                <span class="dias-pill">{{ b.bodegaje_dias }} día{{ b.bodegaje_dias|pluralize }}</span>
+                <span class="monto">{{ b.bodegaje_monto|dinero_signo }}<small>bodegaje</small></span>
+                <div class="acciones" style="display:flex;gap:8px;flex-wrap:wrap;">
+                    {% if b.wa_link %}
+                        <a class="btn-wa" href="{{ b.wa_link }}" target="_blank" rel="noopener">💬 Avisar</a>
+                    {% else %}
+                        <span class="btn-wa disabled">💬 N/A</span>
+                    {% endif %}
+                    <a class="btn-ver" href="{% url 'econotec:ingreso_detalle' b.ingreso.pk %}">Ver</a>
+                    <form method="post"
+                          action="{% url 'econotec:salida_bodegaje_silenciar' pk=b.salida.pk %}"
+                          class="silenciar-form"
+                          {% if es_admin_view %}onsubmit="confirmarSilenciar(event, this, '{{ b.ingreso.codigo_equipo }}', 'bodegaje');"{% endif %}>
+                        {% csrf_token %}
+                        <input type="hidden" name="accion" value="silenciar">
+                        <input type="hidden" name="next" value="{% url 'econotec:alertas_bodegaje' %}">
+                        <button type="submit" class="btn-silenciar"
+                                title="{% if not es_admin_view %}Solo admins pueden silenciar{% else %}No molestar: ocultar este equipo de la alerta del dashboard{% endif %}"
+                                {% if not es_admin_view %}disabled{% endif %}>
+                            🔕 No molestar
+                        </button>
+                    </form>
+                </div>
+            </div>
+        {% endfor %}
+    </div>
+{% endif %}
+
+{# ──────── Sección de equipos silenciados (no molestar) ──────── #}
+{% if total_silenciados > 0 %}
+<div class="seccion-silenciados">
+    <div class="seccion-silenciados-header">
+        🔕 Silenciados — No molestar
+        <span style="background: white; color: #455a64; padding: 2px 10px; border-radius: 10px; font-size: 13px;">
+            {{ total_silenciados }}
+        </span>
+        <span style="margin-left: auto; font-weight: 600; font-size: 13px;">
+            Bodegaje acumulado oculto: <strong>{{ total_acumulado_silenciado|dinero_signo }}</strong>
+        </span>
+    </div>
+    <div class="tabla">
+        {% for b in items_silenciados %}
+            <div class="row">
+                <span class="codigo">{{ b.ingreso.codigo_equipo }}</span>
+                <div class="cliente">
+                    <div class="nombre">{{ b.ingreso.cliente.nombres }}</div>
+                    <div class="equipo">
+                        {{ b.ingreso.tipo_equipo_display }} {{ b.ingreso.marca }}
+                        {% if b.ingreso.modelo_serie %} — {{ b.ingreso.modelo_serie }}{% endif %}
+                        <br>Listo desde {{ b.salida.fecha_salida|date:"d/m/Y" }}
+                        ({{ b.dias_desde_salida }} día{{ b.dias_desde_salida|pluralize }})
+                    </div>
+                </div>
+                <div class="tecnico">
+                    <div class="label">Técnico encargado</div>
+                    <div class="valor">
+                        {% if b.ingreso.tecnico_encargado %}{{ b.ingreso.tecnico_encargado_nombre }}
+                        {% else %}<em style="color: var(--text-muted);">— Sin asignar —</em>{% endif %}
+                    </div>
+                </div>
+                <span class="dias-pill">{{ b.bodegaje_dias }} día{{ b.bodegaje_dias|pluralize }}</span>
+                <span class="monto">{{ b.bodegaje_monto|dinero_signo }}<small>oculto</small></span>
+                <div class="acciones" style="display:flex;gap:8px;flex-wrap:wrap;">
+                    <a class="btn-ver" href="{% url 'econotec:ingreso_detalle' b.ingreso.pk %}">Ver</a>
+                    <form method="post"
+                          action="{% url 'econotec:salida_bodegaje_silenciar' pk=b.salida.pk %}"
+                          class="silenciar-form">
+                        {% csrf_token %}
+                        <input type="hidden" name="accion" value="reactivar">
+                        <input type="hidden" name="next" value="{% url 'econotec:alertas_bodegaje' %}">
+                        <button type="submit" class="btn-reactivar"
+                                title="{% if not es_admin_view %}Solo admins pueden reactivar{% else %}Reactivar: volver a mostrar este equipo en la alerta del dashboard{% endif %}"
+                                {% if not es_admin_view %}disabled{% endif %}>
+                            🔔 Reactivar alerta
+                        </button>
+                    </form>
+                </div>
+            </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+{% endblock %}

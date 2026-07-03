@@ -1,0 +1,160 @@
+{% extends 'base.html' %}
+{% load econotec_extras %}
+
+{% block title %}Historial — Econotec{% endblock %}
+
+{% block content %}
+<style>
+    .mes-card {
+        background: var(--card-bg);
+        border-radius: 12px;
+        margin-bottom: 22px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        overflow: hidden;
+    }
+    .mes-header {
+        background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+        color: white;
+        padding: 14px 22px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+    .mes-header h3 {
+        font-size: 18px;
+        font-weight: 700;
+        margin: 0;
+    }
+    .mes-stats { display: flex; gap: 20px; font-size: 13px; }
+    .mes-stats .item { text-align: right; }
+    .mes-stats .item .lbl { font-size: 11px; opacity: 0.9; text-transform: uppercase; }
+    .mes-stats .item .val { font-size: 16px; font-weight: 800; }
+</style>
+
+<div class="crumb">
+    <a href="{% url 'econotec:bienvenida' %}">Inicio</a> / Historial
+</div>
+
+<h2 class="page-title">Historial de <span class="accent">Equipos</span></h2>
+<p class="page-subtitle">Equipos organizados por mes de ingreso.</p>
+
+<div class="toolbar">
+    <form method="get">
+        <select name="ano" class="form-input" style="max-width:160px;">
+            <option value="">Todos los años</option>
+            {% for a in anos_disponibles %}
+                <option value="{{ a }}" {% if ano_filtro == a|stringformat:"s" %}selected{% endif %}>{{ a }}</option>
+            {% endfor %}
+        </select>
+        <select name="mes" class="form-input" style="max-width:160px;">
+            <option value="">Todos los meses</option>
+            {% for i in "123456789012"|make_list %}{% endfor %}
+            {% for n in "1,2,3,4,5,6,7,8,9,10,11,12"|cut:" " %}{% endfor %}
+            {% for m in "1 2 3 4 5 6 7 8 9 10 11 12"|cut:" "|make_list %}{% endfor %}
+            <option value="1" {% if mes_filtro == '1' %}selected{% endif %}>Enero</option>
+            <option value="2" {% if mes_filtro == '2' %}selected{% endif %}>Febrero</option>
+            <option value="3" {% if mes_filtro == '3' %}selected{% endif %}>Marzo</option>
+            <option value="4" {% if mes_filtro == '4' %}selected{% endif %}>Abril</option>
+            <option value="5" {% if mes_filtro == '5' %}selected{% endif %}>Mayo</option>
+            <option value="6" {% if mes_filtro == '6' %}selected{% endif %}>Junio</option>
+            <option value="7" {% if mes_filtro == '7' %}selected{% endif %}>Julio</option>
+            <option value="8" {% if mes_filtro == '8' %}selected{% endif %}>Agosto</option>
+            <option value="9" {% if mes_filtro == '9' %}selected{% endif %}>Septiembre</option>
+            <option value="10" {% if mes_filtro == '10' %}selected{% endif %}>Octubre</option>
+            <option value="11" {% if mes_filtro == '11' %}selected{% endif %}>Noviembre</option>
+            <option value="12" {% if mes_filtro == '12' %}selected{% endif %}>Diciembre</option>
+        </select>
+        <button type="submit" class="btn btn-primary">Filtrar</button>
+    </form>
+</div>
+
+{% if grupos %}
+    {% for g in grupos %}
+        <div class="mes-card">
+            <div class="mes-header">
+                <h3>{{ g.mes_nombre }} {{ g.ano }}</h3>
+                <div class="mes-stats">
+                    <div class="item"><div class="lbl">Equipos</div><div class="val">{{ g.total_equipos }}</div></div>
+                    <div class="item"><div class="lbl">Acordado</div><div class="val">{{ g.total_acordado|dinero_signo }}</div></div>
+                    <div class="item"><div class="lbl">Pagado</div><div class="val">{{ g.total_pagado|dinero_signo }}</div></div>
+                </div>
+                <div class="mes-actions" style="display:flex; gap:8px;">
+                    <a href="{% url 'econotec:historial_imprimir' %}?ano={{ g.ano }}&mes={{ g.mes }}" target="_blank" class="btn btn-sm" style="background:#fff; color:var(--primary); font-weight:700; border-radius:4px; padding:6px 10px; font-size:12px; text-decoration:none;">🖨 Imprimir</a>
+                    <a href="{% url 'econotec:historial_export' %}?ano={{ g.ano }}&mes={{ g.mes }}" class="btn btn-sm btn-success" style="font-weight:700; border-radius:4px; padding:6px 10px; font-size:12px; text-decoration:none; border:none;">📊 Exportar Excel</a>
+                </div>
+            </div>
+            <div class="tipos-container">
+            {% for t in g.tipos %}
+                <div class="tipo-header" style="background:#f4f4f5; padding:12px 22px; display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #e5e7eb;">
+                    <div><strong style="color:var(--primary); font-size:14px; text-transform:uppercase;">{{ t.tipo }}</strong> — <span style="color:#666;">Total: {{ t.total }}</span></div>
+                    <button type="button" class="btn btn-secondary" style="padding:4px 12px; font-size:12px;" onclick="toggleTable('table-{{ g.ano }}-{{ g.mes }}-{{ forloop.counter }}')">Ver / Ocultar</button>
+                </div>
+                <div id="table-{{ g.ano }}-{{ g.mes }}-{{ forloop.counter }}" style="display:none; overflow-x:auto; padding:10px 22px;">
+                    <table style="margin-bottom:10px;">
+                        <thead>
+                            <tr>
+                                <th>N°</th>
+                                <th>Fecha</th>
+                                <th>Cliente</th>
+                                <th>Equipo</th>
+                                <th>Estado</th>
+                                <th>Pago</th>
+                                <th>Salida</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                        {% for i in t.ingresos %}
+                            <tr>
+                                <td><strong style="color: var(--primary);">{{ i.codigo_equipo }}</strong></td>
+                                <td>{{ i.fecha_ingreso|date:"d/m/Y" }}</td>
+                                <td>{{ i.cliente.nombres }}</td>
+                                <td>{{ i.tipo_equipo_display }} — {{ i.marca|truncatechars:25 }}</td>
+                                <td><span class="badge badge-{{ i.estado }}">{{ i.get_estado_display }}</span></td>
+                                <td>
+                                    {% if i.estado_pago == 'Pagado' %}
+                                        <span class="badge badge-pagado">Pagado</span>
+                                    {% elif i.estado_pago == 'Parcial' %}
+                                        <span class="badge badge-parcial">Parcial</span>
+                                    {% else %}
+                                        <span class="badge badge-pendiente">Pendiente</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if i.tiene_salida %}
+                                        <span class="badge badge-{{ i.salida.estado_reparacion }}">{{ i.salida.get_estado_reparacion_display|truncatechars:18 }}</span>
+                                    {% else %}
+                                        <span style="color:#aaa;">—</span>
+                                    {% endif %}
+                                </td>
+                                <td><a href="{% url 'econotec:ingreso_detalle' pk=i.pk %}" class="btn btn-sm btn-primary">Ver</a></td>
+                            </tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% endfor %}
+            </div>
+        </div>
+    {% endfor %}
+{% else %}
+<div class="empty-state">
+    <div class="icon">📚</div>
+    <h3>No hay historial todavía</h3>
+    <p>Aquí aparecerán los equipos agrupados por mes de ingreso.</p>
+</div>
+{% endif %}
+
+<script>
+function toggleTable(id) {
+    const el = document.getElementById(id);
+    if (el.style.display === 'none') {
+        el.style.display = 'block';
+    } else {
+        el.style.display = 'none';
+    }
+}
+</script>
+{% endblock %}

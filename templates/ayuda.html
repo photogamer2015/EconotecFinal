@@ -1,0 +1,149 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}Ayuda — Econotec{% endblock %}
+
+{% block content %}
+<style>
+    .help-container { max-width: 900px; margin: 0 auto; }
+    .help-section {
+        background: var(--card-bg);
+        border-radius: 12px;
+        padding: 24px 28px;
+        margin-bottom: 18px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        border-left: 4px solid var(--primary);
+    }
+    .help-section h3 {
+        color: var(--primary);
+        font-size: 18px;
+        margin-bottom: 12px;
+    }
+    .help-section p { line-height: 1.6; color: #555; margin-bottom: 8px; }
+    .help-section ol, .help-section ul { padding-left: 22px; line-height: 1.7; color: #555; }
+    .help-section code {
+        background: #f5f5f5;
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-size: 13px;
+        color: #d7642f;
+    }
+    .contact-box {
+        background: linear-gradient(135deg, #f97618, #d7642f);
+        color: white;
+        padding: 24px;
+        border-radius: 12px;
+        text-align: center;
+        margin-top: 24px;
+    }
+    .contact-box h3 { color: white; margin-bottom: 12px; }
+    .contact-box p { color: rgba(255,255,255,0.95); margin: 4px 0; }
+</style>
+
+<div class="help-container">
+    <h2 class="page-title">Centro de <span class="accent">Ayuda</span></h2>
+    <p class="page-subtitle">Guía rápida para usar el sistema Econotec.</p>
+
+    <div class="help-section">
+        <h3>📥 1. Ingreso de Equipos y Generación de QR</h3>
+        <p>El proceso inicia cuando el cliente deja su equipo:</p>
+        <ol>
+            <li>Ve a <strong>Ingresos → Nueva Solicitud</strong>.</li>
+            <li>Si el cliente es nuevo, registra sus datos; si ya existe, se autocompletarán.</li>
+            <li>Registra los detalles del equipo (laptop, Apple, accesorios, problema, etc.).</li>
+            <li>Opcionalmente, puedes registrar un <strong>Anticipo</strong> en esta misma pantalla.</li>
+            <li>Al guardar, el sistema generará automáticamente un <strong>Código QR Inteligente</strong>. Puedes imprimir la solicitud en formato A4, o imprimir el código QR directamente en formato Ticket (80mm) para pegarlo en el equipo.</li>
+        </ol>
+    </div>
+
+    <div class="help-section">
+        <h3>📱 2. Hoja del Técnico (Escaneo QR)</h3>
+        <p>Diseñada para que los técnicos trabajen directamente desde su celular:</p>
+        <ol>
+            <li>Abre la cámara de tu celular y <strong>escanea el código QR</strong> pegado en el equipo.</li>
+            <li>Se abrirá la "Hoja del Técnico". No necesitas buscar el equipo en la computadora.</li>
+            <li>Cambia el estado del equipo con un solo toque:
+                <ul>
+                    <li><strong>📋 Ingresado / En diagnóstico</strong></li>
+                    <li><strong>🔧 En reparación</strong></li>
+                    <li><strong>✅ Con solución (Pendiente de retiro)</strong></li>
+                    <li><strong>❌ Sin solución (Pendiente de retiro)</strong></li>
+                    <li><strong>🚫 No quiso reparar (Pendiente de retiro)</strong></li>
+                </ul>
+            </li>
+            <li>Los cambios se reflejarán inmediatamente en todo el sistema.</li>
+        </ol>
+    </div>
+
+    <div class="help-section">
+        <h3>📤 3. Salidas, Retiros y Pagos Finales</h3>
+        <p>Cuando el cliente viene a retirar su equipo:</p>
+        <ol>
+            <li>Ve a <strong>Salidas Registradas</strong> y haz clic en <em>Editar Salida</em>.</li>
+            <li>Registra los detalles finales (trabajo realizado, repuestos, garantía).</li>
+            <li>El sistema calculará automáticamente cuánto debe pagar el cliente descontando cualquier anticipo previo.</li>
+            <li>Una vez cobrado, haz clic en el botón verde <strong>"Cliente retiró su equipo"</strong>.</li>
+            <li><strong>Deshacer Retiro:</strong> Si marcaste un equipo como retirado por error, el <em>Administrador</em> puede deshacer esta acción haciendo clic en la "X" roja junto a la fecha de retiro.</li>
+        </ol>
+    </div>
+
+    <div class="help-section">
+        <h3>💰 4. Historial de Pagos y Abonos</h3>
+        <p>El sistema unifica todos los pagos en un solo lugar:</p>
+        <ul>
+            <li><strong>Abonos en partes:</strong> Puedes registrar abonos parciales desde la sección <em>Pagos → Ingresar Abono</em>.
+                <ul>
+                    <li>Al elegir <strong>Transferencia</strong>, el sistema te pedirá el banco y el link del comprobante.</li>
+                    <li>La sección de <strong>Facturación</strong> te permite indicar si el cliente requiere factura ("Sí" hace obligatorios los datos fiscales).</li>
+                </ul>
+            </li>
+            <li><strong>Anticipos y Salidas:</strong> Tanto el anticipo inicial como el pago final al momento de la salida se registrarán automáticamente en la tabla de <em>Historial de Abonos</em> del cliente para que siempre haya cuadre de caja.</li>
+            <li><strong>Bodegaje:</strong> Si un equipo acumuló bodegaje, al registrar un abono el sistema preguntará si deseas cobrarlo o perdonarlo.</li>
+            <li>Desde el <em>Historial de Pagos</em> general puedes buscar cualquier recibo emitido en el mes.</li>
+        </ul>
+    </div>
+
+    <div class="help-section">
+        <h3>⚠️ 5. Alertas Automáticas y Penalidades</h3>
+        <p>Econotec cuenta con un sistema inteligente de alertas en el menú izquierdo:</p>
+        <ul>
+            <li><strong>📦 Bodegaje (Penalidad):</strong> Si un equipo "Con Solución" pasa más de 30 días sin ser retirado, el sistema empieza a cobrar automáticamente <strong>$1.00 dólar por cada día de retraso</strong>. El Administrador tiene la potestad de <em>Congelar</em> esta tarifa o de omitirla si el cliente llega a un acuerdo.</li>
+            <li><strong>⏱️ Equipos Demorados:</strong> El sistema vigila los equipos que no han sido reparados. A los 5 días se marcan en <span style="color:#e6a23c;font-weight:bold;">Naranja (Atención)</span> y a los 10 días en <span style="color:#f56c6c;font-weight:bold;">Rojo (Crítico)</span> para evitar molestias con los clientes.</li>
+        </ul>
+    </div>
+
+    <div class="help-section">
+        <h3>📈 6. Estadísticas y Reportes</h3>
+        <ul>
+            <li><strong>Top 10 Clientes Recurrentes:</strong> En la pestaña <em>Clientes → Top Clientes</em> verás un ranking automático de las 10 personas que más equipos han traído a reparar, separado por sede (Guayaquil/Quito).</li>
+            <li><strong>Registro Administrativo:</strong> Solo para administradores. Lleva el control de la caja, ingresa sueldos, pagos de alquiler, compra de repuestos (Egresos). El sistema calculará la Utilidad Neta real de la empresa y permite exportar reportes a Excel.</li>
+        </ul>
+    </div>
+
+    <div class="help-section">
+        <h3>🤖 7. Asistente Inteligente (EconoBot)</h3>
+        <p>En la esquina inferior derecha encontrarás a EconoBot, tu asistente virtual:</p>
+        <ul>
+            <li>Haz clic en el icono naranja para abrir el chat de ayuda.</li>
+            <li>Puedes escribirle preguntas sobre cómo usar el sistema (ej. <em>"¿Cómo registro un abono?"</em> o <em>"¿Qué es el bodegaje?"</em>).</li>
+            <li><strong>Modo Voz:</strong> Puedes presionar el ícono de micrófono para hablarle y EconoBot también te responderá con audio.</li>
+        </ul>
+    </div>
+
+    <div class="help-section">
+        <h3>👥 Roles del sistema</h3>
+        <ul>
+            <li><strong>Administrador (Gerencia):</strong> Acceso total. Puede borrar registros, deshacer retiros, perdonar multas de bodegaje, y ver el balance financiero de ingresos/egresos.</li>
+            <li><strong>Técnico / Asesor:</strong> Puede registrar ingresos, usar el escáner QR, registrar pagos y entregar equipos. No puede eliminar registros financieros ni deshacer retiros ya efectuados.</li>
+        </ul>
+    </div>
+
+    <div class="contact-box">
+        <h3>📞 Contacto Econotec</h3>
+        <p><strong>Guayaquil:</strong> Sauces 8 Mz 462 Solar / 6 Piso 2 Oficina 2</p>
+        <p><strong>Quito:</strong> Av. Amazonas y 18 de septiembre / Piso 2 Oficina 102</p>
+        <p>WhatsApp: +593 96 383 6191  - CENTRAL  | +593 96 328 9727 - GUAYAQUIL | +593 98 075 8747 - QUITO
+        </p>
+        <p>Web: <a href="https://econotec-ec.com/" target="_blank" style="color: white; text-decoration: underline;">https://econotec-ec.com/</a></p>
+    </div>
+</div>
+{% endblock %}

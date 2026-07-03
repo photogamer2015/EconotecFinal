@@ -1,0 +1,43 @@
+<div class="dash-modal-header" style="display: flex; justify-content: space-between; align-items: center; gap: 12px;">
+    <h3 style="margin: 0;">{{ titulo }}</h3>
+    <div style="display: flex; align-items: center; margin-left: auto;">
+        {% if link_ver_todos %}
+            <a href="{{ link_ver_todos }}" class="btn btn-sm btn-primary" style="font-size: 11px; padding: 4px 10px; border-radius: 4px; margin-right: 16px; text-decoration: none; font-weight: bold; background: var(--primary); color: white;">Ver todos &rarr;</a>
+        {% endif %}
+        <button type="button" class="dash-modal-close" onclick="cerrarModalDashboard()" style="margin: 0; padding: 0; line-height: 1;">&times;</button>
+    </div>
+</div>
+<div class="dash-modal-body">
+    {% if filas %}
+    <div class="table-responsive">
+        <table class="table-dash-modal">
+            <thead>
+                <tr>
+                    {% for col in columnas %}
+                    <th>{{ col }}</th>
+                    {% endfor %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for fila in filas %}
+                <tr>
+                    {% for celda in fila %}
+                    <td>
+                        {% if forloop.first %}
+                            <span class="badge-codigo">{{ celda }}</span>
+                        {% else %}
+                            {{ celda|safe }}
+                        {% endif %}
+                    </td>
+                    {% endfor %}
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="dash-modal-empty">
+        <p>No hay registros para mostrar en esta categoría.</p>
+    </div>
+    {% endif %}
+</div>

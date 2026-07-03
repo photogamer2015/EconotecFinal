@@ -1,0 +1,1497 @@
+{% extends 'base.html' %}
+{% load static %}
+{% load econotec_extras %}
+
+{% block title %}Bienvenido — Econotec{% endblock %}
+
+{% block content %}
+<style>
+  .dashboard-header {
+    text-align: center;
+    margin-bottom: 40px;
+  }
+  .dashboard-header h2 {
+    font-size: 32px;
+    color: var(--secondary);
+    font-weight: 700;
+    margin-bottom: 6px;
+  }
+  .dashboard-header h2 .accent {
+    color: var(--primary);
+  }
+  .dashboard-header p {
+    color: var(--text-muted);
+    font-size: 15px;
+  }
+
+  .stats-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 14px;
+    margin-bottom: 36px;
+  }
+  .stat-card {
+    background: var(--card-bg);
+    padding: 18px;
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+    border-left: 4px solid var(--primary);
+  }
+  .stat-card .label {
+    font-size: 12px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+  }
+  .stat-card .value {
+    font-size: 28px;
+    font-weight: 800;
+    color: var(--secondary);
+    margin-top: 6px;
+  }
+  .stat-card .value.alt {
+    color: var(--primary);
+  }
+  .stat-card .value.warn {
+    color: #e65100;
+  }
+
+  .dashboard-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 22px;
+  }
+
+  .card-box {
+    background: var(--card-bg);
+    border-radius: 14px;
+    padding: 22px;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.05);
+    transition: all 0.2s;
+    border: 1px solid #f0f0f0;
+    text-decoration: none;
+    color: inherit;
+    display: block;
+  }
+  .card-box:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 12px 28px rgba(249, 118, 24, 0.15);
+    border-color: var(--primary);
+  }
+  .card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+  }
+  .card-title {
+    font-size: 17px;
+    font-weight: 700;
+    color: var(--secondary);
+  }
+  .card-icon {
+    font-size: 26px;
+  }
+  .card-desc {
+    font-size: 13px;
+    color: var(--text-muted);
+    line-height: 1.5;
+    min-height: 38px;
+  }
+  .card-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 14px;
+    padding-top: 12px;
+    border-top: 1px solid #f5f5f5;
+  }
+  .status-ok {
+    background: #e8f5e9;
+    color: var(--success);
+    font-size: 11px;
+    padding: 4px 9px;
+    border-radius: 6px;
+    font-weight: 700;
+  }
+  .status-admin {
+    background: var(--primary-light);
+    color: var(--primary-dark);
+    font-size: 11px;
+    padding: 4px 9px;
+    border-radius: 6px;
+    font-weight: 700;
+  }
+  .card-number {
+    font-size: 18px;
+    font-weight: 800;
+    color: var(--primary);
+  }
+
+  .alert-box {
+    margin-top: 32px;
+    text-align: center;
+    padding: 24px;
+    background: #fff8e1;
+    border-radius: 10px;
+    color: #856404;
+  }
+
+  /* ════════════════════════════════════════════════════════
+       BLOQUES DE ALERTAS (sin modal — solo banners y listas)
+       ════════════════════════════════════════════════════════ */
+  .alerta-block {
+    margin-bottom: 28px;
+    background: var(--card-bg);
+    border-radius: 14px;
+    overflow: hidden;
+    box-shadow: var(--shadow);
+  }
+  .alerta-block.demora {
+    border: 2px solid #ffcdd2;
+  }
+  .alerta-block.bodegaje {
+    border: 2px solid #ffe0b2;
+  }
+  [data-theme="dark"] .alerta-block.demora {
+    border-color: rgba(239, 68, 68, 0.4);
+  }
+  [data-theme="dark"] .alerta-block.bodegaje {
+    border-color: rgba(249, 118, 24, 0.4);
+  }
+
+  .alerta-cabecera {
+    padding: 16px 22px;
+    color: white;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+  .alerta-cabecera.rojo {
+    background: linear-gradient(135deg, #c62828, #8e0000);
+  }
+  .alerta-cabecera.naranja {
+    background: linear-gradient(135deg, #f97618, #d7642f);
+  }
+  .alerta-cabecera .icono {
+    font-size: 36px;
+    line-height: 1;
+    animation: shake 1.6s ease-in-out infinite;
+  }
+  @keyframes shake {
+    0%,
+    100% {
+      transform: rotate(0deg);
+    }
+    25% {
+      transform: rotate(-6deg);
+    }
+    75% {
+      transform: rotate(6deg);
+    }
+  }
+  .alerta-cabecera .titulo h3 {
+    font-size: 18px;
+    margin: 0 0 2px;
+    font-weight: 800;
+  }
+  .alerta-cabecera .titulo p {
+    font-size: 12px;
+    margin: 0;
+    opacity: 0.9;
+  }
+  .alerta-cabecera .ver-todos {
+    margin-left: auto;
+    background: white;
+    padding: 8px 14px;
+    border-radius: 6px;
+    text-decoration: none;
+    font-weight: 700;
+    font-size: 12px;
+  }
+  .alerta-cabecera.rojo .ver-todos {
+    color: #c62828;
+  }
+  .alerta-cabecera.naranja .ver-todos {
+    color: #d7642f;
+  }
+
+  .alerta-item {
+    padding: 12px 22px;
+    border-top: 1px solid var(--border-color);
+    display: grid;
+    grid-template-columns: auto 1fr auto auto;
+    gap: 14px;
+    align-items: center;
+  }
+  .alerta-item .codigo {
+    color: white;
+    padding: 5px 10px;
+    border-radius: 6px;
+    font-weight: 800;
+    font-size: 12px;
+    min-width: 48px;
+    text-align: center;
+  }
+  .alerta-item.rojo .codigo {
+    background: #c62828;
+  }
+  .alerta-item.naranja .codigo {
+    background: #f97618;
+  }
+
+  .alerta-item .info {
+    font-size: 13px;
+  }
+  .alerta-item .info .cli {
+    font-weight: 700;
+    color: var(--text-main);
+  }
+  .alerta-item .info .det {
+    color: var(--text-muted);
+    margin-top: 2px;
+    font-size: 12px;
+  }
+
+  .alerta-item .pill {
+    padding: 5px 11px;
+    border-radius: 14px;
+    font-weight: 800;
+    font-size: 11px;
+    text-align: center;
+  }
+  .alerta-item.rojo .pill {
+    background: #ffcdd2;
+    color: #b71c1c;
+  }
+  .alerta-item.naranja .pill {
+    background: #ffe0b2;
+    color: #b54400;
+  }
+  [data-theme="dark"] .alerta-item.rojo .pill {
+    background: rgba(239, 68, 68, 0.25);
+    color: #fca5a5;
+  }
+  [data-theme="dark"] .alerta-item.naranja .pill {
+    background: rgba(249, 118, 24, 0.25);
+    color: #fbbf73;
+  }
+
+  .alerta-item .acciones {
+    display: flex;
+    gap: 6px;
+  }
+  .btn-wa {
+    background: #25d366;
+    color: white;
+    padding: 6px 11px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 700;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .btn-wa:hover {
+    background: #1da851;
+  }
+  .btn-wa.disabled {
+    background: #cfd8dc;
+    color: #607d8b;
+    cursor: not-allowed;
+    pointer-events: none;
+  }
+  .btn-ver-mini {
+    background: var(--primary);
+    color: white;
+    padding: 6px 11px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 700;
+    text-decoration: none;
+  }
+  .btn-ver-mini:hover {
+    background: var(--primary-dark);
+  }
+  .cerrar-btn {
+    background: #2e7d32;
+    color: white;
+    padding: 6px 11px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 700;
+    border: none;
+    cursor: pointer;
+  }
+  .cerrar-btn:hover {
+    background: #1b5e20;
+  }
+  .cerrar-form {
+    display: inline-block;
+    margin: 0;
+  }
+
+  .silenciar-btn {
+    background: #757575;
+    color: white;
+    padding: 6px 10px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 700;
+    border: none;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    transition: background 0.15s;
+  }
+  .silenciar-btn:hover {
+    background: #424242;
+  }
+  .silenciar-btn[title] {
+    position: relative;
+  }
+  .silenciar-form {
+    display: inline-block;
+    margin: 0;
+  }
+
+  .silenciar-btn[disabled] {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .bod-monto {
+    background: #2e7d32;
+    color: white;
+    padding: 5px 11px;
+    border-radius: 14px;
+    font-weight: 800;
+    font-size: 12px;
+  }
+
+  @media (max-width: 600px) {
+    .alerta-cabecera {
+      flex-wrap: wrap;
+    }
+    .alerta-cabecera .ver-todos {
+      margin-left: 0;
+      margin-top: 4px;
+    }
+    .alerta-item {
+      grid-template-columns: auto 1fr;
+      gap: 8px 12px;
+    }
+    .alerta-item .pill,
+    .alerta-item .acciones {
+      grid-column: 1 / -1;
+      justify-self: start;
+    }
+  }
+
+  /* ════════════════════════════════════════════════════════
+       PANEL DE ALERTAS SILENCIADAS (NO MOLESTAR)
+       ════════════════════════════════════════════════════════ */
+  .silenciados-control-panel {
+    background: rgba(31, 41, 55, 0.05);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    margin-bottom: 24px;
+    overflow: hidden;
+    transition: all 0.3s ease;
+  }
+  [data-theme="dark"] .silenciados-control-panel {
+    background: rgba(255, 255, 255, 0.03);
+  }
+  .silenciados-control-panel:hover {
+    border-color: var(--primary);
+    box-shadow: 0 4px 12px rgba(249, 118, 24, 0.1);
+  }
+  .panel-header {
+    padding: 14px 20px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    cursor: pointer;
+    user-select: none;
+  }
+  .panel-header .bell-icon {
+    font-size: 24px;
+    animation: bell-ring 2.5s ease-in-out infinite;
+    display: inline-block;
+  }
+  @keyframes bell-ring {
+    0%,
+    100% {
+      transform: rotate(0deg);
+    }
+    5%,
+    15%,
+    25% {
+      transform: rotate(-8deg);
+    }
+    10%,
+    20%,
+    30% {
+      transform: rotate(8deg);
+    }
+    35% {
+      transform: rotate(0deg);
+    }
+  }
+  .panel-header .text {
+    flex: 1;
+  }
+  .panel-header .text h4 {
+    margin: 0;
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--secondary);
+  }
+  .panel-header .text p {
+    margin: 2px 0 0;
+    font-size: 12px;
+    color: var(--text-muted);
+  }
+  .btn-toggle-panel {
+    background: transparent;
+    border: 1px solid var(--border-color);
+    color: var(--text-main);
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 700;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.2s;
+  }
+  .btn-toggle-panel:hover {
+    background: var(--primary-light);
+    color: var(--primary-dark);
+    border-color: var(--primary);
+  }
+  .btn-toggle-panel .arrow {
+    transition: transform 0.3s;
+    font-size: 8px;
+  }
+  .panel-body {
+    padding: 16px 20px;
+    border-top: 1px solid var(--border-color);
+    background: var(--card-bg);
+  }
+  .grupo-silenciados h5 {
+    font-size: 12px;
+    font-weight: 800;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin: 0 0 10px;
+    letter-spacing: 0.5px;
+  }
+  .silenciados-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .silenciado-row {
+    display: grid;
+    grid-template-columns: auto auto 1fr auto;
+    gap: 12px;
+    align-items: center;
+    padding: 8px 12px;
+    background: var(--bg);
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+  }
+  .silenciado-row .cod {
+    background: #90a4ae;
+    color: white;
+    font-size: 11px;
+    font-weight: 800;
+    padding: 3px 8px;
+    border-radius: 4px;
+    min-width: 42px;
+    text-align: center;
+  }
+  .silenciado-row .cod.naranja {
+    background: rgba(249, 118, 24, 0.7);
+  }
+  .silenciado-row .nom {
+    font-weight: 700;
+    font-size: 13px;
+    color: var(--text-main);
+  }
+  .silenciado-row .det {
+    font-size: 12px;
+    color: var(--text-muted);
+  }
+  .reactivar-bell-btn {
+    background: var(--success);
+    color: white;
+    border: none;
+    padding: 5px 12px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 700;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    transition:
+      background 0.2s,
+      transform 0.15s;
+  }
+  .reactivar-bell-btn:hover {
+    background: #1b5e20;
+    transform: scale(1.05);
+  }
+  .reactivar-bell-btn:active {
+    transform: scale(0.95);
+  }
+  .reactivar-bell-btn[disabled] {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+  }
+  
+  @media (max-width: 600px) {
+    .silenciado-row {
+      grid-template-columns: auto 1fr;
+      gap: 8px;
+    }
+    .silenciado-row .reactivar-bell-btn {
+      grid-column: 1 / -1;
+      justify-self: start;
+    }
+  }
+  /* MODAL DASHBOARD */
+  .stat-clickable {
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+  .stat-clickable:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 20px rgba(249, 118, 24, 0.2);
+    border-color: var(--primary);
+  }
+
+  .dash-modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(4px);
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.3s, visibility 0.3s;
+  }
+  .dash-modal-overlay.active {
+    opacity: 1;
+    visibility: visible;
+  }
+
+  .dash-modal-container {
+    background: var(--card-bg);
+    width: 90%;
+    max-width: 900px;
+    max-height: 85vh;
+    border-radius: 16px;
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.3);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    transform: scale(0.95);
+    transition: transform 0.3s;
+  }
+  .dash-modal-overlay.active .dash-modal-container {
+    transform: scale(1);
+  }
+
+  /* Animación del logo hablando */
+  @keyframes speakerPulse {
+      0% {
+          transform: scale(1);
+          box-shadow: 0 0 0 0 rgba(249, 118, 24, 0.7), 0 6px 18px rgba(249, 118, 24, 0.3);
+      }
+      50% {
+          transform: scale(1.1);
+          box-shadow: 0 0 0 12px rgba(249, 118, 24, 0), 0 12px 30px rgba(249, 118, 24, 0.8);
+      }
+      100% {
+          transform: scale(1);
+          box-shadow: 0 0 0 0 rgba(249, 118, 24, 0), 0 6px 18px rgba(249, 118, 24, 0.3);
+      }
+  }
+  .is-speaking {
+      animation: speakerPulse 0.5s infinite;
+      border: 2px solid #f97618;
+  }
+
+  .dash-modal-header {
+    padding: 20px 24px;
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: var(--bg);
+  }
+  .dash-modal-header h3 {
+    margin: 0;
+    font-size: 20px;
+    color: var(--secondary);
+    font-weight: 800;
+  }
+  .dash-modal-close {
+    background: transparent;
+    border: none;
+    font-size: 28px;
+    line-height: 1;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: color 0.2s;
+  }
+  .dash-modal-close:hover {
+    color: var(--danger);
+  }
+
+  .dash-modal-body {
+    padding: 24px;
+    overflow-y: auto;
+    flex: 1;
+  }
+
+  .table-dash-modal {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+  }
+  .table-dash-modal th {
+    background: var(--bg);
+    padding: 12px 16px;
+    text-align: left;
+    color: var(--text-muted);
+    font-weight: 700;
+    border-bottom: 2px solid var(--border-color);
+    text-transform: uppercase;
+    font-size: 12px;
+    letter-spacing: 0.5px;
+  }
+  .table-dash-modal td {
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border-color);
+    color: var(--text-main);
+  }
+  .table-dash-modal tbody tr:hover td {
+    background: rgba(249, 118, 24, 0.05);
+  }
+
+  .badge-codigo {
+    background: var(--primary-light);
+    color: var(--primary-dark);
+    padding: 4px 8px;
+    border-radius: 6px;
+    font-weight: 800;
+    font-size: 12px;
+  }
+  .dash-modal-empty {
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--text-muted);
+    font-size: 16px;
+  }
+  .dash-modal-loader {
+    text-align: center;
+    padding: 50px 20px;
+    color: var(--primary);
+    font-size: 18px;
+    font-weight: 600;
+  }
+</style>
+
+{% if avisos_vigentes %}
+<div class="avisos-panel-inicio" style="max-width: 980px; margin: 0 auto 26px;">
+  {% for aviso in avisos_vigentes %}
+    {% if aviso.tipo == 'urgente' %}
+      {% with bg='#fde8e8' bd='#f0b4b4' fg='#a01f1f' ic='🚨' %}
+      <div style="background:{{ bg }}; border:1px solid {{ bd }}; color:{{ fg }}; border-radius:12px; padding:14px 18px; margin-bottom:12px;">
+        <div style="font-weight:800; margin-bottom:4px;">{{ ic }} {{ aviso.titulo }}</div>
+        <div style="font-size:14px; white-space:pre-line;">{{ aviso.mensaje }}</div>
+      </div>
+      {% endwith %}
+    {% elif aviso.tipo == 'alerta' %}
+      {% with bg='#fff3cd' bd='#ffe08a' fg='#7a5b12' ic='⚠️' %}
+      <div style="background:{{ bg }}; border:1px solid {{ bd }}; color:{{ fg }}; border-radius:12px; padding:14px 18px; margin-bottom:12px;">
+        <div style="font-weight:800; margin-bottom:4px;">{{ ic }} {{ aviso.titulo }}</div>
+        <div style="font-size:14px; white-space:pre-line;">{{ aviso.mensaje }}</div>
+      </div>
+      {% endwith %}
+    {% elif aviso.tipo == 'exito' %}
+      {% with bg='#e6f4ea' bd='#a9d8bb' fg='#1b6f38' ic='✅' %}
+      <div style="background:{{ bg }}; border:1px solid {{ bd }}; color:{{ fg }}; border-radius:12px; padding:14px 18px; margin-bottom:12px;">
+        <div style="font-weight:800; margin-bottom:4px;">{{ ic }} {{ aviso.titulo }}</div>
+        <div style="font-size:14px; white-space:pre-line;">{{ aviso.mensaje }}</div>
+      </div>
+      {% endwith %}
+    {% else %}
+      {% with bg='#e7f0fb' bd='#b6d0ef' fg='#1c4e8a' ic='📢' %}
+      <div style="background:{{ bg }}; border:1px solid {{ bd }}; color:{{ fg }}; border-radius:12px; padding:14px 18px; margin-bottom:12px;">
+        <div style="font-weight:800; margin-bottom:4px;">{{ ic }} {{ aviso.titulo }}</div>
+        <div style="font-size:14px; white-space:pre-line;">{{ aviso.mensaje }}</div>
+      </div>
+      {% endwith %}
+    {% endif %}
+  {% endfor %}
+</div>
+{% endif %}
+
+<div class="dashboard-header">
+  <img
+    id="logo-bienvenida"
+    src="{% static 'logo.jpg' %}"
+    alt="Econotec"
+    style="
+      width: 110px;
+      height: 110px;
+      border-radius: 50%;
+      background: #1a1a1a;
+      padding: 4px;
+      object-fit: cover;
+      box-shadow: 0 6px 18px rgba(249, 118, 24, 0.3);
+      margin-bottom: 16px;
+      cursor: pointer;
+      transition: transform 0.2s;
+    "
+    onmouseover="this.style.transform='scale(1.05)'"
+    onmouseout="this.style.transform='scale(1)'"
+  />
+  <h2>
+    <span id="saludo-tiempo">Hola</span>,
+    <span class="accent"
+      >{{ usuario.first_name|default:usuario.username }}</span
+    >
+  </h2>
+  <p>
+    Sistema de Gestión Econotec — Reparación de Tecnología {% if es_admin %} —
+    <strong>Administrador</strong> {% elif es_tecnico %} —
+    <strong>Técnico</strong> {% elif es_asesor %} — <strong>Asesor</strong>
+    {% endif %}
+  </p>
+</div>
+
+<script>
+  (function() {
+    // Saludo según la hora del día
+    var hora = new Date().getHours();
+    var saludo = "Hola";
+    if (hora >= 5 && hora < 12) {
+      saludo = "Buenos días";
+    } else if (hora >= 12 && hora < 19) {
+      saludo = "Buenas tardes";
+    } else {
+      saludo = "Buenas noches";
+    }
+    document.getElementById("saludo-tiempo").textContent = saludo;
+
+    // Precargar voces
+    var availableVoices = [];
+    window.speechSynthesis.onvoiceschanged = function() {
+      availableVoices = window.speechSynthesis.getVoices();
+    };
+
+    // Voz de bienvenida al hacer clic en el logo
+    var nombreUsuario = "{{ usuario.first_name|default:usuario.username|escapejs }}";
+    
+    var logo = document.getElementById("logo-bienvenida");
+    logo.addEventListener("click", function() {
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel(); // Detener cualquier audio previo
+        var msg = new SpeechSynthesisUtterance(saludo + ", " + nombreUsuario);
+        msg.lang = "es-ES"; // Voz en español
+        
+        if (availableVoices.length === 0) {
+          availableVoices = window.speechSynthesis.getVoices();
+        }
+        
+        // Buscar una voz de alta calidad en español (Google, Paulina, Monica, Jorge, etc.)
+        var bestVoice = availableVoices.find(v => v.lang.startsWith('es') && (v.name.includes('Google') || v.name.includes('Natural') || v.name.includes('Premium')));
+        if (!bestVoice) bestVoice = availableVoices.find(v => v.lang.startsWith('es'));
+        
+        if (bestVoice) {
+          msg.voice = bestVoice;
+        }
+
+        msg.rate = 0.95; // Velocidad un poco más natural
+        msg.pitch = 1.0;
+
+        msg.onstart = function() {
+            logo.classList.add('is-speaking');
+        };
+        msg.onend = function() {
+            logo.classList.remove('is-speaking');
+        };
+        msg.onerror = function() {
+            logo.classList.remove('is-speaking');
+        };
+
+        window.speechSynthesis.speak(msg);
+      }
+    });
+
+    // ── Sonido de Inicio estilo PS5 ──
+    function playPremiumStartupSound() {
+        var AudioContext = window.AudioContext || window.webkitAudioContext;
+        if (!AudioContext) return;
+        var ctx = new AudioContext();
+        
+        // Si el navegador bloquea el audio (Autoplay policy), intentar reanudarlo al primer clic
+        if (ctx.state === 'suspended') {
+            var resumeAudio = function() {
+                ctx.resume();
+                document.removeEventListener('click', resumeAudio);
+            };
+            document.addEventListener('click', resumeAudio);
+        }
+
+        var now = ctx.currentTime;
+        var masterGain = ctx.createGain();
+        masterGain.gain.value = 0.6;
+        masterGain.connect(ctx.destination);
+
+        var compressor = ctx.createDynamicsCompressor();
+        compressor.threshold.setValueAtTime(-24, now);
+        compressor.knee.setValueAtTime(10, now);
+        compressor.ratio.setValueAtTime(4, now);
+        compressor.attack.setValueAtTime(0.1, now);
+        compressor.release.setValueAtTime(0.25, now);
+        masterGain.connect(compressor);
+        compressor.connect(ctx.destination);
+
+        function createOsc(freq, type, attack, decay, sustain, release, detune, peakVol, delay) {
+            var osc = ctx.createOscillator();
+            var gain = ctx.createGain();
+            osc.type = type;
+            osc.frequency.value = freq;
+            osc.detune.value = detune;
+
+            osc.connect(gain);
+            gain.connect(masterGain);
+
+            var startTime = now + delay;
+            gain.gain.setValueAtTime(0, startTime);
+            gain.gain.linearRampToValueAtTime(peakVol, startTime + attack);
+            gain.gain.exponentialRampToValueAtTime(peakVol * sustain + 0.001, startTime + attack + decay);
+            gain.gain.exponentialRampToValueAtTime(0.001, startTime + attack + decay + release);
+
+            osc.start(startTime);
+            osc.stop(startTime + attack + decay + release);
+        }
+
+        // Bajo profundo y resonante
+        createOsc(65.41, 'sine', 1.5, 2.0, 0.8, 3.0, 0, 0.8, 0);
+        createOsc(65.41, 'triangle', 2.0, 1.5, 0.6, 3.0, 5, 0.3, 0);
+        createOsc(65.41, 'triangle', 2.0, 1.5, 0.6, 3.0, -5, 0.3, 0);
+
+        // Acorde espacial ambiental
+        var chord = [130.81, 196.00, 246.94, 293.66, 329.63];
+        chord.forEach(function(freq, i) {
+            createOsc(freq, 'sine', 2.0 + i*0.2, 2.0, 0.5, 4.0, 3, 0.15, 0);
+            createOsc(freq, 'sine', 2.0 + i*0.2, 2.0, 0.5, 4.0, -3, 0.15, 0);
+            createOsc(freq, 'triangle', 1.5 + i*0.1, 2.5, 0.4, 4.0, 0, 0.05, 0);
+        });
+
+        // Destellos brillantes (Shimmer)
+        var shimmer = [783.99, 987.77, 1174.66];
+        shimmer.forEach(function(freq, i) {
+            createOsc(freq, 'sine', 1.5, 1.0, 0.5, 3.0, 0, 0.06, 1.0 + i*0.1);
+            createOsc(freq, 'sine', 1.5, 1.0, 0.5, 3.0, 4, 0.04, 1.0 + i*0.1);
+        });
+    }
+
+    if (!sessionStorage.getItem('startup_sound_played')) {
+        sessionStorage.setItem('startup_sound_played', 'true');
+        setTimeout(playPremiumStartupSound, 400); // Pequeño delay para sincronizar con la carga visual
+    }
+
+  })();
+</script>
+
+{# ──────── Sección de Equipos Silenciados (Centro de control "No Molestar") ──────── #} {% if total_silenciados > 0 %}
+<div class="silenciados-control-panel animate__animated animate__fadeIn">
+  <div class="panel-header" onclick="toggleDashboardSilenciados(event)">
+    <span class="bell-icon">🔔</span>
+    <div class="text">
+      <h4>Alertas en modo "No molestar"</h4>
+      <p>
+        Tienes
+        <strong
+          >{{ total_silenciados }} equipo{{ total_silenciados|pluralize }}</strong
+        >
+        silenciado{{ total_silenciados|pluralize }} en este momento.
+      </p>
+    </div>
+    <button type="button" class="btn-toggle-panel" id="btn-toggle-silenciados">
+      Ver silenciados <span class="arrow">▼</span>
+    </button>
+  </div>
+
+  <div class="panel-body" id="panel-silenciados-body" style="display: none">
+    {% if demorados_silenciados %}
+    <div class="grupo-silenciados">
+      <h5>⚠️ Demoras de Diagnóstico Silenciadas</h5>
+      <div class="silenciados-list">
+        {% for d in demorados_silenciados %}
+        <div class="silenciado-row">
+          <span class="cod">{{ d.ingreso.codigo_equipo }}</span>
+          <span class="nom">{{ d.ingreso.cliente.nombres }}</span>
+          <span class="det"
+            >{{ d.ingreso.tipo_equipo_display }} — {{ d.dias }} día{{ d.dias|pluralize }}</span
+          >
+          <form
+            method="post"
+            action="{% url 'econotec:ingreso_diagnostico_silenciar' pk=d.ingreso.pk %}"
+            class="silenciar-form"
+          >
+            {% csrf_token %}
+            <input type="hidden" name="accion" value="reactivar" />
+            <input
+              type="hidden"
+              name="next"
+              value="{% url 'econotec:bienvenida' %}"
+            />
+            <button
+              type="submit"
+              class="reactivar-bell-btn"
+              title="{% if not es_admin %}Solo admins pueden reactivar{% else %}Reactivar alerta (quitar no molestar){% endif %}"
+              {% if not es_admin %}disabled{% endif %}
+            >
+              🔔 Reactivar
+            </button>
+          </form>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %} {% if bodegajes_silenciados %}
+    <div class="grupo-silenciados" style="margin-top: 14px">
+      <h5>📦 Bodegajes Ocultos Silenciados</h5>
+      <div class="silenciados-list">
+        {% for b in bodegajes_silenciados %}
+        <div class="silenciado-row">
+          <span class="cod naranja">{{ b.ingreso.codigo_equipo }}</span>
+          <span class="nom">{{ b.ingreso.cliente.nombres }}</span>
+          <span class="det"
+            >Listo desde {{ b.salida.fecha_salida|date:"d/m/Y" }} (+{{ b.bodegaje_monto|dinero_signo }})</span
+          >
+          <form
+            method="post"
+            action="{% url 'econotec:salida_bodegaje_silenciar' pk=b.salida.pk %}"
+            class="silenciar-form"
+          >
+            {% csrf_token %}
+            <input type="hidden" name="accion" value="reactivar" />
+            <input
+              type="hidden"
+              name="next"
+              value="{% url 'econotec:bienvenida' %}"
+            />
+            <button
+              type="submit"
+              class="reactivar-bell-btn"
+              title="{% if not es_admin %}Solo admins pueden reactivar{% else %}Reactivar alerta (quitar no molestar){% endif %}"
+              {% if not es_admin %}disabled{% endif %}
+            >
+              🔔 Reactivar
+            </button>
+          </form>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endif %} {# ════════════════════════════════════════════════════════════════ #} {# ALERTA 1: Equipos demorados en diagnóstico (4+ días sin diagnosticar) #}
+{# ════════════════════════════════════════════════════════════════ #} {% if demorados_total > 0 %}
+<div class="alerta-block demora">
+  <div class="alerta-cabecera rojo">
+    <div class="icono">⚠️</div>
+    <div class="titulo">
+      <h3>
+        {% if umbral_diagnostico > 0 %} {{ demorados_total }} equipo{{ demorados_total|pluralize }} sin diagnosticar hace más de {{ umbral_diagnostico }} día{{ umbral_diagnostico|pluralize }} {% else %}
+        {{ demorados_total }} equipo{{ demorados_total|pluralize }} pendiente{{ demorados_total|pluralize }} de diagnóstico {% endif %}
+      </h3>
+      <p>
+        Cambia el estado a "En reparación" o "Reparado" para que desaparezcan de
+        aquí.
+      </p>
+    </div>
+    <a href="{% url 'econotec:alertas_demora' %}" class="ver-todos"
+      >Ver todos &rarr;</a
+    >
+  </div>
+  {% for d in demorados %}
+  <div class="alerta-item rojo">
+    <span class="codigo">{{ d.ingreso.codigo_equipo }}</span>
+    <div class="info">
+      <div class="cli">{{ d.ingreso.cliente.nombres }}</div>
+      <div class="det">
+        {{ d.ingreso.tipo_equipo_display }} {{ d.ingreso.marca }} — Ingresó {{ d.ingreso.fecha_ingreso|date:"d/m/Y" }} {% if d.ingreso.tecnico_encargado %} · Téc.:
+        <strong>{{ d.ingreso.tecnico_encargado_nombre }}</strong>
+        {% endif %}
+      </div>
+    </div>
+    <span class="pill">
+      {% if d.dias == 0 %} Hoy {% else %} {{ d.dias }} día{{ d.dias|pluralize }}
+      {% endif %}
+    </span>
+    <div class="acciones">
+      {% if d.wa_link %}
+      <a class="btn-wa" href="{{ d.wa_link }}" target="_blank" rel="noopener"
+        >💬 WhatsApp</a
+      >
+      {% else %}
+      <span class="btn-wa disabled">💬 N/A</span>
+      {% endif %}
+      <a
+        class="btn-ver-mini"
+        href="{% url 'econotec:ingreso_detalle' d.ingreso.pk %}"
+        >Ver</a
+      >
+      <form
+        method="post"
+        action="{% url 'econotec:ingreso_diagnostico_silenciar' pk=d.ingreso.pk %}"
+        class="silenciar-form"
+        {% if es_admin %}onsubmit="confirmarSilenciar(event, this, '{{ d.ingreso.codigo_equipo }}', 'diagnostico');"
+        {% endif %}
+      >
+        {% csrf_token %}
+        <input type="hidden" name="accion" value="silenciar" />
+        <input
+          type="hidden"
+          name="next"
+          value="{% url 'econotec:bienvenida' %}"
+        />
+        <button
+          type="submit"
+          class="silenciar-btn"
+          title="{% if not es_admin %}Solo admins pueden silenciar{% else %}No molestar: ocultar este equipo de la alerta{% endif %}"
+          {% if not es_admin %}disabled{% endif %}
+        >
+          🔕 No molestar
+        </button>
+      </form>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+{# ════════════════════════════════════════════════════════════════ #}
+{# ALERTA 2: Bodegaje pendiente (5+ días sin que el cliente venga) #}
+{# ════════════════════════════════════════════════════════════════ #}
+
+{% load econotec_extras %}
+{% if bodegajes_total > 0 %}
+<div class="alerta-block bodegaje">
+  <div class="alerta-cabecera naranja">
+    <div class="icono">📦</div>
+    <div class="titulo">
+      <h3>
+        {{ bodegajes_total }} equipo{{ bodegajes_total|pluralize }} listo{{ bodegajes_total|pluralize:"s" }} sin retirar (cobrando bodegaje)
+      </h3>
+      <p>
+        {% if umbral_bodegaje > 0 %} Equipos entregados hace más de {{ umbral_bodegaje }} día{{ umbral_bodegaje|pluralize }}. Bodegaje: {{ costo_bodegaje_dia|dinero_signo }}/día. {% else %} Equipos listos pendientes de retiro. Bodegaje: {{ costo_bodegaje_dia|dinero_signo }}/día. {% endif %}
+      </p>
+    </div>
+    <a href="{% url 'econotec:alertas_bodegaje' %}" class="ver-todos"
+      >Ver todos &rarr;</a
+    >
+  </div>
+  {% for b in bodegajes %}
+  <div class="alerta-item naranja">
+    <span class="codigo">{{ b.ingreso.codigo_equipo }}</span>
+    <div class="info">
+      <div class="cli">{{ b.ingreso.cliente.nombres }}</div>
+      <div class="det">
+        {{ b.ingreso.tipo_equipo_display }} {{ b.ingreso.marca }} — Listo desde
+        {{ b.salida.fecha_salida|date:"d/m/Y" }} ({{ b.dias_desde_salida }}
+        día{{ b.dias_desde_salida|pluralize }}) {% if b.ingreso.tecnico_encargado %} · Téc.:
+        <strong>{{ b.ingreso.tecnico_encargado_nombre }}</strong>
+        {% endif %}
+      </div>
+    </div>
+    <span class="bod-monto">+{{ b.bodegaje_monto|dinero_signo }}</span>
+    <div class="acciones">
+      {% if b.wa_link %}
+      <a class="btn-wa" href="{{ b.wa_link }}" target="_blank" rel="noopener"
+        >💬 WhatsApp</a
+      >
+      {% else %}
+      <span class="btn-wa disabled">💬 N/A</span>
+      {% endif %}
+      <a
+        class="btn-ver-mini"
+        href="{% url 'econotec:ingreso_detalle' b.ingreso.pk %}"
+        >Ver</a
+      >
+      <form
+        method="post"
+        action="{% url 'econotec:salida_bodegaje_silenciar' pk=b.salida.pk %}"
+        class="silenciar-form"
+        {% if es_admin %}onsubmit="confirmarSilenciar(event, this, '{{ b.ingreso.codigo_equipo }}', 'bodegaje');"
+        {% endif %}
+      >
+        {% csrf_token %}
+        <input type="hidden" name="accion" value="silenciar" />
+        <input
+          type="hidden"
+          name="next"
+          value="{% url 'econotec:bienvenida' %}"
+        />
+        <button
+          type="submit"
+          class="silenciar-btn"
+          title="{% if not es_admin %}Solo admins pueden silenciar{% else %}No molestar: ocultar este equipo de la alerta{% endif %}"
+          {% if not es_admin %}disabled{% endif %}
+        >
+          🔕 No molestar
+        </button>
+      </form>
+      <form
+        method="post"
+        action="{% url 'econotec:salida_marcar_retirada' pk=b.salida.pk %}"
+        class="cerrar-form"
+        onsubmit="{% if b.ingreso.diferencia > 0 %}event.preventDefault(); Swal.fire({icon: 'error', title: 'Saldo Pendiente', text: 'No se puede retirar. El cliente tiene un saldo pendiente de {{ b.ingreso.diferencia|dinero_signo }}. Debe pagar todo antes de retirar el equipo.', confirmButtonColor: '#d33'}); return false;{% else %}confirmarCierre(event, this, '{{ b.ingreso.codigo_equipo }}', {% if b.bodegaje_monto > 0 %}true{% else %}false{% endif %}, {{ b.bodegaje_monto|default:0|stringformat:'.2f' }}, {{ b.bodegaje_dias|default:0 }});{% endif %}"
+      >
+        {% csrf_token %}
+        <input type="hidden" name="aplicar_bodegaje" value="" />
+        <button type="submit" class="cerrar-btn" {% if b.ingreso.diferencia > 0 %}style="background: #9e9e9e; cursor: not-allowed;" title="Saldo pendiente: {{ b.ingreso.diferencia|dinero_signo }}"{% endif %}>✓ Cliente retiró</button>
+      </form>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+<!-- Stats rápidas -->
+<div class="stats-row">
+  <div class="stat-card stat-clickable" onclick="abrirModalDashboard('equipos_total')">
+    <div class="label">Equipos Total</div>
+    <div class="value">{{ stats.total_ingresos }}</div>
+  </div>
+  <div class="stat-card stat-clickable" onclick="abrirModalDashboard('ingresos_mes')">
+    <div class="label">Ingresos del Mes</div>
+    <div class="value alt">{{ stats.ingresos_mes }}</div>
+  </div>
+  <div class="stat-card stat-clickable" onclick="abrirModalDashboard('pendientes')">
+    <div class="label">Pendientes en Taller</div>
+    <div class="value warn">{{ stats.pendientes_retiro }}</div>
+  </div>
+  <div class="stat-card stat-clickable" onclick="abrirModalDashboard('salidas_mes')">
+    <div class="label">Salidas del Mes</div>
+    <div class="value">{{ stats.salidas_mes }}</div>
+  </div>
+  <div class="stat-card stat-clickable" onclick="abrirModalDashboard('clientes')">
+    <div class="label">Clientes</div>
+    <div class="value">{{ stats.total_clientes }}</div>
+  </div>
+</div>
+
+<!-- Tarjetas principales -->
+<div class="dashboard-grid">
+  {# ── INGRESO DE EQUIPO: admin + técnico ── #} {% if puede_gestionar_equipos %}
+  <a href="{% url 'econotec:ingreso_menu' %}" class="card-box">
+    <div class="card-header">
+      <div class="card-title">Ingreso de Equipo / Cliente</div>
+      <div class="card-icon">📥</div>
+    </div>
+    <div class="card-desc">
+      Registra equipos entrantes, llena la Solicitud de Ingreso y la imprime o
+      descarga.
+    </div>
+    <div class="card-footer">
+      <span class="status-ok">Disponible</span>
+      <span class="card-number">Total: {{ stats.total_ingresos }}</span>
+    </div>
+  </a>
+
+  <a href="{% url 'econotec:venta_menu' %}" class="card-box">
+    <div class="card-header">
+      <div class="card-title">Venta de Producto</div>
+    </div>
+    <div class="card-desc">
+      Registra una venta directa de productos (repuestos, tintas, etc.) y genera su comprobante.
+    </div>
+    <div class="card-footer">
+      <span class="status-ok">Disponible</span>
+      <span>Ingresar →</span>
+    </div>
+  </a>
+
+  <a href="{% url 'econotec:salida_menu' %}" class="card-box">
+    <div class="card-header">
+      <div class="card-title">Salida de Equipo</div>
+      <div class="card-icon">📤</div>
+    </div>
+    <div class="card-desc">
+      Cierra reparaciones: estado del trabajo (reparado, no reparable, etc.) y
+      entrega al cliente.
+    </div>
+    <div class="card-footer">
+      <span class="status-ok">Disponible</span>
+      <span class="card-number">Total: {{ stats.total_salidas }}</span>
+    </div>
+  </a>
+
+  <a href="{% url 'econotec:cliente_lista' %}" class="card-box">
+    <div class="card-header">
+      <div class="card-title">Clientes</div>
+      <div class="card-icon">👥</div>
+    </div>
+    <div class="card-desc">
+      Directorio de clientes con historial de equipos entregados y exportación a
+      Excel.
+    </div>
+    <div class="card-footer">
+      <span class="status-ok">Disponible</span>
+      <span>Ingresar →</span>
+    </div>
+  </a>
+  {% endif %} {# ── PAGOS: admin + asesor ── #} {% if puede_gestionar_pagos %}
+  <a href="{% url 'econotec:pagos_lista' %}" class="card-box">
+    <div class="card-header">
+      <div class="card-title">Pagos</div>
+      <div class="card-icon">💳</div>
+    </div>
+    <div class="card-desc">
+      Control de abonos de los clientes por la reparación de su equipo.
+    </div>
+    <div class="card-footer">
+      <span class="status-ok">Disponible</span>
+      <span>Ingresar →</span>
+    </div>
+  </a>
+  {% endif %} {# ── REGISTRO ADMINISTRATIVO: solo admin ── #} {% if es_admin %}
+  <a href="{% url 'econotec:admin_dashboard' %}" class="card-box">
+    <div class="card-header">
+      <div class="card-title">Registro Administrativo</div>
+      <div class="card-icon">📊</div>
+    </div>
+    <div class="card-desc">
+      Control financiero mensual: ingresos por reparaciones vs. egresos del
+      taller.
+    </div>
+    <div class="card-footer">
+      <span class="status-admin">Solo Admin</span>
+      <span>🔒</span>
+    </div>
+  </a>
+  <a href="{% url 'econotec:avisos_lista' %}" class="card-box">
+    <div class="card-header">
+      <div class="card-title">Avisos del panel</div>
+      <div class="card-icon">📣</div>
+    </div>
+    <div class="card-desc">
+      Publica mensajes con fecha de inicio y fin que verán todos los
+      usuarios en la pantalla de inicio.
+    </div>
+    <div class="card-footer">
+      <span class="status-admin">Solo Admin</span>
+      <span>🔒</span>
+    </div>
+  </a>
+  <a href="{% url 'econotec:control_registro' %}" class="card-box">
+    <div class="card-header">
+      <div class="card-title">Control de Registro</div>
+      <div class="card-icon">📋</div>
+    </div>
+    <div class="card-desc">
+      Auditoría de los últimos equipos y pagos registrados: fecha, hora,
+      asesor y quién los registró.
+    </div>
+    <div class="card-footer">
+      <span class="status-admin">Solo Admin</span>
+      <span>🔒</span>
+    </div>
+  </a>
+  {% endif %} {# ── EQUIPOS MAS INGRESADOS ── #}
+  <a
+    href="{% url 'econotec:historial_lista' %}"
+    class="card-box"
+    style="text-decoration: none"
+  >
+    <div class="card-header">
+      <div class="card-title">Top Equipos Ingresados</div>
+      <div class="card-icon">📊</div>
+    </div>
+    <div class="card-desc" style="flex: 1; padding-bottom: 8px">
+      {% if equipos_top %}
+      <ul
+        style="
+          margin: 0;
+          padding-left: 20px;
+          line-height: 1.6;
+          color: var(--text-color);
+        "
+      >
+        {% for eq in equipos_top %}
+        <li><strong>{{ eq.nombre }}:</strong> {{ eq.total }}</li>
+        {% endfor %}
+      </ul>
+      {% else %}
+      <p style="margin: 0">No hay ingresos aún.</p>
+      {% endif %}
+    </div>
+    <div
+      class="card-footer"
+      style="
+        border-top: 1px solid var(--border-color);
+        padding-top: 12px;
+        margin-top: auto;
+      "
+    >
+      <span class="status-ok" style="background: #e3f2fd; color: #1976d2"
+        >Estadística</span
+      >
+      <span>Ver historial →</span>
+    </div>
+  </a>
+
+  {# ── TOP CLIENTES ── #}
+  {% if puede_gestionar_equipos %}
+  <a href="{% url 'econotec:cliente_top_recurrentes' %}" class="card-box" style="display: flex; flex-direction: column;">
+    <div class="card-header">
+      <div class="card-title">Top Clientes Recurrentes</div>
+      <div class="card-icon">⭐</div>
+    </div>
+    <div class="card-desc" style="flex-grow: 1;">
+      {% if clientes_top %}
+        <ul style="list-style: none; padding: 0; margin: 0; font-size: 14px;">
+        {% for c in clientes_top %}
+          <li style="display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid var(--border-color);">
+            <span>{{ c.nombres|truncatechars:18 }}</span>
+            <span style="font-weight: 600;">{{ c.total_ingresos }} ing.</span>
+          </li>
+        {% endfor %}
+        </ul>
+      {% else %}
+        <p style="margin: 0;">No hay ingresos aún.</p>
+      {% endif %}
+    </div>
+    <div class="card-footer" style="border-top: 1px solid var(--border-color); padding-top: 12px; margin-top: auto;">
+      <span class="status-ok" style="background: #fff8e1; color: #f57f17">Fidelidad</span>
+      <span>Ver todos →</span>
+    </div>
+  </a>
+  {% endif %}
+
+  {# ── AYUDA: cualquier rol con acceso ── #} {% if puede_gestionar_equipos or puede_gestionar_pagos %}
+  <a href="{% url 'econotec:ayuda' %}" class="card-box">
+    <div class="card-header">
+      <div class="card-title">Ayuda</div>
+      <div class="card-icon">❓</div>
+    </div>
+    <div class="card-desc">Manual de uso del sistema y soporte técnico.</div>
+    <div class="card-footer">
+      <span class="status-ok">Disponible</span>
+      <span>Ingresar →</span>
+    </div>
+  </a>
+  {% endif %}
+</div>
+
+<!-- Estructura del Modal Flotante -->
+<div class="dash-modal-overlay" id="dashModalOverlay" onclick="cerrarModalDashboard(event)">
+  <div class="dash-modal-container" id="dashModalContainer" onclick="event.stopPropagation()">
+    <!-- Contenido inyectado por AJAX -->
+    <div class="dash-modal-loader">Cargando datos...</div>
+  </div>
+</div>
+
+{% block extra_js %}
+<script>
+  function toggleDashboardSilenciados(event) {
+    // Evitar activar si el click se hizo dentro de un formulario o botón de reactivar
+    if (
+      event.target.closest("form") ||
+      event.target.closest(".reactivar-bell-btn")
+    ) {
+      return;
+    }
+    const body = document.getElementById("panel-silenciados-body");
+    const arrow = document.querySelector(".btn-toggle-panel .arrow");
+    const btn = document.getElementById("btn-toggle-silenciados");
+    if (!body) return;
+
+    if (body.style.display === "none") {
+      body.style.display = "block";
+      if (arrow) arrow.style.transform = "rotate(180deg)";
+      if (btn) btn.innerHTML = 'Ocultar <span class="arrow">▲</span>';
+    } else {
+      body.style.display = "none";
+      if (arrow) arrow.style.transform = "rotate(0deg)";
+      if (btn) btn.innerHTML = 'Ver silenciados <span class="arrow">▼</span>';
+    }
+  }
+
+  function abrirModalDashboard(tipo) {
+    const overlay = document.getElementById("dashModalOverlay");
+    const container = document.getElementById("dashModalContainer");
+    
+    // Mostrar loader
+    container.innerHTML = '<div class="dash-modal-loader">Cargando datos...</div>';
+    overlay.classList.add("active");
+    document.body.style.overflow = "hidden"; // Prevenir scroll de fondo
+
+    // Cargar datos
+    fetch(`/dashboard-details/${tipo}/`)
+      .then(response => {
+        if (!response.ok) throw new Error("Network response was not ok");
+        return response.text();
+      })
+      .then(html => {
+        container.innerHTML = html;
+      })
+      .catch(error => {
+        console.error("Error fetching modal data:", error);
+        container.innerHTML = `
+          <div class="dash-modal-header">
+            <h3>Error</h3>
+            <button class="dash-modal-close" onclick="cerrarModalDashboard()">&times;</button>
+          </div>
+          <div class="dash-modal-body">
+            <p style="color: #d32f2f; text-align: center;">Hubo un error al cargar la información.</p>
+          </div>
+        `;
+      });
+  }
+
+  function cerrarModalDashboard(event) {
+    if (event && event.target.id !== "dashModalOverlay" && !event.target.classList.contains("dash-modal-close")) {
+      return; // Permite cerrar si hace click en overlay o en X
+    }
+    const overlay = document.getElementById("dashModalOverlay");
+    overlay.classList.remove("active");
+    document.body.style.overflow = "auto";
+  }
+
+  // Cerrar modal con tecla Escape
+  document.addEventListener('keydown', function(event) {
+    if (event.key === "Escape") {
+      const overlay = document.getElementById("dashModalOverlay");
+      if (overlay.classList.contains("active")) {
+        cerrarModalDashboard();
+      }
+    }
+  });
+</script>
+{% endblock %} {% endblock %}

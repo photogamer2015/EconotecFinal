@@ -1,0 +1,611 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ titulo }} — Econotec{% endblock %}
+
+{% block extra_js %}
+<!-- JS bloqueado intencionalmente para evitar errores de referencias perdidas -->
+{% endblock %}
+
+{% block content %}
+<style>
+    .form-card {
+        background: var(--card-bg);
+        border-radius: 14px;
+        padding: 28px;
+        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.06);
+        max-width: 980px;
+        margin: 0 auto;
+    }
+
+    .form-section {
+        margin-bottom: 24px;
+        padding-bottom: 22px;
+        border-bottom: 1px dashed #ddd;
+    }
+
+    .form-section:last-child {
+        border-bottom: none;
+    }
+
+    .form-section h3 {
+        color: var(--primary);
+        font-size: 16px;
+        font-weight: 700;
+        margin-bottom: 16px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .form-row {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 14px;
+    }
+
+    .form-row.cols-3 {
+        grid-template-columns: repeat(3, 1fr);
+    }
+
+    .form-row.cols-2 {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    @media (max-width: 768px) {
+        .form-row.cols-3, .form-row.cols-2 {
+            grid-template-columns: 1fr;
+        }
+        .top-meta {
+            flex-direction: column;
+            gap: 12px;
+            align-items: flex-start;
+        }
+    }
+
+    .top-meta {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        background: var(--primary-light);
+        padding: 14px 18px;
+        border-radius: 10px;
+        margin-bottom: 18px;
+    }
+
+    .top-meta .num-equipo {
+        background: white;
+        border: 2px solid var(--primary);
+        padding: 8px 18px;
+        border-radius: 8px;
+        font-weight: 800;
+        color: var(--primary);
+        font-size: 18px;
+    }
+
+    .actions-bar {
+        display: flex;
+        gap: 10px;
+        justify-content: flex-end;
+        margin-top: 24px;
+    }
+
+    /* Mostrar visualmente el estado deshabilitado de los botones */
+    .btn[disabled], .btn:disabled {
+        opacity: 0.55;
+        cursor: not-allowed;
+        pointer-events: none;
+        filter: grayscale(10%);
+    }
+</style>
+
+<div class="crumb">
+    <a href="{% url 'econotec:bienvenida' %}">Inicio</a> /
+    <a href="{% url 'econotec:venta_menu' %}">Ventas</a> / {{ titulo }}
+</div>
+
+<form method="post" class="form-card">
+    {% csrf_token %}
+
+    <div class="top-meta">
+        <div>
+            <strong style="color: var(--primary); font-size: 18px;">REGISTRO DE VENTA</strong><br>
+            <small style="color: #666;">Registra los datos del cliente y el producto vendido.</small>
+        </div>
+        <div class="num-equipo">VENTA {{ siguiente_codigo|default:siguiente_numero }}</div>
+    </div>
+
+    <!-- Datos del personal -->
+    <div class="form-section">
+        <h3>Personal Econotec</h3>
+        <div class="form-row cols-2">
+            <div>
+                <label class="form-label">Asesor Comercial / Vendedor</label>
+                {{ ing_form.asesor_comercial }}
+            </div>
+            <div>
+                <label class="form-label">Fecha de Venta *</label>
+                {{ ing_form.fecha_ingreso }}
+                {{ ing_form.fecha_ingreso.errors }}
+            </div>
+        </div>
+        <div class="form-row" style="margin-top:14px;">
+            <div>
+                <label class="form-label">Factura N° (opcional)</label>
+                {{ ing_form.numero_factura }}
+            </div>
+        </div>
+        <!-- Campos ocultos requeridos por el modelo subyacente -->
+        <div style="display:none;">
+            {{ ing_form.tecnico_encargado }}
+        </div>
+    </div>
+
+    <!-- Datos del cliente -->
+    <div class="form-section">
+        <h3>Datos del Cliente</h3>
+
+        <!-- Aviso dinámico cuando se encuentra cliente por cédula -->
+        <div id="cliente-aviso"
+            style="display:none; margin-bottom:14px; padding:12px 16px; border-radius:8px; background:#e8f5e9; border-left:4px solid #2e7d32; font-size:13px;">
+            <strong style="color:#1b5e20;">✅ Cliente reconocido.</strong>
+            <span id="cliente-aviso-texto" style="color:#1b5e20;"></span>
+        </div>
+
+        <div class="form-row cols-2">
+            <div>
+                <label class="form-label">Cédula o RUC *</label>
+                {{ cli_form.cedula }}
+                {{ cli_form.cedula.errors }}
+                <small style="color:#888; font-size:11px;">Si ya existe, se llenan sus datos automáticamente.</small>
+                <small id="cliente-buscando" style="color: var(--primary); font-size:11px; display:none;">🔎
+                    Buscando...</small>
+            </div>
+            <div>
+                <label class="form-label">Nombres del Cliente *</label>
+                {{ cli_form.nombres }}
+                {{ cli_form.nombres.errors }}
+            </div>
+        </div>
+        <div class="form-row cols-2" style="margin-top:14px;">
+            <div>
+                <label class="form-label">WhatsApp</label>
+                {{ cli_form.whatsapp }}
+            </div>
+            <div>
+                <label class="form-label">Correo</label>
+                {{ cli_form.correo }}
+            </div>
+        </div>
+        <div class="form-row cols-2" style="margin-top:14px;">
+            <div>
+                <label class="form-label">Sector</label>
+                {{ cli_form.sector }}
+            </div>
+            <div>
+                <label class="form-label">Sector (otro)</label>
+                {{ cli_form.sector_otro }}
+            </div>
+        </div>
+    </div>
+
+    <!-- Detalles del equipo -->
+    <div class="form-section">
+        <h3>Detalles del Producto Vendido</h3>
+        <div style="margin-top:14px;">
+            <label class="form-label">Descripción o Productos específicos (ej. tinta, cables, etc.) *</label>
+            {{ ing_form.problema_reportado }}
+            {{ ing_form.problema_reportado.errors }}
+        </div>
+        <!-- Campos ocultos de marca, modelo, accesorios y reporte técnico -->
+        <div style="display:none;">
+            {{ ing_form.tipo_equipo }}
+            {{ ing_form.tipo_equipo_otro }}
+            {{ ing_form.marca }}
+            {{ ing_form.modelo_serie }}
+            {{ ing_form.accesorios_entregados }}
+            {{ ing_form.reporte_tecnico }}
+            {{ ing_form.diagnostico_inmediato }}
+            {{ ing_form.valor_diagnostico }}
+        </div>
+    </div>
+
+    <!-- Valores de la venta -->
+    <div class="form-section">
+        <h3>Valores de la Venta</h3>
+        <div class="form-row cols-1">
+            <div>
+                <label class="form-label">Valor total de la venta (USD) *</label>
+                {{ ing_form.valor_acordado }}
+            </div>
+            <div style="display:none;">
+                {{ ing_form.abono_anticipo }}
+            </div>
+        </div>
+        <script>
+            // Forzar a que el valor de la venta sea obligatorio
+            var _inpValor = document.querySelector('[name="ing-valor_acordado"]');
+            if (_inpValor) {
+                _inpValor.setAttribute('required', 'required');
+            }
+        </script>
+
+        <!-- Método de Pago Inicial (se muestra dinámicamente) -->
+        <div id="wrap_pago_inicial" style="display:none; margin-top:14px; background:#f5f7fa; padding:15px; border-radius:8px; border:1px solid #e1e4e8;">
+            <h4 style="margin-top:0; margin-bottom:10px; color:#333; font-size:14px;">MÉTODO DE PAGO INICIAL</h4>
+            <div class="form-row cols-2">
+                <div>
+                    <label class="form-label">Método de pago</label>
+                    {{ ing_form.anticipo_metodo }}
+                </div>
+                <div id="wrap_anticipo_banco" style="display:none;">
+                    <label class="form-label">Banco</label>
+                    {{ ing_form.anticipo_banco }}
+                </div>
+                <div id="wrap_anticipo_tarjeta" style="display:none;">
+                    <label class="form-label">Tarjeta / App</label>
+                    {{ ing_form.anticipo_tarjeta_app }}
+                </div>
+            </div>
+            <div class="form-row cols-2" style="margin-top:10px;">
+                <div id="wrap_anticipo_banco_otro" style="display:none;">
+                    <label class="form-label">Especificar Banco</label>
+                    {{ ing_form.anticipo_banco_otro }}
+                </div>
+                <div id="wrap_anticipo_comprobante" style="display:none;">
+                    <label class="form-label">Enlace al comprobante</label>
+                    {{ ing_form.anticipo_comprobante_url }}
+                </div>
+            </div>
+            
+            <div id="wrap_pago_mixto" style="display:none; margin-top:14px; background:#fff; padding:15px; border-radius:8px; border:1px dashed #c4cdd5;">
+                <h5 style="margin-top:0; margin-bottom:10px; color:#1a1f36; font-size:13px;">Pago Mixto (Dividir el valor pagado en dos)</h5>
+                <div class="form-row cols-2">
+                    <div>
+                        <label class="form-label">Monto 1 (USD) *</label>
+                        {{ ing_form.anticipo_monto_1 }}
+                    </div>
+                    <div>
+                        <label class="form-label">Método de pago 1 *</label>
+                        {{ ing_form.anticipo_metodo_1 }}
+                    </div>
+                    <div id="wrap_anticipo_banco_1" style="display:none;">
+                        <label class="form-label">Banco 1 *</label>
+                        {{ ing_form.anticipo_banco_1 }}
+                    </div>
+                </div>
+                <div class="form-row cols-2" style="margin-top:10px;">
+                    <div>
+                        <label class="form-label">Monto 2 (USD) *</label>
+                        {{ ing_form.anticipo_monto_2 }}
+                    </div>
+                    <div>
+                        <label class="form-label">Método de pago 2 *</label>
+                        {{ ing_form.anticipo_metodo_2 }}
+                    </div>
+                    <div id="wrap_anticipo_banco_2" style="display:none;">
+                        <label class="form-label">Banco 2 *</label>
+                        {{ ing_form.anticipo_banco_2 }}
+                    </div>
+                </div>
+                <div id="msg_error_mixto" style="display:none; color:#d32f2f; margin-top:14px; font-weight:600; font-size:13px; text-align:center;">
+                    <!-- Error message for sum will appear here -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Campos ocultos de estado (ya vienen seteados a entregado en la vista) -->
+        <div style="display:none;">
+            {{ ing_form.estado }}
+            {{ ing_form.subestado_reparacion }}
+            {{ ing_form.subestado_entregado }}
+        </div>
+    </div>
+
+    <div class="actions-bar">
+        <a href="{% url 'econotec:venta_lista' %}" class="btn btn-secondary">Cancelar</a>
+        <button type="submit" id="btn-registrar" class="btn btn-primary">
+            Registrar Venta
+        </button>
+    </div>
+</form>
+
+<script>
+    // Autocompletado de cliente por cédula
+    // Cuando el técnico escribe la cédula, busca al cliente y rellena los campos.
+    (function () {
+        var inpCedula = document.querySelector('input[name="cli-cedula"]');
+        var inpNombres = document.querySelector('input[name="cli-nombres"]');
+        var inpWhatsapp = document.querySelector('input[name="cli-whatsapp"]');
+        var inpCorreo = document.querySelector('input[name="cli-correo"]');
+        var selSector = document.querySelector('select[name="cli-sector"]');
+        var inpSectorOtro = document.querySelector('input[name="cli-sector_otro"]');
+        var aviso = document.getElementById('cliente-aviso');
+        var avisoTxt = document.getElementById('cliente-aviso-texto');
+        var loadingMsg = document.getElementById('cliente-buscando');
+
+        if (!inpCedula) return;
+
+        var URL_BUSCAR = "{% url 'econotec:cliente_buscar_por_cedula' %}";
+        var timer = null;
+        var ultimaCedulaConsultada = '';
+
+        function camposClienteEditables(editable) {
+            var bg = editable ? '' : '#f0fff4';
+            [inpNombres, inpWhatsapp, inpCorreo, inpSectorOtro].forEach(function (el) {
+                if (el) el.style.backgroundColor = bg;
+            });
+            if (selSector) selSector.style.backgroundColor = bg;
+        }
+
+        function ocultarAviso() {
+            if (aviso) aviso.style.display = 'none';
+            camposClienteEditables(true);
+        }
+
+        function buscar() {
+            var cedula = (inpCedula.value || '').trim();
+            if (cedula.length < 5) {
+                ocultarAviso();
+                ultimaCedulaConsultada = '';
+                return;
+            }
+            if (cedula === ultimaCedulaConsultada) return;
+            ultimaCedulaConsultada = cedula;
+
+            if (loadingMsg) loadingMsg.style.display = '';
+
+            fetch(URL_BUSCAR + '?cedula=' + encodeURIComponent(cedula), {
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                credentials: 'same-origin'
+            })
+                .then(function (r) { return r.json(); })
+                .then(function (data) {
+                    if (loadingMsg) loadingMsg.style.display = 'none';
+
+                    if (data && data.existe) {
+                        var c = data.cliente;
+                        if (inpNombres) inpNombres.value = c.nombres || '';
+                        if (inpWhatsapp) inpWhatsapp.value = c.whatsapp || '';
+                        if (inpCorreo) inpCorreo.value = c.correo || '';
+                        if (selSector) selSector.value = c.sector || '';
+                        if (inpSectorOtro) inpSectorOtro.value = c.sector_otro || '';
+
+                        if (aviso && avisoTxt) {
+                            var n = data.num_equipos_anteriores || 0;
+                            var sufijo = (n === 1) ? '1 registro anterior' : (n + ' registros anteriores');
+                            avisoTxt.textContent = ' Cliente "' + (c.nombres || '') + '" — ' + sufijo + '. Los datos pueden editarse si lo necesitas.';
+                            aviso.style.display = '';
+                        }
+                        camposClienteEditables(false);
+                        if (window.__checkRequired) window.__checkRequired();
+                    } else {
+                        ocultarAviso();
+                        if (window.__checkRequired) window.__checkRequired();
+                    }
+                })
+                .catch(function () {
+                    if (loadingMsg) loadingMsg.style.display = 'none';
+                });
+        }
+
+        function programarBusqueda() {
+            clearTimeout(timer);
+            timer = setTimeout(buscar, 350);
+        }
+
+        inpCedula.addEventListener('input', programarBusqueda);
+        inpCedula.addEventListener('blur', buscar);
+
+        if (inpCedula.value && inpCedula.value.trim().length >= 5) {
+            buscar();
+        }
+    })();
+
+    (function () {
+        var btn = document.getElementById('btn-registrar');
+        var form = document.querySelector('form.form-card');
+        
+        // --- Lógica de Factura ---
+        var selFactura = document.getElementById('id_factura_realizada');
+        var divFacturaData = document.getElementById('factura-data');
+        var facturaHelper = document.getElementById('factura-helper');
+        var inpsFactura = [
+            document.getElementById('id_factura_nombres'),
+            document.getElementById('id_factura_cedula'),
+            document.getElementById('id_factura_correo')
+        ];
+        var labelsFactura = [
+            document.getElementById('label-factura-nombres'),
+            document.getElementById('label-factura-cedula'),
+            document.getElementById('label-factura-correo')
+        ];
+
+        function actualizarFactura() {
+            if (!selFactura) return;
+            var req = (selFactura.value === 'si');
+            if (divFacturaData) {
+                if (req) {
+                    divFacturaData.style.opacity = '1';
+                    divFacturaData.style.background = 'var(--hover-bg)';
+                    divFacturaData.style.borderColor = 'rgba(249, 118, 24, 0.22)';
+                } else {
+                    divFacturaData.style.opacity = '0.55';
+                    divFacturaData.style.background = 'rgba(107, 114, 128, 0.06)';
+                    divFacturaData.style.borderColor = 'transparent';
+                }
+            }
+            if (facturaHelper) {
+                facturaHelper.innerHTML = req 
+                    ? 'Completa estos datos para emitir la factura.' 
+                    : 'Selecciona <strong>Sí</strong> para habilitar los campos de factura.';
+            }
+            inpsFactura.forEach(function(inp, idx) {
+                if (!inp) return;
+                inp.disabled = !req;
+                if (req) {
+                    inp.setAttribute('required', 'required');
+                    if (labelsFactura[idx]) labelsFactura[idx].style.color = '';
+                } else {
+                    inp.removeAttribute('required');
+                    inp.value = '';
+                    if (labelsFactura[idx]) labelsFactura[idx].style.color = 'var(--text-muted)';
+                }
+            });
+            if (window.__checkRequired) window.__checkRequired();
+        }
+
+        if (selFactura) {
+            selFactura.addEventListener('change', actualizarFactura);
+            actualizarFactura(); // run on load
+        }
+        // --- Fin Lógica Factura ---
+
+        // Lógica para mostrar/ocultar los campos de pago inicial
+        var inpAbono = document.querySelector('[name="ing-abono_anticipo"]');
+        var wrapPago = document.getElementById('wrap_pago_inicial');
+        
+        var selMetodo = document.querySelector('[name="ing-anticipo_metodo"]');
+        var wrapBanco = document.getElementById('wrap_anticipo_banco');
+        var wrapTarjeta = document.getElementById('wrap_anticipo_tarjeta');
+        var wrapComprobante = document.getElementById('wrap_anticipo_comprobante');
+        
+        var selBanco = document.querySelector('[name="ing-anticipo_banco"]');
+        var wrapBancoOtro = document.getElementById('wrap_anticipo_banco_otro');
+        
+        var wrapPagoMixto = document.getElementById('wrap_pago_mixto');
+        var selMetodo1 = document.querySelector('[name="ing-anticipo_metodo_1"]');
+        var wrapBanco1 = document.getElementById('wrap_anticipo_banco_1');
+        var selMetodo2 = document.querySelector('[name="ing-anticipo_metodo_2"]');
+        var wrapBanco2 = document.getElementById('wrap_anticipo_banco_2');
+        var inpMonto1 = document.querySelector('[name="ing-anticipo_monto_1"]');
+        var inpMonto2 = document.querySelector('[name="ing-anticipo_monto_2"]');
+        var msgErrorMixto = document.getElementById('msg_error_mixto');
+
+        function checkPagoInicial() {
+            var abonoVal = parseFloat((inpAbono && inpAbono.value) ? inpAbono.value.replace(',', '.') : 0) || 0;
+            if (abonoVal > 0) {
+                wrapPago.style.display = 'block';
+            } else {
+                wrapPago.style.display = 'none';
+            }
+        }
+
+        function checkMetodo() {
+            var metodo = selMetodo ? selMetodo.value : 'efectivo';
+            if (metodo === 'mixto') {
+                if (wrapPagoMixto) wrapPagoMixto.style.display = 'block';
+                if (wrapBanco) wrapBanco.style.display = 'none';
+                if (wrapTarjeta) wrapTarjeta.style.display = 'none';
+                if (wrapComprobante) wrapComprobante.style.display = 'none';
+                if (wrapBancoOtro) wrapBancoOtro.style.display = 'none';
+                checkMetodoMixto();
+            } else {
+                if (wrapPagoMixto) wrapPagoMixto.style.display = 'none';
+                if (wrapBanco) wrapBanco.style.display = (metodo === 'transferencia') ? 'block' : 'none';
+                if (wrapTarjeta) wrapTarjeta.style.display = (metodo === 'tarjeta') ? 'block' : 'none';
+                if (wrapComprobante) wrapComprobante.style.display = (metodo === 'transferencia') ? 'block' : 'none';
+                
+                // Si cambia método, ocultar/mostrar banco otro según corresponda
+                if (metodo !== 'transferencia') {
+                    if (wrapBancoOtro) wrapBancoOtro.style.display = 'none';
+                } else {
+                    checkBanco();
+                }
+            }
+        }
+
+        function checkMetodoMixto() {
+            if (selMetodo1 && wrapBanco1) {
+                wrapBanco1.style.display = (selMetodo1.value === 'transferencia') ? 'block' : 'none';
+            }
+            if (selMetodo2 && wrapBanco2) {
+                wrapBanco2.style.display = (selMetodo2.value === 'transferencia') ? 'block' : 'none';
+            }
+            validarSumaMixto();
+        }
+
+        function validarSumaMixto() {
+            if (!selMetodo || selMetodo.value !== 'mixto') {
+                if (msgErrorMixto) msgErrorMixto.style.display = 'none';
+                if (inpMonto2) inpMonto2.setCustomValidity("");
+                if (window.__checkRequired) window.__checkRequired();
+                return;
+            }
+
+            var totalRequerido = inpAbono ? parseFloat(inpAbono.value.replace(',', '.')) || 0 : 0;
+            var m1 = inpMonto1 ? parseFloat(inpMonto1.value) || 0 : 0;
+            var m2 = inpMonto2 ? parseFloat(inpMonto2.value) || 0 : 0;
+            var suma = m1 + m2;
+
+            if (totalRequerido > 0) {
+                if (Math.abs(suma - totalRequerido) > 0.001) {
+                    if (msgErrorMixto) {
+                        msgErrorMixto.textContent = "⚠️ La suma de ambos montos ($" + suma.toFixed(2) + ") debe ser igual al total a pagar ($" + totalRequerido.toFixed(2) + ").";
+                        msgErrorMixto.style.display = 'block';
+                    }
+                    if (inpMonto2) inpMonto2.setCustomValidity("La suma debe ser " + totalRequerido.toFixed(2));
+                } else {
+                    if (msgErrorMixto) msgErrorMixto.style.display = 'none';
+                    if (inpMonto2) inpMonto2.setCustomValidity("");
+                }
+            } else {
+                if (msgErrorMixto) msgErrorMixto.style.display = 'none';
+                if (inpMonto2) inpMonto2.setCustomValidity("");
+            }
+            if (window.__checkRequired) window.__checkRequired();
+        }
+
+        function checkBanco() {
+            if (selMetodo && selMetodo.value === 'transferencia' && selBanco && selBanco.value === 'otro') {
+                if (wrapBancoOtro) wrapBancoOtro.style.display = 'block';
+            } else {
+                if (wrapBancoOtro) wrapBancoOtro.style.display = 'none';
+            }
+        }
+
+        if (inpAbono) {
+            inpAbono.addEventListener('input', checkPagoInicial);
+            inpAbono.addEventListener('change', checkPagoInicial);
+            inpAbono.addEventListener('input', validarSumaMixto);
+            inpAbono.addEventListener('change', validarSumaMixto);
+        }
+        if (inpMonto1) {
+            inpMonto1.addEventListener('input', validarSumaMixto);
+            inpMonto1.addEventListener('change', validarSumaMixto);
+        }
+        if (inpMonto2) {
+            inpMonto2.addEventListener('input', validarSumaMixto);
+            inpMonto2.addEventListener('change', validarSumaMixto);
+        }
+        if (selMetodo) selMetodo.addEventListener('change', checkMetodo);
+        if (selBanco) selBanco.addEventListener('change', checkBanco);
+        if (selMetodo1) selMetodo1.addEventListener('change', checkMetodoMixto);
+        if (selMetodo2) selMetodo2.addEventListener('change', checkMetodoMixto);
+
+        checkPagoInicial();
+        if (selMetodo) checkMetodo();
+
+        window.__checkRequired = function() {
+            if (!btn || !form) return;
+            
+            // Remove 'required' from all hidden elements to prevent HTML5 validation from blocking form submission
+            form.querySelectorAll('div[style*="display:none"] input, div[style*="display:none"] select, div[style*="display:none"] textarea').forEach(function(el) {
+                el.removeAttribute('required');
+            });
+
+            if (!form.checkValidity()) {
+                btn.style.opacity = '0.55';
+                btn.style.filter = 'grayscale(20%)';
+            } else {
+                btn.style.opacity = '1';
+                btn.style.filter = 'none';
+            }
+        };
+
+        if (form) {
+            form.addEventListener('input', window.__checkRequired);
+            form.addEventListener('change', window.__checkRequired);
+            setTimeout(window.__checkRequired, 100);
+            setTimeout(window.__checkRequired, 500);
+        }
+    })();
+</script>
+{% endblock %}

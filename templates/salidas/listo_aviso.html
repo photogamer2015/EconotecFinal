@@ -1,0 +1,197 @@
+{% extends 'base.html' %}
+{% load econotec_extras %}
+
+{% block title %}Salida registrada — Econotec{% endblock %}
+
+{% block content %}
+<style>
+    .exito-wrap {
+        max-width: 720px;
+        margin: 30px auto;
+        text-align: center;
+    }
+    .exito-card {
+        background: var(--card-bg);
+        border-radius: 16px;
+        padding: 36px 30px;
+        box-shadow: var(--shadow);
+        border-top: 8px solid #2e7d32;
+    }
+    .exito-card .icono {
+        font-size: 72px;
+        margin-bottom: 12px;
+    }
+    .exito-card h2 {
+        color: #2e7d32;
+        font-size: 26px;
+        margin-bottom: 6px;
+        font-weight: 800;
+    }
+    .exito-card .subt {
+        color: var(--text-muted);
+        font-size: 14px;
+        margin-bottom: 20px;
+    }
+    .resumen {
+        background: var(--primary-light);
+        border-radius: 10px;
+        padding: 16px 20px;
+        margin: 20px 0;
+        text-align: left;
+    }
+    .resumen .row {
+        display: flex; justify-content: space-between;
+        padding: 4px 0;
+        font-size: 14px;
+    }
+    .resumen .row strong { color: var(--primary-dark); }
+
+    .wa-card {
+        background: linear-gradient(135deg, #25D366, #1da851);
+        color: white;
+        border-radius: 12px;
+        padding: 22px 24px;
+        margin-top: 20px;
+        text-align: left;
+    }
+    .wa-card h3 { font-size: 16px; margin: 0 0 6px; font-weight: 800; }
+    .wa-card p { font-size: 13px; opacity: 0.95; margin: 0 0 14px; }
+    .wa-card .btn-wa-grande {
+        display: inline-flex; align-items: center; gap: 8px;
+        background: white; color: #1da851;
+        padding: 12px 22px; border-radius: 8px;
+        font-weight: 800; font-size: 15px;
+        text-decoration: none;
+    }
+    .wa-card .btn-wa-grande:hover { transform: translateY(-2px); }
+
+    /* Pasos: WhatsApp + PDF para que el técnico mande la hoja por el chat */
+    .pasos {
+        background: #fff8e1;
+        border-radius: 12px;
+        padding: 18px 22px;
+        margin-top: 18px;
+        text-align: left;
+        color: #6d4c00;
+        border-left: 5px solid #f9a825;
+    }
+    [data-theme="dark"] .pasos {
+        background: rgba(249, 168, 37, 0.15);
+        color: #fbbf24;
+        border-left-color: #f9a825;
+    }
+    .pasos h4 {
+        font-size: 14px; margin: 0 0 8px;
+        text-transform: uppercase; letter-spacing: 0.5px;
+    }
+    .pasos ol { margin: 0 0 0 18px; padding: 0; font-size: 13px; line-height: 1.6; }
+    .pasos li { margin-bottom: 4px; }
+
+    .acciones-finales {
+        margin-top: 24px;
+        display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;
+    }
+    .acciones-finales a, .acciones-finales button {
+        padding: 10px 20px; border-radius: 8px;
+        text-decoration: none; font-weight: 700; font-size: 13px;
+        border: none; cursor: pointer; font-family: inherit;
+        display: inline-flex; align-items: center; gap: 6px;
+    }
+    .a-primary { background: var(--primary); color: white; }
+    .a-primary:hover { background: var(--primary-dark); }
+    .a-secondary { background: #e0e0e0; color: #333; }
+    .a-secondary:hover { background: #cfcfcf; }
+    .a-info { background: #1976d2; color: white; }
+    .a-info:hover { background: #1565c0; }
+
+    .info-no-wa {
+        background: #fff8e1;
+        color: #856404;
+        padding: 14px 18px;
+        border-radius: 10px;
+        margin-top: 20px;
+        font-size: 13px;
+        text-align: left;
+    }
+    [data-theme="dark"] .info-no-wa {
+        background: rgba(245, 158, 11, 0.15);
+        color: #fbbf24;
+    }
+    .tel-pill {
+        display: inline-block;
+        background: rgba(255,255,255,0.22);
+        padding: 2px 10px;
+        border-radius: 10px;
+        font-size: 11px;
+        font-weight: 700;
+        margin-left: 6px;
+        vertical-align: middle;
+    }
+</style>
+
+<div class="exito-wrap">
+    <div class="exito-card">
+        <div class="icono">✅</div>
+        <h2>¡Salida registrada!</h2>
+        <p class="subt">El equipo {{ ingreso.codigo_equipo }} fue marcado como entregado.</p>
+
+        <div class="resumen">
+            <div class="row"><span>Cliente:</span><strong>{{ ingreso.cliente.nombres }}</strong></div>
+            <div class="row"><span>Equipo:</span><strong>{{ ingreso.tipo_equipo_display }} {{ ingreso.marca }}</strong></div>
+            <div class="row"><span>Estado:</span><strong>{{ salida.get_estado_reparacion_display }}</strong></div>
+            <div class="row"><span>Fecha de salida:</span><strong>{{ salida.fecha_salida|date:"d/m/Y" }}</strong></div>
+            {% if salida.garantia_dias %}
+                <div class="row"><span>Garantía:</span><strong>{{ salida.garantia_dias }} día{{ salida.garantia_dias|pluralize }}</strong></div>
+            {% endif %}
+            {% if ingreso.diferencia > 0 %}
+                <div class="row"><span>Saldo pendiente:</span><strong style="color: var(--danger);">{{ ingreso.diferencia|dinero_signo }}</strong></div>
+            {% endif %}
+            {% if ingreso.cliente.whatsapp %}
+                <div class="row"><span>WhatsApp del cliente:</span><strong>{{ ingreso.cliente.whatsapp }}</strong></div>
+            {% endif %}
+        </div>
+
+        {% if wa_link %}
+            <div class="wa-card">
+                <h3>
+                    💬 Avísale al cliente que su equipo está listo
+                    <span class="tel-pill">📱 {{ ingreso.cliente.whatsapp }}</span>
+                </h3>
+                <p>
+                    Tenemos el WhatsApp del cliente registrado. Haz clic abajo para abrir WhatsApp
+                    con un mensaje profesional ya redactado, dirigido al número del cliente.
+                </p>
+                <a href="{{ wa_link }}" target="_blank" rel="noopener" class="btn-wa-grande">
+                    💬 Enviar WhatsApp a {{ ingreso.cliente.nombres|truncatechars:25 }}
+                </a>
+            </div>
+
+            <div class="pasos">
+                <h4>📎 ¿Quieres adjuntar la hoja de salida?</h4>
+                <ol>
+                    <li>Descarga el <strong>PDF de la hoja de salida</strong> (botón abajo).</li>
+                    <li>Haz clic en el botón verde de WhatsApp para abrir el chat del cliente.</li>
+                    <li>En el chat, adjunta el PDF descargado junto con el mensaje.</li>
+                </ol>
+            </div>
+        {% else %}
+            <div class="info-no-wa">
+                ℹ️ El cliente no tiene un número de WhatsApp registrado o la salida no es positiva,
+                por lo que no se puede generar un mensaje automático. Puedes editar los datos del
+                cliente para agregarle el número.
+            </div>
+        {% endif %}
+
+        <div class="acciones-finales">
+            <a class="a-info" href="{% url 'econotec:salida_pdf' pk=salida.pk %}" target="_blank">
+                📄 Descargar hoja de salida (PDF)
+            </a>
+            <a class="a-info" href="{% url 'econotec:salida_imprimir' pk=salida.pk %}" target="_blank">
+                🖨 Imprimir
+            </a>
+            <a class="a-primary" href="{% url 'econotec:salida_lista' %}">Ir a lista de salidas</a>
+            <a class="a-secondary" href="{% url 'econotec:bienvenida' %}">Volver al inicio</a>
+        </div>
+    </div>
+</div>
+{% endblock %}
