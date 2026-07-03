@@ -292,6 +292,7 @@
                     <span class="txt"><strong>En reparación</strong></span>
                 </label>
 
+                {% comment %}
                 <label class="estado-opt ok" data-kind="ok">
                     <input type="radio" name="estado_movil" value="entregado_con_solucion"
                            {% if estado_actual_movil == 'entregado_con_solucion' %}checked{% endif %}>
@@ -312,6 +313,7 @@
                     <span class="ico">🚫</span>
                     <span class="txt"><strong>No quiso reparar</strong></span>
                 </label>
+                {% endcomment %}
             </div>
 
             <!-- Subestado solo para "En reparación" -->
