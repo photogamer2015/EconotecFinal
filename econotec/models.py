@@ -841,7 +841,7 @@ class SalidaEquipo(models.Model):
     """
 
     ESTADO_REPARACION = [
-        ('pendiente_retiro', '⏳ Reparado'),
+        ('pendiente_retiro', '⏳ Reparado — pendiente de retiro'),
         ('cliente_no_acepta', '🚫 Cliente no quiso reparar'),
         ('no_reparable', '❌ No se pudo reparar'),
         ('garantia', '🛡 Salida por garantía'),
