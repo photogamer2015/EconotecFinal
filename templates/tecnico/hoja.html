@@ -212,11 +212,11 @@
 
     <!-- ESTADO ACTUAL -->
     {% if estado_actual_movil == 'entregado_con_solucion' %}
-        <div class="estado-banner eb-ok"><span class="dot">✅</span> Con solución (Pendiente de retiro)</div>
+        <div class="estado-banner eb-ok"><span class="dot">✅</span> Con solución</div>
     {% elif estado_actual_movil == 'entregado_sin_solucion' %}
-        <div class="estado-banner eb-fail"><span class="dot">❌</span> Sin solución (Pendiente de retiro)</div>
+        <div class="estado-banner eb-fail"><span class="dot">❌</span> Sin solución</div>
     {% elif estado_actual_movil == 'entregado_no_quiso' %}
-        <div class="estado-banner eb-fail"><span class="dot">🚫</span> No quiso reparar (Pendiente de retiro)</div>
+        <div class="estado-banner eb-fail"><span class="dot">🚫</span> No quiso reparar</div>
     {% elif estado_actual_movil == 'en_reparacion' %}
         <div class="estado-banner eb-reparacion"><span class="dot">🔧</span> En reparación</div>
     {% else %}
@@ -296,21 +296,21 @@
                     <input type="radio" name="estado_movil" value="entregado_con_solucion"
                            {% if estado_actual_movil == 'entregado_con_solucion' %}checked{% endif %}>
                     <span class="ico">✅</span>
-                    <span class="txt"><strong>Con solución (Pendiente de retiro)</strong><small>Salida positiva</small></span>
+                    <span class="txt"><strong>Con solución</strong><small>Salida positiva</small></span>
                 </label>
 
                 <label class="estado-opt fail" data-kind="fail">
                     <input type="radio" name="estado_movil" value="entregado_sin_solucion"
                            {% if estado_actual_movil == 'entregado_sin_solucion' %}checked{% endif %}>
                     <span class="ico">❌</span>
-                    <span class="txt"><strong>Sin solución (Pendiente de retiro)</strong><small>Salida negativa (No reparable)</small></span>
+                    <span class="txt"><strong>Sin solución</strong><small>Salida negativa (No reparable)</small></span>
                 </label>
 
                 <label class="estado-opt fail" data-kind="fail">
                     <input type="radio" name="estado_movil" value="entregado_no_quiso"
                            {% if estado_actual_movil == 'entregado_no_quiso' %}checked{% endif %}>
                     <span class="ico">🚫</span>
-                    <span class="txt"><strong>No quiso reparar (Pendiente de retiro)</strong><small>Salida negativa (Cliente no acepta)</small></span>
+                    <span class="txt"><strong>No quiso reparar</strong><small>Salida negativa (Cliente no acepta)</small></span>
                 </label>
             </div>
 
@@ -362,13 +362,14 @@
         document.getElementById('hoja-form').addEventListener('submit', function (e) {
             const sel = document.querySelector('input[name="estado_movil"]:checked');
             if (sel && (sel.value === 'entregado_con_solucion' || sel.value === 'entregado_sin_solucion' || sel.value === 'entregado_no_quiso')) {
+                let v = sel.value;
                 let txt = '¿Confirmar acción?';
-                if (sel.value === 'entregado_con_solucion') {
-                    txt = '¿Confirmar CON SOLUCIÓN? El equipo quedará pendiente de retiro (salida positiva)';
-                } else if (sel.value === 'entregado_sin_solucion') {
-                    txt = '¿Confirmar SIN SOLUCIÓN? El equipo quedará pendiente de retiro (salida negativa)';
-                } else if (sel.value === 'entregado_no_quiso') {
-                    txt = '¿Confirmar NO QUISO REPARAR? El equipo quedará pendiente de retiro (salida negativa)';
+                if (v === 'entregado_con_solucion') {
+                    txt = '¿Confirmar CON SOLUCIÓN? El equipo registrará salida positiva';
+                } else if (v === 'entregado_sin_solucion') {
+                    txt = '¿Confirmar SIN SOLUCIÓN? El equipo registrará salida negativa';
+                } else if (v === 'entregado_no_quiso') {
+                    txt = '¿Confirmar NO QUISO REPARAR? El equipo registrará salida negativa';
                 }
                 if (!window.confirm(txt)) { e.preventDefault(); }
             }
