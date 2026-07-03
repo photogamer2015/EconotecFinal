@@ -337,7 +337,7 @@
             <div class="actions-grid">
                 {% if puede_gestionar_pagos %}
                 <a href="{% url 'econotec:abono_crear' ingreso_pk=ingreso.pk %}" class="btn btn-success">Gestionar Pagos</a>
-                <a href="{% url 'econotec:ingreso_abonos' pk=ingreso.pk %}" class="btn btn-secondary">Ver Abonos ({{ abonos.count }})</a>
+                <a href="{% url 'econotec:ingreso_abonos' pk=ingreso.pk %}" class="btn btn-secondary">Ver Abonos</a>
                 {% endif %}
 
                 {% if ingreso.sede != 'ventas' %}
