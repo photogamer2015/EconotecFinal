@@ -16,7 +16,6 @@ urlpatterns = [
     path('alertas/bodegaje/', views.alertas_bodegaje, name='alertas_bodegaje'),
     path('ingresos/<int:pk>/diagnostico-silenciar/',
          views.ingreso_diagnostico_silenciar, name='ingreso_diagnostico_silenciar'),
-    path('bot-query/', views.bot_query, name='bot_query'),
 
     # ── Salida: aviso post-creación + cierre del caso ──────
     path('salidas/<int:pk>/aviso/', views.salida_listo_aviso, name='salida_listo_aviso'),

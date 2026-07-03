@@ -25,7 +25,6 @@ import os
 SECRET_KEY = env('SECRET_KEY')
 DEBUG = env('DEBUG')
 GEMINI_API_KEY = env('GEMINI_API_KEY', default='')
-OPENAI_API_KEY = env('OPENAI_API_KEY', default='')
 
 ALLOWED_HOSTS = ['127.0.0.1', 'localhost', '*']
 
