@@ -118,7 +118,7 @@
                         <div style="display: flex; gap: 4px; align-items: center; white-space: nowrap;">
                             <span class="ret-pill">✅ Retirado {{ s.fecha_retiro_real|date:"d/m/Y" }}</span>
                             {% if es_admin %}
-                            <form method="post" action="{% url 'econotec:salida_deshacer_retiro' pk=s.pk %}" onsubmit="confirmDelete(event, this, '¿Seguro que deseas DESHACER el retiro de este equipo? Volverá a estar pendiente de retiro en el local.', 'Sí, deshacer', 'Cancelar');" style="margin:0; display:inline-block;">
+                            <form method="post" action="{% url 'econotec:salida_deshacer_retiro' pk=s.pk %}" onsubmit="confirmDelete(event, this, '¿Seguro que deseas DESHACER el retiro de este equipo? Volverá a estar listo para entrega en el local.', 'Sí, deshacer', 'Cancelar');" style="margin:0; display:inline-block;">
                                 {% csrf_token %}
                                 <button type="submit" class="btn btn-sm btn-danger" style="padding: 2px 6px; font-size: 11px; margin:0;" title="Deshacer Retiro">✖</button>
                             </form>

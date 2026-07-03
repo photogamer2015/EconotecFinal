@@ -79,7 +79,7 @@ SUBESTADO_ENTREGADO = [
     ('con_solucion', 'Con solución'),
     ('sin_solucion', 'Sin solución'),
     ('no_quiso_reparar', 'No quiso repararlo'),
-    ('pendiente_retiro', 'Pendiente de retiro'),
+    ('pendiente_retiro', 'Listo para entrega'),
 ]
 
 
@@ -841,7 +841,7 @@ class SalidaEquipo(models.Model):
     """
 
     ESTADO_REPARACION = [
-        ('pendiente_retiro', '⏳ Reparado — pendiente de retiro'),
+        ('pendiente_retiro', '⏳ Reparado'),
         ('cliente_no_acepta', '🚫 Cliente no quiso reparar'),
         ('no_reparable', '❌ No se pudo reparar'),
         ('garantia', '🛡 Salida por garantía'),
