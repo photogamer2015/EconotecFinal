@@ -296,21 +296,21 @@
                     <input type="radio" name="estado_movil" value="entregado_con_solucion"
                            {% if estado_actual_movil == 'entregado_con_solucion' %}checked{% endif %}>
                     <span class="ico">✅</span>
-                    <span class="txt"><strong>Con solución</strong><small>Salida positiva</small></span>
+                    <span class="txt"><strong>Con solución</strong></span>
                 </label>
 
                 <label class="estado-opt fail" data-kind="fail">
                     <input type="radio" name="estado_movil" value="entregado_sin_solucion"
                            {% if estado_actual_movil == 'entregado_sin_solucion' %}checked{% endif %}>
                     <span class="ico">❌</span>
-                    <span class="txt"><strong>Sin solución</strong><small>Salida negativa (No reparable)</small></span>
+                    <span class="txt"><strong>Sin solución</strong></span>
                 </label>
 
                 <label class="estado-opt fail" data-kind="fail">
                     <input type="radio" name="estado_movil" value="entregado_no_quiso"
                            {% if estado_actual_movil == 'entregado_no_quiso' %}checked{% endif %}>
                     <span class="ico">🚫</span>
-                    <span class="txt"><strong>No quiso reparar</strong><small>Salida negativa (Cliente no acepta)</small></span>
+                    <span class="txt"><strong>No quiso reparar</strong></span>
                 </label>
             </div>
 
