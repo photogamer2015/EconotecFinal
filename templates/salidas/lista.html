@@ -155,6 +155,7 @@
                     {% if s.pendiente_de_retiro_fisico and not s.cliente_ya_retiro %}
                         <a href="{% url 'econotec:salida_listo_aviso' pk=s.pk %}" class="wa-mini" title="Avisar por WhatsApp">💬</a>
                     {% endif %}
+                    <a href="{% url 'econotec:ingreso_abonos' pk=s.ingreso.pk %}" class="btn btn-sm btn-secondary">Ver Abonos / Pagos</a>
                     <a href="{% url 'econotec:salida_editar' pk=s.pk %}" class="btn btn-sm btn-secondary">Editar Salida</a>
                     <a href="{% url 'econotec:salida_imprimir' pk=s.pk %}" target="_blank" class="btn btn-sm btn-info">🖨 </a>
                     <a href="{% url 'econotec:salida_pdf' pk=s.pk %}" class="btn btn-sm btn-primary"> Descargar 📄</a>
