@@ -69,6 +69,83 @@
     .money-card .value { font-size: 18px; font-weight: 800; color: var(--secondary); margin-top:4px; }
     .money-card.pos .value { color: var(--success); }
     .money-card.neg .value { color: var(--danger); }
+    .estado-equipo-panel {
+        text-align: center;
+        padding: 18px 14px;
+        border-radius: 10px;
+        border: 1px solid #dbeafe;
+        background: #eff6ff;
+    }
+    .estado-equipo-panel.estado-ingresado {
+        border-color: #bfdbfe;
+        background: #eff6ff;
+    }
+    .estado-equipo-panel.estado-en_reparacion {
+        border-color: #fed7aa;
+        background: #fff7ed;
+    }
+    .estado-equipo-panel.estado-entregado {
+        border-color: #bbf7d0;
+        background: #f0fdf4;
+    }
+    .estado-equipo-panel.estado-garantia {
+        border-color: #ddd6fe;
+        background: #f5f3ff;
+    }
+    .estado-equipo-label {
+        color: #6b7280;
+        font-size: 12px;
+        font-weight: 800;
+        letter-spacing: 0.5px;
+        margin-bottom: 8px;
+        text-transform: uppercase;
+    }
+    .estado-equipo-valor {
+        color: #1f2937;
+        font-size: 24px;
+        font-weight: 900;
+        line-height: 1.12;
+        text-transform: uppercase;
+    }
+    .estado-equipo-subestado {
+        color: #4b5563;
+        font-size: 14px;
+        font-weight: 800;
+        margin-top: 8px;
+    }
+    .estado-equipo-actions {
+        margin-top: 14px;
+    }
+    .estado-equipo-actions .btn {
+        justify-content: center;
+        width: 100%;
+    }
+    .pago-mixto-detalle {
+        display: grid;
+        gap: 8px;
+        margin-top: 10px;
+        padding-top: 10px;
+        border-top: 1px dashed #e5e7eb;
+    }
+    .pago-mixto-parte {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        padding: 8px 10px;
+        background: #fff8f3;
+        border-radius: 8px;
+    }
+    .pago-mixto-parte strong {
+        color: var(--primary);
+        white-space: nowrap;
+    }
+    .pago-mixto-parte span {
+        color: #374151;
+        font-size: 12px;
+        font-weight: 700;
+        text-align: right;
+    }
 </style>
 
 <div class="crumb">
@@ -216,6 +293,24 @@
 
     <!-- Columna derecha: pagos, salida, acciones -->
     <div>
+        <div class="info-card" style="margin-bottom:18px;">
+            <h3>🔄 Estado del equipo</h3>
+            <div class="estado-equipo-panel estado-{{ ingreso.estado }}">
+                <div class="estado-equipo-label">Estado actual</div>
+                <div class="estado-equipo-valor">{{ ingreso.get_estado_display }}</div>
+                {% if ingreso.estado == 'en_reparacion' and ingreso.subestado_reparacion %}
+                    <div class="estado-equipo-subestado">↳ {{ ingreso.get_subestado_reparacion_display }}</div>
+                {% elif ingreso.estado == 'entregado' and ingreso.subestado_entregado %}
+                    <div class="estado-equipo-subestado">↳ {{ ingreso.get_subestado_entregado_display }}</div>
+                {% endif %}
+            </div>
+            <div class="estado-equipo-actions">
+                <a href="{% url 'econotec:ingreso_editar' pk=ingreso.pk %}#estado-equipo-editor" class="btn btn-secondary">
+                    ✏ Editar estado
+                </a>
+            </div>
+        </div>
+
         {% if ingreso.abono_anticipo > 0 or ingreso.diagnostico_inmediato == 'si' %}
         <div class="info-card" style="margin-bottom:18px; border-left:4px solid var(--secondary);">
             <h3>💳 Pago Inicial (Mostrador)</h3>
@@ -224,9 +319,31 @@
             {% endif %}
             {% if ingreso.diagnostico_inmediato == 'si' and ingreso.valor_diagnostico > 0 %}
             <div class="field-row"><span class="label">Diagnóstico Express</span><span class="value" style="font-weight:700; color:var(--primary);">{{ ingreso.valor_diagnostico|dinero_signo }}</span></div>
-            {% endif %}
             <div class="field-row">
-                <span class="label">Método</span>
+                <span class="label">Método del diagnóstico</span>
+                <span class="value">
+                    {{ ingreso.get_diagnostico_metodo_display }}
+                    {% if ingreso.diagnostico_metodo == 'transferencia' %}
+                        ({{ ingreso.diagnostico_banco_otro|default:ingreso.get_diagnostico_banco_display }})
+                    {% elif ingreso.diagnostico_metodo == 'tarjeta' %}
+                        ({{ ingreso.get_diagnostico_tarjeta_app_display }})
+                    {% endif %}
+                </span>
+            </div>
+            {% if ingreso.diagnostico_metodo == 'mixto' and ingreso.diagnostico_mixto_partes %}
+            <div class="pago-mixto-detalle">
+                {% for parte in ingreso.diagnostico_mixto_partes %}
+                <div class="pago-mixto-parte">
+                    <strong>{{ parte.monto|dinero_signo }}</strong>
+                    <span>{{ parte.detalle }}</span>
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+            {% endif %}
+            {% if ingreso.abono_anticipo > 0 %}
+            <div class="field-row">
+                <span class="label">Método del anticipo</span>
                 <span class="value">
                     {{ ingreso.get_anticipo_metodo_display }}
                     {% if ingreso.anticipo_metodo == 'transferencia' %}
@@ -236,9 +353,25 @@
                     {% endif %}
                 </span>
             </div>
+            {% if ingreso.anticipo_metodo == 'mixto' and ingreso.anticipo_mixto_partes %}
+            <div class="pago-mixto-detalle">
+                {% for parte in ingreso.anticipo_mixto_partes %}
+                <div class="pago-mixto-parte">
+                    <strong>{{ parte.monto|dinero_signo }}</strong>
+                    <span>{{ parte.detalle }}</span>
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+            {% endif %}
             {% if ingreso.anticipo_comprobante_url %}
             <div class="field-row" style="border-bottom:none; margin-top:6px;">
                 <a href="{{ ingreso.anticipo_comprobante_url }}" target="_blank" class="btn btn-secondary" style="width:100%; font-size:12px; padding:6px;">📎 Ver Comprobante</a>
+            </div>
+            {% endif %}
+            {% if ingreso.diagnostico_comprobante_url %}
+            <div class="field-row" style="border-bottom:none; margin-top:6px;">
+                <a href="{{ ingreso.diagnostico_comprobante_url }}" target="_blank" class="btn btn-secondary" style="width:100%; font-size:12px; padding:6px;">📎 Ver Comprobante Diagnóstico</a>
             </div>
             {% endif %}
         </div>
@@ -333,11 +466,11 @@
         </div>
 
         <div class="info-card" style="margin-top:18px;">
-            <h3>💳 Acciones</h3>
+            <h3> 📎 Acciones</h3>
             <div class="actions-grid">
                 {% if puede_gestionar_pagos %}
-                <a href="{% url 'econotec:abono_crear' ingreso_pk=ingreso.pk %}" class="btn btn-success">Gestionar Pagos</a>
-                <a href="{% url 'econotec:ingreso_abonos' pk=ingreso.pk %}" class="btn btn-secondary">Ver Abonos</a>
+                <a href="{% url 'econotec:abono_crear' ingreso_pk=ingreso.pk %}" class="btn btn-success">Pago Directo</a>
+                <a href="{% url 'econotec:ingreso_abonos' pk=ingreso.pk %}" class="btn btn-secondary">Ver Abonos / Pagos</a>
                 {% endif %}
 
                 {% if ingreso.sede != 'ventas' %}

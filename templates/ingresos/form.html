@@ -121,7 +121,7 @@
                 {{ ing_form.asesor_comercial }}
             </div>
             <div>
-                <label class="form-label">Técnico Encargado *</label>
+                <label class="form-label">Técnico Recibido *</label>
                 {{ ing_form.tecnico_encargado }}
             </div>
             <div>
@@ -240,9 +240,9 @@
         </div>
     </div>
 
-    <!-- Diagnóstico y valores -->
+    <!-- Diagnóstico inmediato -->
     <div class="form-section">
-        <h3>Diagnóstico y Valores</h3>
+        <h3>Diagnóstico Inmediato</h3>
         <div class="form-row cols-2">
             <div>
                 <label class="form-label">Diagnóstico inmediato</label>
@@ -253,83 +253,82 @@
                 {{ ing_form.valor_diagnostico }}
             </div>
         </div>
-        <div class="form-row cols-3" style="margin-top:14px;">
-            <div>
-                <label class="form-label">Valor acordado (USD)</label>
-                {{ ing_form.valor_acordado }}
-                <small style="color:#888; font-size:11px; display:block; margin-top:4px;">Si dejas el casillero vacío o pones un punto (.), el valor saldrá como PENDIENTE y en la hoja se mostrará una raya (—).</small>
-            </div>
-            <div>
-                <label class="form-label">Abono / Anticipo (USD)</label>
-                {{ ing_form.abono_anticipo }}
-            </div>
-            <div>
-                <label class="form-label">Estado del equipo</label>
-                {{ ing_form.estado }}
-            </div>
-        </div>
-
-        <!-- Método de Pago Inicial (se muestra dinámicamente) -->
-        <div id="wrap_pago_inicial" style="display:none; margin-top:14px; background:#f5f7fa; padding:15px; border-radius:8px; border:1px solid #e1e4e8;">
-            <h4 style="margin-top:0; margin-bottom:10px; color:#333; font-size:14px;">MÉTODO DE PAGO INICIAL</h4>
+        <div id="wrap_pago_diagnostico" style="display:none; margin-top:14px; background:#f5f7fa; padding:15px; border-radius:8px; border:1px solid #e1e4e8;">
+            <h4 style="margin-top:0; margin-bottom:10px; color:#333; font-size:14px;">MÉTODO DE PAGO DEL DIAGNÓSTICO</h4>
             <div class="form-row cols-2">
                 <div>
                     <label class="form-label">Método de pago</label>
-                    {{ ing_form.anticipo_metodo }}
+                    {{ ing_form.diagnostico_metodo }}
                 </div>
-                <div id="wrap_anticipo_banco" style="display:none;">
+                <div id="wrap_diagnostico_banco" style="display:none;">
                     <label class="form-label">Banco</label>
-                    {{ ing_form.anticipo_banco }}
+                    {{ ing_form.diagnostico_banco }}
                 </div>
-                <div id="wrap_anticipo_tarjeta" style="display:none;">
+                <div id="wrap_diagnostico_tarjeta" style="display:none;">
                     <label class="form-label">Tarjeta / App</label>
-                    {{ ing_form.anticipo_tarjeta_app }}
+                    {{ ing_form.diagnostico_tarjeta_app }}
                 </div>
             </div>
             <div class="form-row cols-2" style="margin-top:10px;">
-                <div id="wrap_anticipo_banco_otro" style="display:none;">
+                <div id="wrap_diagnostico_banco_otro" style="display:none;">
                     <label class="form-label">Especificar Banco</label>
-                    {{ ing_form.anticipo_banco_otro }}
+                    {{ ing_form.diagnostico_banco_otro }}
                 </div>
-                <div id="wrap_anticipo_comprobante" style="display:none;">
+                <div id="wrap_diagnostico_comprobante" style="display:none;">
                     <label class="form-label">Enlace al comprobante</label>
-                    {{ ing_form.anticipo_comprobante_url }}
+                    {{ ing_form.diagnostico_comprobante_url }}
                 </div>
             </div>
-            
-            <div id="wrap_pago_mixto" style="display:none; margin-top:14px; background:#fff; padding:15px; border-radius:8px; border:1px dashed #c4cdd5;">
-                <h5 style="margin-top:0; margin-bottom:10px; color:#1a1f36; font-size:13px;">Pago Mixto (Dividir el valor pagado en dos)</h5>
+
+            <div id="wrap_diagnostico_mixto" style="display:none; margin-top:14px; background:#fff; padding:15px; border-radius:8px; border:1px dashed #c4cdd5;">
+                <h5 style="margin-top:0; margin-bottom:10px; color:#1a1f36; font-size:13px;">Pago Mixto del diagnóstico (dividir en dos)</h5>
                 <div class="form-row cols-2">
                     <div>
                         <label class="form-label">Monto 1 (USD) *</label>
-                        {{ ing_form.anticipo_monto_1 }}
+                        {{ ing_form.diagnostico_monto_1 }}
                     </div>
                     <div>
                         <label class="form-label">Método de pago 1 *</label>
-                        {{ ing_form.anticipo_metodo_1 }}
+                        {{ ing_form.diagnostico_metodo_1 }}
                     </div>
-                    <div id="wrap_anticipo_banco_1" style="display:none;">
+                    <div id="wrap_diagnostico_banco_1" style="display:none;">
                         <label class="form-label">Banco 1 *</label>
-                        {{ ing_form.anticipo_banco_1 }}
+                        {{ ing_form.diagnostico_banco_1 }}
                     </div>
                 </div>
                 <div class="form-row cols-2" style="margin-top:10px;">
                     <div>
                         <label class="form-label">Monto 2 (USD) *</label>
-                        {{ ing_form.anticipo_monto_2 }}
+                        {{ ing_form.diagnostico_monto_2 }}
                     </div>
                     <div>
                         <label class="form-label">Método de pago 2 *</label>
-                        {{ ing_form.anticipo_metodo_2 }}
+                        {{ ing_form.diagnostico_metodo_2 }}
                     </div>
-                    <div id="wrap_anticipo_banco_2" style="display:none;">
+                    <div id="wrap_diagnostico_banco_2" style="display:none;">
                         <label class="form-label">Banco 2 *</label>
-                        {{ ing_form.anticipo_banco_2 }}
+                        {{ ing_form.diagnostico_banco_2 }}
                     </div>
                 </div>
-                <div id="msg_error_mixto" style="display:none; color:#d32f2f; margin-top:14px; font-weight:600; font-size:13px; text-align:center;">
+                <div id="msg_error_diagnostico_mixto" style="display:none; color:#d32f2f; margin-top:14px; font-weight:600; font-size:13px; text-align:center;">
                     <!-- Error message for sum will appear here -->
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Valor y estado -->
+    <div class="form-section">
+        <h3>Valor y Estado del Equipo</h3>
+        <div class="form-row cols-2">
+            <div>
+                <label class="form-label">Valor acordado (USD)</label>
+                {{ ing_form.valor_acordado }}
+                <small style="color:#888; font-size:11px; display:block; margin-top:4px;">Si dejas el casillero vacío o pones un punto (.), el valor saldrá como PENDIENTE y en la hoja se mostrará una raya (—).</small>
+            </div>
+            <div id="estado-equipo-editor">
+                <label class="form-label">Estado del equipo</label>
+                {{ ing_form.estado }}
             </div>
         </div>
 
@@ -387,6 +386,84 @@
             <strong style="color:#2e7d32; font-size:14px;">⚡ Salida automática</strong><br>
             <span id="hint-auto-salida-texto" style="color:#1b5e20;"></span>
             <br><small style="color:#388e3c; margin-top:4px; display:block;">💡 Al hacer clic en <strong>Guardar cambios</strong>, se registrará la salida del equipo automáticamente. No tendrás que hacerlo por separado.</small>
+        </div>
+    </div>
+
+    <!-- Abono / anticipo -->
+    <div class="form-section">
+        <h3>Abono / Anticipo</h3>
+        <div class="form-row cols-2">
+            <div>
+                <label class="form-label">Abono / Anticipo (USD)</label>
+                {{ ing_form.abono_anticipo }}
+                <small style="color:#888; font-size:11px; display:block; margin-top:4px;">Este valor es aparte del diagnóstico inmediato. Si no recibe anticipo, déjalo en 0.</small>
+            </div>
+        </div>
+
+        <div id="wrap_pago_anticipo_slot">
+            <!-- Método de Pago Inicial (se muestra dinámicamente) -->
+            <div id="wrap_pago_inicial" style="display:none; margin-top:14px; background:#f5f7fa; padding:15px; border-radius:8px; border:1px solid #e1e4e8;">
+                <h4 id="titulo_pago_inicial" style="margin-top:0; margin-bottom:10px; color:#333; font-size:14px;">MÉTODO DE PAGO INICIAL</h4>
+                <div class="form-row cols-2">
+                    <div>
+                        <label class="form-label">Método de pago</label>
+                        {{ ing_form.anticipo_metodo }}
+                    </div>
+                    <div id="wrap_anticipo_banco" style="display:none;">
+                        <label class="form-label">Banco</label>
+                        {{ ing_form.anticipo_banco }}
+                    </div>
+                    <div id="wrap_anticipo_tarjeta" style="display:none;">
+                        <label class="form-label">Tarjeta / App</label>
+                        {{ ing_form.anticipo_tarjeta_app }}
+                    </div>
+                </div>
+                <div class="form-row cols-2" style="margin-top:10px;">
+                    <div id="wrap_anticipo_banco_otro" style="display:none;">
+                        <label class="form-label">Especificar Banco</label>
+                        {{ ing_form.anticipo_banco_otro }}
+                    </div>
+                    <div id="wrap_anticipo_comprobante" style="display:none;">
+                        <label class="form-label">Enlace al comprobante</label>
+                        {{ ing_form.anticipo_comprobante_url }}
+                    </div>
+                </div>
+                
+                <div id="wrap_pago_mixto" style="display:none; margin-top:14px; background:#fff; padding:15px; border-radius:8px; border:1px dashed #c4cdd5;">
+                    <h5 id="titulo_pago_mixto" style="margin-top:0; margin-bottom:10px; color:#1a1f36; font-size:13px;">Pago Mixto (Dividir el valor pagado en dos)</h5>
+                    <div class="form-row cols-2">
+                        <div>
+                            <label class="form-label">Monto 1 (USD) *</label>
+                            {{ ing_form.anticipo_monto_1 }}
+                        </div>
+                        <div>
+                            <label class="form-label">Método de pago 1 *</label>
+                            {{ ing_form.anticipo_metodo_1 }}
+                        </div>
+                        <div id="wrap_anticipo_banco_1" style="display:none;">
+                            <label class="form-label">Banco 1 *</label>
+                            {{ ing_form.anticipo_banco_1 }}
+                        </div>
+                    </div>
+                    <div class="form-row cols-2" style="margin-top:10px;">
+                        <div>
+                            <label class="form-label">Monto 2 (USD) *</label>
+                            {{ ing_form.anticipo_monto_2 }}
+                        </div>
+                        <div>
+                            <label class="form-label">Método de pago 2 *</label>
+                            {{ ing_form.anticipo_metodo_2 }}
+                        </div>
+                        <div id="wrap_anticipo_banco_2" style="display:none;">
+                            <label class="form-label">Banco 2 *</label>
+                            {{ ing_form.anticipo_banco_2 }}
+                        </div>
+                    </div>
+                    <div id="msg_error_mixto" style="display:none; color:#d32f2f; margin-top:14px; font-weight:600; font-size:13px; text-align:center;">
+                        <!-- Error message for sum will appear here -->
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -606,6 +683,116 @@
 
     (function() {
         var selDiag = document.querySelector('[name="ing-diagnostico_inmediato"]');
+        var inpValorDiag = document.querySelector('[name="ing-valor_diagnostico"]');
+        var wrapPagoDiag = document.getElementById('wrap_pago_diagnostico');
+
+        var selMetodoDiag = document.querySelector('[name="ing-diagnostico_metodo"]');
+        var wrapBancoDiag = document.getElementById('wrap_diagnostico_banco');
+        var wrapTarjetaDiag = document.getElementById('wrap_diagnostico_tarjeta');
+        var wrapComprobanteDiag = document.getElementById('wrap_diagnostico_comprobante');
+        var selBancoDiag = document.querySelector('[name="ing-diagnostico_banco"]');
+        var wrapBancoOtroDiag = document.getElementById('wrap_diagnostico_banco_otro');
+
+        var wrapMixtoDiag = document.getElementById('wrap_diagnostico_mixto');
+        var selMetodoDiag1 = document.querySelector('[name="ing-diagnostico_metodo_1"]');
+        var selMetodoDiag2 = document.querySelector('[name="ing-diagnostico_metodo_2"]');
+        var wrapBancoDiag1 = document.getElementById('wrap_diagnostico_banco_1');
+        var wrapBancoDiag2 = document.getElementById('wrap_diagnostico_banco_2');
+        var inpMontoDiag1 = document.querySelector('[name="ing-diagnostico_monto_1"]');
+        var inpMontoDiag2 = document.querySelector('[name="ing-diagnostico_monto_2"]');
+        var msgErrorDiag = document.getElementById('msg_error_diagnostico_mixto');
+
+        function valorDiagnostico() {
+            var activo = selDiag && selDiag.value === 'si';
+            return activo && inpValorDiag ? parseFloat(inpValorDiag.value.replace(',', '.')) || 0 : 0;
+        }
+
+        function checkPagoDiagnostico() {
+            if (!wrapPagoDiag) return;
+            wrapPagoDiag.style.display = valorDiagnostico() > 0 ? 'block' : 'none';
+            validarSumaDiagnosticoMixto();
+        }
+
+        function checkBancoDiagnostico() {
+            if (!wrapBancoOtroDiag) return;
+            wrapBancoOtroDiag.style.display = (selMetodoDiag && selMetodoDiag.value === 'transferencia' && selBancoDiag && selBancoDiag.value === 'otro') ? 'block' : 'none';
+        }
+
+        function checkMetodoDiagnostico() {
+            var metodo = selMetodoDiag ? selMetodoDiag.value : 'efectivo';
+            if (wrapMixtoDiag) wrapMixtoDiag.style.display = (metodo === 'mixto') ? 'block' : 'none';
+            if (wrapBancoDiag) wrapBancoDiag.style.display = (metodo === 'transferencia') ? 'block' : 'none';
+            if (wrapTarjetaDiag) wrapTarjetaDiag.style.display = (metodo === 'tarjeta') ? 'block' : 'none';
+            if (wrapComprobanteDiag) wrapComprobanteDiag.style.display = (metodo === 'transferencia') ? 'block' : 'none';
+            if (metodo === 'transferencia') {
+                checkBancoDiagnostico();
+            } else if (wrapBancoOtroDiag) {
+                wrapBancoOtroDiag.style.display = 'none';
+            }
+            checkMetodoDiagnosticoMixto();
+        }
+
+        function checkMetodoDiagnosticoMixto() {
+            if (wrapBancoDiag1 && selMetodoDiag1) {
+                wrapBancoDiag1.style.display = (selMetodoDiag1.value === 'transferencia') ? 'block' : 'none';
+            }
+            if (wrapBancoDiag2 && selMetodoDiag2) {
+                wrapBancoDiag2.style.display = (selMetodoDiag2.value === 'transferencia') ? 'block' : 'none';
+            }
+            validarSumaDiagnosticoMixto();
+        }
+
+        function validarSumaDiagnosticoMixto() {
+            if (!selMetodoDiag || selMetodoDiag.value !== 'mixto') {
+                if (msgErrorDiag) msgErrorDiag.style.display = 'none';
+                if (inpMontoDiag2) inpMontoDiag2.setCustomValidity("");
+                if (window.__checkRequired) window.__checkRequired();
+                return;
+            }
+
+            var total = valorDiagnostico();
+            var m1 = inpMontoDiag1 ? parseFloat(inpMontoDiag1.value.replace(',', '.')) || 0 : 0;
+            var m2 = inpMontoDiag2 ? parseFloat(inpMontoDiag2.value.replace(',', '.')) || 0 : 0;
+            var suma = m1 + m2;
+
+            if (total > 0 && Math.abs(suma - total) > 0.001) {
+                if (msgErrorDiag) {
+                    msgErrorDiag.textContent = "⚠️ La suma de ambos montos ($" + suma.toFixed(2) + ") debe ser igual al total del diagnóstico ($" + total.toFixed(2) + ").";
+                    msgErrorDiag.style.display = 'block';
+                }
+                if (inpMontoDiag2) inpMontoDiag2.setCustomValidity("La suma debe ser " + total.toFixed(2));
+            } else {
+                if (msgErrorDiag) msgErrorDiag.style.display = 'none';
+                if (inpMontoDiag2) inpMontoDiag2.setCustomValidity("");
+            }
+            if (window.__checkRequired) window.__checkRequired();
+        }
+
+        if (selDiag) {
+            selDiag.addEventListener('change', checkPagoDiagnostico);
+        }
+        if (inpValorDiag) {
+            inpValorDiag.addEventListener('input', checkPagoDiagnostico);
+            inpValorDiag.addEventListener('change', checkPagoDiagnostico);
+        }
+        if (selMetodoDiag) selMetodoDiag.addEventListener('change', checkMetodoDiagnostico);
+        if (selBancoDiag) selBancoDiag.addEventListener('change', checkBancoDiagnostico);
+        if (selMetodoDiag1) selMetodoDiag1.addEventListener('change', checkMetodoDiagnosticoMixto);
+        if (selMetodoDiag2) selMetodoDiag2.addEventListener('change', checkMetodoDiagnosticoMixto);
+        if (inpMontoDiag1) {
+            inpMontoDiag1.addEventListener('input', validarSumaDiagnosticoMixto);
+            inpMontoDiag1.addEventListener('change', validarSumaDiagnosticoMixto);
+        }
+        if (inpMontoDiag2) {
+            inpMontoDiag2.addEventListener('input', validarSumaDiagnosticoMixto);
+            inpMontoDiag2.addEventListener('change', validarSumaDiagnosticoMixto);
+        }
+
+        checkPagoDiagnostico();
+        checkMetodoDiagnostico();
+    })();
+
+    (function() {
         var inpAbono = document.querySelector('[name="ing-abono_anticipo"]');
         var wrapPago = document.getElementById('wrap_pago_inicial');
         
@@ -624,17 +811,36 @@
         var wrapBanco2 = document.getElementById('wrap_anticipo_banco_2');
         var inpMonto1 = document.querySelector('[name="ing-anticipo_monto_1"]');
         var inpMonto2 = document.querySelector('[name="ing-anticipo_monto_2"]');
-        var inpValorDiag = document.querySelector('[name="ing-valor_diagnostico"]');
         var msgErrorMixto = document.getElementById('msg_error_mixto');
+        var tituloPagoInicial = document.getElementById('titulo_pago_inicial');
+        var tituloPagoMixto = document.getElementById('titulo_pago_mixto');
+
+        function getContextoPagoInicial() {
+            var abonoVal = inpAbono ? parseFloat(inpAbono.value.replace(',', '.')) || 0 : 0;
+
+            if (abonoVal > 0) {
+                return {
+                    total: abonoVal,
+                    concepto: 'abono / anticipo',
+                    titulo: 'MÉTODO DE PAGO DEL ABONO / ANTICIPO'
+                };
+            }
+            return {
+                total: 0,
+                concepto: 'abono / anticipo',
+                titulo: 'MÉTODO DE PAGO DEL ABONO / ANTICIPO'
+            };
+        }
 
         function checkPagoInicial() {
-            var isDiag = selDiag && selDiag.value === 'si';
-            var abonoVal = parseFloat((inpAbono && inpAbono.value) ? inpAbono.value.replace(',', '.') : 0) || 0;
-            if (isDiag || abonoVal > 0) {
+            var contexto = getContextoPagoInicial();
+            if (contexto.total > 0) {
                 wrapPago.style.display = 'block';
             } else {
                 wrapPago.style.display = 'none';
             }
+            if (tituloPagoInicial) tituloPagoInicial.textContent = contexto.titulo;
+            if (tituloPagoMixto) tituloPagoMixto.textContent = 'Pago Mixto del ' + contexto.concepto + ' (dividir en dos)';
         }
 
         function checkMetodo() {
@@ -679,19 +885,17 @@
                 return;
             }
 
-            var isDiag = selDiag && selDiag.value === 'si';
-            var diagVal = isDiag && inpValorDiag ? parseFloat(inpValorDiag.value.replace(',', '.')) || 0 : 0;
-            var abonoVal = inpAbono ? parseFloat(inpAbono.value.replace(',', '.')) || 0 : 0;
-            var totalRequerido = diagVal + abonoVal;
+            var contexto = getContextoPagoInicial();
+            var totalRequerido = contexto.total;
 
-            var m1 = inpMonto1 ? parseFloat(inpMonto1.value) || 0 : 0;
-            var m2 = inpMonto2 ? parseFloat(inpMonto2.value) || 0 : 0;
+            var m1 = inpMonto1 ? parseFloat(inpMonto1.value.replace(',', '.')) || 0 : 0;
+            var m2 = inpMonto2 ? parseFloat(inpMonto2.value.replace(',', '.')) || 0 : 0;
             var suma = m1 + m2;
 
             if (totalRequerido > 0) {
                 if (Math.abs(suma - totalRequerido) > 0.001) {
                     if (msgErrorMixto) {
-                        msgErrorMixto.textContent = "⚠️ La suma de ambos montos ($" + suma.toFixed(2) + ") debe ser igual al total a pagar ($" + totalRequerido.toFixed(2) + ").";
+                        msgErrorMixto.textContent = "⚠️ La suma de ambos montos ($" + suma.toFixed(2) + ") debe ser igual al total del " + contexto.concepto + " ($" + totalRequerido.toFixed(2) + ").";
                         msgErrorMixto.style.display = 'block';
                     }
                     if (inpMonto2) inpMonto2.setCustomValidity("La suma debe ser " + totalRequerido.toFixed(2));
@@ -714,19 +918,11 @@
             }
         }
 
-        if (selDiag) {
-            selDiag.addEventListener('change', checkPagoInicial);
-            selDiag.addEventListener('change', validarSumaMixto);
-        }
         if (inpAbono) {
             inpAbono.addEventListener('input', checkPagoInicial);
             inpAbono.addEventListener('change', checkPagoInicial);
             inpAbono.addEventListener('input', validarSumaMixto);
             inpAbono.addEventListener('change', validarSumaMixto);
-        }
-        if (inpValorDiag) {
-            inpValorDiag.addEventListener('input', validarSumaMixto);
-            inpValorDiag.addEventListener('change', validarSumaMixto);
         }
         if (inpMonto1) {
             inpMonto1.addEventListener('input', validarSumaMixto);

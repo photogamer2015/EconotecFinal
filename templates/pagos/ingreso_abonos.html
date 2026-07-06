@@ -75,18 +75,32 @@
                 <td><strong style="color: #f39c12;">DIAGNÓSTICO</strong></td>
                 <td>{{ ingreso.fecha_ingreso|date:"d/m/Y" }}</td>
                 <td style="color: #f39c12; font-weight: 700;">{{ ingreso.valor_diagnostico|dinero_signo }}</td>
-                <td>{{ ingreso.get_anticipo_metodo_display }}{% if ingreso.anticipo_metodo == 'tarjeta' %} ({{ ingreso.get_anticipo_tarjeta_app_display }}){% endif %}</td>
                 <td>
-                    {% if ingreso.anticipo_metodo == 'transferencia' %}
-                        {% if ingreso.anticipo_banco == 'otro' %}{{ ingreso.anticipo_banco_otro }}{% else %}{{ ingreso.get_anticipo_banco_display }}{% endif %}
+                    {{ ingreso.get_diagnostico_metodo_display }}{% if ingreso.diagnostico_metodo == 'tarjeta' %} ({{ ingreso.get_diagnostico_tarjeta_app_display }}){% endif %}
+                    {% if ingreso.diagnostico_metodo == 'mixto' and ingreso.diagnostico_mixto_partes %}
+                        {% for parte in ingreso.diagnostico_mixto_partes %}
+                            <br><small style="color:#666; font-weight:700;">{{ parte.monto|dinero_signo }} · {{ parte.detalle }}</small>
+                        {% endfor %}
+                    {% endif %}
+                </td>
+                <td>
+                    {% if ingreso.diagnostico_metodo == 'transferencia' %}
+                        {% if ingreso.diagnostico_banco == 'otro' %}{{ ingreso.diagnostico_banco_otro }}{% else %}{{ ingreso.get_diagnostico_banco_display }}{% endif %}
+                    {% elif ingreso.diagnostico_metodo == 'mixto' and ingreso.diagnostico_mixto_partes %}
+                        {% for parte in ingreso.diagnostico_mixto_partes %}
+                            <small style="display:block; color:#666;">
+                                Parte {{ parte.numero }}:
+                                {% if parte.banco %}{{ parte.banco }}{% else %}—{% endif %}
+                            </small>
+                        {% endfor %}
                     {% else %}
                         —
                     {% endif %}
                 </td>
                 <td>
                     Pago diagnóstico (Extra)
-                    {% if ingreso.anticipo_comprobante_url %}
-                        <br><a href="{{ ingreso.anticipo_comprobante_url }}" target="_blank" style="font-size:11px; text-decoration:underline;">Ver comprobante</a>
+                    {% if ingreso.diagnostico_comprobante_url %}
+                        <br><a href="{{ ingreso.diagnostico_comprobante_url }}" target="_blank" style="font-size:11px; text-decoration:underline;">Ver comprobante</a>
                     {% endif %}
                 </td>
                 <td style="font-size: 11px; white-space: nowrap; color: var(--text-muted);">
@@ -103,13 +117,22 @@
                 <td style="color: var(--success); font-weight: 700;">{{ ingreso.abono_anticipo|dinero_signo }}</td>
                 <td>
                     {{ ingreso.get_anticipo_metodo_display }}{% if ingreso.anticipo_metodo == 'tarjeta' %} ({{ ingreso.get_anticipo_tarjeta_app_display }}){% endif %}
-                    {% if ingreso.anticipo_metodo == 'mixto' %}
-                        <br><small style="color:#666;">({{ ingreso.anticipo_monto_1|dinero_signo }} {{ ingreso.get_anticipo_metodo_1_display|default:'' }}, {{ ingreso.anticipo_monto_2|dinero_signo }} {{ ingreso.get_anticipo_metodo_2_display|default:'' }})</small>
+                    {% if ingreso.anticipo_metodo == 'mixto' and ingreso.anticipo_mixto_partes %}
+                        {% for parte in ingreso.anticipo_mixto_partes %}
+                            <br><small style="color:#666; font-weight:700;">{{ parte.monto|dinero_signo }} · {{ parte.detalle }}</small>
+                        {% endfor %}
                     {% endif %}
                 </td>
                 <td>
                     {% if ingreso.anticipo_metodo == 'transferencia' %}
                         {% if ingreso.anticipo_banco == 'otro' %}{{ ingreso.anticipo_banco_otro }}{% else %}{{ ingreso.get_anticipo_banco_display }}{% endif %}
+                    {% elif ingreso.anticipo_metodo == 'mixto' and ingreso.anticipo_mixto_partes %}
+                        {% for parte in ingreso.anticipo_mixto_partes %}
+                            <small style="display:block; color:#666;">
+                                Parte {{ parte.numero }}:
+                                {% if parte.banco %}{{ parte.banco }}{% else %}—{% endif %}
+                            </small>
+                        {% endfor %}
                     {% else %}
                         —
                     {% endif %}
@@ -157,13 +180,22 @@
                 <td style="color: var(--success); font-weight: 700;">{{ salida.valor_final_cobrado|dinero_signo }}</td>
                 <td>
                     {{ salida.get_metodo_pago_final_display }}{% if salida.metodo_pago_final == 'tarjeta' %} ({{ salida.tarjeta_app }}){% endif %}
-                    {% if salida.metodo_pago_final == 'mixto' %}
-                        <br><small style="color:#666;">({{ salida.monto_1|dinero_signo }} {{ salida.get_metodo_1_display|default:'' }}, {{ salida.monto_2|dinero_signo }} {{ salida.get_metodo_2_display|default:'' }})</small>
+                    {% if salida.metodo_pago_final == 'mixto' and salida.pago_mixto_partes %}
+                        {% for parte in salida.pago_mixto_partes %}
+                            <br><small style="color:#666; font-weight:700;">{{ parte.monto|dinero_signo }} · {{ parte.detalle }}</small>
+                        {% endfor %}
                     {% endif %}
                 </td>
                 <td>
                     {% if salida.metodo_pago_final == 'transferencia' %}
                         {% if salida.banco == 'otro' %}{{ salida.banco_otro }}{% else %}{{ salida.get_banco_display }}{% endif %}
+                    {% elif salida.metodo_pago_final == 'mixto' and salida.pago_mixto_partes %}
+                        {% for parte in salida.pago_mixto_partes %}
+                            <small style="display:block; color:#666;">
+                                Parte {{ parte.numero }}:
+                                {% if parte.banco %}{{ parte.banco }}{% else %}—{% endif %}
+                            </small>
+                        {% endfor %}
                     {% else %}
                         —
                     {% endif %}

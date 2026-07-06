@@ -302,6 +302,55 @@ class IngresoEquipo(models.Model):
         help_text='URL de la imagen/pdf del comprobante de pago inicial.',
     )
 
+    # ── Método de Pago del Diagnóstico ───────────────────
+    diagnostico_metodo = models.CharField(
+        max_length=20, choices=METODOS_PAGO, default='efectivo',
+        verbose_name='Método de pago del diagnóstico',
+    )
+    diagnostico_banco = models.CharField(
+        max_length=20, choices=BANCOS, blank=True,
+        verbose_name='Banco del diagnóstico',
+    )
+    diagnostico_banco_otro = models.CharField(
+        max_length=100, blank=True,
+        verbose_name='Banco del diagnóstico (otro)',
+        help_text='Completar solo si elegiste "Otro banco".',
+    )
+    diagnostico_tarjeta_app = models.CharField(
+        max_length=20, choices=TARJETAS_APPS, blank=True,
+        verbose_name='Tarjeta / App del diagnóstico',
+        help_text='Solo cuando el método es Tarjeta o Payphone.',
+    )
+    diagnostico_comprobante_url = models.URLField(
+        blank=True,
+        verbose_name='Link del comprobante del diagnóstico',
+        help_text='URL de la imagen/pdf del comprobante de pago del diagnóstico.',
+    )
+    diagnostico_monto_1 = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True,
+        verbose_name='Monto diagnóstico 1'
+    )
+    diagnostico_metodo_1 = models.CharField(
+        max_length=20, choices=METODOS_PAGO, blank=True,
+        verbose_name='Método diagnóstico 1'
+    )
+    diagnostico_banco_1 = models.CharField(
+        max_length=20, choices=BANCOS, blank=True,
+        verbose_name='Banco diagnóstico 1'
+    )
+    diagnostico_monto_2 = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True,
+        verbose_name='Monto diagnóstico 2'
+    )
+    diagnostico_metodo_2 = models.CharField(
+        max_length=20, choices=METODOS_PAGO, blank=True,
+        verbose_name='Método diagnóstico 2'
+    )
+    diagnostico_banco_2 = models.CharField(
+        max_length=20, choices=BANCOS, blank=True,
+        verbose_name='Banco diagnóstico 2'
+    )
+
     # Campos para Pago Mixto (cuando anticipo_metodo == 'mixto')
     anticipo_monto_1 = models.DecimalField(
         max_digits=10, decimal_places=2, null=True, blank=True,
@@ -457,16 +506,109 @@ class IngresoEquipo(models.Model):
         return _q2(total)
 
     @property
+    def anticipo_mixto_partes(self):
+        """Desglose legible de las dos partes del pago inicial mixto."""
+        if self.anticipo_metodo != 'mixto':
+            return []
+
+        bancos = dict(self.BANCOS)
+        metodos = dict(self.METODOS_PAGO)
+
+        def armar_parte(numero, monto, metodo, banco):
+            if not monto and not metodo:
+                return None
+
+            metodo_texto = metodos.get(metodo, metodo or '—')
+            banco_texto = ''
+            detalle = metodo_texto
+
+            if metodo == 'transferencia':
+                banco_texto = bancos.get(banco, banco or '')
+                detalle = f'{metodo_texto} - {banco_texto}' if banco_texto else metodo_texto
+
+            return {
+                'numero': numero,
+                'monto': _q2(monto or Decimal('0.00')),
+                'metodo': metodo_texto,
+                'banco': banco_texto,
+                'detalle': detalle,
+            }
+
+        partes = [
+            armar_parte(1, self.anticipo_monto_1, self.anticipo_metodo_1, self.anticipo_banco_1),
+            armar_parte(2, self.anticipo_monto_2, self.anticipo_metodo_2, self.anticipo_banco_2),
+        ]
+        return [p for p in partes if p]
+
+    @property
+    def diagnostico_mixto_partes(self):
+        """Desglose legible de las dos partes del pago del diagnóstico."""
+        if self.diagnostico_metodo != 'mixto':
+            return []
+
+        bancos = dict(self.BANCOS)
+        metodos = dict(self.METODOS_PAGO)
+
+        def armar_parte(numero, monto, metodo, banco):
+            if not monto and not metodo:
+                return None
+
+            metodo_texto = metodos.get(metodo, metodo or '—')
+            banco_texto = ''
+            detalle = metodo_texto
+
+            if metodo == 'transferencia':
+                banco_texto = bancos.get(banco, banco or '')
+                detalle = f'{metodo_texto} - {banco_texto}' if banco_texto else metodo_texto
+
+            return {
+                'numero': numero,
+                'monto': _q2(monto or Decimal('0.00')),
+                'metodo': metodo_texto,
+                'banco': banco_texto,
+                'detalle': detalle,
+            }
+
+        partes = [
+            armar_parte(1, self.diagnostico_monto_1, self.diagnostico_metodo_1, self.diagnostico_banco_1),
+            armar_parte(2, self.diagnostico_monto_2, self.diagnostico_metodo_2, self.diagnostico_banco_2),
+        ]
+        return [p for p in partes if p]
+
+    @property
     def resumen_metodos_pago(self):
         """Devuelve un string con los métodos de pago usados en los abonos y cierre detallados."""
         metodos = []
+
+        if self.diagnostico_inmediato == 'si' and self.valor_diagnostico and self.valor_diagnostico > 0:
+            m = self.get_diagnostico_metodo_display()
+            if m:
+                if self.diagnostico_metodo == 'mixto':
+                    partes = ', '.join(
+                        f"${parte['monto']} {parte['detalle']}"
+                        for parte in self.diagnostico_mixto_partes
+                    )
+                    metodos.append(f"Diagnóstico: Pago Mixto ({partes})" if partes else "Diagnóstico: Pago Mixto")
+                else:
+                    if self.diagnostico_metodo == 'transferencia':
+                        banco = self.diagnostico_banco_otro if self.diagnostico_banco == 'otro' else self.get_diagnostico_banco_display()
+                        if banco:
+                            m = f"{m} ({banco})"
+                    elif self.diagnostico_metodo == 'tarjeta':
+                        if self.diagnostico_tarjeta_app:
+                            m = f"{m} ({self.get_diagnostico_tarjeta_app_display()})"
+                    metodos.append(f"Diagnóstico: {m}")
         
         # 1. Pago inicial (anticipo)
         if self.abono_anticipo and self.abono_anticipo > 0:
             m = self.get_anticipo_metodo_display()
             if m:
                 if self.anticipo_metodo == 'mixto':
-                    metodos.append(f"Pago Mixto (${self.anticipo_monto_1 or '0.00'} {self.get_anticipo_metodo_1_display() or ''}, ${self.anticipo_monto_2 or '0.00'} {self.get_anticipo_metodo_2_display() or ''})")
+                    partes = ', '.join(
+                        f"${parte['monto']} {parte['detalle']}"
+                        for parte in self.anticipo_mixto_partes
+                    )
+                    metodos.append(f"Pago Mixto ({partes})" if partes else "Pago Mixto")
                 else:
                     if self.anticipo_metodo == 'transferencia':
                         banco = self.anticipo_banco_otro if self.anticipo_banco == 'otro' else self.get_anticipo_banco_display()
@@ -494,6 +636,12 @@ class IngresoEquipo(models.Model):
                     if banco: m = f"{m} ({banco})"
                 elif s.metodo_pago_final == 'tarjeta':
                     if s.tarjeta_app: m = f"{m} ({s.tarjeta_app})"
+                elif s.metodo_pago_final == 'mixto':
+                    partes = ', '.join(
+                        f"${parte['monto']} {parte['detalle']}"
+                        for parte in s.pago_mixto_partes
+                    )
+                    m = f"{m} ({partes})" if partes else m
                 metodos.append(m)
                 
         # Evitar duplicados manteniendo orden visual
@@ -1068,6 +1216,41 @@ class SalidaEquipo(models.Model):
         verbose_name = 'Salida de equipo'
         verbose_name_plural = 'Salidas de equipos'
         ordering = ['-fecha_salida', '-creado']
+
+    @property
+    def pago_mixto_partes(self):
+        """Desglose legible de las dos partes del pago final mixto."""
+        if self.metodo_pago_final != 'mixto':
+            return []
+
+        bancos = dict(self._meta.get_field('banco_1').choices)
+        metodos = dict(self.METODOS_PAGO_FINAL)
+
+        def armar_parte(numero, monto, metodo, banco):
+            if not monto and not metodo:
+                return None
+
+            metodo_texto = metodos.get(metodo, metodo or '—')
+            banco_texto = ''
+            detalle = metodo_texto
+
+            if metodo == 'transferencia':
+                banco_texto = bancos.get(banco, banco or '')
+                detalle = f'{metodo_texto} - {banco_texto}' if banco_texto else metodo_texto
+
+            return {
+                'numero': numero,
+                'monto': _q2(monto or Decimal('0.00')),
+                'metodo': metodo_texto,
+                'banco': banco_texto,
+                'detalle': detalle,
+            }
+
+        partes = [
+            armar_parte(1, self.monto_1, self.metodo_1, self.banco_1),
+            armar_parte(2, self.monto_2, self.metodo_2, self.banco_2),
+        ]
+        return [p for p in partes if p]
 
     @property
     def es_positivo(self):

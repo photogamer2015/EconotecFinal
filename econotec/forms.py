@@ -117,6 +117,10 @@ class IngresoEquipoForm(forms.ModelForm):
             'problema_reportado',
             'diagnostico_inmediato', 'valor_diagnostico',
             'valor_acordado', 'abono_anticipo',
+            'diagnostico_metodo', 'diagnostico_banco', 'diagnostico_banco_otro',
+            'diagnostico_tarjeta_app', 'diagnostico_comprobante_url',
+            'diagnostico_monto_1', 'diagnostico_metodo_1', 'diagnostico_banco_1',
+            'diagnostico_monto_2', 'diagnostico_metodo_2', 'diagnostico_banco_2',
             'anticipo_metodo', 'anticipo_banco', 'anticipo_banco_otro',
             'anticipo_tarjeta_app', 'anticipo_comprobante_url',
             'anticipo_monto_1', 'anticipo_metodo_1', 'anticipo_banco_1',
@@ -155,6 +159,17 @@ class IngresoEquipoForm(forms.ModelForm):
             'abono_anticipo': forms.NumberInput(attrs={
                 'class': 'form-input', 'step': '0.01', 'min': '0',
             }),
+            'diagnostico_metodo': forms.Select(attrs={'class': 'form-input', 'id': 'id_diagnostico_metodo'}),
+            'diagnostico_banco': forms.Select(attrs={'class': 'form-input', 'id': 'id_diagnostico_banco'}),
+            'diagnostico_banco_otro': forms.TextInput(attrs={'class': 'form-input', 'id': 'id_diagnostico_banco_otro', 'placeholder': 'Especificar banco'}),
+            'diagnostico_tarjeta_app': forms.Select(attrs={'class': 'form-input', 'id': 'id_diagnostico_tarjeta_app'}),
+            'diagnostico_comprobante_url': forms.URLInput(attrs={'class': 'form-input', 'id': 'id_diagnostico_comprobante_url', 'placeholder': 'Link a la imagen'}),
+            'diagnostico_monto_1': forms.NumberInput(attrs={'class': 'form-input', 'step': '0.01', 'min': '0', 'id': 'id_diagnostico_monto_1'}),
+            'diagnostico_metodo_1': forms.Select(attrs={'class': 'form-input', 'id': 'id_diagnostico_metodo_1'}),
+            'diagnostico_banco_1': forms.Select(attrs={'class': 'form-input', 'id': 'id_diagnostico_banco_1'}),
+            'diagnostico_monto_2': forms.NumberInput(attrs={'class': 'form-input', 'step': '0.01', 'min': '0', 'id': 'id_diagnostico_monto_2'}),
+            'diagnostico_metodo_2': forms.Select(attrs={'class': 'form-input', 'id': 'id_diagnostico_metodo_2'}),
+            'diagnostico_banco_2': forms.Select(attrs={'class': 'form-input', 'id': 'id_diagnostico_banco_2'}),
             'anticipo_metodo': forms.Select(attrs={'class': 'form-input', 'id': 'id_anticipo_metodo'}),
             'anticipo_banco': forms.Select(attrs={'class': 'form-input', 'id': 'id_anticipo_banco'}),
             'anticipo_banco_otro': forms.TextInput(attrs={'class': 'form-input', 'id': 'id_anticipo_banco_otro', 'placeholder': 'Especificar banco'}),
@@ -287,6 +302,29 @@ class IngresoEquipoForm(forms.ModelForm):
             cleaned['equipo_garantia'] = None
             cleaned['equipo_garantia_manual'] = ''
             cleaned['motivo_garantia'] = ''
+
+        diagnostico_activo = cleaned.get('diagnostico_inmediato') == 'si'
+        diagnostico = cleaned.get('valor_diagnostico') or Decimal('0.00')
+        if diagnostico_activo and diagnostico > 0 and cleaned.get('diagnostico_metodo') == 'mixto':
+            monto_1 = cleaned.get('diagnostico_monto_1') or Decimal('0.00')
+            monto_2 = cleaned.get('diagnostico_monto_2') or Decimal('0.00')
+
+            if (monto_1 + monto_2) != diagnostico:
+                self.add_error(
+                    'diagnostico_monto_2',
+                    f'La suma del pago mixto debe ser igual al total del diagnóstico: ${diagnostico:.2f}.'
+                )
+
+        if cleaned.get('anticipo_metodo') == 'mixto':
+            abono = cleaned.get('abono_anticipo') or Decimal('0.00')
+            monto_1 = cleaned.get('anticipo_monto_1') or Decimal('0.00')
+            monto_2 = cleaned.get('anticipo_monto_2') or Decimal('0.00')
+
+            if abono > 0 and (monto_1 + monto_2) != abono:
+                self.add_error(
+                    'anticipo_monto_2',
+                    f'La suma del pago mixto debe ser igual al total del abono / anticipo: ${abono:.2f}.'
+                )
         
             
         return cleaned
