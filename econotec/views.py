@@ -553,7 +553,7 @@ def ingreso_lista(request):
         sede_filtro = sede_sesion
 
     qs = (IngresoEquipo.objects
-          .select_related('cliente', 'registrado_por')
+          .select_related('cliente', 'registrado_por', 'salida')
           .prefetch_related('abonos'))
 
     if sede_filtro in ('guayaquil', 'quito'):
@@ -575,9 +575,21 @@ def ingreso_lista(request):
             q_filter |= Q(numero_equipo__icontains=digitos)
             
         qs = qs.filter(q_filter)
+    estados_salida_filtro = {
+        'salida_pendiente_retiro': 'pendiente_retiro',
+        'salida_entregado_cliente': 'retirado',
+        'salida_cliente_no_acepta': 'cliente_no_acepta',
+        'salida_no_reparable': 'no_reparable',
+        'salida_garantia': 'garantia',
+    }
+
     if estado:
         if estado in ['espera_cliente', 'espera_repuesto']:
             qs = qs.filter(estado='en_reparacion', subestado_reparacion=estado)
+        elif estado == 'con_salida':
+            qs = qs.filter(salida__isnull=False)
+        elif estado in estados_salida_filtro:
+            qs = qs.filter(salida__estado_reparacion=estados_salida_filtro[estado])
         else:
             qs = qs.filter(estado=estado)
     if tipo:
@@ -607,6 +619,13 @@ def ingreso_lista(request):
         ('en_reparacion', 'En reparación (Todos)'),
         ('espera_cliente', '   ↳ En reparación - Cliente'),
         ('espera_repuesto', '   ↳ En reparación - Repuestos'),
+        ('entregado', 'Entregado al cliente (Ingreso)'),
+        ('con_salida', 'Salida registrada (Todos)'),
+        ('salida_pendiente_retiro', '   ↳ Reparado - pendiente de retiro'),
+        ('salida_entregado_cliente', '   ↳ Entregado / retirado por cliente'),
+        ('salida_cliente_no_acepta', '   ↳ Cliente no quiso reparar'),
+        ('salida_no_reparable', '   ↳ No se pudo reparar'),
+        ('salida_garantia', '   ↳ Salida por garantía'),
     ]
 
     return render(request, 'ingresos/lista.html', {
