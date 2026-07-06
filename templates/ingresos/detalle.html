@@ -230,7 +230,7 @@
                 <h3>📥 Solicitud de Ingreso</h3>
             {% endif %}
             <div class="field-row"><span class="label">Asesora Comercial</span><span class="value">{{ ingreso.asesor_comercial|default:"—" }}</span></div>
-            <div class="field-row"><span class="label">Técnico Encargado</span><span class="value">{{ ingreso.tecnico_encargado_nombre|default:"— Sin asignar —" }}</span></div>
+            <div class="field-row"><span class="label">Técnico Recibido</span><span class="value">{{ ingreso.tecnico_encargado_nombre|default:"— Sin asignar —" }}</span></div>
             <div class="field-row"><span class="label">Fecha de ingreso</span><span class="value">{{ ingreso.fecha_ingreso|date:"d/m/Y" }}</span></div>
             <div class="field-row"><span class="label">Factura N°</span><span class="value">{{ ingreso.numero_factura|default:"—" }}</span></div>
             <div class="field-row"><span class="label">Estado</span><span class="value">

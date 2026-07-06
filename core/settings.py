@@ -26,6 +26,14 @@ SECRET_KEY = env('SECRET_KEY')
 DEBUG = env('DEBUG')
 GEMINI_API_KEY = env('GEMINI_API_KEY', default='')
 
+# ── AWS S3 — Backup automático de la base de datos ──────────
+# Configura estas variables en tu archivo .env cuando tengas tus credenciales.
+# Mientras estén vacías, el backup simplemente no se ejecuta (no causa error).
+AWS_ACCESS_KEY_ID = env('AWS_ACCESS_KEY_ID', default='')
+AWS_SECRET_ACCESS_KEY = env('AWS_SECRET_ACCESS_KEY', default='')
+AWS_S3_BUCKET_NAME = env('AWS_S3_BUCKET_NAME', default='')
+AWS_S3_REGION = env('AWS_S3_REGION', default='us-east-1')
+
 ALLOWED_HOSTS = ['127.0.0.1', 'localhost', '*']
 
 # Orígenes confiables para formularios POST (CSRF).
