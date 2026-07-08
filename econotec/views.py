@@ -12,6 +12,7 @@ from django.db import transaction
 from django.db.models import Count, Q, Sum
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_GET, require_POST
 
@@ -33,6 +34,39 @@ from .alertas import (
     UMBRAL_DIAS_BODEGAJE,
     COSTO_BODEGAJE_DIA,
 )
+
+
+def _normalizar_comparacion(valor):
+    return ' '.join((valor or '').strip().casefold().split())
+
+
+def _equipo_duplicado_para_cliente(cliente, datos_ingreso, excluir_pk=None):
+    tipo = _normalizar_comparacion(datos_ingreso.get('tipo_equipo'))
+    tipo_otro = _normalizar_comparacion(datos_ingreso.get('tipo_equipo_otro'))
+    marca = _normalizar_comparacion(datos_ingreso.get('marca'))
+    modelo = _normalizar_comparacion(datos_ingreso.get('modelo_serie'))
+
+    if not cliente or not tipo or not marca:
+        return None
+
+    qs = cliente.ingresos.all()
+    if excluir_pk:
+        qs = qs.exclude(pk=excluir_pk)
+
+    for equipo in qs:
+        if _normalizar_comparacion(equipo.tipo_equipo) != tipo:
+            continue
+        if tipo == 'otro' and _normalizar_comparacion(equipo.tipo_equipo_otro) != tipo_otro:
+            continue
+        if _normalizar_comparacion(equipo.marca) != marca:
+            continue
+
+        modelo_existente = _normalizar_comparacion(equipo.modelo_serie)
+        if modelo and modelo_existente and modelo_existente != modelo:
+            continue
+        return equipo
+
+    return None
 
 
 # ═════════════════════════════════════════════════════════════════
@@ -322,10 +356,13 @@ def cliente_buscar_por_cedula(request):
     equipos_data = [
         {
             'id': eq.id, 
+            'codigo': eq.codigo_equipo,
             'label': f"{eq.codigo_equipo} — {eq.marca} {eq.modelo_serie} ({eq.creado.strftime('%d/%m/%Y')})",
             'tipo_equipo': eq.tipo_equipo,
+            'tipo_equipo_otro': eq.tipo_equipo_otro,
             'marca': eq.marca,
-            'modelo_serie': eq.modelo_serie
+            'modelo_serie': eq.modelo_serie,
+            'detalle_url': reverse('econotec:ingreso_detalle', args=[eq.pk]),
         }
         for eq in equipos_qs
     ]
@@ -369,18 +406,32 @@ def ingreso_registrar(request):
             # Actualizar datos del cliente con la nueva info, si hay cambios
             cli_form_existente = ClienteForm(request.POST, prefix='cli', instance=cliente_existente)
             if ing_form.is_valid() and cli_form_existente.is_valid():
-                cliente = cli_form_existente.save()
-                ingreso = ing_form.save(commit=False)
-                ingreso.cliente = cliente
-                ingreso.sede = sede_actual           # ← sede de la sesión
-                ingreso.registrado_por = request.user
-                ingreso.save()
-                messages.success(
-                    request,
-                    f'Equipo {ingreso.codigo_equipo} ingresado para {cliente.nombres}.'
-                )
-                return redirect('econotec:ingreso_detalle', pk=ingreso.pk)
-            cli_form = cli_form_existente
+                duplicado = _equipo_duplicado_para_cliente(cliente_existente, ing_form.cleaned_data)
+                if duplicado:
+                    mensaje_duplicado = (
+                        'ESTE EQUIPO YA SE ENCUENTRA REGISTRADO, POR FAVOR VERIFICA EN LA LISTA DE EQUIPOS.'
+                    )
+                    ing_form.add_error('marca', mensaje_duplicado)
+                    ing_form.add_error('modelo_serie', f'Coincide con el equipo {duplicado.codigo_equipo}.')
+                    messages.error(
+                        request,
+                        f'{mensaje_duplicado} Coincide con {duplicado.codigo_equipo}.'
+                    )
+                    cli_form = cli_form_existente
+                else:
+                    cliente = cli_form_existente.save()
+                    ingreso = ing_form.save(commit=False)
+                    ingreso.cliente = cliente
+                    ingreso.sede = sede_actual           # ← sede de la sesión
+                    ingreso.registrado_por = request.user
+                    ingreso.save()
+                    messages.success(
+                        request,
+                        f'Equipo {ingreso.codigo_equipo} ingresado para {cliente.nombres}.'
+                    )
+                    return redirect('econotec:ingreso_detalle', pk=ingreso.pk)
+            else:
+                cli_form = cli_form_existente
         else:
             if cli_form.is_valid() and ing_form.is_valid():
                 cliente = cli_form.save()

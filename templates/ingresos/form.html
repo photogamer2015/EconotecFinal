@@ -84,6 +84,49 @@
         margin-top: 24px;
     }
 
+    .equipo-duplicado-alerta {
+        display: none;
+        margin: 16px 0 18px;
+        padding: 20px 22px;
+        border-radius: 10px;
+        border: 2px solid #dc2626;
+        background: #fef2f2;
+        color: #7f1d1d;
+        box-shadow: 0 8px 22px rgba(220, 38, 38, 0.12);
+    }
+
+    .equipo-duplicado-alerta .titulo {
+        display: block;
+        font-size: 19px;
+        font-weight: 900;
+        line-height: 1.25;
+        text-transform: uppercase;
+        letter-spacing: 0.2px;
+    }
+
+    .equipo-duplicado-alerta .detalle {
+        display: block;
+        margin-top: 8px;
+        color: #991b1b;
+        font-size: 13px;
+        font-weight: 700;
+    }
+
+    .equipo-duplicado-alerta a {
+        color: #b91c1c;
+        font-weight: 900;
+        text-decoration: underline;
+    }
+
+    .equipo-duplicado-alerta.compacta {
+        margin: 0 0 14px;
+        padding: 15px 18px;
+    }
+
+    .equipo-duplicado-alerta.compacta .titulo {
+        font-size: 15px;
+    }
+
     /* Mostrar visualmente el estado deshabilitado de los botones */
     .btn[disabled], .btn:disabled {
         opacity: 0.55;
@@ -209,7 +252,12 @@
             <div>
                 <label class="form-label">Modelo / Serie</label>
                 {{ ing_form.modelo_serie }}
+                {{ ing_form.modelo_serie.errors }}
             </div>
+        </div>
+        <div id="equipo-duplicado-alerta" class="equipo-duplicado-alerta" data-equipo-duplicado-alerta role="alert" aria-live="assertive">
+            <span class="titulo">ESTE EQUIPO YA SE ENCUENTRA REGISTRADO, POR FAVOR VERIFICA EN LA LISTA DE EQUIPOS.</span>
+            <span id="equipo-duplicado-detalle" class="detalle" data-equipo-duplicado-detalle></span>
         </div>
         <div style="margin-top:14px;">
             <label class="form-label" style="margin-bottom:8px;">¿Trajo accesorios? *</label>
@@ -356,7 +404,7 @@
             <h4 style="color: #e65100; margin-bottom: 12px; font-size: 15px;">🛡️ Detalle de Garantía</h4>
             <div class="form-row cols-2">
                 <div>
-                    <label class="form-label" style="color: #e65100; margin-bottom: 4px;">Selecciona el equipo anterior</label>
+                    <label class="form-label" style="color: #e65100; margin-bottom: 4px;">Selecciona el equipo anterior <span style="color:#888; font-weight:600;">(opcional)</span></label>
                     <div style="display:flex; align-items:center; gap:8px;">
                         <span style="color:#e65100; font-weight:bold;">—</span>
                         <div style="flex:1;">
@@ -365,10 +413,10 @@
                         <span style="color:#e65100; font-weight:bold;">—</span>
                     </div>
                     {{ ing_form.equipo_garantia.errors }}
-                    <small style="color:#888; font-size:11px; display:block; margin-top:4px;">Solo se muestran equipos previos de este cliente.</small>
+                    <small style="color:#888; font-size:11px; display:block; margin-top:4px;">Si no aparece o no aplica, puedes dejarlo en blanco y registrar la garantía solo con el motivo.</small>
                     
                     <div style="margin-top: 10px;">
-                        <label class="form-label" style="color: #e65100; font-size: 12px; margin-bottom: 4px;">¿No está en la lista? (Ingreso manual)</label>
+                        <label class="form-label" style="color: #e65100; font-size: 12px; margin-bottom: 4px;">¿No está en la lista? (Ingreso manual opcional)</label>
                         {{ ing_form.equipo_garantia_manual }}
                         {{ ing_form.equipo_garantia_manual.errors }}
                     </div>
@@ -467,6 +515,11 @@
         </div>
     </div>
 
+    <div class="equipo-duplicado-alerta compacta" data-equipo-duplicado-alerta role="alert" aria-live="assertive">
+        <span class="titulo">ESTE EQUIPO YA SE ENCUENTRA REGISTRADO, POR FAVOR VERIFICA EN LA LISTA DE EQUIPOS.</span>
+        <span class="detalle" data-equipo-duplicado-detalle></span>
+    </div>
+
     <div class="actions-bar">
         <a href="{% url 'econotec:ingreso_lista' %}" class="btn btn-secondary">Cancelar</a>
         <button type="submit" id="btn-registrar" class="btn btn-primary">
@@ -515,7 +568,7 @@
             // Hacer obligatorios los campos según el estado para evitar opciones nulas
             if (selRep) selRep.required = (v === 'en_reparacion');
             if (selEnt) selEnt.required = (v === 'entregado');
-            if (selGar) selGar.required = (v === 'garantia');
+            if (selGar) selGar.required = false;
             if (inpMotivo) inpMotivo.required = (v === 'garantia');
 
             // Limpia el sub-estado que no corresponde para que no quede dato colgado
@@ -576,6 +629,8 @@
             var cedula = (inpCedula.value || '').trim();
             if (cedula.length < 5) {  // muy corta para ser cédula válida
                 ocultarAviso();
+                window.__equipos_cliente_data = [];
+                if (window.__evaluarEquipoDuplicado) window.__evaluarEquipoDuplicado();
                 var selGar = document.querySelector('[name="ing-equipo_garantia"]');
                 if (selGar) {
                     selGar.innerHTML = '<option value="">— Sin equipo registrado —</option>';
@@ -613,6 +668,7 @@
                         
                         var selGar = document.querySelector('[name="ing-equipo_garantia"]');
                         if (selGar && data.equipos) {
+                            window.__equipos_cliente_data = data.equipos;
                             window.__equipos_garantia_data = data.equipos;
                             if (data.equipos.length > 0) {
                                 var currentVal = selGar.value;
@@ -630,9 +686,12 @@
                         }
                         
                         camposClienteEditables(false);
+                        if (window.__evaluarEquipoDuplicado) window.__evaluarEquipoDuplicado();
                         if (window.__checkRequired) window.__checkRequired();
                     } else {
                         ocultarAviso();
+                        window.__equipos_cliente_data = [];
+                        if (window.__evaluarEquipoDuplicado) window.__evaluarEquipoDuplicado();
                         var selGar = document.querySelector('[name="ing-equipo_garantia"]');
                         if (selGar) {
                             selGar.innerHTML = '<option value="">— Sin equipo registrado —</option>';
@@ -657,6 +716,118 @@
         if (inpCedula.value && inpCedula.value.trim().length >= 5) {
             buscar();
         }
+    })();
+
+    // Validación visual contra equipos ya registrados del mismo cliente
+    (function () {
+        var form = document.getElementById('ingreso-form');
+        var alertas = Array.prototype.slice.call(document.querySelectorAll('[data-equipo-duplicado-alerta]'));
+        var detalles = Array.prototype.slice.call(document.querySelectorAll('[data-equipo-duplicado-detalle]'));
+        var btnRegistrar = document.getElementById('btn-registrar');
+        var inpTipo = document.querySelector('[name="ing-tipo_equipo"]');
+        var inpTipoOtro = document.querySelector('[name="ing-tipo_equipo_otro"]');
+        var inpMarca = document.querySelector('[name="ing-marca"]');
+        var inpModelo = document.querySelector('[name="ing-modelo_serie"]');
+        var textoBotonNormal = btnRegistrar ? btnRegistrar.textContent : '';
+
+        if (!form || !alertas.length || !inpTipo || !inpMarca) return;
+
+        function normalizar(valor) {
+            return (valor || '')
+                .toString()
+                .normalize('NFD')
+                .replace(/[\u0300-\u036f]/g, '')
+                .trim()
+                .toLowerCase()
+                .replace(/\s+/g, ' ');
+        }
+
+        function textoTipoActual() {
+            var tipo = normalizar(inpTipo.value);
+            if (tipo === 'otro' && inpTipoOtro) return normalizar(inpTipoOtro.value);
+            return tipo;
+        }
+
+        function textoTipoEquipo(eq) {
+            var tipo = normalizar(eq.tipo_equipo);
+            if (tipo === 'otro') return normalizar(eq.tipo_equipo_otro);
+            return tipo;
+        }
+
+        function encontrarCoincidencia() {
+            var equipos = window.__equipos_cliente_data || [];
+            var tipo = textoTipoActual();
+            var marca = normalizar(inpMarca.value);
+            var modelo = normalizar(inpModelo ? inpModelo.value : '');
+
+            if (!tipo || !marca || equipos.length === 0) return null;
+
+            for (var i = 0; i < equipos.length; i += 1) {
+                var eq = equipos[i];
+                if (textoTipoEquipo(eq) !== tipo) continue;
+                if (normalizar(eq.marca) !== marca) continue;
+
+                var modeloEquipo = normalizar(eq.modelo_serie);
+                var coincidenciaBloqueante = !modelo || !modeloEquipo || modeloEquipo === modelo;
+
+                if (coincidenciaBloqueante) {
+                    return { equipo: eq };
+                }
+            }
+            return null;
+        }
+
+        function mostrarCoincidencia(resultado) {
+            window.__equipoDuplicadoExacto = !!resultado;
+
+            if (!resultado) {
+                alertas.forEach(function (alerta) {
+                    alerta.style.display = 'none';
+                });
+                if (btnRegistrar) {
+                    btnRegistrar.disabled = false;
+                    btnRegistrar.textContent = textoBotonNormal;
+                }
+                return;
+            }
+
+            var eq = resultado.equipo;
+            var enlace = eq.detalle_url
+                ? ' <a href="' + eq.detalle_url + '" target="_blank" rel="noopener">Ver ' + (eq.codigo || 'equipo') + '</a>'
+                : '';
+            var nota = 'Coincide con ' + (eq.label || eq.codigo || 'un equipo anterior') + '. No se debe registrar nuevamente.' + enlace;
+
+            detalles.forEach(function (detalle) {
+                detalle.innerHTML = nota;
+            });
+            alertas.forEach(function (alerta) {
+                alerta.style.display = 'block';
+            });
+
+            if (btnRegistrar) {
+                btnRegistrar.disabled = true;
+                btnRegistrar.textContent = 'Equipo ya registrado';
+            }
+        }
+
+        window.__evaluarEquipoDuplicado = function () {
+            mostrarCoincidencia(encontrarCoincidencia());
+        };
+
+        [inpTipo, inpTipoOtro, inpMarca, inpModelo].forEach(function (campo) {
+            if (!campo) return;
+            campo.addEventListener('input', window.__evaluarEquipoDuplicado);
+            campo.addEventListener('change', window.__evaluarEquipoDuplicado);
+        });
+
+        form.addEventListener('submit', function (e) {
+            window.__evaluarEquipoDuplicado();
+            if (window.__equipoDuplicadoExacto) {
+                e.preventDefault();
+                e.stopImmediatePropagation();
+                alertas[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+        }, true);
     })();
 
     (function () {

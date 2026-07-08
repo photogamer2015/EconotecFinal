@@ -198,6 +198,8 @@ class IngresoEquipoForm(forms.ModelForm):
         
         # Hacer obligatorios los campos de personal
         self.fields['tecnico_encargado'].required = True
+        self.fields['equipo_garantia'].required = False
+        self.fields['equipo_garantia_manual'].required = False
         
         # Limita los técnicos disponibles a los del grupo "Tecnicos" + admins activos
         self.fields['tecnico_encargado'].queryset = _queryset_tecnicos()
@@ -292,9 +294,6 @@ class IngresoEquipoForm(forms.ModelForm):
             cleaned['subestado_entregado'] = ''
             
         if estado == 'garantia':
-            if not cleaned.get('equipo_garantia') and not cleaned.get('equipo_garantia_manual'):
-                self.add_error('equipo_garantia', 'Debe seleccionar un equipo anterior o ingresarlo manualmente.')
-                self.add_error('equipo_garantia_manual', 'Debe seleccionar un equipo anterior o ingresarlo manualmente.')
             motivo = cleaned.get('motivo_garantia')
             if not motivo or not motivo.strip():
                 self.add_error('motivo_garantia', 'Debe indicar obligatoriamente el motivo de la garantía.')
