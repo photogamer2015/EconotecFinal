@@ -347,15 +347,53 @@
         .perfil-nivel { margin: 5px 0 0; font-size: 13px; opacity: 0.9; text-transform: uppercase; letter-spacing: 1px; font-weight: bold;}
         
         .perfil-body { padding: 20px; }
-        .perfil-stats { display: flex; justify-content: space-between; margin-bottom: 20px; }
-        .stat-box { text-align: center; flex: 1; }
+        .perfil-stats { display: flex; justify-content: space-between; gap: 10px; margin-bottom: 20px; }
+        .stat-box { text-align: center; flex: 1; background: rgba(150,150,150,0.08); border-radius: 10px; padding: 10px 6px; }
         .stat-num { display: block; font-size: 22px; font-weight: 800; color: var(--text-color, #333); }
-        .stat-label { font-size: 11px; color: var(--text-color, #666); opacity: 0.8; text-transform: uppercase; }
+        .stat-label { font-size: 10px; color: var(--text-color, #666); opacity: 0.8; text-transform: uppercase; line-height: 1.2; }
         
         .perfil-progress { margin-top: 10px; }
         .progress-bar-bg { background: rgba(150,150,150,0.2); height: 10px; border-radius: 5px; overflow: hidden; margin-bottom: 8px;}
         .progress-bar-fill { height: 100%; width: 0%; background: #f97618; transition: width 1s ease-out; }
         .progress-text { font-size: 12px; color: var(--text-color, #666); text-align: center; margin: 0; }
+        .perfil-actions {
+            display: grid;
+            gap: 10px;
+            margin-top: 20px;
+        }
+        .perfil-action {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            background: rgba(150,150,150,0.12);
+            color: var(--text-color, #333);
+            padding: 12px 14px;
+            border-radius: 10px;
+            text-decoration: none;
+            font-weight: 700;
+            font-size: 14px;
+            transition: background 0.2s, transform 0.2s;
+        }
+        .perfil-action:hover {
+            background: rgba(249,118,24,0.14);
+            transform: translateY(-1px);
+        }
+        .perfil-action-icon {
+            font-size: 18px;
+            width: 22px;
+            text-align: center;
+            flex: 0 0 auto;
+        }
+        .perfil-action-text {
+            flex: 1;
+            line-height: 1.2;
+        }
+        .perfil-action-arrow {
+            color: var(--primary, #f97618);
+            font-size: 18px;
+            font-weight: 900;
+        }
         
         #btn-perfil:hover { background: rgba(255,255,255,0.25) !important; transform: translateY(-1px); }
 
@@ -1054,6 +1092,10 @@
                         <span class="stat-label">Salidas Buenas</span>
                     </div>
                     <div class="stat-box">
+                        <span class="stat-num" id="stat-producto" style="color: #f97618;">0</span>
+                        <span class="stat-label">Salida de producto</span>
+                    </div>
+                    <div class="stat-box">
                         <span class="stat-num" id="stat-malas" style="color: #dc3545;">0</span>
                         <span class="stat-label">Salidas Malas</span>
                     </div>
@@ -1066,10 +1108,16 @@
                     <p class="progress-text" id="perfil-progress-text">0 / 10 para el siguiente nivel</p>
                 </div>
                 
-                <div class="perfil-actions" style="margin-top: 20px;">
-                    <a href="{% url 'econotec:ingreso_lista' %}?tecnico={{ request.user.id }}" style="display: flex; align-items: center; justify-content: center; gap: 10px; background: #f0f0f0; color: #333; padding: 12px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 14px; transition: background 0.3s;">
-                        📋 Ver mis equipos asignados
-                        <span style="font-size: 18px; margin-top: -2px;">➔</span>
+                <div class="perfil-actions">
+                    <a href="{% url 'econotec:ingreso_lista' %}?tecnico={{ request.user.id }}" class="perfil-action">
+                        <span class="perfil-action-icon">📥</span>
+                        <span class="perfil-action-text">Ver mis equipos recibidos</span>
+                        <span class="perfil-action-arrow">➔</span>
+                    </a>
+                    <a href="{% url 'econotec:salida_lista' %}?tecnico_salida={{ request.user.id }}" class="perfil-action">
+                        <span class="perfil-action-icon">🔧</span>
+                        <span class="perfil-action-text">Ver mis equipos reparados</span>
+                        <span class="perfil-action-arrow">➔</span>
                     </a>
                 </div>
             </div>
@@ -1105,6 +1153,7 @@
                             }
                             
                             document.getElementById('stat-buenas').textContent = data.salidas_buenas;
+                            document.getElementById('stat-producto').textContent = data.salidas_producto;
                             document.getElementById('stat-malas').textContent = data.salidas_malas;
                             
                             var fill = document.getElementById('perfil-progress-fill');
@@ -1141,8 +1190,8 @@
                 html: `
                     <div style="text-align: left; font-size: 14px; line-height: 1.6;">
                         <p>Te saluda con tu nombre de usuario y un icono de avatar.</p>
-                        <p>Contiene estadísticas exactas mostrando tus <b>"Salidas Buenas"</b> que suman a tu puntuación. ¡Ten cuidado, porque las Salidas Malas marcadas como <b>"No se pudo reparar"</b> te restan 1 punto, y las <b>"Salidas por Garantía"</b> te restan 2 puntos por no hacer bien el trabajo a la primera! <i>(Nota: Si el "Cliente no quiso reparar", no te suma ni te resta puntos, ya que no es tu culpa)</i>.</p>
-                        <p><b>Regla de Oro:</b> Tu nivel se calcula <b>EXCLUSIVAMENTE</b> por las Salidas en las que tú eres el Técnico responsable, los ingresos de equipos no dan puntos.</p>
+                        <p>Contiene estadísticas exactas mostrando tus <b>"Salidas Buenas"</b> y tus <b>"Salidas de producto"</b>, ambas suman 1 punto a tu puntuación. ¡Ten cuidado, porque las Salidas Malas marcadas como <b>"No se pudo reparar"</b> te restan 1 punto, y las <b>"Salidas por Garantía"</b> te restan 2 puntos por no hacer bien el trabajo a la primera! <i>(Nota: Si el "Cliente no quiso reparar", no te suma ni te resta puntos, ya que no es tu culpa)</i>.</p>
+                        <p><b>Regla de Oro:</b> Tu nivel se calcula por las salidas en las que tú eres el técnico responsable y por las ventas de producto asignadas como <b>Técnico vendió</b>. Los ingresos normales de equipos no dan puntos.</p>
                         <p>El color de la cabecera y de tu barra de progreso cambiará automáticamente para reflejar tu nivel desbloqueado:</p>
                         <ul style="padding-left: 10px; list-style-type: none; margin-top: 10px;">
                             <li style="margin-bottom: 5px;"><span style="color:#8e8e8e; font-size: 18px; margin-right: 5px;">●</span> <b>Nivel Novato</b> (0-49): Gris</li>

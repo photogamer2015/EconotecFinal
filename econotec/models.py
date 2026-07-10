@@ -70,6 +70,7 @@ SEDE_PREFIJOS = {
 
 SUBESTADO_EN_REPARACION = [
     ('', '— Ninguno —'),
+    ('en_reparacion', 'En reparación'),
     ('espera_cliente', 'En reparación - Cliente'),
     ('espera_repuesto', 'En reparación - Repuestos'),
 ]

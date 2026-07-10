@@ -43,6 +43,20 @@
         gap: 8px;
         margin-bottom: 14px;
     }
+    .btn-salida-bloqueada {
+        width: 100%;
+        border: none;
+        background: #d1d5db !important;
+        border-color: #d1d5db !important;
+        color: #4b5563 !important;
+        cursor: pointer;
+        justify-content: center;
+        opacity: 1;
+    }
+    .btn-salida-bloqueada:hover {
+        background: #c4c9d1 !important;
+        transform: none;
+    }
     .big-num {
         font-size: 32px;
         font-weight: 800;
@@ -478,7 +492,13 @@
                         <a href="{% url 'econotec:salida_editar' pk=salida.pk %}" class="btn btn-warning">📤 Editar Salida</a>
                         <a href="{% url 'econotec:salida_pdf' pk=salida.pk %}" class="btn btn-primary">📄 PDF Salida</a>
                     {% else %}
-                        <a href="{% url 'econotec:salida_registrar' ingreso_pk=ingreso.pk %}" class="btn btn-primary">📤 Registrar Salida</a>
+                        {% if ingreso.valor_acordado is None %}
+                            <button type="button" class="btn btn-salida-bloqueada" onclick="alertaValorAcordadoPendiente()">
+                                📤 Registrar Salida
+                            </button>
+                        {% else %}
+                            <a href="{% url 'econotec:salida_registrar' ingreso_pk=ingreso.pk %}" class="btn btn-primary">📤 Registrar Salida</a>
+                        {% endif %}
                     {% endif %}
                 {% endif %}
             </div>
@@ -521,4 +541,21 @@
         {% endif %}
     </div>
 </div>
+
+<script>
+    function alertaValorAcordadoPendiente() {
+        var mensaje = 'Por favor registra un valor acordado para registrar la salida.';
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                icon: 'warning',
+                title: 'Valor acordado pendiente',
+                text: mensaje,
+                confirmButtonText: 'Entendido',
+                confirmButtonColor: '#f97618'
+            });
+        } else {
+            alert(mensaje);
+        }
+    }
+</script>
 {% endblock %}

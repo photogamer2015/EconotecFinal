@@ -663,17 +663,23 @@ def _obtener_estadisticas_gamificacion():
         # El nivel se calcula por las salidas que el técnico REPARÓ, no por
         # las que registró ni por los ingresos (misma regla que api_perfil).
         salidas_qs = SalidaEquipo.objects.filter(tecnico_reparo=u)
+        ventas_producto_qs = IngresoEquipo.objects.filter(
+            sede='ventas',
+            tecnico_encargado=u,
+        )
 
         if fecha_reinicio:
             ingresos_qs = ingresos_qs.filter(creado__gte=fecha_reinicio)
             salidas_qs = salidas_qs.filter(creado__gte=fecha_reinicio)
+            ventas_producto_qs = ventas_producto_qs.filter(creado__gte=fecha_reinicio)
 
         ingresos = ingresos_qs.count()
+        ventas_producto = ventas_producto_qs.count()
         salidas_buenas = salidas_qs.filter(estado_reparacion__in=['pendiente_retiro', 'retirado']).count()
         salidas_malas = salidas_qs.filter(estado_reparacion__in=['no_reparable']).count()
         salidas_garantia = salidas_qs.filter(estado_reparacion__in=['garantia']).count()
         
-        total = max(0, salidas_buenas - salidas_malas - (salidas_garantia * 2))
+        total = max(0, salidas_buenas + ventas_producto - salidas_malas - (salidas_garantia * 2))
         
         if total <= 49:
             nivel = 'Novato'
@@ -692,6 +698,7 @@ def _obtener_estadisticas_gamificacion():
             'usuario': f"{u.first_name} {u.last_name}".strip() or u.username,
             'ingresos': ingresos,
             'buenas': salidas_buenas,
+            'producto': ventas_producto,
             'malas': salidas_malas,
             'total': total,
             'nivel': nivel
@@ -731,7 +738,7 @@ def admin_perfiles_exportar(request, formato):
         ws.title = "Ranking Perfiles"
         
         # Headers
-        headers = ['Posición', 'Técnico / Asesor', 'Ingresos', 'Salidas Buenas', 'Salidas Malas', 'Puntaje Total', 'Nivel Alcanzado']
+        headers = ['Posición', 'Técnico / Asesor', 'Ingresos', 'Salidas Buenas', 'Salida de Producto', 'Salidas Malas', 'Puntaje Total', 'Nivel Alcanzado']
         for col_num, header in enumerate(headers, 1):
             cell = ws.cell(row=1, column=col_num)
             cell.value = header
@@ -743,9 +750,10 @@ def admin_perfiles_exportar(request, formato):
             ws.cell(row=row_num, column=2, value=stat['usuario'])
             ws.cell(row=row_num, column=3, value=stat['ingresos'])
             ws.cell(row=row_num, column=4, value=stat['buenas'])
-            ws.cell(row=row_num, column=5, value=stat['malas'])
-            ws.cell(row=row_num, column=6, value=stat['total'])
-            ws.cell(row=row_num, column=7, value=stat['nivel'])
+            ws.cell(row=row_num, column=5, value=stat['producto'])
+            ws.cell(row=row_num, column=6, value=stat['malas'])
+            ws.cell(row=row_num, column=7, value=stat['total'])
+            ws.cell(row=row_num, column=8, value=stat['nivel'])
             
         response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
         response['Content-Disposition'] = f'attachment; filename=Ranking_Perfiles_{fecha_str}.xlsx'
@@ -776,9 +784,10 @@ def admin_perfiles_exportar(request, formato):
         c.drawString(90, y, "Usuario")
         c.drawString(220, y, "Ingresos")
         c.drawString(280, y, "S. Buenas")
-        c.drawString(350, y, "S. Malas")
-        c.drawString(420, y, "Puntos")
-        c.drawString(480, y, "Nivel")
+        c.drawString(340, y, "S. Prod.")
+        c.drawString(400, y, "S. Malas")
+        c.drawString(460, y, "Puntos")
+        c.drawString(510, y, "Nivel")
         y -= 20
         
         c.line(50, y+10, 550, y+10)
@@ -792,9 +801,10 @@ def admin_perfiles_exportar(request, formato):
             c.drawString(90, y, str(stat['usuario'])[:25])
             c.drawString(220, y, str(stat['ingresos']))
             c.drawString(280, y, str(stat['buenas']))
-            c.drawString(350, y, str(stat['malas']))
-            c.drawString(420, y, str(stat['total']))
-            c.drawString(480, y, str(stat['nivel']))
+            c.drawString(340, y, str(stat['producto']))
+            c.drawString(400, y, str(stat['malas']))
+            c.drawString(460, y, str(stat['total']))
+            c.drawString(510, y, str(stat['nivel']))
             y -= 20
             
         c.save()

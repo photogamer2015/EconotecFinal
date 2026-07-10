@@ -117,6 +117,11 @@ def tecnico_hoja(request, token):
     if request.method == 'POST':
         return _procesar_actualizacion(request, ingreso, token)
 
+    valor_acordado_bloqueado = (
+        ingreso.valor_acordado is not None
+        and ingreso.estado_pago == 'Pagado'
+    )
+
     contexto = {
         'ingreso': ingreso,
         'cliente': ingreso.cliente,
@@ -125,6 +130,8 @@ def tecnico_hoja(request, token):
         'opciones_estado': OPCIONES_ESTADO_MOVIL,
         'estado_actual_movil': _estado_movil_actual(ingreso),
         'reporte_actual': ingreso.reporte_tecnico or '',
+        'valor_acordado_actual': '.' if ingreso.valor_acordado is None else ingreso.valor_acordado,
+        'valor_acordado_bloqueado': valor_acordado_bloqueado,
         'subestado_reparacion_actual': ingreso.subestado_reparacion or '',
         'subestados_reparacion': IngresoEquipo._meta.get_field(
             'subestado_reparacion').choices,
@@ -137,12 +144,13 @@ def _procesar_actualizacion(request, ingreso, token):
     """
     Guarda el reporte del técnico y aplica el cambio de estado seleccionado.
 
-    Regla de seguridad de datos: el técnico nunca toca valores monetarios.
-    Solo el reporte y el estado/salida.
+    El valor acordado es solo lectura en la hoja móvil. Se administra desde
+    el sistema principal, y la salida nunca se registra mientras siga pendiente.
     """
     reporte = (request.POST.get('reporte_tecnico') or '').strip()
     estado_movil = (request.POST.get('estado_movil') or '').strip()
     subestado_rep = (request.POST.get('subestado_reparacion') or '').strip()
+    accion = (request.POST.get('accion') or 'guardar').strip()
 
     # 1) Reporte del técnico — siempre se guarda.
     #    Si el contenido cambió (o se escribió por primera vez), registramos
@@ -152,6 +160,33 @@ def _procesar_actualizacion(request, ingreso, token):
         ingreso.reporte_por = request.user
         ingreso.reporte_actualizado = timezone.now()
     ingreso.reporte_tecnico = reporte
+
+    if accion == 'actualizar_valor':
+        ingreso.save(update_fields=['reporte_tecnico', 'reporte_por',
+                                    'reporte_actualizado', 'actualizado'])
+        messages.info(request, 'El valor acordado se edita desde el sistema principal.')
+        return redirect('econotec:tecnico_hoja', token=token)
+
+    estados_crean_salida = {
+        ESTADO_ENTREGADO_OK,
+        ESTADO_ENTREGADO_FAIL,
+        ESTADO_ENTREGADO_NO_QUISO,
+    }
+    solicita_salida = accion == 'registrar_salida' or estado_movil in estados_crean_salida
+
+    if solicita_salida and ingreso.valor_acordado is None:
+        ingreso.save(update_fields=['reporte_tecnico', 'reporte_por',
+                                    'reporte_actualizado', 'actualizado'])
+        messages.warning(
+            request,
+            'Por favor registra un valor acordado para registrar la salida.'
+        )
+        return redirect('econotec:tecnico_hoja', token=token)
+
+    if solicita_salida:
+        ingreso.save(update_fields=['reporte_tecnico', 'reporte_por',
+                                    'reporte_actualizado', 'actualizado'])
+        return redirect('econotec:salida_registrar', ingreso_pk=ingreso.pk)
 
     # 2) Aplicar el estado.
     if estado_movil == ESTADO_INGRESADO:

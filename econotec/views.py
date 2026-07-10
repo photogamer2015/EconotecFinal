@@ -20,7 +20,7 @@ from .forms import (
     ClienteForm, IngresoEquipoForm, SalidaEquipoForm,
 )
 from .models import Cliente, IngresoEquipo, SalidaEquipo, Abono
-from .permisos import admin_requerido, tecnico_requerido
+from .permisos import admin_requerido, tecnico_requerido, es_tecnico
 from .alertas import (
     equipos_demorados_qs,
     salidas_bodegaje_qs,
@@ -40,19 +40,40 @@ def _normalizar_comparacion(valor):
     return ' '.join((valor or '').strip().casefold().split())
 
 
-def _equipo_duplicado_para_cliente(cliente, datos_ingreso, excluir_pk=None):
+def _identidad_equipo_normalizada(datos_ingreso):
+    tipo = _normalizar_comparacion(datos_ingreso.get('tipo_equipo'))
+    tipo_otro = _normalizar_comparacion(datos_ingreso.get('tipo_equipo_otro')) if tipo == 'otro' else ''
+    return (
+        tipo,
+        tipo_otro,
+        _normalizar_comparacion(datos_ingreso.get('marca')),
+        _normalizar_comparacion(datos_ingreso.get('modelo_serie')),
+    )
+
+
+def _identidad_equipo_de_ingreso(ingreso):
+    return _identidad_equipo_normalizada({
+        'tipo_equipo': ingreso.tipo_equipo,
+        'tipo_equipo_otro': ingreso.tipo_equipo_otro,
+        'marca': ingreso.marca,
+        'modelo_serie': ingreso.modelo_serie,
+    })
+
+
+def _equipos_duplicados_para_cliente(cliente, datos_ingreso, excluir_pk=None):
     tipo = _normalizar_comparacion(datos_ingreso.get('tipo_equipo'))
     tipo_otro = _normalizar_comparacion(datos_ingreso.get('tipo_equipo_otro'))
     marca = _normalizar_comparacion(datos_ingreso.get('marca'))
     modelo = _normalizar_comparacion(datos_ingreso.get('modelo_serie'))
 
     if not cliente or not tipo or not marca:
-        return None
+        return []
 
-    qs = cliente.ingresos.all()
+    qs = cliente.ingresos.order_by('-creado')
     if excluir_pk:
         qs = qs.exclude(pk=excluir_pk)
 
+    duplicados = []
     for equipo in qs:
         if _normalizar_comparacion(equipo.tipo_equipo) != tipo:
             continue
@@ -64,9 +85,18 @@ def _equipo_duplicado_para_cliente(cliente, datos_ingreso, excluir_pk=None):
         modelo_existente = _normalizar_comparacion(equipo.modelo_serie)
         if modelo and modelo_existente and modelo_existente != modelo:
             continue
-        return equipo
+        duplicados.append(equipo)
 
-    return None
+    return duplicados
+
+
+def _equipo_duplicado_para_cliente(cliente, datos_ingreso, excluir_pk=None):
+    duplicados = _equipos_duplicados_para_cliente(cliente, datos_ingreso, excluir_pk)
+    return duplicados[0] if duplicados else None
+
+
+def _confirmo_mismo_equipo_cliente(request):
+    return request.POST.get('confirmar_mismo_equipo_cliente') == '1'
 
 
 # ═════════════════════════════════════════════════════════════════
@@ -395,6 +425,10 @@ def ingreso_registrar(request):
         messages.error(request, 'Tu sesión no tiene una sede asignada. Vuelve a iniciar sesión.')
         return redirect('login')
 
+    confirmar_mismo_equipo_cliente = (
+        _confirmo_mismo_equipo_cliente(request) if request.method == 'POST' else False
+    )
+
     if request.method == 'POST':
         cli_form = ClienteForm(request.POST, prefix='cli')
         ing_form = IngresoEquipoForm(request.POST, prefix='ing')
@@ -407,7 +441,7 @@ def ingreso_registrar(request):
             cli_form_existente = ClienteForm(request.POST, prefix='cli', instance=cliente_existente)
             if ing_form.is_valid() and cli_form_existente.is_valid():
                 duplicado = _equipo_duplicado_para_cliente(cliente_existente, ing_form.cleaned_data)
-                if duplicado:
+                if duplicado and not confirmar_mismo_equipo_cliente:
                     mensaje_duplicado = (
                         'ESTE EQUIPO YA SE ENCUENTRA REGISTRADO, POR FAVOR VERIFICA EN LA LISTA DE EQUIPOS.'
                     )
@@ -429,6 +463,11 @@ def ingreso_registrar(request):
                         request,
                         f'Equipo {ingreso.codigo_equipo} ingresado para {cliente.nombres}.'
                     )
+                    if duplicado and confirmar_mismo_equipo_cliente:
+                        messages.info(
+                            request,
+                            f'Reingreso confirmado: mismo cliente y mismo equipo que {duplicado.codigo_equipo}.'
+                        )
                     return redirect('econotec:ingreso_detalle', pk=ingreso.pk)
             else:
                 cli_form = cli_form_existente
@@ -495,6 +534,7 @@ def ingreso_registrar(request):
         'titulo': 'Nueva Solicitud de Ingreso',
         'siguiente_numero': siguiente_numero,
         'siguiente_codigo': siguiente_codigo,
+        'confirmar_mismo_equipo_cliente': confirmar_mismo_equipo_cliente,
     })
 
 
@@ -503,6 +543,10 @@ def ingreso_registrar(request):
 def ingreso_editar(request, pk):
     """Edita un ingreso existente."""
     ingreso = get_object_or_404(IngresoEquipo, pk=pk)
+    identidad_original = _identidad_equipo_de_ingreso(ingreso)
+    confirmar_mismo_equipo_cliente = (
+        _confirmo_mismo_equipo_cliente(request) if request.method == 'POST' else False
+    )
 
     # Mapeo subestado_entregado → estado_reparacion de SalidaEquipo
     _MAPA_SALIDA = {
@@ -528,7 +572,58 @@ def ingreso_editar(request, pk):
         cli_form = ClienteForm(request.POST, prefix='cli', instance=ingreso.cliente)
         ing_form = IngresoEquipoForm(request.POST, prefix='ing', instance=ingreso)
         if cli_form.is_valid() and ing_form.is_valid():
-            cli_form.save()
+            cliente_editado = cli_form.save(commit=False)
+            identidad_sin_cambios = (
+                _identidad_equipo_normalizada(ing_form.cleaned_data)
+                == identidad_original
+            )
+            duplicado = None
+            if not identidad_sin_cambios:
+                duplicado = _equipo_duplicado_para_cliente(
+                    cliente_editado,
+                    ing_form.cleaned_data,
+                    excluir_pk=ingreso.pk,
+                )
+            if duplicado and not confirmar_mismo_equipo_cliente:
+                mensaje_duplicado = (
+                    'ESTE EQUIPO YA SE ENCUENTRA REGISTRADO, POR FAVOR VERIFICA EN LA LISTA DE EQUIPOS.'
+                )
+                ing_form.add_error('marca', mensaje_duplicado)
+                ing_form.add_error('modelo_serie', f'Coincide con el equipo {duplicado.codigo_equipo}.')
+                messages.error(
+                    request,
+                    f'{mensaje_duplicado} Coincide con {duplicado.codigo_equipo}.'
+                )
+                return render(request, 'ingresos/form.html', {
+                    'cli_form': cli_form,
+                    'ing_form': ing_form,
+                    'modo': 'editar',
+                    'titulo': f'Editar equipo {ingreso.codigo_equipo}',
+                    'siguiente_numero': ingreso.numero_equipo,
+                    'siguiente_codigo': ingreso.codigo_equipo,
+                    'ingreso': ingreso,
+                    'confirmar_mismo_equipo_cliente': confirmar_mismo_equipo_cliente,
+                })
+
+            estado_nuevo = ing_form.cleaned_data.get('estado')
+            valor_acordado_nuevo = ing_form.cleaned_data.get('valor_acordado')
+            if estado_nuevo == 'entregado' and valor_acordado_nuevo is None:
+                ing_form.add_error(
+                    'valor_acordado',
+                    'Por favor registra un valor acordado para registrar la salida.'
+                )
+                return render(request, 'ingresos/form.html', {
+                    'cli_form': cli_form,
+                    'ing_form': ing_form,
+                    'modo': 'editar',
+                    'titulo': f'Editar equipo {ingreso.codigo_equipo}',
+                    'siguiente_numero': ingreso.numero_equipo,
+                    'siguiente_codigo': ingreso.codigo_equipo,
+                    'ingreso': ingreso,
+                    'confirmar_mismo_equipo_cliente': confirmar_mismo_equipo_cliente,
+                })
+
+            cliente_editado.save()
             ing_form.save()
 
             # ── Auto-crear Salida si estado=entregado + subestado definido ──
@@ -580,6 +675,7 @@ def ingreso_editar(request, pk):
         'titulo': f'Editar Equipo {ingreso.codigo_equipo}',
         'siguiente_numero': ingreso.numero_equipo,
         'siguiente_codigo': ingreso.codigo_equipo,
+        'confirmar_mismo_equipo_cliente': confirmar_mismo_equipo_cliente,
     })
 
 
@@ -634,9 +730,18 @@ def ingreso_lista(request):
         'salida_garantia': 'garantia',
     }
 
+    subestados_reparacion_filtro = {
+        'reparacion_en_reparacion': 'en_reparacion',
+        'espera_cliente': 'espera_cliente',
+        'espera_repuesto': 'espera_repuesto',
+    }
+
     if estado:
-        if estado in ['espera_cliente', 'espera_repuesto']:
-            qs = qs.filter(estado='en_reparacion', subestado_reparacion=estado)
+        if estado in subestados_reparacion_filtro:
+            qs = qs.filter(
+                estado='en_reparacion',
+                subestado_reparacion=subestados_reparacion_filtro[estado],
+            )
         elif estado == 'con_salida':
             qs = qs.filter(salida__isnull=False)
         elif estado in estados_salida_filtro:
@@ -668,6 +773,7 @@ def ingreso_lista(request):
         ('', '— Estado —'),
         ('ingresado', 'Ingresado / En diagnóstico'),
         ('en_reparacion', 'En reparación (Todos)'),
+        ('reparacion_en_reparacion', '   ↳ En reparación'),
         ('espera_cliente', '   ↳ En reparación - Cliente'),
         ('espera_repuesto', '   ↳ En reparación - Repuestos'),
         ('entregado', 'Entregado al cliente (Ingreso)'),
@@ -748,33 +854,80 @@ def venta_menu(request):
     })
 
 
+def _preparar_post_venta(post_data):
+    """
+    Completa los campos del formulario de ingreso que no se muestran en ventas.
+    Ventas reutiliza IngresoEquipoForm, pero omite diagnóstico/técnico/estado
+    en la pantalla; sin estos defaults el formulario puede fallar en silencio.
+    """
+    defaults_si_falta = {
+        'ing-marca': 'N/A',
+        'ing-modelo_serie': 'N/A',
+        'ing-tipo_equipo': 'otro',
+        'ing-tipo_equipo_otro': '',
+        'ing-accesorios_entregados': 'Ninguno',
+        'ing-abono_anticipo': '0.00',
+        'ing-anticipo_metodo': 'efectivo',
+        'ing-anticipo_banco': '',
+        'ing-anticipo_banco_otro': '',
+        'ing-anticipo_tarjeta_app': '',
+        'ing-anticipo_comprobante_url': '',
+        'ing-anticipo_monto_1': '',
+        'ing-anticipo_metodo_1': '',
+        'ing-anticipo_banco_1': '',
+        'ing-anticipo_monto_2': '',
+        'ing-anticipo_metodo_2': '',
+        'ing-anticipo_banco_2': '',
+        'ing-equipo_garantia': '',
+        'ing-equipo_garantia_manual': '',
+        'ing-motivo_garantia': '',
+    }
+    for campo, valor in defaults_si_falta.items():
+        if not post_data.get(campo):
+            post_data[campo] = valor
+
+    # El diagnóstico no aplica a ventas, pero IngresoEquipoForm exige el método.
+    post_data['ing-diagnostico_inmediato'] = 'no'
+    post_data['ing-valor_diagnostico'] = '0.00'
+    post_data['ing-diagnostico_metodo'] = 'efectivo'
+    post_data['ing-diagnostico_banco'] = ''
+    post_data['ing-diagnostico_banco_otro'] = ''
+    post_data['ing-diagnostico_tarjeta_app'] = ''
+    post_data['ing-diagnostico_comprobante_url'] = ''
+    post_data['ing-diagnostico_monto_1'] = ''
+    post_data['ing-diagnostico_metodo_1'] = ''
+    post_data['ing-diagnostico_banco_1'] = ''
+    post_data['ing-diagnostico_monto_2'] = ''
+    post_data['ing-diagnostico_metodo_2'] = ''
+    post_data['ing-diagnostico_banco_2'] = ''
+
+    # IngresoEquipoForm oculta la opción "entregado"; validamos como ingreso
+    # normal y luego forzamos el estado final de venta antes de guardar.
+    post_data['ing-estado'] = 'ingresado'
+    post_data['ing-subestado_reparacion'] = ''
+    post_data['ing-subestado_entregado'] = ''
+
+
+def _configurar_form_venta(ing_form):
+    ing_form.fields['tecnico_encargado'].required = True
+    ing_form.fields['tecnico_encargado'].label = 'Técnico vendió'
+    ing_form.fields['tecnico_encargado'].empty_label = '— Selecciona el técnico que vendió —'
+    if 'equipo_garantia' in ing_form.fields:
+        ing_form.fields['equipo_garantia'].required = False
+    ing_form.fields['problema_reportado'].widget.attrs['placeholder'] = 'Ej.: 1 Tinta Epson Negra, 2 Cables USB'
+
+
 @tecnico_requerido
 @transaction.atomic
 def venta_registrar(request):
     """Registra una nueva venta de producto."""
     if request.method == 'POST':
         post_data = request.POST.copy()
-        # Valores por defecto para campos no usados en ventas
-        if not post_data.get('ing-marca'):
-            post_data['ing-marca'] = 'N/A'
-        if not post_data.get('ing-modelo_serie'):
-            post_data['ing-modelo_serie'] = 'N/A'
-        if not post_data.get('ing-tipo_equipo'):
-            post_data['ing-tipo_equipo'] = 'otro'
-        if not post_data.get('ing-valor_diagnostico'):
-            post_data['ing-valor_diagnostico'] = '0.00'
-        if not post_data.get('ing-abono_anticipo'):
-            post_data['ing-abono_anticipo'] = '0.00'
+        _preparar_post_venta(post_data)
 
         cli_form = ClienteForm(post_data, prefix='cli')
         ing_form = IngresoEquipoForm(post_data, prefix='ing')
-        
-        # En ventas no es obligatorio el técnico ni la garantía
-        ing_form.fields['tecnico_encargado'].required = False
-        if 'equipo_garantia' in ing_form.fields:
-            ing_form.fields['equipo_garantia'].required = False
-
-        ing_form.fields['problema_reportado'].widget.attrs['placeholder'] = 'Ej.: 1 Tinta Epson Negra, 2 Cables USB'
+        _configurar_form_venta(ing_form)
 
         cedula = (post_data.get('cli-cedula') or '').strip()
         cliente_existente = Cliente.objects.filter(cedula=cedula).first() if cedula else None
@@ -788,26 +941,16 @@ def venta_registrar(request):
                 cliente = cli_form_existente.save()
                 venta = ing_form.save(commit=False)
             else:
-                print("ERRORES AL ACTUALIZAR CLI:")
-                print("ING_FORM ERRORS:", ing_form.errors)
-                print("CLI_FORM ERRORS:", cli_form_existente.errors)
                 cli_form = cli_form_existente # Pass the instance form so it doesn't show "Cedula exists" error
         else:
             if cli_form.is_valid() and ing_form.is_valid():
                 cliente = cli_form.save()
                 venta = ing_form.save(commit=False)
-            else:
-                print("ERRORES AL CREAR NUEVO CLI:")
-                print("ING_FORM ERRORS:", ing_form.errors)
-                print("CLI_FORM ERRORS:", cli_form.errors)
 
         if cliente and venta:
             venta.cliente = cliente
             venta.sede = 'ventas'
             venta.registrado_por = request.user
-            venta.save()
-
-            # Marcar la venta como finalizada directamente en el ingreso
             venta.estado = 'entregado'
             venta.subestado_entregado = 'con_solucion'
             venta.save()
@@ -817,7 +960,7 @@ def venta_registrar(request):
             
     else:
         cli_form = ClienteForm(prefix='cli')
-        ing_form = IngresoEquipoForm(prefix='ing', initial={
+        initial = {
             'fecha_ingreso': date.today(),
             'estado': 'entregado',
             'subestado_entregado': 'con_solucion', # Asumimos la venta está finalizada y entregada
@@ -826,8 +969,11 @@ def venta_registrar(request):
             'marca': 'N/A',
             'modelo_serie': 'N/A',
             'tipo_equipo': 'otro',
-        })
-        ing_form.fields['problema_reportado'].widget.attrs['placeholder'] = 'Ej.: 1 Tinta Epson Negra, 2 Cables USB'
+        }
+        if es_tecnico(request.user):
+            initial['tecnico_encargado'] = request.user
+        ing_form = IngresoEquipoForm(prefix='ing', initial=initial)
+        _configurar_form_venta(ing_form)
 
     from .models import SEDE_PREFIJOS
     siguiente_numero = IngresoEquipo.siguiente_numero_equipo('ventas')
@@ -850,35 +996,26 @@ def venta_editar(request, pk):
 
     if request.method == 'POST':
         post_data = request.POST.copy()
-        if not post_data.get('ing-marca'):
-            post_data['ing-marca'] = 'N/A'
-        if not post_data.get('ing-modelo_serie'):
-            post_data['ing-modelo_serie'] = 'N/A'
-        if not post_data.get('ing-tipo_equipo'):
-            post_data['ing-tipo_equipo'] = 'otro'
-        if not post_data.get('ing-valor_diagnostico'):
-            post_data['ing-valor_diagnostico'] = '0.00'
-        if not post_data.get('ing-abono_anticipo'):
-            post_data['ing-abono_anticipo'] = '0.00'
+        _preparar_post_venta(post_data)
             
         cli_form = ClienteForm(post_data, prefix='cli', instance=venta.cliente)
         ing_form = IngresoEquipoForm(post_data, prefix='ing', instance=venta)
-        
-        # En ventas no es obligatorio el técnico ni la garantía
-        ing_form.fields['tecnico_encargado'].required = False
-        if 'equipo_garantia' in ing_form.fields:
-            ing_form.fields['equipo_garantia'].required = False
+        _configurar_form_venta(ing_form)
         
         if cli_form.is_valid() and ing_form.is_valid():
             cli_form.save()
-            ing_form.save()
+            venta = ing_form.save(commit=False)
+            venta.sede = 'ventas'
+            venta.estado = 'entregado'
+            venta.subestado_entregado = 'con_solucion'
+            venta.save()
             messages.success(request, f'Venta {venta.codigo_equipo} actualizada.')
             return redirect('econotec:venta_lista')
     else:
         cli_form = ClienteForm(prefix='cli', instance=venta.cliente)
         ing_form = IngresoEquipoForm(prefix='ing', instance=venta)
         
-    ing_form.fields['problema_reportado'].widget.attrs['placeholder'] = 'Ej.: 1 Tinta Epson Negra, 2 Cables USB'
+    _configurar_form_venta(ing_form)
 
     return render(request, 'ventas/form.html', {
         'cli_form': cli_form,
@@ -1059,6 +1196,13 @@ def salida_registrar(request, ingreso_pk):
         )
         return redirect('econotec:salida_editar', pk=ingreso.salida.pk)
 
+    if ingreso.valor_acordado is None:
+        messages.warning(
+            request,
+            'Por favor registra un valor acordado para registrar la salida.'
+        )
+        return redirect('econotec:ingreso_detalle', pk=ingreso.pk)
+
     if request.method == 'POST':
         salida_inst = SalidaEquipo(ingreso=ingreso)
         form = SalidaEquipoForm(request.POST, instance=salida_inst)
@@ -1086,6 +1230,7 @@ def salida_registrar(request, ingreso_pk):
             'cliente_recibe_conforme': 'si',
             'metodo_pago_final': 'efectivo',
             'valor_final_cobrado': 0,
+            'tecnico_reparo': request.user if es_tecnico(request.user) else None,
         })
 
     return render(request, 'salidas/form.html', {
@@ -1806,13 +1951,19 @@ def api_perfil(request):
     # para subir de nivel.
     ingresos_qs = IngresoEquipo.objects.filter(registrado_por=user)
     salidas_qs = SalidaEquipo.objects.filter(tecnico_reparo=user)
+    ventas_producto_qs = IngresoEquipo.objects.filter(
+        sede='ventas',
+        tecnico_encargado=user,
+    )
 
     if fecha_reinicio:
         ingresos_qs = ingresos_qs.filter(creado__gte=fecha_reinicio)
         salidas_qs = salidas_qs.filter(creado__gte=fecha_reinicio)
+        ventas_producto_qs = ventas_producto_qs.filter(creado__gte=fecha_reinicio)
 
     # Ingresos registrados por el usuario (solo informativo, no suma nivel)
     ingresos_count = ingresos_qs.count()
+    salidas_producto = ventas_producto_qs.count()
     
     # Salidas positivas (reparadas por el técnico)
     salidas_buenas = salidas_qs.filter(
@@ -1829,9 +1980,9 @@ def api_perfil(request):
         estado_reparacion__in=['garantia']
     ).count()
     
-    # Calcular total (no puede ser menor a 0)
-    # El nivel se basa exclusivamente en las salidas del técnico que reparó.
-    total_operaciones = max(0, salidas_buenas - salidas_malas - (salidas_garantia * 2))
+    # Calcular total (no puede ser menor a 0).
+    # Las ventas de producto cuentan como salida positiva de producto: +1 cada una.
+    total_operaciones = max(0, salidas_buenas + salidas_producto - salidas_malas - (salidas_garantia * 2))
     
     # Gamificación
     if total_operaciones <= 49:
@@ -1864,6 +2015,7 @@ def api_perfil(request):
         'nombre': user.first_name or user.username,
         'ingresos': ingresos_count,
         'salidas_buenas': salidas_buenas,
+        'salidas_producto': salidas_producto,
         'salidas_malas': salidas_malas,
         'total': total_operaciones,
         'nivel': nivel,

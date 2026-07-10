@@ -185,6 +185,9 @@
                 </td>
                 <td class="row-actions">
                     <a href="{% url 'econotec:ingreso_detalle' pk=i.pk %}" class="btn btn-sm btn-primary">Ver Detalles</a>
+                    {% if es_admin and i.salida %}
+                        <a href="{% url 'econotec:salida_editar' pk=i.salida.pk %}" class="btn btn-sm btn-secondary">Ver detalle de salida</a>
+                    {% endif %}
                     <a href="{% url 'econotec:ingreso_pdf' pk=i.pk %}" class="btn btn-sm btn-secondary" title="Descargar PDF">Descargar 📄</a>
                 </td>
             </tr>

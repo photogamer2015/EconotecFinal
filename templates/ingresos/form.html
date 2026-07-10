@@ -118,6 +118,56 @@
         text-decoration: underline;
     }
 
+    .equipo-duplicado-alerta.confirmado {
+        border-color: #f97316;
+        background: #fff7ed;
+        color: #9a3412;
+        box-shadow: 0 8px 22px rgba(249, 115, 22, 0.13);
+    }
+
+    .equipo-duplicado-alerta.confirmado .detalle,
+    .equipo-duplicado-alerta.confirmado a {
+        color: #c2410c;
+    }
+
+    .equipo-reingreso-confirmacion {
+        display: none;
+        margin: -6px 0 18px;
+        padding: 16px 18px;
+        border: 1px solid #fed7aa;
+        border-radius: 8px;
+        background: #fff7ed;
+        color: #7c2d12;
+    }
+
+    .equipo-reingreso-confirmacion.visible {
+        display: block;
+    }
+
+    .equipo-reingreso-confirmacion label {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        font-weight: 800;
+        cursor: pointer;
+    }
+
+    .equipo-reingreso-confirmacion input {
+        width: 18px;
+        height: 18px;
+        margin-top: 2px;
+        accent-color: var(--primary);
+    }
+
+    .equipo-reingreso-confirmacion .ayuda {
+        display: block;
+        margin: 8px 0 0 28px;
+        font-size: 13px;
+        font-weight: 600;
+        line-height: 1.35;
+        color: #9a3412;
+    }
+
     .equipo-duplicado-alerta.compacta {
         margin: 0 0 14px;
         padding: 15px 18px;
@@ -258,6 +308,21 @@
         <div id="equipo-duplicado-alerta" class="equipo-duplicado-alerta" data-equipo-duplicado-alerta role="alert" aria-live="assertive">
             <span class="titulo">ESTE EQUIPO YA SE ENCUENTRA REGISTRADO, POR FAVOR VERIFICA EN LA LISTA DE EQUIPOS.</span>
             <span id="equipo-duplicado-detalle" class="detalle" data-equipo-duplicado-detalle></span>
+        </div>
+        <div id="mismo-equipo-cliente-wrap" class="equipo-reingreso-confirmacion" data-mismo-equipo-wrap>
+            <label for="id_confirmar_mismo_equipo_cliente">
+                <input
+                    type="checkbox"
+                    id="id_confirmar_mismo_equipo_cliente"
+                    name="confirmar_mismo_equipo_cliente"
+                    value="1"
+                    {% if confirmar_mismo_equipo_cliente %}checked{% endif %}
+                >
+                <span>Trajo más de 2 del mismo equipo del mismo cliente</span>
+            </label>
+            <span id="mismo-equipo-cliente-ayuda" class="ayuda">
+                Marca esta opción solo si el cliente está trayendo nuevamente ese mismo equipo. Se registrará como un nuevo ingreso y se conservará el historial anterior.
+            </span>
         </div>
         <div style="margin-top:14px;">
             <label class="form-label" style="margin-bottom:8px;">¿Trajo accesorios? *</label>
@@ -571,6 +636,10 @@
             if (selGar) selGar.required = false;
             if (inpMotivo) inpMotivo.required = (v === 'garantia');
 
+            if (v === 'en_reparacion' && selRep && !selRep.value) {
+                selRep.value = 'en_reparacion';
+            }
+
             // Limpia el sub-estado que no corresponde para que no quede dato colgado
             if (v !== 'en_reparacion' && selRep) selRep.value = '';
             if (v !== 'entregado' && selEnt) selEnt.value = '';
@@ -723,12 +792,22 @@
         var form = document.getElementById('ingreso-form');
         var alertas = Array.prototype.slice.call(document.querySelectorAll('[data-equipo-duplicado-alerta]'));
         var detalles = Array.prototype.slice.call(document.querySelectorAll('[data-equipo-duplicado-detalle]'));
+        var confirmWrap = document.querySelector('[data-mismo-equipo-wrap]');
+        var confirmCheck = document.getElementById('id_confirmar_mismo_equipo_cliente');
+        var confirmAyuda = document.getElementById('mismo-equipo-cliente-ayuda');
         var btnRegistrar = document.getElementById('btn-registrar');
         var inpTipo = document.querySelector('[name="ing-tipo_equipo"]');
         var inpTipoOtro = document.querySelector('[name="ing-tipo_equipo_otro"]');
         var inpMarca = document.querySelector('[name="ing-marca"]');
         var inpModelo = document.querySelector('[name="ing-modelo_serie"]');
         var textoBotonNormal = btnRegistrar ? btnRegistrar.textContent : '';
+        var ingresoActualId = '{{ ingreso.pk|default:"" }}';
+        var identidadOriginal = ingresoActualId ? {
+            tipo: '{{ ingreso.tipo_equipo|default:""|escapejs }}',
+            tipoOtro: '{{ ingreso.tipo_equipo_otro|default:""|escapejs }}',
+            marca: '{{ ingreso.marca|default:""|escapejs }}',
+            modelo: '{{ ingreso.modelo_serie|default:""|escapejs }}'
+        } : null;
 
         if (!form || !alertas.length || !inpTipo || !inpMarca) return;
 
@@ -754,6 +833,16 @@
             return tipo;
         }
 
+        function identidadActualSinCambios() {
+            if (!identidadOriginal) return false;
+            var tipo = normalizar(inpTipo.value);
+            var tipoOtro = (tipo === 'otro' && inpTipoOtro) ? normalizar(inpTipoOtro.value) : '';
+            return tipo === normalizar(identidadOriginal.tipo) &&
+                tipoOtro === normalizar(identidadOriginal.tipoOtro) &&
+                normalizar(inpMarca.value) === normalizar(identidadOriginal.marca) &&
+                normalizar(inpModelo ? inpModelo.value : '') === normalizar(identidadOriginal.modelo);
+        }
+
         function encontrarCoincidencia() {
             var equipos = window.__equipos_cliente_data || [];
             var tipo = textoTipoActual();
@@ -761,9 +850,12 @@
             var modelo = normalizar(inpModelo ? inpModelo.value : '');
 
             if (!tipo || !marca || equipos.length === 0) return null;
+            if (identidadActualSinCambios()) return null;
 
+            var coincidencias = [];
             for (var i = 0; i < equipos.length; i += 1) {
                 var eq = equipos[i];
+                if (ingresoActualId && String(eq.id) === String(ingresoActualId)) continue;
                 if (textoTipoEquipo(eq) !== tipo) continue;
                 if (normalizar(eq.marca) !== marca) continue;
 
@@ -771,19 +863,23 @@
                 var coincidenciaBloqueante = !modelo || !modeloEquipo || modeloEquipo === modelo;
 
                 if (coincidenciaBloqueante) {
-                    return { equipo: eq };
+                    coincidencias.push(eq);
                 }
             }
-            return null;
+            return coincidencias.length ? { equipo: coincidencias[0], total: coincidencias.length } : null;
         }
 
         function mostrarCoincidencia(resultado) {
-            window.__equipoDuplicadoExacto = !!resultado;
+            var confirmado = !!(confirmCheck && confirmCheck.checked);
+            window.__equipoDuplicadoExacto = !!resultado && !confirmado;
 
             if (!resultado) {
                 alertas.forEach(function (alerta) {
                     alerta.style.display = 'none';
+                    alerta.classList.remove('confirmado');
                 });
+                if (confirmWrap) confirmWrap.classList.remove('visible');
+                if (confirmCheck) confirmCheck.checked = false;
                 if (btnRegistrar) {
                     btnRegistrar.disabled = false;
                     btnRegistrar.textContent = textoBotonNormal;
@@ -792,21 +888,37 @@
             }
 
             var eq = resultado.equipo;
+            var total = resultado.total || 1;
+            var proximoIngreso = total + 1;
+            var historial = total === 1
+                ? '1 registro anterior'
+                : total + ' registros anteriores';
             var enlace = eq.detalle_url
                 ? ' <a href="' + eq.detalle_url + '" target="_blank" rel="noopener">Ver ' + (eq.codigo || 'equipo') + '</a>'
                 : '';
-            var nota = 'Coincide con ' + (eq.label || eq.codigo || 'un equipo anterior') + '. No se debe registrar nuevamente.' + enlace;
+            var nota = 'Coincide con ' + (eq.label || eq.codigo || 'un equipo anterior') + '. Este cliente ya tiene ' + historial + ' con este mismo equipo; este sería el ingreso #' + proximoIngreso + '.';
+            if (confirmado) {
+                nota += ' Confirmado como reingreso del mismo cliente y equipo.';
+            } else {
+                nota += ' Marca la casilla de confirmación si realmente es el mismo equipo que vuelve a ingresar.';
+            }
+            nota += enlace;
 
             detalles.forEach(function (detalle) {
                 detalle.innerHTML = nota;
             });
             alertas.forEach(function (alerta) {
                 alerta.style.display = 'block';
+                alerta.classList.toggle('confirmado', confirmado);
             });
+            if (confirmWrap) confirmWrap.classList.add('visible');
+            if (confirmAyuda) {
+                confirmAyuda.textContent = 'Este cliente ya trajo este equipo ' + total + (total === 1 ? ' vez' : ' veces') + '. Marca esta opción solo si quieres registrar una nueva visita del mismo equipo y del mismo cliente.';
+            }
 
             if (btnRegistrar) {
-                btnRegistrar.disabled = true;
-                btnRegistrar.textContent = 'Equipo ya registrado';
+                btnRegistrar.disabled = !confirmado;
+                btnRegistrar.textContent = confirmado ? textoBotonNormal : 'Confirmar reingreso';
             }
         }
 
@@ -819,6 +931,9 @@
             campo.addEventListener('input', window.__evaluarEquipoDuplicado);
             campo.addEventListener('change', window.__evaluarEquipoDuplicado);
         });
+        if (confirmCheck) {
+            confirmCheck.addEventListener('change', window.__evaluarEquipoDuplicado);
+        }
 
         form.addEventListener('submit', function (e) {
             window.__evaluarEquipoDuplicado();
@@ -1217,7 +1332,17 @@
     (function() {
         const form = document.getElementById('ingreso-form');
         if (!form) return;
-        const storageKey = 'econotec_ingreso_form_{{ ingreso.pk|default:"nuevo" }}';
+        const ingresoId = '{{ ingreso.pk|default:"" }}';
+        const storageKey = ingresoId ? 'econotec_ingreso_form_' + ingresoId : '';
+
+        // Una nueva solicitud siempre debe abrir limpia. Antes se reutilizaba
+        // la clave "nuevo" y el navegador restauraba datos de ingresos pasados.
+        if (!storageKey) {
+            try {
+                localStorage.removeItem('econotec_ingreso_form_nuevo');
+            } catch (e) {}
+            return;
+        }
         
         // Restaurar datos
         try {

@@ -61,6 +61,24 @@
             margin-bottom: 12px; padding-bottom: 8px;
             border-bottom: 2px solid #ffe6d3;
         }
+        .card-title.card-toggle {
+            width: 100%; display: flex; align-items: center; justify-content: space-between;
+            gap: 12px; background: transparent; border-top: 0; border-left: 0;
+            border-right: 0; text-align: left; cursor: pointer; font-family: inherit;
+        }
+        .card-title.card-toggle[aria-expanded="false"] { margin-bottom: 0; }
+        .card-title.card-toggle[aria-expanded="true"] { margin-bottom: 12px; }
+        .toggle-chevron {
+            width: 28px; height: 28px; border-radius: 50%;
+            display: inline-flex; align-items: center; justify-content: center;
+            background: #fff3e8; color: var(--naranja-dark); font-size: 18px;
+            transition: transform .18s ease, background .18s ease;
+            flex-shrink: 0;
+        }
+        .card-title.card-toggle[aria-expanded="true"] .toggle-chevron {
+            transform: rotate(180deg); background: #ffe0c2;
+        }
+        .valor-content[hidden] { display: none; }
 
         .row { display: flex; justify-content: space-between; align-items: baseline;
                gap: 12px; padding: 7px 0; border-bottom: 1px dashed #eee; }
@@ -96,13 +114,77 @@
             color: var(--muted); margin: 14px 0 6px;
             text-transform: uppercase; letter-spacing: 0.4px;
         }
-        textarea, select {
+        textarea, select, input.mobile-input {
             width: 100%; border: 1.5px solid var(--border); border-radius: 10px;
             padding: 12px; font-size: 15px; font-family: inherit; color: var(--text);
             background: #fff;
         }
         textarea { min-height: 120px; resize: vertical; line-height: 1.5; }
-        textarea:focus, select:focus { outline: none; border-color: var(--naranja); }
+        textarea:focus, select:focus, input.mobile-input:focus { outline: none; border-color: var(--naranja); }
+
+        .field-help {
+            margin-top: 7px; color: var(--muted); font-size: 12px; line-height: 1.35;
+        }
+        .valor-box {
+            background: #fff8f3; border: 1px solid #ffe0c2;
+            border-radius: 12px; padding: 12px; margin-top: 8px;
+        }
+        .valor-box.pendiente {
+            border-color: #fca5a5; background: #fff1f2;
+        }
+        .valor-error {
+            display: none; margin-top: 8px; color: var(--fail);
+            font-size: 12.5px; font-weight: 700; line-height: 1.35;
+        }
+        .valor-error.show { display: block; }
+        input.mobile-input[readonly] {
+            background: #f9fafb; color: #6b7280; font-weight: 800;
+        }
+        .money-summary-mobile {
+            margin-top: 13px; padding-top: 13px;
+            border-top: 1px solid #ffe0c2;
+        }
+        .money-heading {
+            text-align: center; color: var(--muted); font-size: 12.5px;
+            margin-bottom: 9px; font-weight: 700;
+        }
+        .money-grid-mobile {
+            display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 8px;
+        }
+        .money-card-mobile {
+            background: #fff; border: 1px solid var(--border);
+            border-radius: 10px; padding: 10px 6px; text-align: center;
+            min-width: 0;
+        }
+        .money-card-mobile .label {
+            color: #8b8b8b; font-size: 10.5px; font-weight: 800;
+            text-transform: uppercase; letter-spacing: 0.35px;
+        }
+        .money-card-mobile .value {
+            margin-top: 2px; font-size: 17px; font-weight: 900;
+            color: var(--text); word-break: break-word;
+        }
+        .money-card-mobile.pos .value { color: var(--ok); }
+        .money-card-mobile.neg .value { color: var(--fail); }
+        .estado-pill-mobile {
+            display: inline-block; padding: 4px 9px; border-radius: 999px;
+            font-size: 10.5px; font-weight: 900; text-transform: uppercase;
+            letter-spacing: 0.3px;
+        }
+        .estado-pill-mobile.pagado { background: #e8f5e9; color: var(--ok); }
+        .estado-pill-mobile.parcial { background: #fff3cd; color: #8a6d00; }
+        .estado-pill-mobile.pendiente { background: #fdecea; color: var(--fail); }
+        .valor-paid-lock, .valor-pending-note {
+            margin-top: 10px; padding: 10px 12px; border-radius: 10px;
+            font-size: 12.5px; font-weight: 800; line-height: 1.35;
+        }
+        .valor-paid-lock {
+            background: #e8f5e9; border: 1px solid #b7e4bd; color: var(--ok);
+        }
+        .valor-pending-note {
+            background: #fff7e6; border: 1px solid #ffd89b; color: var(--warn);
+        }
 
         .reporte-autor {
             margin-top: 10px; font-size: 12.5px; color: var(--ok);
@@ -135,6 +217,38 @@
             border-radius: 10px; border: 1px dashed var(--border);
         }
         .subestado-box.hidden { display: none; }
+
+        .salida-section {
+            margin-top: 14px; padding-top: 14px;
+            border-top: 1px solid var(--border);
+        }
+        .salida-title {
+            display: flex; align-items: center; gap: 8px;
+            color: var(--naranja-dark); font-size: 12.5px;
+            font-weight: 900; text-transform: uppercase; letter-spacing: 0.45px;
+            margin-bottom: 10px;
+        }
+        .salida-help {
+            background: #f9fafb; border: 1px solid var(--border);
+            border-radius: 10px; padding: 10px 12px;
+            color: var(--muted); font-size: 12.5px; line-height: 1.35;
+            margin-bottom: 10px;
+        }
+        .salida-blocked {
+            display: none; margin-top: 10px; padding: 10px 12px;
+            border-radius: 10px; background: #fff1f2; border: 1px solid #fecdd3;
+            color: var(--fail); font-size: 12.5px; font-weight: 800; line-height: 1.35;
+        }
+        .salida-blocked.show { display: block; }
+        .btn-salida {
+            width: 100%; margin-top: 10px; background: var(--naranja); color: #fff;
+            box-shadow: 0 6px 14px rgba(249,118,24,0.22);
+        }
+        .btn-salida:active { background: var(--naranja-dark); }
+        .btn-salida.blocked {
+            background: #d1d5db; color: #6b7280; box-shadow: none;
+        }
+        .btn-salida.blocked:active { background: #d1d5db; }
 
         /* Barra de guardar fija abajo */
         .save-bar {
@@ -176,6 +290,9 @@
             text-align: center; width: 90%; max-width: 400px;
         }
         .toast.show { opacity: 1; }
+        .toast.info { background: #2563eb; box-shadow: 0 4px 15px rgba(37,99,235,0.35); }
+        .toast.warning { background: #b8860b; box-shadow: 0 4px 15px rgba(184,134,11,0.35); }
+        .toast.error { background: #c62828; box-shadow: 0 4px 15px rgba(198,40,40,0.35); }
     </style>
 </head>
 <body>
@@ -193,7 +310,7 @@
 </div>
 
 {% if messages %}
-<div class="toast show" id="toast-msg">
+<div class="toast show {% for message in messages %}{% if forloop.first %}{{ message.tags }}{% endif %}{% endfor %}" id="toast-msg">
     {% for message in messages %}
         {{ message }}<br>
     {% endfor %}
@@ -275,6 +392,78 @@
         </div>
 
         <div class="card">
+            <button
+                type="button"
+                class="card-title card-toggle"
+                id="valor-toggle"
+                aria-expanded="false"
+                aria-controls="valor-content"
+            >
+                <span>💵 Valor acordado</span>
+                <span class="toggle-chevron" aria-hidden="true">⌄</span>
+            </button>
+            <div class="valor-content" id="valor-content" hidden>
+                <div class="valor-box {% if ingreso.valor_acordado is None %}pendiente{% endif %}" id="valor-box">
+                    <label class="field-label" for="valor_acordado" style="margin-top:0;">Valor acordado (USD)</label>
+                    <input
+                        type="text"
+                        inputmode="decimal"
+                        name="valor_acordado"
+                        id="valor_acordado"
+                        class="mobile-input"
+                        value="{{ valor_acordado_actual }}"
+                        placeholder="Ej.: 25.00 o . si está pendiente"
+                        autocomplete="off"
+                        readonly
+                    >
+                    <div class="field-help">
+                        Este valor es solo lectura en la hoja móvil. Se edita desde el sistema principal. Para registrar salida debe existir un valor real.
+                    </div>
+                    <div class="valor-error" id="valor-error">
+                        Para registrar la salida, primero ingresa un valor acordado real.
+                    </div>
+
+                    {% if ingreso.valor_acordado is not None %}
+                        <div class="money-summary-mobile">
+                            <div class="money-heading">Valor acordado total: <strong>{{ ingreso.valor_acordado|dinero_signo }}</strong></div>
+                            <div class="money-grid-mobile">
+                                <div class="money-card-mobile pos">
+                                    <div class="label">Pagado</div>
+                                    <div class="value">{{ ingreso.total_abonado|dinero_signo }}</div>
+                                </div>
+                                <div class="money-card-mobile {% if ingreso.diferencia > 0 %}neg{% endif %}">
+                                    <div class="label">Saldo</div>
+                                    <div class="value">{{ ingreso.diferencia|dinero_signo }}</div>
+                                </div>
+                                <div class="money-card-mobile">
+                                    <div class="label">Estado</div>
+                                    <div class="value">
+                                        {% if ingreso.estado_pago == 'Pagado' %}
+                                            <span class="estado-pill-mobile pagado">Pagado</span>
+                                        {% elif ingreso.estado_pago == 'Parcial' %}
+                                            <span class="estado-pill-mobile parcial">Parcial</span>
+                                        {% else %}
+                                            <span class="estado-pill-mobile pendiente">Pendiente</span>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                            {% if valor_acordado_bloqueado %}
+                                <div class="valor-paid-lock">
+                                    Ya está pagado todo. El valor acordado queda bloqueado y puedes registrar la salida.
+                                </div>
+                            {% endif %}
+                        </div>
+                    {% else %}
+                        <div class="valor-pending-note">
+                            Sin valor acordado registrado. Cuando lo actualices, se mostrará aquí el saldo pendiente y el estado de pago.
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
             <div class="card-title">🔄 Estado del equipo</div>
             <div class="estado-opciones">
 
@@ -291,29 +480,19 @@
                     <span class="ico">🔧</span>
                     <span class="txt"><strong>En reparación</strong></span>
                 </label>
+            </div>
 
-                {% comment %}
-                <label class="estado-opt ok" data-kind="ok">
-                    <input type="radio" name="estado_movil" value="entregado_con_solucion"
-                           {% if estado_actual_movil == 'entregado_con_solucion' %}checked{% endif %}>
-                    <span class="ico">✅</span>
-                    <span class="txt"><strong>Con solución</strong></span>
-                </label>
-
-                <label class="estado-opt fail" data-kind="fail">
-                    <input type="radio" name="estado_movil" value="entregado_sin_solucion"
-                           {% if estado_actual_movil == 'entregado_sin_solucion' %}checked{% endif %}>
-                    <span class="ico">❌</span>
-                    <span class="txt"><strong>Sin solución</strong></span>
-                </label>
-
-                <label class="estado-opt fail" data-kind="fail">
-                    <input type="radio" name="estado_movil" value="entregado_no_quiso"
-                           {% if estado_actual_movil == 'entregado_no_quiso' %}checked{% endif %}>
-                    <span class="ico">🚫</span>
-                    <span class="txt"><strong>No quiso reparar</strong></span>
-                </label>
-                {% endcomment %}
+            <div class="salida-section">
+                <div class="salida-title">📤 Registrar salida</div>
+                <div class="salida-help">
+                    Cuando el trabajo esté terminado, guarda el reporte y abre el formulario completo de salida para elegir si fue con solución, sin solución o si el cliente no quiso reparar.
+                </div>
+                <div class="salida-blocked" id="salida-blocked">
+                    Registra un valor acordado antes de abrir el formulario de salida.
+                </div>
+                <button type="submit" name="accion" value="registrar_salida" id="btn-ir-salida" class="btn btn-salida">
+                    📤 Registrar salida
+                </button>
             </div>
 
             <!-- Subestado solo para "En reparación" -->
@@ -328,7 +507,7 @@
         </div>
 
         <div class="save-bar">
-            <button type="submit" class="btn btn-primary">💾 Guardar cambios</button>
+            <button type="submit" name="accion" value="guardar" class="btn btn-primary">💾 Guardar cambios</button>
         </div>
     </form>
 
@@ -340,6 +519,42 @@
     (function () {
         const opciones = document.querySelectorAll('.estado-opt');
         const subBox = document.getElementById('subestado-box');
+        const form = document.getElementById('hoja-form');
+        const valorInput = document.getElementById('valor_acordado');
+        const valorBox = document.getElementById('valor-box');
+        const valorError = document.getElementById('valor-error');
+        const salidaBlocked = document.getElementById('salida-blocked');
+        const salidaBtn = document.getElementById('btn-ir-salida');
+        const valorToggle = document.getElementById('valor-toggle');
+        const valorContent = document.getElementById('valor-content');
+
+        function setValorOpen(abierto) {
+            if (!valorToggle || !valorContent) return;
+            valorToggle.setAttribute('aria-expanded', abierto ? 'true' : 'false');
+            valorContent.hidden = !abierto;
+        }
+
+        function valorPendiente() {
+            const valor = ((valorInput && valorInput.value) || '').trim();
+            return valor === '' || valor === '.' || valor === '-' || valor === '—' || valor === '_' || valor === ',';
+        }
+
+        function validarSalidaPorValor(mostrar, requiereSalida) {
+            const bloqueado = !!requiereSalida && valorPendiente();
+            if (valorBox) valorBox.classList.toggle('pendiente', valorPendiente());
+            if (valorError) valorError.classList.toggle('show', bloqueado);
+            if (salidaBlocked) salidaBlocked.classList.toggle('show', valorPendiente());
+            if (salidaBtn) salidaBtn.classList.toggle('blocked', valorPendiente());
+            if (valorInput) {
+                valorInput.setCustomValidity(bloqueado ? 'Registra un valor acordado para registrar la salida.' : '');
+            }
+            if (bloqueado && mostrar && valorInput) {
+                setValorOpen(true);
+                valorInput.focus();
+                valorInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+            return !bloqueado;
+        }
 
         function refrescar() {
             opciones.forEach(function (op) {
@@ -350,6 +565,7 @@
             const sel = document.querySelector('input[name="estado_movil"]:checked');
             if (sel && sel.value === 'en_reparacion') subBox.classList.remove('hidden');
             else subBox.classList.add('hidden');
+            validarSalidaPorValor(false, false);
         }
 
         opciones.forEach(function (op) {
@@ -358,22 +574,21 @@
                 refrescar();
             });
         });
+        if (valorInput) {
+            valorInput.addEventListener('input', function () { validarSalidaPorValor(false, false); });
+            valorInput.addEventListener('change', function () { validarSalidaPorValor(false, false); });
+        }
+        if (valorToggle) {
+            valorToggle.addEventListener('click', function () {
+                setValorOpen(valorToggle.getAttribute('aria-expanded') !== 'true');
+            });
+        }
         refrescar();
 
-        // Confirmar antes de marcar como entregado (acción importante).
-        document.getElementById('hoja-form').addEventListener('submit', function (e) {
-            const sel = document.querySelector('input[name="estado_movil"]:checked');
-            if (sel && (sel.value === 'entregado_con_solucion' || sel.value === 'entregado_sin_solucion' || sel.value === 'entregado_no_quiso')) {
-                let v = sel.value;
-                let txt = '¿Confirmar acción?';
-                if (v === 'entregado_con_solucion') {
-                    txt = '¿Confirmar CON SOLUCIÓN? El equipo registrará salida positiva';
-                } else if (v === 'entregado_sin_solucion') {
-                    txt = '¿Confirmar SIN SOLUCIÓN? El equipo registrará salida negativa';
-                } else if (v === 'entregado_no_quiso') {
-                    txt = '¿Confirmar NO QUISO REPARAR? El equipo registrará salida negativa';
-                }
-                if (!window.confirm(txt)) { e.preventDefault(); }
+        form.addEventListener('submit', function (e) {
+            const accion = e.submitter ? e.submitter.value : 'guardar';
+            if (accion === 'registrar_salida' && !validarSalidaPorValor(true, true)) {
+                e.preventDefault();
             }
         });
     })();

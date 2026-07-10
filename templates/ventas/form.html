@@ -87,6 +87,26 @@
         margin-top: 24px;
     }
 
+    .form-error-summary {
+        background: #fff5f5;
+        border-left: 4px solid #c62828;
+        border-radius: 8px;
+        color: #8a1f1f;
+        font-size: 13px;
+        margin-bottom: 18px;
+        padding: 12px 16px;
+    }
+
+    .form-error-summary strong {
+        display: block;
+        margin-bottom: 6px;
+    }
+
+    .form-error-summary ul {
+        margin: 0;
+        padding-left: 18px;
+    }
+
     /* Mostrar visualmente el estado deshabilitado de los botones */
     .btn[disabled], .btn:disabled {
         opacity: 0.55;
@@ -113,12 +133,41 @@
     </div>
 
     <!-- Datos del personal -->
+    {% if cli_form.errors or ing_form.errors %}
+    <div class="form-error-summary">
+        <strong>No se pudo guardar la venta. Revisa estos datos:</strong>
+        <ul>
+            {% for field in cli_form %}
+                {% for error in field.errors %}
+                    <li>{{ field.label }}: {{ error }}</li>
+                {% endfor %}
+            {% endfor %}
+            {% for field in ing_form %}
+                {% for error in field.errors %}
+                    <li>{{ field.label }}: {{ error }}</li>
+                {% endfor %}
+            {% endfor %}
+            {% for error in cli_form.non_field_errors %}
+                <li>{{ error }}</li>
+            {% endfor %}
+            {% for error in ing_form.non_field_errors %}
+                <li>{{ error }}</li>
+            {% endfor %}
+        </ul>
+    </div>
+    {% endif %}
+
     <div class="form-section">
         <h3>Personal Econotec</h3>
-        <div class="form-row cols-2">
+        <div class="form-row cols-3">
             <div>
                 <label class="form-label">Asesor Comercial / Vendedor</label>
                 {{ ing_form.asesor_comercial }}
+            </div>
+            <div>
+                <label class="form-label">Técnico vendió *</label>
+                {{ ing_form.tecnico_encargado }}
+                {{ ing_form.tecnico_encargado.errors }}
             </div>
             <div>
                 <label class="form-label">Fecha de Venta *</label>
@@ -131,10 +180,6 @@
                 <label class="form-label">Factura N° (opcional)</label>
                 {{ ing_form.numero_factura }}
             </div>
-        </div>
-        <!-- Campos ocultos requeridos por el modelo subyacente -->
-        <div style="display:none;">
-            {{ ing_form.tecnico_encargado }}
         </div>
     </div>
 
