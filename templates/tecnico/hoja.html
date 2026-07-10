@@ -47,6 +47,18 @@
             background: rgba(255,255,255,0.95); color: var(--naranja-dark);
             font-weight: 800; font-size: 18px; padding: 4px 12px; border-radius: 10px;
         }
+        .tb-main { min-width: 0; }
+        .tb-actions {
+            margin-left: auto; display: flex; align-items: center; justify-content: flex-end;
+            gap: 7px; flex-wrap: wrap;
+        }
+        .tb-profile {
+            background: rgba(255, 255, 255, 0.2);
+            color: white; border: 1px solid rgba(255, 255, 255, 0.4);
+            padding: 5px 10px; border-radius: 8px; font-size: 13px;
+            font-weight: 800; cursor: pointer; font-family: inherit; white-space: nowrap;
+        }
+        .tb-profile:hover { background: rgba(255, 255, 255, 0.3); }
 
         .wrap { padding: 14px; max-width: 560px; margin: 0 auto; }
 
@@ -277,9 +289,55 @@
             background: rgba(255, 255, 255, 0.2);
             color: white; border: 1px solid rgba(255, 255, 255, 0.4);
             padding: 5px 10px; border-radius: 8px; font-size: 13px;
-            font-weight: 700; text-decoration: none; margin-left: 10px;
+            font-weight: 700; text-decoration: none; white-space: nowrap;
         }
         .tb-logout:hover { background: rgba(255, 255, 255, 0.3); }
+
+        .perfil-mobile-modal {
+            position: fixed; inset: 0; z-index: 180; display: none;
+            align-items: center; justify-content: center; padding: 16px;
+            background: rgba(17, 24, 39, 0.58);
+        }
+        .perfil-mobile-modal.show { display: flex; }
+        .perfil-mobile-card {
+            width: 100%; max-width: 430px; background: #fff; border-radius: 18px;
+            overflow: hidden; box-shadow: 0 24px 70px rgba(0,0,0,0.28);
+        }
+        .perfil-mobile-head {
+            position: relative; padding: 22px 18px; color: #fff; text-align: center;
+            background: linear-gradient(135deg, #6b7280, #374151);
+        }
+        .perfil-mobile-close {
+            position: absolute; top: 10px; right: 10px; width: 34px; height: 34px;
+            border: 0; border-radius: 50%; background: rgba(255,255,255,0.18);
+            color: #fff; font-size: 22px; cursor: pointer;
+        }
+        .perfil-mobile-avatar {
+            width: 64px; height: 64px; margin: 0 auto 10px; border-radius: 50%;
+            background: rgba(255,255,255,0.2); display: flex; align-items: center;
+            justify-content: center; font-size: 32px; border: 2px solid rgba(255,255,255,0.55);
+        }
+        .perfil-mobile-name { font-size: 20px; font-weight: 900; }
+        .perfil-mobile-level { margin-top: 3px; font-size: 12px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.8px; opacity: 0.92; }
+        .perfil-mobile-body { padding: 16px; }
+        .perfil-mobile-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+        .perfil-mobile-stat {
+            border: 1px solid var(--border); border-radius: 12px; padding: 10px 6px;
+            text-align: center; background: #f9fafb;
+        }
+        .perfil-mobile-stat .num { display: block; font-size: 24px; font-weight: 900; line-height: 1; }
+        .perfil-mobile-stat .lbl { display: block; margin-top: 5px; color: var(--muted); font-size: 10.5px; font-weight: 800; text-transform: uppercase; }
+        .perfil-mobile-progress { margin: 14px 0 12px; }
+        .perfil-mobile-bar { height: 10px; background: #eef2f7; border-radius: 999px; overflow: hidden; }
+        .perfil-mobile-fill { width: 0; height: 100%; border-radius: 999px; background: var(--naranja); transition: width 0.35s ease; }
+        .perfil-mobile-progress-text { margin-top: 7px; color: var(--muted); font-size: 12px; font-weight: 700; text-align: center; }
+        .perfil-mobile-links { display: grid; gap: 8px; margin-top: 12px; }
+        .perfil-mobile-link {
+            display: flex; align-items: center; justify-content: space-between; gap: 10px;
+            text-decoration: none; color: var(--text); border: 1px solid var(--border);
+            border-radius: 12px; padding: 12px; font-size: 13px; font-weight: 800;
+        }
+        .perfil-mobile-state { padding: 18px; color: var(--muted); font-weight: 800; text-align: center; }
 
         .toast {
             position: fixed; top: 70px; left: 50%; transform: translateX(-50%);
@@ -293,18 +351,29 @@
         .toast.info { background: #2563eb; box-shadow: 0 4px 15px rgba(37,99,235,0.35); }
         .toast.warning { background: #b8860b; box-shadow: 0 4px 15px rgba(184,134,11,0.35); }
         .toast.error { background: #c62828; box-shadow: 0 4px 15px rgba(198,40,40,0.35); }
+
+        @media (max-width: 430px) {
+            .topbar { gap: 9px; padding: 10px 12px; }
+            .topbar .logo { width: 34px; height: 34px; }
+            .topbar .tb-title { font-size: 14px; }
+            .topbar .tb-eq { font-size: 15px; padding: 4px 9px; }
+            .tb-profile, .tb-logout { font-size: 11.5px; padding: 5px 8px; }
+        }
     </style>
 </head>
 <body>
 
 <div class="topbar">
     <img src="{% static 'logo.jpg' %}" alt="Econotec" class="logo">
-    <div>
+    <div class="tb-main">
         <div class="tb-title">ECONOTEC</div>
         <div class="tb-sub">Hoja del técnico</div>
     </div>
-    <div style="margin-left: auto; display: flex; align-items: center; gap: 8px;">
+    <div class="tb-actions">
         <div class="tb-eq">{{ ingreso.codigo_equipo }}</div>
+        {% if es_tecnico %}
+        <button type="button" id="btn-perfil-movil" class="tb-profile">👤 Ver perfil</button>
+        {% endif %}
         <a href="{% url 'logout' %}" class="tb-logout">🚪 Cerrar sesión</a>
     </div>
 </div>
@@ -321,6 +390,52 @@
         if (toast) toast.classList.remove('show');
     }, 4000);
 </script>
+{% endif %}
+
+{% if es_tecnico %}
+<div id="perfil-mobile-modal" class="perfil-mobile-modal" aria-hidden="true">
+    <div class="perfil-mobile-card" role="dialog" aria-modal="true" aria-labelledby="perfil-mobile-nombre">
+        <div class="perfil-mobile-head" id="perfil-mobile-head">
+            <button type="button" class="perfil-mobile-close" id="perfil-mobile-close" aria-label="Cerrar">×</button>
+            <div class="perfil-mobile-avatar" id="perfil-mobile-avatar">👤</div>
+            <div class="perfil-mobile-name" id="perfil-mobile-nombre">Cargando...</div>
+            <div class="perfil-mobile-level" id="perfil-mobile-nivel">Nivel: ---</div>
+        </div>
+        <div class="perfil-mobile-body">
+            <div class="perfil-mobile-state" id="perfil-mobile-loading">Cargando perfil...</div>
+            <div id="perfil-mobile-content" style="display:none;">
+                <div class="perfil-mobile-stats">
+                    <div class="perfil-mobile-stat">
+                        <span class="num" id="perfil-mobile-buenas" style="color:#28a745;">0</span>
+                        <span class="lbl">Buenas</span>
+                    </div>
+                    <div class="perfil-mobile-stat">
+                        <span class="num" id="perfil-mobile-producto" style="color:#f97618;">0</span>
+                        <span class="lbl">Producto</span>
+                    </div>
+                    <div class="perfil-mobile-stat">
+                        <span class="num" id="perfil-mobile-malas" style="color:#dc3545;">0</span>
+                        <span class="lbl">Malas</span>
+                    </div>
+                </div>
+                <div class="perfil-mobile-progress">
+                    <div class="perfil-mobile-bar">
+                        <div class="perfil-mobile-fill" id="perfil-mobile-fill"></div>
+                    </div>
+                    <div class="perfil-mobile-progress-text" id="perfil-mobile-progress-text"></div>
+                </div>
+                <div class="perfil-mobile-links">
+                    <a href="{% url 'econotec:ingreso_lista' %}?tecnico={{ request.user.id }}" class="perfil-mobile-link">
+                        <span>📥 Ver mis equipos recibidos</span><span>›</span>
+                    </a>
+                    <a href="{% url 'econotec:salida_lista' %}?tecnico_salida={{ request.user.id }}" class="perfil-mobile-link">
+                        <span>🔧 Ver mis equipos reparados</span><span>›</span>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
 {% endif %}
 
 
@@ -358,7 +473,8 @@
         <div class="card-title">💻 Equipo</div>
         <div class="row"><span class="k">Tipo</span><span class="v"><span class="pill pill-eq">{{ ingreso.tipo_equipo_display }}</span></span></div>
         <div class="row"><span class="k">Marca</span><span class="v">{{ ingreso.marca }}</span></div>
-        {% if ingreso.modelo_serie %}<div class="row"><span class="k">Modelo / Serie</span><span class="v">{{ ingreso.modelo_serie }}</span></div>{% endif %}
+        {% if ingreso.modelo_serie %}<div class="row"><span class="k">Modelo</span><span class="v">{{ ingreso.modelo_serie }}</span></div>{% endif %}
+        {% if ingreso.serie %}<div class="row"><span class="k">Serie</span><span class="v">{{ ingreso.serie }}</span></div>{% endif %}
         {% if ingreso.accesorios_entregados %}<div class="row"><span class="k">Accesorios</span><span class="v">{{ ingreso.accesorios_entregados }}</span></div>{% endif %}
         <div class="row"><span class="k">Sede</span><span class="v">{{ ingreso.sede_display_corto }}</span></div>
         <div class="row"><span class="k">Fecha ingreso</span><span class="v">{{ ingreso.fecha_ingreso|date:"d/m/Y" }}</span></div>
@@ -515,6 +631,85 @@
 </div>
 
 <script>
+    {% if es_tecnico %}
+    // Perfil del técnico dentro de la hoja móvil.
+    (function () {
+        const btn = document.getElementById('btn-perfil-movil');
+        const modal = document.getElementById('perfil-mobile-modal');
+        const closeBtn = document.getElementById('perfil-mobile-close');
+        const loading = document.getElementById('perfil-mobile-loading');
+        const content = document.getElementById('perfil-mobile-content');
+        const head = document.getElementById('perfil-mobile-head');
+        const fill = document.getElementById('perfil-mobile-fill');
+        const progressText = document.getElementById('perfil-mobile-progress-text');
+        let cargado = false;
+
+        if (!btn || !modal) return;
+
+        function setModal(abierto) {
+            modal.classList.toggle('show', abierto);
+            modal.setAttribute('aria-hidden', abierto ? 'false' : 'true');
+        }
+
+        function porcentajeProgreso(data) {
+            if (!data.proximo) return 100;
+            let previo = 0;
+            if (data.total >= 4000) previo = 3999;
+            else if (data.total >= 1000) previo = 999;
+            else if (data.total >= 500) previo = 499;
+            else if (data.total >= 100) previo = 99;
+            else if (data.total >= 50) previo = 49;
+            const actual = data.total - previo;
+            const necesario = data.proximo - previo;
+            return Math.max(0, Math.min(100, (actual / necesario) * 100));
+        }
+
+        function cargarPerfil() {
+            if (cargado) return;
+            fetch("{% url 'econotec:api_perfil' %}", {
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                credentials: 'same-origin'
+            })
+                .then(function (r) { return r.json(); })
+                .then(function (data) {
+                    cargado = true;
+                    document.getElementById('perfil-mobile-nombre').textContent = data.nombre || 'Técnico';
+                    document.getElementById('perfil-mobile-nivel').textContent = 'Nivel: ' + (data.nivel || '---');
+                    document.getElementById('perfil-mobile-buenas').textContent = data.salidas_buenas || 0;
+                    document.getElementById('perfil-mobile-producto').textContent = data.salidas_producto || 0;
+                    document.getElementById('perfil-mobile-malas').textContent = data.salidas_malas || 0;
+                    if (head && data.color) head.style.background = data.color;
+                    if (fill) {
+                        fill.style.width = porcentajeProgreso(data) + '%';
+                        if (data.color) fill.style.background = data.color;
+                    }
+                    if (progressText) {
+                        progressText.textContent = data.proximo
+                            ? data.total + ' / ' + data.proximo + ' para el siguiente nivel'
+                            : data.total + ' operaciones (Nivel máximo)';
+                    }
+                    if (loading) loading.style.display = 'none';
+                    if (content) content.style.display = '';
+                })
+                .catch(function () {
+                    if (loading) loading.textContent = 'No se pudo cargar el perfil. Intenta de nuevo.';
+                });
+        }
+
+        btn.addEventListener('click', function () {
+            setModal(true);
+            cargarPerfil();
+        });
+        if (closeBtn) closeBtn.addEventListener('click', function () { setModal(false); });
+        modal.addEventListener('click', function (event) {
+            if (event.target === modal) setModal(false);
+        });
+        document.addEventListener('keydown', function (event) {
+            if (event.key === 'Escape') setModal(false);
+        });
+    })();
+    {% endif %}
+
     // Resaltar la tarjeta de estado seleccionada y mostrar/ocultar subestado.
     (function () {
         const opciones = document.querySelectorAll('.estado-opt');

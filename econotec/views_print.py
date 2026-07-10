@@ -449,7 +449,9 @@ def ingreso_pdf(request, pk):
 
         _draw_label_value(c, margen, y, 'MARCA:', ingreso.marca, label_w=60, line_w=440)
         y -= 22
-        _draw_label_value(c, margen, y, 'MODELO / SERIE:', ingreso.modelo_serie, label_w=110, line_w=390)
+        _draw_label_value(c, margen, y, 'MODELO:', ingreso.modelo_serie, label_w=70, line_w=430)
+        y -= 22
+        _draw_label_value(c, margen, y, 'SERIE:', ingreso.serie, label_w=60, line_w=440)
         y -= 22
         _draw_label_value(c, margen, y, 'ACCESORIOS ENTREGADOS:', ingreso.accesorios_entregados[:60] if ingreso.accesorios_entregados else '', label_w=170, line_w=330)
         y -= 30
@@ -616,7 +618,7 @@ def salida_pdf(request, pk):
     _draw_label_value(c, margen, y, 'WhatsApp:', cliente.whatsapp, label_w=80, line_w=line_w + 40)
     y -= 22
     _draw_label_value(c, margen, y, 'Equipo:',
-                     f'{ingreso.tipo_equipo_display} — {ingreso.marca} {ingreso.modelo_serie}',
+                     f'{ingreso.tipo_equipo_display} — {ingreso.marca} {ingreso.modelo_serie_detalle}',
                      label_w=60, line_w=line_w + 60)
     y -= 22
     _draw_label_value(c, margen, y, 'Técnico que reparó:', ingreso.tecnico_encargado_nombre,

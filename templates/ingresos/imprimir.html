@@ -331,7 +331,8 @@
     </div>
 
     <div class="field-line"><span class="label">MARCA:</span><span class="value">{{ ingreso.marca }}{% if ingreso.tipo_equipo == 'otro' and ingreso.tipo_equipo_otro %} ({{ ingreso.tipo_equipo_otro }}){% endif %}</span></div>
-    <div class="field-line"><span class="label">MODELO / SERIE:</span><span class="value">{{ ingreso.modelo_serie }}</span></div>
+    <div class="field-line"><span class="label">MODELO:</span><span class="value">{{ ingreso.modelo_serie }}</span></div>
+    <div class="field-line"><span class="label">SERIE:</span><span class="value">{{ ingreso.serie|default:"" }}</span></div>
     <div class="field-line"><span class="label">ACCESORIOS ENTREGADOS:</span><span class="value">{{ ingreso.accesorios_entregados|linebreaksbr }}</span></div>
 
     <!-- PROBLEMA REPORTADO -->

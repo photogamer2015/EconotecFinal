@@ -52,6 +52,7 @@ class VentasTests(TestCase):
             'ing-tipo_equipo_otro': '',
             'ing-marca': 'N/A',
             'ing-modelo_serie': 'N/A',
+            'ing-serie': '',
             'ing-accesorios_entregados': 'Ninguno',
             'ing-diagnostico_inmediato': 'no',
             'ing-valor_diagnostico': '0.00',
@@ -75,7 +76,7 @@ class VentasTests(TestCase):
             'cliente': self.cliente_existente,
             'tipo_equipo': 'laptop',
             'marca': 'HP',
-            'modelo_serie': '',
+            'modelo_serie': 'Elitebook',
             'accesorios_entregados': '',
             'problema_reportado': 'No enciende',
             'valor_acordado': Decimal('25.00'),
@@ -103,6 +104,7 @@ class VentasTests(TestCase):
             'ing-tipo_equipo_otro': ingreso.tipo_equipo_otro,
             'ing-marca': ingreso.marca,
             'ing-modelo_serie': ingreso.modelo_serie,
+            'ing-serie': ingreso.serie,
             'ing-accesorios_entregados': ingreso.accesorios_entregados,
             'ing-problema_reportado': ingreso.problema_reportado,
             'ing-diagnostico_inmediato': ingreso.diagnostico_inmediato,
@@ -156,7 +158,8 @@ class VentasTests(TestCase):
             'ing-tipo_equipo': 'laptop',
             'ing-tipo_equipo_otro': '',
             'ing-marca': 'MacBook M4 S',
-            'ing-modelo_serie': '',
+            'ing-modelo_serie': 'MacBook M4 S',
+            'ing-serie': '',
             'ing-accesorios_entregados': 'Cargador',
             'ing-problema_reportado': 'No enciende',
             'ing-diagnostico_inmediato': 'no',
@@ -287,7 +290,8 @@ class VentasTests(TestCase):
             'tipo_equipo': 'laptop',
             'tipo_equipo_otro': '',
             'marca': 'HP',
-            'modelo_serie': '',
+            'modelo_serie': 'Elitebook',
+            'serie': '',
             'accesorios_entregados': '',
             'problema_reportado': 'No enciende',
             'diagnostico_inmediato': 'no',
@@ -368,6 +372,9 @@ class VentasTests(TestCase):
         self.assertContains(response, 'solo lectura')
         self.assertNotContains(response, 'Actualizar valor')
         self.assertContains(response, 'Registrar salida')
+        self.assertContains(response, 'id="btn-perfil-movil"')
+        self.assertContains(response, 'Ver perfil')
+        self.assertContains(response, 'id="perfil-mobile-modal"')
 
     def test_hoja_tecnico_no_actualiza_valor_acordado_desde_movil(self):
         ingreso = self.crear_ingreso_reparacion(
@@ -543,10 +550,42 @@ class VentasTests(TestCase):
             reverse('econotec:salida_editar', kwargs={'pk': salida.pk})
         )
 
+    def test_detalle_garantia_muestra_equipo_manual(self):
+        ingreso = self.crear_ingreso_reparacion(
+            estado='garantia',
+            equipo_garantia_manual='G980',
+            motivo_garantia='Garantia por revision',
+        )
+
+        response = self.client.get(
+            reverse('econotec:ingreso_detalle', kwargs={'pk': ingreso.pk})
+        )
+
+        self.assertContains(response, 'Garantía de G980')
+
+    def test_detalle_garantia_muestra_equipo_anterior_seleccionado(self):
+        equipo_anterior = self.crear_ingreso_reparacion(
+            marca='Epson',
+            modelo_serie='L3250',
+        )
+        ingreso = self.crear_ingreso_reparacion(
+            marca='Epson',
+            modelo_serie='L3250 Garantia',
+            estado='garantia',
+            equipo_garantia=equipo_anterior,
+            motivo_garantia='Garantia por equipo anterior',
+        )
+
+        response = self.client.get(
+            reverse('econotec:ingreso_detalle', kwargs={'pk': ingreso.pk})
+        )
+
+        self.assertContains(response, f'Garantía de {equipo_anterior.codigo_equipo}')
+
     def test_editar_mismo_equipo_no_se_detecta_como_duplicado(self):
         ingreso = self.crear_ingreso_reparacion(
             marca='MacBook M4 S',
-            modelo_serie='',
+            modelo_serie='MacBook M4 S',
         )
 
         response = self.client.post(
@@ -588,7 +627,7 @@ class VentasTests(TestCase):
     def test_editar_a_otro_equipo_igual_si_se_detecta_como_duplicado(self):
         duplicado = self.crear_ingreso_reparacion(
             marca='MacBook M4 S',
-            modelo_serie='',
+            modelo_serie='MacBook M4 S',
         )
         ingreso = self.crear_ingreso_reparacion(
             marca='HP',
@@ -607,13 +646,13 @@ class VentasTests(TestCase):
         )
 
         self.assertEqual(response.status_code, 200)
-        self.assertIn('marca', response.context['ing_form'].errors)
+        self.assertIn('modelo_serie', response.context['ing_form'].errors)
 
     def test_registrar_mismo_equipo_y_cliente_sin_confirmacion_bloquea(self):
         self.activar_sede_guayaquil()
         self.crear_ingreso_reparacion(
             marca='MacBook M4 S',
-            modelo_serie='',
+            modelo_serie='MacBook M4 S',
         )
 
         response = self.client.post(
@@ -623,13 +662,36 @@ class VentasTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(IngresoEquipo.objects.filter(cliente=self.cliente_existente).count(), 1)
-        self.assertIn('marca', response.context['ing_form'].errors)
+        self.assertIn('modelo_serie', response.context['ing_form'].errors)
+
+    def test_registrar_mismo_modelo_ignora_mayusculas_y_tildes(self):
+        self.activar_sede_guayaquil()
+        self.crear_ingreso_reparacion(
+            marca='Canon',
+            modelo_serie='Cámara Pró',
+            serie='ABC-001',
+        )
+
+        response = self.client.post(
+            reverse('econotec:ingreso_registrar'),
+            self.ingreso_registro_post_data(
+                **{
+                    'ing-marca': 'Canon',
+                    'ing-modelo_serie': 'CAMARA PRO',
+                    'ing-serie': 'XYZ-999',
+                }
+            ),
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(IngresoEquipo.objects.filter(cliente=self.cliente_existente).count(), 1)
+        self.assertIn('modelo_serie', response.context['ing_form'].errors)
 
     def test_registrar_mismo_equipo_y_cliente_confirmado_crea_reingreso(self):
         self.activar_sede_guayaquil()
         ingreso_anterior = self.crear_ingreso_reparacion(
             marca='MacBook M4 S',
-            modelo_serie='',
+            modelo_serie='MacBook M4 S',
         )
 
         response = self.client.post(

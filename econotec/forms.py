@@ -113,7 +113,7 @@ class IngresoEquipoForm(forms.ModelForm):
             'numero_factura',
             'asesor_comercial', 'tecnico_encargado', 'fecha_ingreso',
             'tipo_equipo', 'tipo_equipo_otro',
-            'marca', 'modelo_serie', 'accesorios_entregados',
+            'marca', 'modelo_serie', 'serie', 'accesorios_entregados',
             'problema_reportado',
             'diagnostico_inmediato', 'valor_diagnostico',
             'valor_acordado', 'abono_anticipo',
@@ -143,6 +143,9 @@ class IngresoEquipoForm(forms.ModelForm):
             }),
             'modelo_serie': forms.TextInput(attrs={
                 'class': 'form-input', 'placeholder': 'Ej.: Curve 9320',
+            }),
+            'serie': forms.TextInput(attrs={
+                'class': 'form-input', 'placeholder': 'Ej.: SN123456 (opcional)',
             }),
             'accesorios_entregados': forms.Textarea(attrs={
                 'class': 'form-input', 'rows': 2,
@@ -198,6 +201,8 @@ class IngresoEquipoForm(forms.ModelForm):
         
         # Hacer obligatorios los campos de personal
         self.fields['tecnico_encargado'].required = True
+        self.fields['modelo_serie'].required = True
+        self.fields['serie'].required = False
         self.fields['equipo_garantia'].required = False
         self.fields['equipo_garantia_manual'].required = False
         
@@ -253,7 +258,7 @@ class IngresoEquipoForm(forms.ModelForm):
             self.fields['equipo_garantia'].queryset = IngresoEquipo.objects.none()
             self.fields['equipo_garantia'].empty_label = '— Sin equipo registrado —'
 
-        self.fields['equipo_garantia'].label_from_instance = lambda eq: f"{eq.codigo_equipo} — {eq.marca} {eq.modelo_serie} ({eq.creado.strftime('%d/%m/%Y')})"
+        self.fields['equipo_garantia'].label_from_instance = lambda eq: f"{eq.codigo_equipo} — {eq.marca} {eq.modelo_serie_detalle} ({eq.creado.strftime('%d/%m/%Y')})"
 
         # Quitar la opción "entregado" del campo estado
         if 'estado' in self.fields:

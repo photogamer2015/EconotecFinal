@@ -187,7 +187,7 @@
                     <div class="nombre">{{ d.ingreso.cliente.nombres }}</div>
                     <div class="equipo">
                         {{ d.ingreso.tipo_equipo_display }} {{ d.ingreso.marca }}
-                        {% if d.ingreso.modelo_serie %} — {{ d.ingreso.modelo_serie }}{% endif %}
+                        {% if d.ingreso.modelo_serie %} — {{ d.ingreso.modelo_serie_detalle }}{% endif %}
                         <br>Ingresó {{ d.ingreso.fecha_ingreso|date:"d/m/Y" }}
                         — <span class="badge badge-{{ d.ingreso.estado }}">{{ d.ingreso.get_estado_display }}</span>
                     </div>
@@ -252,7 +252,7 @@
                     <div class="nombre">{{ d.ingreso.cliente.nombres }}</div>
                     <div class="equipo">
                         {{ d.ingreso.tipo_equipo_display }} {{ d.ingreso.marca }}
-                        {% if d.ingreso.modelo_serie %} — {{ d.ingreso.modelo_serie }}{% endif %}
+                        {% if d.ingreso.modelo_serie %} — {{ d.ingreso.modelo_serie_detalle }}{% endif %}
                         <br>Ingresó {{ d.ingreso.fecha_ingreso|date:"d/m/Y" }}
                     </div>
                 </div>

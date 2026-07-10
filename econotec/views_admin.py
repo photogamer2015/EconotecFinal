@@ -559,11 +559,11 @@ def admin_mantenimiento_reset(request):
 
             # Pestaña 2: Equipos
             ws_equipos = wb.create_sheet(title='Equipos')
-            ws_equipos.append(['Codigo', 'Cliente', 'Tipo', 'Marca', 'Modelo', 'Sede', 'Estado', 'Valor Acordado', 'Fecha Ingreso'])
-            for col in range(1, 10): ws_equipos.cell(row=1, column=col).font = Font(bold=True)
+            ws_equipos.append(['Codigo', 'Cliente', 'Tipo', 'Marca', 'Modelo', 'Serie', 'Sede', 'Estado', 'Valor Acordado', 'Fecha Ingreso'])
+            for col in range(1, 11): ws_equipos.cell(row=1, column=col).font = Font(bold=True)
             for eq in IngresoEquipo.objects.select_related('cliente').all():
                 ws_equipos.append([
-                    eq.codigo_equipo, eq.cliente.nombres, eq.tipo_equipo, eq.marca, eq.modelo_serie, 
+                    eq.codigo_equipo, eq.cliente.nombres, eq.tipo_equipo, eq.marca, eq.modelo_serie, eq.serie,
                     eq.get_sede_display(), eq.get_estado_display(), 
                     float(eq.valor_acordado or 0), str(eq.fecha_ingreso)
                 ])

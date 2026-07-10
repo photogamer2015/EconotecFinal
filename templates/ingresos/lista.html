@@ -114,7 +114,7 @@
                 <td>{{ i.cliente.nombres }}</td>
                 <td>{{ i.cliente.cedula }}</td>
                 <td>{{ i.tipo_equipo_display }}</td>
-                <td>{{ i.marca }}<br><small style="color:#888;">{{ i.modelo_serie|truncatechars:30 }}</small></td>
+                <td>{{ i.marca }}<br><small style="color:#888;">{{ i.modelo_serie_detalle|truncatechars:42 }}</small></td>
                 <td>
                     {% if i.tecnico_encargado_nombre %}
                         <span style="background: var(--primary-light); color: var(--primary-dark); padding: 3px 9px; border-radius: 10px; font-size: 11px; font-weight: 700;">

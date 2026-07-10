@@ -202,8 +202,12 @@ class IngresoEquipo(models.Model):
         verbose_name='Marca',
     )
     modelo_serie = models.CharField(
+        max_length=200,
+        verbose_name='Modelo',
+    )
+    serie = models.CharField(
         max_length=200, blank=True,
-        verbose_name='Modelo / Serie',
+        verbose_name='Serie',
     )
     accesorios_entregados = models.TextField(
         blank=True,
@@ -479,6 +483,12 @@ class IngresoEquipo(models.Model):
         if self.tipo_equipo == 'otro' and self.tipo_equipo_otro:
             return self.tipo_equipo_otro
         return self.get_tipo_equipo_display()
+
+    @property
+    def modelo_serie_detalle(self):
+        if self.serie:
+            return f'{self.modelo_serie} — Serie: {self.serie}'
+        return self.modelo_serie
 
     @property
     def tecnico_encargado_nombre(self):
@@ -765,6 +775,12 @@ class IngresoEquipo(models.Model):
     @property
     def tiene_salida(self):
         return hasattr(self, 'salida')
+
+    @property
+    def equipo_garantia_referencia(self):
+        if self.equipo_garantia_id and self.equipo_garantia:
+            return self.equipo_garantia.codigo_equipo
+        return (self.equipo_garantia_manual or '').strip()
 
     def save(self, *args, **kwargs):
         if not self.numero_equipo:

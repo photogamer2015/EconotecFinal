@@ -293,16 +293,21 @@
                 {{ ing_form.tipo_equipo_otro }}
             </div>
         </div>
-        <div class="form-row cols-2" style="margin-top:14px;">
+        <div class="form-row cols-3" style="margin-top:14px;">
             <div>
                 <label class="form-label">Marca *</label>
                 {{ ing_form.marca }}
                 {{ ing_form.marca.errors }}
             </div>
             <div>
-                <label class="form-label">Modelo / Serie</label>
+                <label class="form-label">Modelo *</label>
                 {{ ing_form.modelo_serie }}
                 {{ ing_form.modelo_serie.errors }}
+            </div>
+            <div>
+                <label class="form-label">Serie <span style="color:#888; font-weight:600;">(opcional)</span></label>
+                {{ ing_form.serie }}
+                {{ ing_form.serie.errors }}
             </div>
         </div>
         <div id="equipo-duplicado-alerta" class="equipo-duplicado-alerta" data-equipo-duplicado-alerta role="alert" aria-live="assertive">
@@ -845,24 +850,18 @@
 
         function encontrarCoincidencia() {
             var equipos = window.__equipos_cliente_data || [];
-            var tipo = textoTipoActual();
-            var marca = normalizar(inpMarca.value);
             var modelo = normalizar(inpModelo ? inpModelo.value : '');
 
-            if (!tipo || !marca || equipos.length === 0) return null;
+            if (!modelo || equipos.length === 0) return null;
             if (identidadActualSinCambios()) return null;
 
             var coincidencias = [];
             for (var i = 0; i < equipos.length; i += 1) {
                 var eq = equipos[i];
                 if (ingresoActualId && String(eq.id) === String(ingresoActualId)) continue;
-                if (textoTipoEquipo(eq) !== tipo) continue;
-                if (normalizar(eq.marca) !== marca) continue;
 
                 var modeloEquipo = normalizar(eq.modelo_serie);
-                var coincidenciaBloqueante = !modelo || !modeloEquipo || modeloEquipo === modelo;
-
-                if (coincidenciaBloqueante) {
+                if (modeloEquipo === modelo) {
                     coincidencias.push(eq);
                 }
             }
@@ -896,7 +895,7 @@
             var enlace = eq.detalle_url
                 ? ' <a href="' + eq.detalle_url + '" target="_blank" rel="noopener">Ver ' + (eq.codigo || 'equipo') + '</a>'
                 : '';
-            var nota = 'Coincide con ' + (eq.label || eq.codigo || 'un equipo anterior') + '. Este cliente ya tiene ' + historial + ' con este mismo equipo; este sería el ingreso #' + proximoIngreso + '.';
+            var nota = 'Coincide por modelo con ' + (eq.label || eq.codigo || 'un equipo anterior') + '. Este cliente ya tiene ' + historial + ' con este mismo equipo; este sería el ingreso #' + proximoIngreso + '.';
             if (confirmado) {
                 nota += ' Confirmado como reingreso del mismo cliente y equipo.';
             } else {
@@ -1295,6 +1294,7 @@
         var inpTipo = document.querySelector('[name="ing-tipo_equipo"]');
         var inpMarca = document.querySelector('[name="ing-marca"]');
         var inpModelo = document.querySelector('[name="ing-modelo_serie"]');
+        var inpSerie = document.querySelector('[name="ing-serie"]');
         var inpMotivo = document.querySelector('[name="ing-motivo_garantia"]');
         var inpProblema = document.querySelector('[name="ing-problema_reportado"]');
 
@@ -1312,6 +1312,10 @@
                         if (inpModelo && eq.modelo_serie) {
                             inpModelo.value = eq.modelo_serie;
                             inpModelo.style.backgroundColor = '#f0fff4';
+                        }
+                        if (inpSerie) {
+                            inpSerie.value = eq.serie || '';
+                            inpSerie.style.backgroundColor = '#f0fff4';
                         }
                     }
                 }

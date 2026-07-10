@@ -221,7 +221,7 @@
                     <div class="nombre">{{ b.ingreso.cliente.nombres }}</div>
                     <div class="equipo">
                         {{ b.ingreso.tipo_equipo_display }} {{ b.ingreso.marca }}
-                        {% if b.ingreso.modelo_serie %} — {{ b.ingreso.modelo_serie }}{% endif %}
+                        {% if b.ingreso.modelo_serie %} — {{ b.ingreso.modelo_serie_detalle }}{% endif %}
                         <br>Listo desde {{ b.salida.fecha_salida|date:"d/m/Y" }}
                         ({{ b.dias_desde_salida }} día{{ b.dias_desde_salida|pluralize }})
                     </div>
@@ -281,7 +281,7 @@
                     <div class="nombre">{{ b.ingreso.cliente.nombres }}</div>
                     <div class="equipo">
                         {{ b.ingreso.tipo_equipo_display }} {{ b.ingreso.marca }}
-                        {% if b.ingreso.modelo_serie %} — {{ b.ingreso.modelo_serie }}{% endif %}
+                        {% if b.ingreso.modelo_serie %} — {{ b.ingreso.modelo_serie_detalle }}{% endif %}
                         <br>Listo desde {{ b.salida.fecha_salida|date:"d/m/Y" }}
                         ({{ b.dias_desde_salida }} día{{ b.dias_desde_salida|pluralize }})
                     </div>

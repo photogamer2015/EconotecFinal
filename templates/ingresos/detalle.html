@@ -127,6 +127,20 @@
         font-weight: 800;
         margin-top: 8px;
     }
+    .estado-equipo-garantia-ref {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 7px;
+        margin-top: 12px;
+        padding: 7px 13px;
+        border-radius: 999px;
+        background: #ede9fe;
+        color: #6d28d9;
+        font-size: 13px;
+        font-weight: 900;
+        letter-spacing: 0.2px;
+    }
     .estado-equipo-actions {
         margin-top: 14px;
     }
@@ -180,7 +194,7 @@
             <p class="page-subtitle">Venta de Producto</p>
         {% else %}
             <h2 class="page-title">Equipo <span class="accent">{{ ingreso.codigo_equipo }}</span></h2>
-            <p class="page-subtitle">{{ ingreso.tipo_equipo_display }} — {{ ingreso.marca }} {{ ingreso.modelo_serie }}</p>
+            <p class="page-subtitle">{{ ingreso.tipo_equipo_display }} — {{ ingreso.marca }} {{ ingreso.modelo_serie_detalle }}</p>
         {% endif %}
     </div>
     <div style="display:flex; gap:8px; flex-wrap:wrap;">
@@ -286,7 +300,8 @@
             <h3>🔧 Detalles del Equipo</h3>
             <div class="field-row"><span class="label">Tipo</span><span class="value">{{ ingreso.tipo_equipo_display }}</span></div>
             <div class="field-row"><span class="label">Marca</span><span class="value">{{ ingreso.marca }}</span></div>
-            <div class="field-row"><span class="label">Modelo / Serie</span><span class="value">{{ ingreso.modelo_serie|default:"—" }}</span></div>
+            <div class="field-row"><span class="label">Modelo</span><span class="value">{{ ingreso.modelo_serie|default:"—" }}</span></div>
+            <div class="field-row"><span class="label">Serie</span><span class="value">{{ ingreso.serie|default:"—" }}</span></div>
             <div class="field-row"><span class="label">Accesorios entregados</span><span class="value">{{ ingreso.accesorios_entregados|default:"—" }}</span></div>
         </div>
 
@@ -316,6 +331,9 @@
                     <div class="estado-equipo-subestado">↳ {{ ingreso.get_subestado_reparacion_display }}</div>
                 {% elif ingreso.estado == 'entregado' and ingreso.subestado_entregado %}
                     <div class="estado-equipo-subestado">↳ {{ ingreso.get_subestado_entregado_display }}</div>
+                {% endif %}
+                {% if ingreso.estado == 'garantia' and ingreso.equipo_garantia_referencia %}
+                    <div class="estado-equipo-garantia-ref">🛡 Garantía de {{ ingreso.equipo_garantia_referencia }}</div>
                 {% endif %}
             </div>
             <div class="estado-equipo-actions">

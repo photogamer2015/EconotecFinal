@@ -5,6 +5,7 @@ Maneja: bienvenida, ayuda, ingresos de equipos, salidas y clientes.
 from datetime import date
 from decimal import Decimal as D
 from io import BytesIO
+import unicodedata
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
@@ -37,7 +38,9 @@ from .alertas import (
 
 
 def _normalizar_comparacion(valor):
-    return ' '.join((valor or '').strip().casefold().split())
+    texto = ' '.join((valor or '').strip().casefold().split())
+    texto = unicodedata.normalize('NFD', texto)
+    return ''.join(c for c in texto if unicodedata.category(c) != 'Mn')
 
 
 def _identidad_equipo_normalizada(datos_ingreso):
@@ -61,12 +64,9 @@ def _identidad_equipo_de_ingreso(ingreso):
 
 
 def _equipos_duplicados_para_cliente(cliente, datos_ingreso, excluir_pk=None):
-    tipo = _normalizar_comparacion(datos_ingreso.get('tipo_equipo'))
-    tipo_otro = _normalizar_comparacion(datos_ingreso.get('tipo_equipo_otro'))
-    marca = _normalizar_comparacion(datos_ingreso.get('marca'))
     modelo = _normalizar_comparacion(datos_ingreso.get('modelo_serie'))
 
-    if not cliente or not tipo or not marca:
+    if not cliente or not modelo:
         return []
 
     qs = cliente.ingresos.order_by('-creado')
@@ -75,17 +75,9 @@ def _equipos_duplicados_para_cliente(cliente, datos_ingreso, excluir_pk=None):
 
     duplicados = []
     for equipo in qs:
-        if _normalizar_comparacion(equipo.tipo_equipo) != tipo:
-            continue
-        if tipo == 'otro' and _normalizar_comparacion(equipo.tipo_equipo_otro) != tipo_otro:
-            continue
-        if _normalizar_comparacion(equipo.marca) != marca:
-            continue
-
         modelo_existente = _normalizar_comparacion(equipo.modelo_serie)
-        if modelo and modelo_existente and modelo_existente != modelo:
-            continue
-        duplicados.append(equipo)
+        if modelo_existente == modelo:
+            duplicados.append(equipo)
 
     return duplicados
 
@@ -387,11 +379,12 @@ def cliente_buscar_por_cedula(request):
         {
             'id': eq.id, 
             'codigo': eq.codigo_equipo,
-            'label': f"{eq.codigo_equipo} — {eq.marca} {eq.modelo_serie} ({eq.creado.strftime('%d/%m/%Y')})",
+            'label': f"{eq.codigo_equipo} — {eq.marca} {eq.modelo_serie_detalle} ({eq.creado.strftime('%d/%m/%Y')})",
             'tipo_equipo': eq.tipo_equipo,
             'tipo_equipo_otro': eq.tipo_equipo_otro,
             'marca': eq.marca,
             'modelo_serie': eq.modelo_serie,
+            'serie': eq.serie,
             'detalle_url': reverse('econotec:ingreso_detalle', args=[eq.pk]),
         }
         for eq in equipos_qs
@@ -445,8 +438,7 @@ def ingreso_registrar(request):
                     mensaje_duplicado = (
                         'ESTE EQUIPO YA SE ENCUENTRA REGISTRADO, POR FAVOR VERIFICA EN LA LISTA DE EQUIPOS.'
                     )
-                    ing_form.add_error('marca', mensaje_duplicado)
-                    ing_form.add_error('modelo_serie', f'Coincide con el equipo {duplicado.codigo_equipo}.')
+                    ing_form.add_error('modelo_serie', f'{mensaje_duplicado} Coincide con el equipo {duplicado.codigo_equipo}.')
                     messages.error(
                         request,
                         f'{mensaje_duplicado} Coincide con {duplicado.codigo_equipo}.'
@@ -509,6 +501,7 @@ def ingreso_registrar(request):
             'tipo_equipo_otro': request.GET.get('tipo_equipo_otro', ''),
             'marca': request.GET.get('marca', ''),
             'modelo_serie': request.GET.get('modelo_serie', ''),
+            'serie': request.GET.get('serie', ''),
             'problema_reportado': request.GET.get('problema_reportado', ''),
             'accesorios_entregados': request.GET.get('accesorios_entregados', ''),
             'numero_factura': request.GET.get('numero_factura', ''),
@@ -588,8 +581,7 @@ def ingreso_editar(request, pk):
                 mensaje_duplicado = (
                     'ESTE EQUIPO YA SE ENCUENTRA REGISTRADO, POR FAVOR VERIFICA EN LA LISTA DE EQUIPOS.'
                 )
-                ing_form.add_error('marca', mensaje_duplicado)
-                ing_form.add_error('modelo_serie', f'Coincide con el equipo {duplicado.codigo_equipo}.')
+                ing_form.add_error('modelo_serie', f'{mensaje_duplicado} Coincide con el equipo {duplicado.codigo_equipo}.')
                 messages.error(
                     request,
                     f'{mensaje_duplicado} Coincide con {duplicado.codigo_equipo}.'
@@ -714,6 +706,7 @@ def ingreso_lista(request):
             Q(cliente__nombres__icontains=q) |
             Q(marca__icontains=q) |
             Q(modelo_serie__icontains=q) |
+            Q(serie__icontains=q) |
             Q(numero_equipo__icontains=q)
         )
         # Si el usuario busca "G1000", extraemos "1000" para buscar en numero_equipo
@@ -807,7 +800,7 @@ def ingreso_lista(request):
 def ingreso_detalle(request, pk):
     """Vista de detalle de un ingreso con todas sus relaciones."""
     ingreso = get_object_or_404(
-        IngresoEquipo.objects.select_related('cliente', 'registrado_por'),
+        IngresoEquipo.objects.select_related('cliente', 'registrado_por', 'equipo_garantia'),
         pk=pk,
     )
     abonos = ingreso.abonos.all().order_by('-fecha', '-creado')
@@ -863,6 +856,7 @@ def _preparar_post_venta(post_data):
     defaults_si_falta = {
         'ing-marca': 'N/A',
         'ing-modelo_serie': 'N/A',
+        'ing-serie': '',
         'ing-tipo_equipo': 'otro',
         'ing-tipo_equipo_otro': '',
         'ing-accesorios_entregados': 'Ninguno',
@@ -968,6 +962,7 @@ def venta_registrar(request):
             'accesorios_entregados': 'Ninguno',
             'marca': 'N/A',
             'modelo_serie': 'N/A',
+            'serie': '',
             'tipo_equipo': 'otro',
         }
         if es_tecnico(request.user):
@@ -1096,6 +1091,7 @@ def venta_lista(request):
             Q(cliente__nombres__icontains=q) |
             Q(marca__icontains=q) |
             Q(modelo_serie__icontains=q) |
+            Q(serie__icontains=q) |
             Q(numero_equipo__icontains=q) |
             Q(problema_reportado__icontains=q)
         )

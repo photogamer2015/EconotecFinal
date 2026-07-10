@@ -33,7 +33,7 @@ class IngresoEquipoAdmin(admin.ModelAdmin):
     list_filter = ('estado', 'tipo_equipo', 'fecha_ingreso')
     search_fields = (
         'numero_equipo', 'cliente__nombres', 'cliente__cedula',
-        'marca', 'modelo_serie',
+        'marca', 'modelo_serie', 'serie',
     )
     readonly_fields = ('numero_equipo', 'creado', 'actualizado')
     inlines = [AbonoInline, SalidaEquipoInline]

@@ -382,7 +382,7 @@ def historial_export(request):
 
     headers = [
         'N° Equipo', 'Fecha Ingreso', 'Cliente', 'Cédula',
-        'Tipo', 'Marca', 'Modelo', 'Problema',
+        'Tipo', 'Marca', 'Modelo', 'Serie', 'Problema',
         'Valor Acordado', 'Total Abonado', 'Diferencia',
         'Estado Equipo', 'Estado Pago',
         'Fecha Salida', 'Estado Reparación',
@@ -414,21 +414,22 @@ def historial_export(request):
         ws.cell(row=row, column=5, value=ing.tipo_equipo_display)
         ws.cell(row=row, column=6, value=ing.marca)
         ws.cell(row=row, column=7, value=ing.modelo_serie)
-        ws.cell(row=row, column=8, value=ing.problema_reportado)
-        ws.cell(row=row, column=9, value=float(ing.valor_acordado or 0))
-        ws.cell(row=row, column=10, value=float(ing.total_abonado))
-        ws.cell(row=row, column=11, value=float(ing.diferencia))
-        ws.cell(row=row, column=12, value=ing.get_estado_display())
-        ws.cell(row=row, column=13, value=ing.estado_pago)
+        ws.cell(row=row, column=8, value=ing.serie)
+        ws.cell(row=row, column=9, value=ing.problema_reportado)
+        ws.cell(row=row, column=10, value=float(ing.valor_acordado or 0))
+        ws.cell(row=row, column=11, value=float(ing.total_abonado))
+        ws.cell(row=row, column=12, value=float(ing.diferencia))
+        ws.cell(row=row, column=13, value=ing.get_estado_display())
+        ws.cell(row=row, column=14, value=ing.estado_pago)
         salida = getattr(ing, 'salida', None)
         if salida:
-            ws.cell(row=row, column=14, value=salida.fecha_salida.strftime('%d/%m/%Y'))
-            ws.cell(row=row, column=15, value=salida.get_estado_reparacion_display())
+            ws.cell(row=row, column=15, value=salida.fecha_salida.strftime('%d/%m/%Y'))
+            ws.cell(row=row, column=16, value=salida.get_estado_reparacion_display())
         else:
-            ws.cell(row=row, column=14, value='—')
             ws.cell(row=row, column=15, value='—')
+            ws.cell(row=row, column=16, value='—')
 
-    for col in range(1, 16):
+    for col in range(1, 17):
         ws.column_dimensions[chr(64 + col)].width = 18
 
     buf = BytesIO()

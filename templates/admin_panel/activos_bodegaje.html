@@ -38,7 +38,7 @@
                 <tr>
                     <td><strong>{{ item.salida.ingreso.codigo_equipo }}</strong></td>
                     <td>{{ item.salida.ingreso.tipo_equipo_display }}</td>
-                    <td>{{ item.salida.ingreso.modelo_serie }}</td>
+                    <td>{{ item.salida.ingreso.modelo_serie_detalle }}</td>
                     <td>
                         {{ item.salida.ingreso.cliente.nombres }}<br>
                         <small class="text-muted">{{ item.salida.ingreso.cliente.whatsapp }}</small>
@@ -111,7 +111,7 @@
                     <td>{{ salida.ingreso.fecha_ingreso|date:"d/m/Y" }}</td>
                     <td>{{ salida.fecha_retiro_real|date:"d/m/Y" }}</td>
                     <td>{{ salida.ingreso.cliente.nombres }}</td>
-                    <td>{{ salida.ingreso.tipo_equipo_display }} — {{ salida.ingreso.modelo_serie }}</td>
+                    <td>{{ salida.ingreso.tipo_equipo_display }} — {{ salida.ingreso.modelo_serie_detalle }}</td>
                 </tr>
                 {% empty %}
                 <tr>

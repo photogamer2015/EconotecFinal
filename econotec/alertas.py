@@ -246,7 +246,7 @@ def whatsapp_link_equipo_listo(salida):
         f"• Equipo: {ingreso.tipo_equipo_display} {ingreso.marca}"
     )
     if ingreso.modelo_serie:
-        mensaje += f" — {ingreso.modelo_serie}"
+        mensaje += f" — {ingreso.modelo_serie_detalle}"
     mensaje += (
         f"\n• Estado del trabajo: {estado_label}\n"
         f"• Fecha de salida: {salida.fecha_salida.strftime('%d/%m/%Y')}\n"

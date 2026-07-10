@@ -180,7 +180,7 @@
                     <td><strong style="color: var(--naranja);">{{ i.codigo_equipo }}</strong></td>
                     <td>{{ i.fecha_ingreso|date:"d/m/Y" }}</td>
                     <td>{{ i.cliente.nombres }}</td>
-                    <td>{{ i.marca }}{% if i.modelo_serie %} - {{ i.modelo_serie }}{% endif %}</td>
+                    <td>{{ i.marca }}{% if i.modelo_serie %} - {{ i.modelo_serie_detalle }}{% endif %}</td>
                     <td><span class="estado-badge">{{ i.get_estado_display }}</span></td>
                     <td>{{ i.estado_pago }}</td>
                     <td>
