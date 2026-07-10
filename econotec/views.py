@@ -770,6 +770,7 @@ def ingreso_lista(request):
         ('espera_cliente', '   ↳ En reparación - Cliente'),
         ('espera_repuesto', '   ↳ En reparación - Repuestos'),
         ('entregado', 'Entregado al cliente (Ingreso)'),
+        ('garantia', 'Garantía (Ingreso)'),
         ('con_salida', 'Salida registrada (Todos)'),
         ('salida_pendiente_retiro', '   ↳ Reparado - pendiente de retiro'),
         ('salida_entregado_cliente', '   ↳ Entregado / retirado por cliente'),

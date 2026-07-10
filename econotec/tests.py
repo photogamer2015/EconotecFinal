@@ -550,6 +550,30 @@ class VentasTests(TestCase):
             reverse('econotec:salida_editar', kwargs={'pk': salida.pk})
         )
 
+    def test_lista_ingresos_muestra_y_filtra_garantia_de_ingreso(self):
+        self.activar_sede_guayaquil()
+        ingreso_garantia = self.crear_ingreso_reparacion(
+            estado='garantia',
+            marca='Epson',
+            modelo_serie='L3250 Garantia',
+            motivo_garantia='Garantia de ingreso',
+        )
+        self.crear_ingreso_reparacion(
+            marca='HP',
+            modelo_serie='Elitebook',
+            estado='en_reparacion',
+        )
+
+        response = self.client.get(
+            reverse('econotec:ingreso_lista'),
+            {'estado': 'garantia'},
+        )
+
+        self.assertContains(response, 'Garantía (Ingreso)')
+        self.assertContains(response, ingreso_garantia.codigo_equipo)
+        self.assertContains(response, 'value="garantia" selected')
+        self.assertEqual(response.context['total'], 1)
+
     def test_detalle_garantia_muestra_equipo_manual(self):
         ingreso = self.crear_ingreso_reparacion(
             estado='garantia',
