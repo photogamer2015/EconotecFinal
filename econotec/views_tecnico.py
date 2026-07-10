@@ -76,7 +76,12 @@ def _resolver_ingreso(token):
         return None
     return (
         IngresoEquipo.objects
-        .select_related('cliente', 'tecnico_encargado', 'registrado_por')
+        .select_related(
+            'cliente',
+            'tecnico_encargado',
+            'registrado_por',
+            'valor_pendiente_reporte_por',
+        )
         .filter(pk=pk)
         .first()
     )
@@ -148,6 +153,7 @@ def _procesar_actualizacion(request, ingreso, token):
     el sistema principal, y la salida nunca se registra mientras siga pendiente.
     """
     reporte = (request.POST.get('reporte_tecnico') or '').strip()
+    valor_pendiente_reporte = (request.POST.get('valor_pendiente_reporte') or '').strip()
     estado_movil = (request.POST.get('estado_movil') or '').strip()
     subestado_rep = (request.POST.get('subestado_reparacion') or '').strip()
     accion = (request.POST.get('accion') or 'guardar').strip()
@@ -160,6 +166,35 @@ def _procesar_actualizacion(request, ingreso, token):
         ingreso.reporte_por = request.user
         ingreso.reporte_actualizado = timezone.now()
     ingreso.reporte_tecnico = reporte
+
+    if accion == 'reportar_valor_pendiente':
+        update_fields = ['reporte_tecnico', 'reporte_por', 'reporte_actualizado', 'actualizado']
+
+        if ingreso.valor_acordado is not None:
+            ingreso.save(update_fields=update_fields)
+            messages.info(request, 'Este equipo ya tiene valor acordado registrado.')
+            return redirect('econotec:tecnico_hoja', token=token)
+
+        if not valor_pendiente_reporte:
+            ingreso.save(update_fields=update_fields)
+            messages.warning(request, 'Escribe el motivo por el que el valor acordado sigue pendiente.')
+            return redirect('econotec:tecnico_hoja', token=token)
+
+        if valor_pendiente_reporte != (ingreso.valor_pendiente_reporte or '').strip():
+            ingreso.valor_pendiente_reporte = valor_pendiente_reporte
+            ingreso.valor_pendiente_reporte_por = request.user
+            ingreso.valor_pendiente_reporte_actualizado = timezone.now()
+            update_fields.extend([
+                'valor_pendiente_reporte',
+                'valor_pendiente_reporte_por',
+                'valor_pendiente_reporte_actualizado',
+            ])
+            messages.success(request, 'Reporte de valor acordado pendiente guardado.')
+        else:
+            messages.info(request, 'El reporte de valor pendiente no tuvo cambios.')
+
+        ingreso.save(update_fields=update_fields)
+        return redirect('econotec:tecnico_hoja', token=token)
 
     if accion == 'actualizar_valor':
         ingreso.save(update_fields=['reporte_tecnico', 'reporte_por',

@@ -97,11 +97,18 @@ class IngresoEquipoForm(forms.ModelForm):
     Formulario que replica fielmente la hoja "Solicitud de Ingreso" de Econotec.
     El cliente NO se incluye aquí; se maneja aparte (ClienteForm) en la vista.
     """
+    VALOR_ACORDADO_ESTADOS = [
+        ('si', 'Sí'),
+        ('no', 'No / pendiente de valor'),
+    ]
+
     valor_acordado = forms.CharField(
         required=False,
         widget=forms.TextInput(attrs={
             'class': 'form-input', 
-            'placeholder': 'Ej.: 25.00 o ingrese un punto (.)'
+            'placeholder': 'Ej.: 25.00',
+            'inputmode': 'decimal',
+            'autocomplete': 'off',
         }),
         label='Valor acordado (USD)'
     )
@@ -205,6 +212,13 @@ class IngresoEquipoForm(forms.ModelForm):
         self.fields['serie'].required = False
         self.fields['equipo_garantia'].required = False
         self.fields['equipo_garantia_manual'].required = False
+        self.fields['valor_acordado_estado'] = forms.ChoiceField(
+            choices=self.VALOR_ACORDADO_ESTADOS,
+            required=False,
+            initial=self._valor_acordado_estado_inicial(),
+            widget=forms.RadioSelect(attrs={'class': 'valor-acordado-radio'}),
+            label='¿El técnico ya tiene el valor acordado?'
+        )
         
         # Limita los técnicos disponibles a los del grupo "Tecnicos" + admins activos
         self.fields['tecnico_encargado'].queryset = _queryset_tecnicos()
@@ -216,8 +230,8 @@ class IngresoEquipoForm(forms.ModelForm):
                 or u.username
             )
         )
-        if self.instance and self.instance.pk and self.instance.valor_acordado is None:
-            self.initial['valor_acordado'] = '.'
+        if not self.is_bound and self.instance and self.instance.pk and self.instance.valor_acordado is None:
+            self.initial['valor_acordado'] = ''
         # Convertir el campo asesor_comercial (modelo CharField) a un ChoiceField
         # poblado con los usuarios del grupo de asesores (y admins), mostrando
         # el nombre completo como etiqueta y guardando el nombre como valor.
@@ -266,7 +280,28 @@ class IngresoEquipoForm(forms.ModelForm):
                 choice for choice in self.fields['estado'].choices
                 if choice[0] != 'entregado'
             ]
+
+    def _valor_acordado_estado_inicial(self):
+        if self.is_bound:
+            return None
+        if self.instance and self.instance.pk:
+            return 'si' if self.instance.valor_acordado is not None else 'no'
+
+        valor = self.initial.get('valor_acordado')
+        if valor in (None, ''):
+            return 'no'
+        valor = str(valor).strip()
+        if valor in ['.', '-', '—', '_', ',']:
+            return 'no'
+        return 'si'
+
     def clean_valor_acordado(self):
+        estado = ''
+        if self.is_bound:
+            estado = (self.data.get(self.add_prefix('valor_acordado_estado')) or '').strip()
+        if estado in ('no', 'pendiente'):
+            return None
+
         val = self.cleaned_data.get('valor_acordado')
         if not val:
             return None
@@ -276,7 +311,7 @@ class IngresoEquipoForm(forms.ModelForm):
         try:
             return Decimal(val.replace(',', '.'))
         except InvalidOperation:
-            raise forms.ValidationError("Ingrese un monto válido o un punto (.) si aún no hay valor acordado.")
+            raise forms.ValidationError("Ingrese un monto válido o marca No / Pendiente si aún no hay valor acordado.")
 
     def clean(self):
         """
@@ -285,6 +320,15 @@ class IngresoEquipoForm(forms.ModelForm):
         """
         cleaned = super().clean()
         estado = cleaned.get('estado')
+        valor_acordado_estado = cleaned.get('valor_acordado_estado')
+
+        if valor_acordado_estado in ('no', 'pendiente'):
+            cleaned['valor_acordado'] = None
+        elif valor_acordado_estado == 'si' and cleaned.get('valor_acordado') is None:
+            self.add_error(
+                'valor_acordado',
+                'Ingresa el valor acordado o marca No / pendiente de valor.'
+            )
         
         if estado == 'en_reparacion':
             if not cleaned.get('subestado_reparacion'):

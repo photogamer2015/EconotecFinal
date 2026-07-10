@@ -3,6 +3,37 @@
 {% block title %}Ingreso de Equipos — Econotec{% endblock %}
 
 {% block content %}
+<style>
+    .ingreso-menu-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        gap: 20px;
+    }
+    .pending-value-card {
+        border-left: 5px solid var(--warning);
+        position: relative;
+        overflow: hidden;
+    }
+    .pending-value-count {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 34px;
+        height: 28px;
+        padding: 0 10px;
+        border-radius: 999px;
+        background: #fff3e0;
+        color: #b45309;
+        font-size: 13px;
+        font-weight: 900;
+        margin-top: 8px;
+    }
+    [data-theme="dark"] .pending-value-count {
+        background: rgba(245, 158, 11, 0.18);
+        color: #fbbf24;
+    }
+</style>
+
 <div class="crumb">
     <a href="{% url 'econotec:bienvenida' %}">Inicio</a> / Ingreso de Equipo
 </div>
@@ -10,7 +41,7 @@
 <h2 class="page-title">Ingreso de <span class="accent">Equipo / Cliente</span></h2>
 <p class="page-subtitle">Registra una nueva Solicitud de Ingreso o consulta los equipos.</p>
 
-<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px;">
+<div class="ingreso-menu-grid">
     <a href="{% url 'econotec:ingreso_registrar' %}" class="card-box" style="text-decoration:none; color:inherit; border-left: 5px solid var(--primary);">
         <div style="display:flex; align-items:center; gap:14px;">
             <div style="font-size:38px;">📥</div>
@@ -27,6 +58,17 @@
             <div>
                 <h3 style="color: #1f2937; font-size:18px; margin-bottom:4px;">Ver Lista de Equipos</h3>
                 <p style="color:#666; font-size:13px;">{{ total }} equipos registrados — {{ pendientes }} pendientes.</p>
+            </div>
+        </div>
+    </a>
+
+    <a href="{% url 'econotec:ingreso_lista' %}?sede=todas&valor=pendiente" class="card-box pending-value-card" style="text-decoration:none; color:inherit;">
+        <div style="display:flex; align-items:center; gap:14px;">
+            <div style="font-size:38px;">⚠</div>
+            <div>
+                <h3 style="color: #b45309; font-size:18px; margin-bottom:4px;">Pendiente de Valores Acordados</h3>
+                <p style="color:#666; font-size:13px;">Lista de equipos sin valor acordado.</p>
+                <span class="pending-value-count">{{ pendientes_valor }} pendiente{{ pendientes_valor|pluralize }}</span>
             </div>
         </div>
     </a>

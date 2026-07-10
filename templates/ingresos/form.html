@@ -177,6 +177,82 @@
         font-size: 15px;
     }
 
+    .valor-acordado-panel {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    .valor-acordado-opciones {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px;
+    }
+
+    .valor-acordado-opcion {
+        min-height: 46px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 12px;
+        border: 1.5px solid #d9d9d9;
+        border-radius: 8px;
+        background: var(--card-bg);
+        color: var(--text-color);
+        font-size: 13px;
+        font-weight: 800;
+        line-height: 1.2;
+        cursor: pointer;
+        transition: border-color .18s, background .18s, box-shadow .18s;
+    }
+
+    .valor-acordado-opcion:hover {
+        border-color: var(--primary);
+        background: rgba(249, 118, 24, 0.06);
+    }
+
+    .valor-acordado-opcion input {
+        width: 17px;
+        height: 17px;
+        flex: 0 0 auto;
+        margin: 0;
+        accent-color: var(--primary);
+    }
+
+    .valor-acordado-opcion.is-active {
+        border-color: var(--primary);
+        background: rgba(249, 118, 24, 0.10);
+        box-shadow: 0 0 0 3px rgba(249, 118, 24, 0.10);
+    }
+
+    .valor-acordado-monto {
+        display: none;
+        margin-top: 2px;
+    }
+
+    .valor-acordado-aviso {
+        padding: 11px 12px;
+        border-radius: 8px;
+        border: 1px solid #e5e7eb;
+        background: #f8fafc;
+        color: #6b7280;
+        font-size: 12px;
+        font-weight: 700;
+        line-height: 1.35;
+    }
+
+    [data-theme="dark"] .valor-acordado-aviso {
+        border-color: rgba(255, 255, 255, 0.12);
+        background: rgba(255, 255, 255, 0.05);
+        color: var(--text-muted);
+    }
+
+    @media (max-width: 640px) {
+        .valor-acordado-opciones {
+            grid-template-columns: 1fr;
+        }
+    }
+
     /* Mostrar visualmente el estado deshabilitado de los botones */
     .btn[disabled], .btn:disabled {
         opacity: 0.55;
@@ -439,10 +515,28 @@
     <div class="form-section">
         <h3>Valor y Estado del Equipo</h3>
         <div class="form-row cols-2">
-            <div>
-                <label class="form-label">Valor acordado (USD)</label>
-                {{ ing_form.valor_acordado }}
-                <small style="color:#888; font-size:11px; display:block; margin-top:4px;">Si dejas el casillero vacío o pones un punto (.), el valor saldrá como PENDIENTE y en la hoja se mostrará una raya (—).</small>
+            <div class="valor-acordado-panel">
+                <label class="form-label">{{ ing_form.valor_acordado_estado.label }}</label>
+                <div class="valor-acordado-opciones" id="valor-acordado-opciones">
+                    {% for radio in ing_form.valor_acordado_estado %}
+                        <label class="valor-acordado-opcion" for="{{ radio.id_for_label }}">
+                            {{ radio.tag }}
+                            <span>{{ radio.choice_label }}</span>
+                        </label>
+                    {% endfor %}
+                </div>
+                {{ ing_form.valor_acordado_estado.errors }}
+
+                <div id="wrap_valor_acordado_monto" class="valor-acordado-monto">
+                    <label class="form-label" for="{{ ing_form.valor_acordado.id_for_label }}">Valor acordado (USD)</label>
+                    {{ ing_form.valor_acordado }}
+                    {{ ing_form.valor_acordado.errors }}
+                    <small style="color:#888; font-size:11px; display:block; margin-top:4px;">Ingresa el monto acordado con el cliente.</small>
+                </div>
+
+                <div id="valor-acordado-aviso" class="valor-acordado-aviso">
+                    Se guardará como pendiente y en la hoja se mostrará una raya (—).
+                </div>
             </div>
             <div id="estado-equipo-editor">
                 <label class="form-label">Estado del equipo</label>
@@ -663,6 +757,98 @@
         if (selEnt) {
             selEnt.addEventListener('change', actualizarHint);
         }
+    })();
+
+    // Valor acordado: reemplaza el punto manual por una decisión clara.
+    (function () {
+        var radios = Array.prototype.slice.call(document.querySelectorAll('input[name="ing-valor_acordado_estado"]'));
+        var inpValor = document.querySelector('[name="ing-valor_acordado"]');
+        var wrapMonto = document.getElementById('wrap_valor_acordado_monto');
+        var aviso = document.getElementById('valor-acordado-aviso');
+        var ultimoValor = '';
+
+        if (!radios.length || !inpValor) return;
+
+        function esPendiente(valor) {
+            var limpio = String(valor || '').trim();
+            return !limpio || ['.', '-', '—', '_', ','].indexOf(limpio) !== -1;
+        }
+
+        if (!esPendiente(inpValor.value)) {
+            ultimoValor = inpValor.value;
+        }
+
+        function radioActivo() {
+            for (var i = 0; i < radios.length; i += 1) {
+                if (radios[i].checked) return radios[i];
+            }
+            return null;
+        }
+
+        function asegurarSeleccion() {
+            if (radioActivo()) return;
+            var valor = esPendiente(inpValor.value) ? 'no' : 'si';
+            radios.forEach(function (radio) {
+                radio.checked = radio.value === valor;
+            });
+        }
+
+        function estadoActual() {
+            asegurarSeleccion();
+            var activo = radioActivo();
+            return activo ? activo.value : 'pendiente';
+        }
+
+        function marcarOpcionActiva() {
+            radios.forEach(function (radio) {
+                var label = radio.closest('.valor-acordado-opcion');
+                if (label) label.classList.toggle('is-active', radio.checked);
+            });
+        }
+
+        function actualizarValorAcordado() {
+            var estado = estadoActual();
+            marcarOpcionActiva();
+
+            if (estado === 'si') {
+                if (wrapMonto) wrapMonto.style.display = 'block';
+                if (aviso) aviso.style.display = 'none';
+                inpValor.removeAttribute('readonly');
+                inpValor.setAttribute('required', 'required');
+
+                if (esPendiente(inpValor.value)) {
+                    inpValor.value = ultimoValor || '';
+                }
+            } else {
+                if (!esPendiente(inpValor.value)) {
+                    ultimoValor = inpValor.value;
+                }
+                inpValor.removeAttribute('required');
+                inpValor.setAttribute('readonly', 'readonly');
+                inpValor.value = '.';
+
+                if (wrapMonto) wrapMonto.style.display = 'none';
+                if (aviso) {
+                    aviso.style.display = 'block';
+                    aviso.textContent = 'No hay valor acordado. Se guardará como pendiente y en la hoja se mostrará una raya (—).';
+                }
+            }
+
+            if (window.__checkRequired) window.__checkRequired();
+        }
+
+        radios.forEach(function (radio) {
+            radio.addEventListener('change', actualizarValorAcordado);
+        });
+        inpValor.addEventListener('input', function () {
+            if (estadoActual() === 'si' && !esPendiente(inpValor.value)) {
+                ultimoValor = inpValor.value;
+            }
+        });
+
+        actualizarValorAcordado();
+        setTimeout(actualizarValorAcordado, 150);
+        setTimeout(actualizarValorAcordado, 600);
     })();
 
     // Autocompletado de cliente por cédula

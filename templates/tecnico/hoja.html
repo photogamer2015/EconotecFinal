@@ -197,6 +197,22 @@
         .valor-pending-note {
             background: #fff7e6; border: 1px solid #ffd89b; color: var(--warn);
         }
+        .valor-pending-report {
+            margin-top: 12px; padding-top: 12px;
+            border-top: 1px dashed #ffd89b;
+        }
+        .valor-pending-report textarea {
+            min-height: 95px;
+            background: #fff;
+        }
+        .btn-pending-report {
+            width: 100%; margin-top: 10px;
+            background: #b45309; color: #fff;
+            box-shadow: 0 5px 12px rgba(180,83,9,0.18);
+        }
+        .btn-pending-report:active {
+            background: #92400e;
+        }
 
         .reporte-autor {
             margin-top: 10px; font-size: 12.5px; color: var(--ok);
@@ -573,6 +589,25 @@
                     {% else %}
                         <div class="valor-pending-note">
                             Sin valor acordado registrado. Cuando lo actualices, se mostrará aquí el saldo pendiente y el estado de pago.
+                        </div>
+                        <div class="valor-pending-report">
+                            <label class="field-label" for="valor_pendiente_reporte">
+                                Reportar por qué está pendiente el valor acordado
+                            </label>
+                            <textarea
+                                name="valor_pendiente_reporte"
+                                id="valor_pendiente_reporte"
+                                placeholder="Ej.: Falta confirmar repuesto, cliente no responde, pendiente aprobación del presupuesto..."
+                            >{{ ingreso.valor_pendiente_reporte }}</textarea>
+                            {% if ingreso.valor_pendiente_reporte_por_nombre %}
+                            <div class="reporte-autor">
+                                ✍️ Reportado por <strong>{{ ingreso.valor_pendiente_reporte_por_nombre }}</strong>
+                                {% if ingreso.valor_pendiente_reporte_actualizado %} · {{ ingreso.valor_pendiente_reporte_actualizado|date:"d/m/Y H:i" }}{% endif %}
+                            </div>
+                            {% endif %}
+                            <button type="submit" name="accion" value="reportar_valor_pendiente" class="btn btn-pending-report">
+                                ⚠ Reportar por qué está pendiente el valor acordado
+                            </button>
                         </div>
                     {% endif %}
                 </div>

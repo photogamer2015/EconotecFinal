@@ -33,6 +33,37 @@
     [data-theme="dark"] .salida-registrada-badge small {
         color: #a7f3d0;
     }
+    .valor-pendiente-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 9px;
+        border-radius: 7px;
+        background: #fff7ed;
+        border: 1px solid #fed7aa;
+        color: #b45309;
+        font-size: 11px;
+        font-weight: 900;
+        line-height: 1.15;
+        text-transform: uppercase;
+        white-space: nowrap;
+    }
+    .valor-filter-banner {
+        margin: 0 0 18px;
+        padding: 12px 14px;
+        border-radius: 8px;
+        border: 1px solid #fed7aa;
+        background: #fff7ed;
+        color: #9a3412;
+        font-size: 13px;
+        font-weight: 800;
+    }
+    [data-theme="dark"] .valor-pendiente-badge,
+    [data-theme="dark"] .valor-filter-banner {
+        background: rgba(245, 158, 11, 0.14);
+        border-color: rgba(245, 158, 11, 0.35);
+        color: #fbbf24;
+    }
 </style>
 
 <div class="crumb">
@@ -40,7 +71,11 @@
     <a href="{% url 'econotec:ingreso_menu' %}">Ingreso de Equipo</a> / Lista
 </div>
 
+{% if valor_filtro == 'pendiente' %}
+<h2 class="page-title">Equipos <span class="accent">Pendientes de Valor</span></h2>
+{% else %}
 <h2 class="page-title">Equipos <span class="accent">Registrados</span></h2>
+{% endif %}
 <p class="page-subtitle">
     {{ total }} equipos
     {% if sede_filtro == 'guayaquil' %}en sede Guayaquil
@@ -48,6 +83,9 @@
     {% else %}en total (todas las sedes)
     {% endif %}.
 </p>
+{% if valor_filtro == 'pendiente' %}
+<div class="valor-filter-banner">⚠ Lista de equipos pendientes de valor acordado.</div>
+{% endif %}
 
 <div class="toolbar">
     <form method="get">
@@ -61,6 +99,11 @@
             {% for value, label in estados %}
                 <option value="{{ value }}" {% if estado_filtro == value %}selected{% endif %}>{{ label }}</option>
             {% endfor %}
+        </select>
+        <select name="valor" class="form-input" style="max-width:220px;">
+            <option value="">— Valor acordado —</option>
+            <option value="pendiente" {% if valor_filtro == 'pendiente' %}selected{% endif %}>Pendiente de valor acordado</option>
+            <option value="con_valor" {% if valor_filtro == 'con_valor' %}selected{% endif %}>Con valor acordado</option>
         </select>
         <select name="tipo" class="form-input" style="max-width:140px;">
             <option value="">— Tipo —</option>
@@ -150,7 +193,9 @@
                     {% endif %}
                 </td>
                 <td>
-                    {% if i.reparacion_cancelada %}
+                    {% if i.valor_acordado is None %}
+                        <span class="valor-pendiente-badge">⚠ Pendiente valor acordado</span>
+                    {% elif i.reparacion_cancelada %}
                         <span style="color:#999; text-decoration: line-through; font-size: 12px;">{{ i.valor_acordado|dinero_signo }}</span>
                     {% else %}
                         {{ i.valor_acordado|dinero_signo }}

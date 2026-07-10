@@ -198,6 +198,15 @@ class VentasTests(TestCase):
         data.update(overrides)
         return data
 
+    def ingreso_form_data(self, **overrides):
+        data = {
+            key.replace('ing-', '', 1): value
+            for key, value in self.ingreso_registro_post_data().items()
+            if key.startswith('ing-')
+        }
+        data.update(overrides)
+        return data
+
     def activar_sede_guayaquil(self):
         session = self.client.session
         session['sede_actual'] = 'guayaquil'
@@ -331,6 +340,33 @@ class VentasTests(TestCase):
         self.assertTrue(form.is_valid(), form.errors.as_json())
         self.assertEqual(form.cleaned_data['subestado_reparacion'], 'en_reparacion')
 
+    def test_valor_acordado_no_guarda_como_pendiente(self):
+        form = IngresoEquipoForm(data=self.ingreso_form_data(
+            valor_acordado_estado='no',
+            valor_acordado='99.00',
+        ))
+
+        self.assertTrue(form.is_valid(), form.errors.as_json())
+        self.assertIsNone(form.cleaned_data['valor_acordado'])
+
+    def test_valor_acordado_no_con_punto_guarda_como_pendiente(self):
+        form = IngresoEquipoForm(data=self.ingreso_form_data(
+            valor_acordado_estado='no',
+            valor_acordado='.',
+        ))
+
+        self.assertTrue(form.is_valid(), form.errors.as_json())
+        self.assertIsNone(form.cleaned_data['valor_acordado'])
+
+    def test_valor_acordado_si_exige_monto(self):
+        form = IngresoEquipoForm(data=self.ingreso_form_data(
+            valor_acordado_estado='si',
+            valor_acordado='',
+        ))
+
+        self.assertFalse(form.is_valid())
+        self.assertIn('valor_acordado', form.errors)
+
     def test_detalle_bloquea_boton_salida_si_valor_acordado_pendiente(self):
         ingreso = self.crear_ingreso_reparacion(valor_acordado=None)
 
@@ -357,6 +393,51 @@ class VentasTests(TestCase):
         )
         self.assertFalse(SalidaEquipo.objects.filter(ingreso=ingreso).exists())
 
+    def test_detalle_muestra_alerta_si_valor_acordado_pendiente(self):
+        ingreso = self.crear_ingreso_reparacion(valor_acordado=None)
+
+        response = self.client.get(
+            reverse('econotec:ingreso_detalle', kwargs={'pk': ingreso.pk})
+        )
+
+        self.assertContains(response, 'pending-value-alert')
+        self.assertContains(response, 'Pendiente de valor acordado')
+
+    def test_menu_muestra_apartado_pendientes_de_valor_acordado(self):
+        self.crear_ingreso_reparacion(valor_acordado=None)
+        self.crear_ingreso_reparacion(
+            valor_acordado=Decimal('45.00'),
+            marca='Dell',
+            modelo_serie='Inspiron',
+        )
+
+        response = self.client.get(reverse('econotec:ingreso_menu'))
+
+        self.assertContains(response, 'Pendiente de Valores Acordados')
+        self.assertContains(response, 'Lista de equipos sin valor acordado.')
+        self.assertContains(response, '?sede=todas&valor=pendiente')
+        self.assertContains(response, '1 pendiente')
+
+    def test_lista_filtra_valor_acordado_pendiente(self):
+        pendiente = self.crear_ingreso_reparacion(valor_acordado=None)
+        con_valor = self.crear_ingreso_reparacion(
+            valor_acordado=Decimal('80.00'),
+            marca='Lenovo',
+            modelo_serie='ThinkPad',
+        )
+
+        response = self.client.get(
+            reverse('econotec:ingreso_lista'),
+            {'sede': 'todas', 'valor': 'pendiente'},
+        )
+
+        ingresos = list(response.context['ingresos'])
+        self.assertEqual(ingresos, [pendiente])
+        self.assertNotIn(con_valor, ingresos)
+        self.assertContains(response, 'Equipos <span class="accent">Pendientes de Valor</span>')
+        self.assertContains(response, 'value="pendiente" selected')
+        self.assertContains(response, 'Pendiente valor acordado')
+
     def test_hoja_tecnico_muestra_valor_acordado_y_registro_salida(self):
         ingreso = self.crear_ingreso_reparacion(valor_acordado=None)
         token = token_para_ingreso(ingreso.pk)
@@ -371,10 +452,42 @@ class VentasTests(TestCase):
         self.assertContains(response, 'readonly')
         self.assertContains(response, 'solo lectura')
         self.assertNotContains(response, 'Actualizar valor')
+        self.assertContains(response, 'name="valor_pendiente_reporte"')
+        self.assertContains(response, 'Reportar por qué está pendiente el valor acordado')
         self.assertContains(response, 'Registrar salida')
         self.assertContains(response, 'id="btn-perfil-movil"')
         self.assertContains(response, 'Ver perfil')
         self.assertContains(response, 'id="perfil-mobile-modal"')
+
+    def test_hoja_tecnico_reporta_motivo_valor_acordado_pendiente(self):
+        ingreso = self.crear_ingreso_reparacion(valor_acordado=None)
+        token = token_para_ingreso(ingreso.pk)
+
+        response = self.client.post(
+            reverse('econotec:tecnico_hoja', kwargs={'token': token}),
+            {
+                'reporte_tecnico': 'Equipo sigue en diagnostico',
+                'valor_pendiente_reporte': 'Pendiente confirmar repuesto con proveedor.',
+                'estado_movil': 'en_reparacion',
+                'subestado_reparacion': '',
+                'accion': 'reportar_valor_pendiente',
+            },
+        )
+
+        self.assertRedirects(response, reverse('econotec:tecnico_hoja', kwargs={'token': token}))
+        ingreso.refresh_from_db()
+        self.assertEqual(ingreso.valor_pendiente_reporte, 'Pendiente confirmar repuesto con proveedor.')
+        self.assertEqual(ingreso.valor_pendiente_reporte_por, self.usuario)
+        self.assertIsNotNone(ingreso.valor_pendiente_reporte_actualizado)
+        self.assertEqual(ingreso.reporte_tecnico, 'Equipo sigue en diagnostico')
+
+        response = self.client.get(
+            reverse('econotec:ingreso_detalle', kwargs={'pk': ingreso.pk})
+        )
+        self.assertContains(response, 'Pendiente de valor acordado')
+        self.assertContains(response, 'Reporte del técnico')
+        self.assertContains(response, 'Ver reporte del técnico')
+        self.assertContains(response, 'Pendiente confirmar repuesto con proveedor.')
 
     def test_hoja_tecnico_no_actualiza_valor_acordado_desde_movil(self):
         ingreso = self.crear_ingreso_reparacion(
@@ -740,6 +853,9 @@ class VentasTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'name="confirmar_mismo_equipo_cliente"')
+        self.assertContains(response, 'name="ing-valor_acordado_estado"')
+        self.assertContains(response, '¿El técnico ya tiene el valor acordado?')
+        self.assertContains(response, 'No / pendiente de valor')
         self.assertContains(response, "localStorage.removeItem('econotec_ingreso_form_nuevo')")
         self.assertNotContains(response, "localStorage.getItem('econotec_ingreso_form_nuevo')")
 

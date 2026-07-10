@@ -237,6 +237,21 @@ class IngresoEquipo(models.Model):
         verbose_name='Reporte actualizado el',
         help_text='Fecha y hora de la última edición del reporte del técnico.',
     )
+    valor_pendiente_reporte = models.TextField(
+        blank=True,
+        verbose_name='Reporte de valor acordado pendiente',
+        help_text='Motivo indicado por el técnico cuando el valor acordado aún está pendiente.',
+    )
+    valor_pendiente_reporte_por = models.ForeignKey(
+        'auth.User', on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='reportes_valor_pendiente',
+        verbose_name='Reporte de valor pendiente hecho por',
+    )
+    valor_pendiente_reporte_actualizado = models.DateTimeField(
+        null=True, blank=True,
+        verbose_name='Reporte de valor pendiente actualizado el',
+    )
 
     # ── Diagnóstico ──────────────────────────────────────
     diagnostico_inmediato = models.CharField(
@@ -502,6 +517,14 @@ class IngresoEquipo(models.Model):
     def reporte_por_nombre(self):
         """Nombre de quién escribió el reporte del técnico (para mostrar)."""
         u = self.reporte_por
+        if not u:
+            return ''
+        return (f'{u.first_name} {u.last_name}'.strip()) or u.username
+
+    @property
+    def valor_pendiente_reporte_por_nombre(self):
+        """Nombre de quién reportó por qué el valor acordado está pendiente."""
+        u = self.valor_pendiente_reporte_por
         if not u:
             return ''
         return (f'{u.first_name} {u.last_name}'.strip()) or u.username

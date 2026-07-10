@@ -347,10 +347,20 @@ def ingreso_menu(request):
     pendientes = IngresoEquipo.objects.filter(
         estado__in=['ingresado', 'en_reparacion']
     ).count() + SalidaEquipo.objects.filter(estado_reparacion='pendiente_retiro').count()
+    pendientes_valor = _ingresos_pendientes_valor_qs().count()
     return render(request, 'ingresos/menu.html', {
         'total': total,
         'pendientes': pendientes,
+        'pendientes_valor': pendientes_valor,
     })
+
+
+def _ingresos_pendientes_valor_qs():
+    return (
+        IngresoEquipo.objects
+        .filter(sede__in=['guayaquil', 'quito'], valor_acordado__isnull=True)
+        .exclude(estado='entregado')
+    )
 
 
 @tecnico_requerido
@@ -509,7 +519,7 @@ def ingreso_registrar(request):
             'reporte_tecnico': request.GET.get('reporte_tecnico', ''),
             'diagnostico_inmediato': request.GET.get('diagnostico_inmediato', 'no'),
             'valor_diagnostico': request.GET.get('valor_diagnostico', '0.00'),
-            'valor_acordado': request.GET.get('valor_acordado', '0.00'),
+            'valor_acordado': request.GET.get('valor_acordado', ''),
             'abono_anticipo': request.GET.get('abono_anticipo', '0.00'),
         }
         cli_form = ClienteForm(prefix='cli', initial=cli_initial)
@@ -680,6 +690,7 @@ def ingreso_lista(request):
     q = (request.GET.get('q') or '').strip()
     estado = (request.GET.get('estado') or '').strip()
     tipo = (request.GET.get('tipo') or '').strip()
+    valor = (request.GET.get('valor') or '').strip()
 
     # Filtro por sede:
     # - Si el querystring trae explícitamente sede=todas → no filtrar
@@ -744,6 +755,14 @@ def ingreso_lista(request):
     if tipo:
         qs = qs.filter(tipo_equipo=tipo)
 
+    if valor == 'pendiente':
+        qs = qs.filter(
+            sede__in=['guayaquil', 'quito'],
+            valor_acordado__isnull=True,
+        ).exclude(estado='entregado')
+    elif valor == 'con_valor':
+        qs = qs.filter(valor_acordado__isnull=False)
+
     tecnico_filtro = (request.GET.get('tecnico') or '').strip()
     registrador_filtro = (request.GET.get('registrador') or '').strip()
     asesor_filtro = (request.GET.get('asesor') or '').strip()
@@ -784,6 +803,7 @@ def ingreso_lista(request):
         'q': q,
         'estado_filtro': estado,
         'tipo_filtro': tipo,
+        'valor_filtro': valor,
         'sede_filtro': sede_filtro,
         'sede_sesion': sede_sesion,
         'tecnico_filtro': tecnico_filtro,
@@ -801,7 +821,12 @@ def ingreso_lista(request):
 def ingreso_detalle(request, pk):
     """Vista de detalle de un ingreso con todas sus relaciones."""
     ingreso = get_object_or_404(
-        IngresoEquipo.objects.select_related('cliente', 'registrado_por', 'equipo_garantia'),
+        IngresoEquipo.objects.select_related(
+            'cliente',
+            'registrado_por',
+            'equipo_garantia',
+            'valor_pendiente_reporte_por',
+        ),
         pk=pk,
     )
     abonos = ingreso.abonos.all().order_by('-fecha', '-creado')
