@@ -14,6 +14,12 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 
 from .forms import EgresoForm
+from .gamificacion import (
+    SALIDA_BUENA_ESTADOS,
+    SALIDA_GARANTIA_ESTADOS,
+    SALIDA_MALA_ESTADOS,
+    calcular_puntaje_gamificacion,
+)
 from .models import IngresoEquipo, SalidaEquipo, Abono, Egreso, CategoriaEgreso, Cliente, AvisoPanel
 from .permisos import admin_requerido
 
@@ -675,11 +681,16 @@ def _obtener_estadisticas_gamificacion():
 
         ingresos = ingresos_qs.count()
         ventas_producto = ventas_producto_qs.count()
-        salidas_buenas = salidas_qs.filter(estado_reparacion__in=['pendiente_retiro', 'retirado']).count()
-        salidas_malas = salidas_qs.filter(estado_reparacion__in=['no_reparable']).count()
-        salidas_garantia = salidas_qs.filter(estado_reparacion__in=['garantia']).count()
+        salidas_buenas = salidas_qs.filter(estado_reparacion__in=SALIDA_BUENA_ESTADOS).count()
+        salidas_malas = salidas_qs.filter(estado_reparacion__in=SALIDA_MALA_ESTADOS).count()
+        salidas_garantia = salidas_qs.filter(estado_reparacion__in=SALIDA_GARANTIA_ESTADOS).count()
         
-        total = max(0, salidas_buenas + ventas_producto - salidas_malas - (salidas_garantia * 2))
+        total = calcular_puntaje_gamificacion(
+            salidas_buenas,
+            ventas_producto,
+            salidas_malas,
+            salidas_garantia,
+        )
         
         if total <= 49:
             nivel = 'Novato'

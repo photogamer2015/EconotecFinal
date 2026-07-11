@@ -290,6 +290,186 @@ class VentasTests(TestCase):
         self.assertEqual(data['salidas_producto'], 1)
         self.assertEqual(data['total'], 1)
 
+    def test_perfil_suma_cuatro_puntos_por_salida_buena_positiva(self):
+        ingreso = self.crear_ingreso_reparacion()
+        SalidaEquipo.objects.create(
+            ingreso=ingreso,
+            fecha_salida=date(2026, 7, 9),
+            estado_reparacion='pendiente_retiro',
+            cliente_recibe_conforme='si',
+            valor_final_cobrado=Decimal('0.00'),
+            metodo_pago_final='sin_pago',
+            tecnico_reparo=self.usuario,
+            registrado_por=self.usuario,
+        )
+
+        response = self.client.get(reverse('econotec:api_perfil'))
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data['salidas_buenas'], 1)
+        self.assertEqual(data['total'], 4)
+
+    def test_perfil_no_suma_puntos_de_salida_buena_si_no_es_positiva(self):
+        ingreso = self.crear_ingreso_reparacion()
+        SalidaEquipo.objects.create(
+            ingreso=ingreso,
+            fecha_salida=date(2026, 7, 9),
+            estado_reparacion='no_reparable',
+            cliente_recibe_conforme='no',
+            valor_final_cobrado=Decimal('0.00'),
+            metodo_pago_final='sin_pago',
+            tecnico_reparo=self.usuario,
+            registrado_por=self.usuario,
+        )
+
+        response = self.client.get(reverse('econotec:api_perfil'))
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data['salidas_buenas'], 0)
+        self.assertEqual(data['salidas_malas'], 1)
+        self.assertEqual(data['total'], 0)
+
+    def test_menu_ventas_muestra_control_de_pago_de_ventas(self):
+        response = self.client.get(reverse('econotec:venta_menu'))
+
+        self.assertContains(response, 'Control de Pago de Ventas')
+        self.assertContains(response, reverse('econotec:pagos_ventas_lista'))
+
+    def test_hoja_qr_muestra_problema_reportado_debajo_de_categoria(self):
+        ingreso = self.crear_ingreso_reparacion(
+            tipo_equipo='otro',
+            tipo_equipo_otro='Consola',
+            problema_reportado='No da grafica',
+        )
+
+        response = self.client.get(
+            reverse('econotec:ingreso_imprimir_qr', kwargs={'pk': ingreso.pk})
+        )
+
+        self.assertContains(response, 'Consola', count=4)
+        self.assertContains(response, 'Problema:')
+        self.assertContains(response, 'No da grafica', count=4)
+
+    def test_busqueda_clientes_ignora_tildes_y_mayusculas(self):
+        self.cliente_existente.nombres = 'Yandri Guevará'
+        self.cliente_existente.save(update_fields=['nombres'])
+        Cliente.objects.create(
+            cedula='0927827281919',
+            nombres='Randy Rodriguez',
+            whatsapp='90939202',
+            correo='photogamer2016pg@gmail.com',
+            sector='norte',
+        )
+
+        response = self.client.get(reverse('econotec:cliente_lista'), {'q': 'guevara'})
+
+        self.assertEqual(response.context['total'], 1)
+        self.assertContains(response, 'Yandri Guevará')
+        self.assertNotContains(response, 'Randy Rodriguez')
+
+    def test_busqueda_lista_equipos_ignora_tildes_y_mayusculas(self):
+        self.cliente_existente.nombres = 'Yandri Guevará'
+        self.cliente_existente.save(update_fields=['nombres'])
+        ingreso = self.crear_ingreso_reparacion()
+
+        response = self.client.get(
+            reverse('econotec:ingreso_lista'),
+            {'q': 'guevara', 'sede': 'todas'},
+        )
+
+        self.assertEqual(response.context['total'], 1)
+        self.assertContains(response, ingreso.codigo_equipo)
+        self.assertContains(response, 'Yandri Guevará')
+
+    def test_busqueda_lista_salidas_ignora_tildes_y_mayusculas(self):
+        self.cliente_existente.nombres = 'Yandri Guevará'
+        self.cliente_existente.save(update_fields=['nombres'])
+        ingreso = self.crear_ingreso_reparacion()
+        SalidaEquipo.objects.create(
+            ingreso=ingreso,
+            fecha_salida=date(2026, 7, 9),
+            estado_reparacion='pendiente_retiro',
+            cliente_recibe_conforme='si',
+            valor_final_cobrado=Decimal('0.00'),
+            metodo_pago_final='sin_pago',
+            tecnico_reparo=self.usuario,
+            registrado_por=self.usuario,
+        )
+
+        response = self.client.get(reverse('econotec:salida_lista'), {'q': 'GUEVARA'})
+
+        self.assertEqual(response.context['total'], 1)
+        self.assertContains(response, ingreso.codigo_equipo)
+        self.assertContains(response, 'Yandri Guevará')
+
+    def test_busqueda_pagos_ignora_tildes_y_mayusculas(self):
+        self.cliente_existente.nombres = 'Yandri Guevará'
+        self.cliente_existente.save(update_fields=['nombres'])
+        ingreso = self.crear_ingreso_reparacion()
+
+        response = self.client.get(reverse('econotec:pagos_lista'), {'q': 'guevara'})
+
+        self.assertEqual(response.context['total_count'], 1)
+        self.assertContains(response, ingreso.codigo_equipo)
+        self.assertContains(response, 'Yandri Guevará')
+
+    def test_busqueda_ventas_ignora_tildes_y_mayusculas(self):
+        self.cliente_existente.nombres = 'Yandri Guevará'
+        self.cliente_existente.save(update_fields=['nombres'])
+        venta = IngresoEquipo.objects.create(
+            sede='ventas',
+            asesor_comercial='Kimberly',
+            fecha_ingreso=date(2026, 7, 9),
+            cliente=self.cliente_existente,
+            tipo_equipo='otro',
+            marca='N/A',
+            modelo_serie='N/A',
+            accesorios_entregados='Ninguno',
+            problema_reportado='Tinta Epson',
+            valor_acordado=Decimal('25.00'),
+            tecnico_encargado=self.usuario,
+            estado='entregado',
+            subestado_entregado='con_solucion',
+            registrado_por=self.usuario,
+        )
+
+        response = self.client.get(reverse('econotec:venta_lista'), {'q': 'GUEVARA'})
+
+        self.assertEqual(response.context['total'], 1)
+        self.assertContains(response, venta.codigo_equipo)
+        self.assertContains(response, 'Yandri Guevará')
+
+    def test_busqueda_control_pago_ventas_ignora_tildes_y_mayusculas(self):
+        self.cliente_existente.nombres = 'Yandri Guevará'
+        self.cliente_existente.save(update_fields=['nombres'])
+        venta = IngresoEquipo.objects.create(
+            sede='ventas',
+            asesor_comercial='Kimberly',
+            fecha_ingreso=date(2026, 7, 9),
+            cliente=self.cliente_existente,
+            tipo_equipo='otro',
+            marca='N/A',
+            modelo_serie='N/A',
+            accesorios_entregados='Ninguno',
+            problema_reportado='Tinta Epson',
+            valor_acordado=Decimal('25.00'),
+            tecnico_encargado=self.usuario,
+            estado='entregado',
+            subestado_entregado='con_solucion',
+            registrado_por=self.usuario,
+        )
+
+        response = self.client.get(
+            reverse('econotec:pagos_ventas_lista'),
+            {'q': 'GUEVARA'},
+        )
+
+        self.assertEqual(response.context['total_count'], 1)
+        self.assertContains(response, venta.codigo_equipo)
+        self.assertContains(response, 'Yandri Guevará')
+
     def test_ingreso_permite_detalle_simple_en_reparacion(self):
         form = IngresoEquipoForm(data={
             'numero_factura': '',

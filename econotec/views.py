@@ -20,8 +20,21 @@ from django.views.decorators.http import require_GET, require_POST
 from .forms import (
     ClienteForm, IngresoEquipoForm, SalidaEquipoForm,
 )
+from .busqueda import (
+    filtrar_objetos_normalizado,
+    texto_cliente_busqueda,
+    texto_ingreso_busqueda,
+    texto_salida_busqueda,
+    total_resultados,
+)
 from .models import Cliente, IngresoEquipo, SalidaEquipo, Abono
 from .permisos import admin_requerido, tecnico_requerido, es_tecnico
+from .gamificacion import (
+    SALIDA_BUENA_ESTADOS,
+    SALIDA_GARANTIA_ESTADOS,
+    SALIDA_MALA_ESTADOS,
+    calcular_puntaje_gamificacion,
+)
 from .alertas import (
     equipos_demorados_qs,
     salidas_bodegaje_qs,
@@ -710,22 +723,6 @@ def ingreso_lista(request):
         qs = qs.filter(sede=sede_filtro)
     # si sede_filtro es 'todas' o vacío → no se filtra
 
-    if q:
-        import re
-        q_filter = (
-            Q(cliente__cedula__icontains=q) |
-            Q(cliente__nombres__icontains=q) |
-            Q(marca__icontains=q) |
-            Q(modelo_serie__icontains=q) |
-            Q(serie__icontains=q) |
-            Q(numero_equipo__icontains=q)
-        )
-        # Si el usuario busca "G1000", extraemos "1000" para buscar en numero_equipo
-        digitos = re.sub(r'\D', '', q)
-        if digitos:
-            q_filter |= Q(numero_equipo__icontains=digitos)
-            
-        qs = qs.filter(q_filter)
     estados_salida_filtro = {
         'salida_pendiente_retiro': 'pendiente_retiro',
         'salida_entregado_cliente': 'retirado',
@@ -774,6 +771,8 @@ def ingreso_lista(request):
     if asesor_filtro:
         qs = qs.filter(asesor_comercial=asesor_filtro)
 
+    qs = filtrar_objetos_normalizado(qs, q, texto_ingreso_busqueda)
+
     from django.contrib.auth import get_user_model
     User = get_user_model()
     usuarios_all = User.objects.filter(is_active=True).order_by('first_name', 'username')
@@ -813,7 +812,7 @@ def ingreso_lista(request):
         'asesores_choices': asesores_choices,
         'estados': estados_filtro,
         'tipos': IngresoEquipo._meta.get_field('tipo_equipo').choices,
-        'total': qs.count(),
+        'total': total_resultados(qs),
     })
 
 
@@ -1111,21 +1110,12 @@ def venta_lista(request):
           .prefetch_related('abonos')
           .filter(sede='ventas'))
 
-    if q:
-        qs = qs.filter(
-            Q(cliente__cedula__icontains=q) |
-            Q(cliente__nombres__icontains=q) |
-            Q(marca__icontains=q) |
-            Q(modelo_serie__icontains=q) |
-            Q(serie__icontains=q) |
-            Q(numero_equipo__icontains=q) |
-            Q(problema_reportado__icontains=q)
-        )
+    qs = filtrar_objetos_normalizado(qs, q, texto_ingreso_busqueda)
 
     return render(request, 'ventas/lista.html', {
         'ingresos': qs,
         'q': q,
-        'total': qs.count(),
+        'total': total_resultados(qs),
     })
 
 
@@ -1159,19 +1149,6 @@ def salida_lista(request):
           .select_related('ingreso', 'ingreso__cliente', 'registrado_por', 'tecnico_reparo')
           .order_by('-fecha_salida', '-creado'))
 
-    if q:
-        import re
-        q_filter = (
-            Q(ingreso__cliente__cedula__icontains=q) |
-            Q(ingreso__cliente__nombres__icontains=q) |
-            Q(ingreso__marca__icontains=q) |
-            Q(ingreso__numero_equipo__icontains=q)
-        )
-        digitos = re.sub(r'\D', '', q)
-        if digitos:
-            q_filter |= Q(ingreso__numero_equipo__icontains=digitos)
-            
-        qs = qs.filter(q_filter)
     if estado:
         qs = qs.filter(estado_reparacion=estado)
     if sede_filtro in ('guayaquil', 'quito'):
@@ -1180,6 +1157,8 @@ def salida_lista(request):
         qs = qs.filter(registrado_por_id=tecnico_registro_filtro)
     if tecnico_salida_filtro:
         qs = qs.filter(tecnico_reparo_id=tecnico_salida_filtro)
+
+    qs = filtrar_objetos_normalizado(qs, q, texto_salida_busqueda)
 
     from django.contrib.auth import get_user_model
     User = get_user_model()
@@ -1200,7 +1179,7 @@ def salida_lista(request):
         'tecnicos_all': tecnicos_all,
         'tecnicos_solo': tecnicos_solo,
         'estados': estados_filtro,
-        'total': qs.count(),
+        'total': total_resultados(qs),
     })
 
 
@@ -1249,7 +1228,6 @@ def salida_registrar(request, ingreso_pk):
         form = SalidaEquipoForm(instance=salida_inst, initial={
             'fecha_salida': date.today(),
             'estado_reparacion': 'pendiente_retiro',
-            'cliente_recibe_conforme': 'si',
             'metodo_pago_final': 'efectivo',
             'valor_final_cobrado': 0,
             'tecnico_reparo': request.user if es_tecnico(request.user) else None,
@@ -1324,18 +1302,12 @@ def cliente_lista(request):
     if sede_filtro in ('guayaquil', 'quito'):
         qs = qs.filter(ingresos__sede=sede_filtro).distinct()
 
-    if q:
-        qs = qs.filter(
-            Q(cedula__icontains=q) |
-            Q(nombres__icontains=q) |
-            Q(whatsapp__icontains=q) |
-            Q(correo__icontains=q)
-        )
+    qs = filtrar_objetos_normalizado(qs, q, texto_cliente_busqueda)
     return render(request, 'clientes/lista.html', {
         'clientes': qs,
         'q': q,
         'sede_filtro': sede_filtro,
-        'total': qs.count(),
+        'total': total_resultados(qs),
     })
 
 
@@ -1987,24 +1959,30 @@ def api_perfil(request):
     ingresos_count = ingresos_qs.count()
     salidas_producto = ventas_producto_qs.count()
     
-    # Salidas positivas (reparadas por el técnico)
+    # Salidas buenas positivas (reparadas por el técnico)
     salidas_buenas = salidas_qs.filter(
-        estado_reparacion__in=['pendiente_retiro', 'retirado']
+        estado_reparacion__in=SALIDA_BUENA_ESTADOS
     ).count()
     
     # Salidas negativas (restan 1 punto)
     salidas_malas = salidas_qs.filter(
-        estado_reparacion__in=['no_reparable']
+        estado_reparacion__in=SALIDA_MALA_ESTADOS
     ).count()
     
     # Salidas por garantía (restan 2 puntos)
     salidas_garantia = salidas_qs.filter(
-        estado_reparacion__in=['garantia']
+        estado_reparacion__in=SALIDA_GARANTIA_ESTADOS
     ).count()
     
     # Calcular total (no puede ser menor a 0).
     # Las ventas de producto cuentan como salida positiva de producto: +1 cada una.
-    total_operaciones = max(0, salidas_buenas + salidas_producto - salidas_malas - (salidas_garantia * 2))
+    # Las salidas buenas positivas valen más para equilibrar el perfil.
+    total_operaciones = calcular_puntaje_gamificacion(
+        salidas_buenas,
+        salidas_producto,
+        salidas_malas,
+        salidas_garantia,
+    )
     
     # Gamificación
     if total_operaciones <= 49:

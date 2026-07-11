@@ -7,11 +7,12 @@ from decimal import Decimal
 from io import BytesIO
 
 from django.contrib import messages
-from django.db.models import Q, Sum
+from django.db.models import Sum
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 
+from .busqueda import filtrar_objetos_normalizado, texto_ingreso_busqueda
 from .forms import AbonoForm
 from .models import Abono, IngresoEquipo
 from .permisos import tecnico_requerido, asesor_requerido
@@ -61,29 +62,10 @@ def _construir_contexto_pagos(request, base_qs):
           .prefetch_related('abonos')
           .order_by('-fecha_ingreso'))
 
-    if q:
-        import re
-        q_filter = (
-            Q(cliente__cedula__icontains=q) |
-            Q(cliente__nombres__icontains=q) |
-            Q(marca__icontains=q) |
-            Q(numero_equipo__icontains=q) |
-            Q(sede__icontains=q) |
-            Q(tipo_equipo__icontains=q) |
-            Q(tipo_equipo_otro__icontains=q)
-        )
-        
-        # Si el usuario busca "G1000", extraemos "1000" para buscar en numero_equipo
-        digitos = re.sub(r'\D', '', q)
-        if digitos:
-            q_filter |= Q(numero_equipo__icontains=digitos)
-            
-        qs = qs.filter(q_filter)
-
     if sede_pago:
         qs = qs.filter(sede=sede_pago)
 
-    ingresos = list(qs)
+    ingresos = filtrar_objetos_normalizado(qs, q, texto_ingreso_busqueda)
 
     # Filtrar por estado de pago en Python (es propiedad)
     if estado_pago:

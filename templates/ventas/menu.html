@@ -32,5 +32,15 @@
             <span style="font-size:12px; font-weight:700; color:#888;">Total: {{ total }}</span>
         </div>
     </a>
+
+    <a href="{% url 'econotec:pagos_ventas_lista' %}" class="card-box" style="text-decoration:none; color:inherit; border-left: 5px solid #2e7d32;">
+        <div style="display:flex; align-items:center; gap:14px;">
+            <div style="font-size:38px;">💳</div>
+            <div>
+                <h3 style="color: #2e7d32; font-size:18px; margin-bottom:4px;">Control de Pago de Ventas</h3>
+                <p style="color:#666; font-size:13px;">Revisa saldos, abonos y estado de pago de las ventas de producto.</p>
+            </div>
+        </div>
+    </a>
 </div>
 {% endblock %}

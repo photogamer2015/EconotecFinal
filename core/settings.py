@@ -74,7 +74,7 @@ MIDDLEWARE = [
     'econotec.middleware.ActividadUsuarioMiddleware',
 ]
 
-# Configuración de Sesiones (Cierre automático por inactividad en 15 minutos)
+# Configuración de Sesiones (Cierre automático por inactividad en 30 minutos)
 SESSION_COOKIE_AGE = 30 * 60  # 30 minutos en segundos
 SESSION_SAVE_EVERY_REQUEST = True
 SESSION_EXPIRE_AT_BROWSER_CLOSE = True

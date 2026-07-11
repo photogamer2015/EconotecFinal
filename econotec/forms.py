@@ -622,7 +622,6 @@ class SalidaEquipoForm(forms.ModelForm):
             'monto_2', 'metodo_2', 'banco_2',
             'factura_realizada', 'factura_nombres',
             'factura_cedula', 'factura_correo',
-            'cliente_recibe_conforme',
         ]
         widgets = {
             'fecha_salida': forms.DateInput(attrs={'class': 'form-input', 'type': 'date'}, format='%Y-%m-%d'),
@@ -667,7 +666,6 @@ class SalidaEquipoForm(forms.ModelForm):
                 'oninvalid': 'this.setCustomValidity("Por favor incluya un signo @ y el dominio en la dirección de correo.")',
                 'oninput': 'this.setCustomValidity("")',
             }),
-            'cliente_recibe_conforme': forms.Select(attrs={'class': 'form-input'}),
         }
 
     def __init__(self, *args, **kwargs):
@@ -771,6 +769,7 @@ class SalidaEquipoForm(forms.ModelForm):
 
     def save(self, commit=True):
         salida = super().save(commit=False)
+        salida.cliente_recibe_conforme = 'si' if salida.es_positivo else 'no'
         reporte = self.cleaned_data.get('reporte_tecnico')
         
         if hasattr(salida, 'ingreso') and salida.ingreso:

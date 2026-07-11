@@ -187,9 +187,8 @@
     <div class="underlined-block">{{ salida.observaciones|linebreaksbr }}</div>
     {% endif %}
 
-    <!-- CONFORMIDAD Y MÉTODO DE PAGO -->
-    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 8px;">
-        <div class="field-line"><span class="label">Cliente conforme:</span><span class="value">{{ salida.get_cliente_recibe_conforme_display }}</span></div>
+    <!-- MÉTODO DE PAGO -->
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin-top: 8px;">
         <div class="field-line"><span class="label">Método pago:</span><span class="value">{{ salida.get_metodo_pago_final_display }}</span></div>
         {% if salida.metodo_pago_final == 'mixto' %}
         <div class="field-line"><span class="label">Método 1:</span><span class="value">{{ salida.get_metodo_1_display }} ({{ salida.monto_1|dinero_signo }})</span></div>

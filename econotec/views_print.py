@@ -674,15 +674,6 @@ def salida_pdf(request, pk):
                            salida.observaciones, max_w=500, lines=2)
         y -= 8
 
-    # ── Cliente conforme ──
-    c.setFillColor(naranja)
-    c.setFont('Helvetica-Bold', 9)
-    c.drawString(margen, y, f'Cliente recibe conforme:')
-    c.setFillColor(black)
-    c.setFont('Helvetica', 9)
-    c.drawString(margen + 150, y, salida.get_cliente_recibe_conforme_display())
-    y -= 22
-
     # ── Cierre económico ──
     c.setFillColor(naranja)
     c.setFont('Helvetica-Bold', 11)

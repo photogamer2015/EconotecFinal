@@ -1190,7 +1190,7 @@
                 html: `
                     <div style="text-align: left; font-size: 14px; line-height: 1.6;">
                         <p>Te saluda con tu nombre de usuario y un icono de avatar.</p>
-                        <p>Contiene estadísticas exactas mostrando tus <b>"Salidas Buenas"</b> y tus <b>"Salidas de producto"</b>, ambas suman 1 punto a tu puntuación. ¡Ten cuidado, porque las Salidas Malas marcadas como <b>"No se pudo reparar"</b> te restan 1 punto, y las <b>"Salidas por Garantía"</b> te restan 2 puntos por no hacer bien el trabajo a la primera! <i>(Nota: Si el "Cliente no quiso reparar", no te suma ni te resta puntos, ya que no es tu culpa)</i>.</p>
+                        <p>Contiene estadísticas exactas mostrando tus <b>"Salidas Buenas"</b> y tus <b>"Salidas de producto"</b>. Cada Salida Buena positiva suma 4 puntos y cada Salida de producto suma 1 punto a tu puntuación. ¡Ten cuidado, porque las Salidas Malas marcadas como <b>"No se pudo reparar"</b> te restan 1 punto, y las <b>"Salidas por Garantía"</b> te restan 2 puntos por no hacer bien el trabajo a la primera! <i>(Nota: Si el "Cliente no quiso reparar", no te suma ni te resta puntos, ya que no es tu culpa)</i>.</p>
                         <p><b>Regla de Oro:</b> Tu nivel se calcula por las salidas en las que tú eres el técnico responsable y por las ventas de producto asignadas como <b>Técnico vendió</b>. Los ingresos normales de equipos no dan puntos.</p>
                         <p>El color de la cabecera y de tu barra de progreso cambiará automáticamente para reflejar tu nivel desbloqueado:</p>
                         <ul style="padding-left: 10px; list-style-type: none; margin-top: 10px;">
@@ -1213,13 +1213,13 @@
     <script>
         (function() {
             let timeout;
-            const fifteenMinutes = 10 * 60 * 1000; // 10 MINUTOS
+            const inactivityLimit = 30 * 60 * 1000; // 30 minutos
 
             function showLogoutAlert() {
                 Swal.fire({
                     icon: 'warning',
                     title: 'Sesión inactiva',
-                    text: 'Tu sesión ha sido cerrada por inactividad (10 minutos).',
+                    text: 'Tu sesión ha sido cerrada por inactividad (30 minutos).',
                     confirmButtonText: 'Aceptar',
                     confirmButtonColor: '#f97618',
                     allowOutsideClick: false,
@@ -1233,7 +1233,7 @@
 
             function resetTimer() {
                 clearTimeout(timeout);
-                timeout = setTimeout(showLogoutAlert, fifteenMinutes);
+                timeout = setTimeout(showLogoutAlert, inactivityLimit);
             }
 
             // Reiniciar temporizador en cualquier actividad del usuario
