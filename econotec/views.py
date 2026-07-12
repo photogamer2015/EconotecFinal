@@ -1086,19 +1086,32 @@ def venta_export(request):
     from openpyxl import Workbook
     from openpyxl.styles import Alignment, Font, PatternFill
     from io import BytesIO
+    q = (request.GET.get('q') or '').strip()
+    tecnico_vendio_filtro = (request.GET.get('tecnico_vendio') or '').strip()
+    registrador_filtro = (request.GET.get('registrador') or '').strip()
 
     wb = Workbook()
     ws = wb.active
     ws.title = 'Ventas Econotec'
 
-    headers = ['Código', 'Fecha', 'Cliente', 'Cédula', 'Descripción', 'Registrado por', 'Valor']
+    headers = ['Código', 'Fecha', 'Cliente', 'Cédula', 'Descripción', 'Técnico vendió', 'Registrado por', 'Valor']
     for col, h in enumerate(headers, start=1):
         c = ws.cell(row=1, column=col, value=h)
         c.font = Font(bold=True, color='FFFFFF')
         c.fill = PatternFill('solid', fgColor='F97618')
         c.alignment = Alignment(horizontal='center')
 
-    ventas = IngresoEquipo.objects.filter(sede='ventas').order_by('-fecha_ingreso', '-pk')
+    ventas = (
+        IngresoEquipo.objects
+        .select_related('cliente', 'tecnico_encargado', 'registrado_por')
+        .filter(sede='ventas')
+        .order_by('-fecha_ingreso', '-pk')
+    )
+    if tecnico_vendio_filtro.isdigit():
+        ventas = ventas.filter(tecnico_encargado_id=tecnico_vendio_filtro)
+    if registrador_filtro.isdigit():
+        ventas = ventas.filter(registrado_por_id=registrador_filtro)
+    ventas = filtrar_objetos_normalizado(ventas, q, texto_ingreso_busqueda)
 
     for row, v in enumerate(ventas, start=2):
         ws.cell(row=row, column=1, value=v.codigo_equipo)
@@ -1106,11 +1119,15 @@ def venta_export(request):
         ws.cell(row=row, column=3, value=v.cliente.nombres)
         ws.cell(row=row, column=4, value=v.cliente.cedula)
         ws.cell(row=row, column=5, value=v.problema_reportado)
+        tecnico_vendio = f"{v.tecnico_encargado.first_name} {v.tecnico_encargado.last_name}".strip() if v.tecnico_encargado else 'N/A'
+        tecnico_vendio = tecnico_vendio or (v.tecnico_encargado.username if v.tecnico_encargado else 'N/A')
+        ws.cell(row=row, column=6, value=tecnico_vendio)
         registrador = f"{v.registrado_por.first_name} {v.registrado_por.last_name}".strip() if v.registrado_por else 'N/A'
-        ws.cell(row=row, column=6, value=registrador)
-        ws.cell(row=row, column=7, value=v.valor_acordado)
+        registrador = registrador or (v.registrado_por.username if v.registrado_por else 'N/A')
+        ws.cell(row=row, column=7, value=registrador)
+        ws.cell(row=row, column=8, value=v.valor_acordado)
 
-    for col in range(1, 8):
+    for col in range(1, 9):
         ws.column_dimensions[chr(64 + col)].width = 22
 
     buf = BytesIO()
@@ -1129,17 +1146,35 @@ def venta_export(request):
 def venta_lista(request):
     """Listado de ventas."""
     q = (request.GET.get('q') or '').strip()
+    tecnico_vendio_filtro = (request.GET.get('tecnico_vendio') or '').strip()
+    registrador_filtro = (request.GET.get('registrador') or '').strip()
 
     qs = (IngresoEquipo.objects
-          .select_related('cliente', 'registrado_por')
+          .select_related('cliente', 'tecnico_encargado', 'registrado_por')
           .prefetch_related('abonos')
-          .filter(sede='ventas'))
+          .filter(sede='ventas')
+          .order_by('-fecha_ingreso', '-pk'))
+
+    if tecnico_vendio_filtro.isdigit():
+        qs = qs.filter(tecnico_encargado_id=tecnico_vendio_filtro)
+    if registrador_filtro.isdigit():
+        qs = qs.filter(registrado_por_id=registrador_filtro)
 
     qs = filtrar_objetos_normalizado(qs, q, texto_ingreso_busqueda)
+
+    from django.contrib.auth import get_user_model
+    User = get_user_model()
+    usuarios_all = User.objects.filter(is_active=True).order_by('first_name', 'username')
+    from .forms import _queryset_tecnicos
+    tecnicos_solo = _queryset_tecnicos()
 
     return render(request, 'ventas/lista.html', {
         'ingresos': qs,
         'q': q,
+        'tecnico_vendio_filtro': tecnico_vendio_filtro,
+        'registrador_filtro': registrador_filtro,
+        'usuarios_all': usuarios_all,
+        'tecnicos_solo': tecnicos_solo,
         'total': total_resultados(qs),
     })
 

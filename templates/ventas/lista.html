@@ -15,11 +15,23 @@
 </p>
 
 <div class="toolbar">
-    <form method="get">
+    <form method="get" style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
         <input type="text" name="q" value="{{ q }}" placeholder="Buscar por N° venta, cliente, cédula, producto…" class="form-input" style="width: 300px;">
+        <select name="tecnico_vendio" class="form-input" style="max-width:190px;">
+            <option value="">🔧 Técnico vendió...</option>
+            {% for t in tecnicos_solo %}
+                <option value="{{ t.id }}" {% if tecnico_vendio_filtro == t.id|stringformat:"s" %}selected{% endif %}>{{ t.first_name|default:t.username }}</option>
+            {% endfor %}
+        </select>
+        <select name="registrador" class="form-input" style="max-width:190px;">
+            <option value="">📝 Registrado por...</option>
+            {% for u in usuarios_all %}
+                <option value="{{ u.id }}" {% if registrador_filtro == u.id|stringformat:"s" %}selected{% endif %}>{{ u.first_name|default:u.username }}</option>
+            {% endfor %}
+        </select>
         <button type="submit" class="btn btn-primary">Filtrar</button>
     </form>
-        <a href="{% url 'econotec:venta_export' %}" class="btn btn-secondary">📥 Exportar Excel</a>
+        <a href="{% url 'econotec:venta_export' %}?{{ request.GET.urlencode }}" class="btn btn-secondary">📥 Exportar Excel</a>
         <a href="{% url 'econotec:venta_registrar' %}" class="btn btn-primary">+ Nueva Venta</a>
 </div>
 
@@ -33,6 +45,7 @@
                 <th>Cliente</th>
                 <th>Cédula</th>
                 <th>Descripción</th>
+                <th>Técnico vendió</th>
                 <th>Registrado por</th>
                 <th>Valor Venta</th>
                 <th>Saldo Pendiente</th>
@@ -47,6 +60,15 @@
                 <td>{{ i.cliente.nombres }}</td>
                 <td>{{ i.cliente.cedula }}</td>
                 <td>{{ i.problema_reportado|truncatechars:80 }}</td>
+                <td>
+                    {% if i.tecnico_encargado %}
+                        <span style="background:#e8f5e9; color:#2e7d32; padding: 3px 9px; border-radius: 10px; font-size: 11px; font-weight: 700;">
+                            🔧 {{ i.tecnico_encargado.first_name|default:i.tecnico_encargado.username }}
+                        </span>
+                    {% else %}
+                        <span style="color:#bbb;">—</span>
+                    {% endif %}
+                </td>
                 <td>
                     {% if i.registrado_por %}
                         <span style="background: var(--primary-light); color: var(--primary-dark); padding: 3px 9px; border-radius: 10px; font-size: 11px; font-weight: 700;">

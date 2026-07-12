@@ -52,6 +52,12 @@ def texto_ingreso_busqueda(ingreso):
         ingreso.serie,
         ingreso.problema_reportado,
         ingreso.asesor_comercial,
+        getattr(ingreso.tecnico_encargado, 'first_name', ''),
+        getattr(ingreso.tecnico_encargado, 'last_name', ''),
+        getattr(ingreso.tecnico_encargado, 'username', ''),
+        getattr(ingreso.registrado_por, 'first_name', ''),
+        getattr(ingreso.registrado_por, 'last_name', ''),
+        getattr(ingreso.registrado_por, 'username', ''),
     )
 
 

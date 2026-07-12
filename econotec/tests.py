@@ -1,5 +1,6 @@
 from datetime import date
 from decimal import Decimal
+from io import BytesIO
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
@@ -675,6 +676,66 @@ class VentasTests(TestCase):
         self.assertEqual(response.context['total'], 1)
         self.assertContains(response, venta.codigo_equipo)
         self.assertContains(response, 'Yandri Guevará')
+
+    def test_lista_ventas_muestra_tecnico_vendio_y_filtra_personal(self):
+        User = get_user_model()
+        tecnico_alt = User.objects.create_user(username='Carlos')
+        tecnico_alt.groups.add(Group.objects.get(name='Tecnicos'))
+        venta_yandri = self.crear_venta_producto(
+            problema_reportado='Cable HDMI',
+            tecnico_encargado=self.usuario,
+            registrado_por=self.usuario,
+        )
+        venta_carlos = self.crear_venta_producto(
+            problema_reportado='Mouse',
+            tecnico_encargado=tecnico_alt,
+            registrado_por=self.vendedor,
+        )
+
+        response = self.client.get(
+            reverse('econotec:venta_lista'),
+            {'tecnico_vendio': str(self.usuario.pk)},
+        )
+
+        self.assertContains(response, 'Técnico vendió')
+        self.assertContains(response, venta_yandri.codigo_equipo)
+        self.assertNotContains(response, venta_carlos.codigo_equipo)
+
+        response = self.client.get(
+            reverse('econotec:venta_lista'),
+            {'registrador': str(self.vendedor.pk)},
+        )
+
+        self.assertContains(response, venta_carlos.codigo_equipo)
+        self.assertNotContains(response, venta_yandri.codigo_equipo)
+
+    def test_export_ventas_respeta_filtro_tecnico_vendio(self):
+        User = get_user_model()
+        tecnico_alt = User.objects.create_user(username='Carlos')
+        tecnico_alt.groups.add(Group.objects.get(name='Tecnicos'))
+        venta_yandri = self.crear_venta_producto(
+            problema_reportado='Cable HDMI',
+            tecnico_encargado=self.usuario,
+        )
+        venta_carlos = self.crear_venta_producto(
+            problema_reportado='Mouse',
+            tecnico_encargado=tecnico_alt,
+        )
+
+        response = self.client.get(
+            reverse('econotec:venta_export'),
+            {'tecnico_vendio': str(self.usuario.pk)},
+        )
+
+        from openpyxl import load_workbook
+        wb = load_workbook(BytesIO(response.content))
+        ws = wb.active
+        headers = [cell.value for cell in ws[1]]
+        codigos = [row[0] for row in ws.iter_rows(min_row=2, values_only=True)]
+
+        self.assertIn('Técnico vendió', headers)
+        self.assertIn(venta_yandri.codigo_equipo, codigos)
+        self.assertNotIn(venta_carlos.codigo_equipo, codigos)
 
     def test_busqueda_control_pago_ventas_ignora_tildes_y_mayusculas(self):
         self.cliente_existente.nombres = 'Yandri Guevará'
