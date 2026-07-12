@@ -67,4 +67,8 @@ def texto_salida_busqueda(salida):
         getattr(salida.registrado_por, 'first_name', ''),
         getattr(salida.registrado_por, 'last_name', ''),
         getattr(salida.registrado_por, 'username', ''),
+        salida.factura_realizada,
+        salida.factura_nombres,
+        salida.factura_cedula,
+        salida.factura_correo,
     )

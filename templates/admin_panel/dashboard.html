@@ -93,6 +93,7 @@
     </div>
     <div style="display: flex; gap: 8px;">
         <a href="{% url 'econotec:admin_egresos_lista' %}" class="btn btn-secondary">Ver Egresos</a>
+        <a href="{% url 'econotec:salida_facturas_lista' %}?ano={{ year }}&mes={{ month }}" class="btn btn-secondary">Facturas Salidas</a>
         <a href="{% url 'econotec:admin_bodegajes' %}?ano={{ year }}&mes={{ month }}" class="btn btn-secondary">Historial Bodegajes</a>
         <a href="{% url 'econotec:admin_activos_bodegaje' %}" class="btn btn-success">Bodegajes Activos</a>
         <a href="{% url 'econotec:admin_egreso_crear' %}" class="btn btn-primary">+ Nuevo Egreso</a>
@@ -185,6 +186,11 @@
         <div class="lbl">Bodegaje No Cobrado</div>
         <div class="val">{{ bodegaje_perdonado|dinero_signo }}</div>
         <div class="sub">Casos: {{ bodegaje_perdonado_count }}</div>
+    </a>
+    <a href="{% url 'econotec:salida_facturas_lista' %}?ano={{ year }}&mes={{ month }}" class="balance-card card-link" style="border-top-color:#0d47a1;">
+        <div class="lbl">Facturas en Salida</div>
+        <div class="val" style="color:#0d47a1;">{{ facturas_si_count }}</div>
+        <div class="sub">Salidas con factura realizada</div>
     </a>
 </div>
 

@@ -674,6 +674,38 @@ def salida_pdf(request, pk):
                            salida.observaciones, max_w=500, lines=2)
         y -= 8
 
+    # ── Factura ──
+    def _clip_factura(valor, max_len=42):
+        texto = str(valor or '—')
+        return texto if len(texto) <= max_len else f'{texto[:max_len - 1]}…'
+
+    c.setStrokeColor(naranja)
+    c.setLineWidth(0.8)
+    c.rect(margen, y - 62, 500, 62, stroke=1, fill=0)
+    c.setFillColor(naranja)
+    c.setFont('Helvetica-Bold', 10)
+    c.drawString(margen + 8, y - 14, 'FACTURA REALIZADA')
+    c.setFillColor(black)
+    c.setFont('Helvetica-Bold', 9)
+    c.drawRightString(margen + 490, y - 14, 'SI' if salida.factura_realizada == 'si' else 'NO')
+
+    if salida.factura_realizada == 'si':
+        c.setFillColor(naranja)
+        c.setFont('Helvetica-Bold', 7.5)
+        c.drawString(margen + 8, y - 32, 'NOMBRES / RAZÓN SOCIAL')
+        c.drawString(margen + 235, y - 32, 'CÉDULA / RUC')
+        c.drawString(margen + 350, y - 32, 'CORREO')
+        c.setFillColor(black)
+        c.setFont('Helvetica', 8)
+        c.drawString(margen + 8, y - 47, _clip_factura(salida.factura_nombres, 38))
+        c.drawString(margen + 235, y - 47, _clip_factura(salida.factura_cedula, 18))
+        c.drawString(margen + 350, y - 47, _clip_factura(salida.factura_correo, 30))
+    else:
+        c.setFillColor(black)
+        c.setFont('Helvetica', 8)
+        c.drawString(margen + 8, y - 38, 'No se registró factura para esta salida.')
+    y -= 78
+
     # ── Cierre económico ──
     c.setFillColor(naranja)
     c.setFont('Helvetica-Bold', 11)

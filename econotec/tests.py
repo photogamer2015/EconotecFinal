@@ -430,6 +430,29 @@ class VentasTests(TestCase):
         self.assertContains(response, 'Reparado - pendiente de retiro')
         self.assertNotContains(response, 'Listo para entrega')
 
+    def test_dashboard_modal_total_equipos_muestra_pendiente_retiro_visual(self):
+        ingreso = self.crear_ingreso_reparacion(
+            estado='entregado',
+            subestado_entregado='con_solucion',
+        )
+        SalidaEquipo.objects.create(
+            ingreso=ingreso,
+            fecha_salida=date(2026, 7, 9),
+            estado_reparacion='pendiente_retiro',
+            cliente_recibe_conforme='si',
+            valor_final_cobrado=Decimal('0.00'),
+            metodo_pago_final='sin_pago',
+            registrado_por=self.usuario,
+        )
+
+        response = self.client.get(
+            reverse('econotec:dashboard_details', kwargs={'tipo': 'equipos_total'})
+        )
+
+        self.assertContains(response, ingreso.codigo_equipo)
+        self.assertContains(response, 'Pendiente de retiro')
+        self.assertNotContains(response, 'Entregado al cliente')
+
     def test_estado_visual_conserva_entregado_con_solucion_si_cliente_retiro(self):
         ingreso = self.crear_ingreso_reparacion(estado='entregado')
         SalidaEquipo.objects.create(
@@ -451,6 +474,113 @@ class VentasTests(TestCase):
 
         self.assertContains(response, 'Entregado al cliente')
         self.assertContains(response, 'Con solución')
+
+    def test_salida_imprimir_muestra_datos_de_factura_si_fue_realizada(self):
+        ingreso = self.crear_ingreso_reparacion(estado='entregado')
+        salida = SalidaEquipo.objects.create(
+            ingreso=ingreso,
+            fecha_salida=date(2026, 7, 9),
+            estado_reparacion='retirado',
+            cliente_recibe_conforme='si',
+            valor_final_cobrado=Decimal('25.00'),
+            metodo_pago_final='efectivo',
+            factura_realizada='si',
+            factura_nombres='Yandri Guevara',
+            factura_cedula='1207342716',
+            factura_correo='factura@example.com',
+            registrado_por=self.usuario,
+        )
+
+        response = self.client.get(reverse('econotec:salida_imprimir', kwargs={'pk': salida.pk}))
+
+        self.assertContains(response, 'FACTURA REALIZADA')
+        self.assertContains(response, 'Nombres / Razón Social')
+        self.assertContains(response, 'Yandri Guevara')
+        self.assertContains(response, '1207342716')
+        self.assertContains(response, 'factura@example.com')
+
+        pdf_response = self.client.get(reverse('econotec:salida_pdf', kwargs={'pk': salida.pk}))
+        self.assertEqual(pdf_response.status_code, 200)
+        self.assertEqual(pdf_response['Content-Type'], 'application/pdf')
+
+    def test_salida_facturas_lista_muestra_solo_facturas_realizadas(self):
+        User = get_user_model()
+        admin = User.objects.create_superuser(
+            username='AdminFacturas',
+            email='admin-facturas@example.com',
+            password='testpass123',
+        )
+        self.client.force_login(admin)
+
+        ingreso_facturado = self.crear_ingreso_reparacion(
+            estado='entregado',
+            marca='Sony',
+            modelo_serie='Playstation 5',
+        )
+        salida_facturada = SalidaEquipo.objects.create(
+            ingreso=ingreso_facturado,
+            fecha_salida=date(2026, 7, 9),
+            estado_reparacion='retirado',
+            cliente_recibe_conforme='si',
+            valor_final_cobrado=Decimal('100.00'),
+            metodo_pago_final='efectivo',
+            factura_realizada='si',
+            factura_nombres='Yandri Guevara',
+            factura_cedula='1207342716',
+            factura_correo='factura@example.com',
+            registrado_por=admin,
+        )
+        ingreso_sin_factura = self.crear_ingreso_reparacion(
+            estado='entregado',
+            marca='HP',
+            modelo_serie='Elitebook Factura No',
+        )
+        SalidaEquipo.objects.create(
+            ingreso=ingreso_sin_factura,
+            fecha_salida=date(2026, 7, 10),
+            estado_reparacion='retirado',
+            cliente_recibe_conforme='si',
+            valor_final_cobrado=Decimal('0.00'),
+            metodo_pago_final='sin_pago',
+            factura_realizada='no',
+            registrado_por=admin,
+        )
+
+        response = self.client.get(
+            reverse('econotec:salida_facturas_lista'),
+            {'ano': '2026', 'mes': '7'},
+        )
+
+        self.assertEqual(response.context['total_periodo'], 1)
+        self.assertEqual(response.context['total'], 1)
+        self.assertContains(response, 'Facturas <span class="accent">Realizadas</span>')
+        self.assertContains(response, salida_facturada.ingreso.codigo_equipo)
+        self.assertContains(response, 'factura@example.com')
+        self.assertNotContains(response, 'Todas las salidas')
+        self.assertNotContains(response, 'Factura realizada: No')
+        self.assertNotContains(response, ingreso_sin_factura.codigo_equipo)
+
+    def test_salida_menu_muestra_acceso_a_facturas_realizadas(self):
+        ingreso = self.crear_ingreso_reparacion(estado='entregado')
+        SalidaEquipo.objects.create(
+            ingreso=ingreso,
+            fecha_salida=date(2026, 7, 9),
+            estado_reparacion='retirado',
+            cliente_recibe_conforme='si',
+            valor_final_cobrado=Decimal('25.00'),
+            metodo_pago_final='efectivo',
+            factura_realizada='si',
+            factura_nombres='Yandri Guevara',
+            factura_cedula='1207342716',
+            factura_correo='factura@example.com',
+            registrado_por=self.usuario,
+        )
+
+        response = self.client.get(reverse('econotec:salida_menu'))
+
+        self.assertContains(response, 'Facturas Realizadas')
+        self.assertContains(response, reverse('econotec:salida_facturas_lista'))
+        self.assertContains(response, '1 salida con factura registrada.')
 
     def test_busqueda_pagos_ignora_tildes_y_mayusculas(self):
         self.cliente_existente.nombres = 'Yandri Guevará'

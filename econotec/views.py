@@ -277,25 +277,28 @@ def dashboard_details(request, tipo):
 
     link_ver_todos = ""
 
+    def estado_ingreso_para_modal(ingreso):
+        return ingreso.estado_visual_display
+
     if tipo == 'equipos_total':
         titulo = "Total de Equipos Ingresados"
         link_ver_todos = "/ingresos/"
-        qs = IngresoEquipo.objects.select_related('cliente').order_by('-fecha_ingreso')
+        qs = IngresoEquipo.objects.select_related('cliente', 'salida').order_by('-fecha_ingreso')
         columnas = ['Código', 'Cliente', 'Equipo', 'Fecha Ingreso', 'Estado', 'Acción']
         for eq in qs:
             btn = f'<a href="/ingresos/{eq.pk}/" class="badge badge-ingresado" style="text-decoration:none; padding: 4px 8px;">Ver detallles</a>'
-            filas.append([eq.codigo_equipo, eq.cliente.nombres, eq.tipo_equipo_display, eq.fecha_ingreso.strftime('%d/%m/%Y'), eq.get_estado_display(), btn])
+            filas.append([eq.codigo_equipo, eq.cliente.nombres, eq.tipo_equipo_display, eq.fecha_ingreso.strftime('%d/%m/%Y'), estado_ingreso_para_modal(eq), btn])
 
     elif tipo == 'ingresos_mes':
         titulo = f"Ingresos del Mes ({hoy.strftime('%B %Y').capitalize()})"
         link_ver_todos = "/ingresos/"
-        qs = IngresoEquipo.objects.select_related('cliente').filter(
+        qs = IngresoEquipo.objects.select_related('cliente', 'salida').filter(
             fecha_ingreso__year=ano_actual, fecha_ingreso__month=mes_actual
         ).order_by('-fecha_ingreso')
         columnas = ['Código', 'Cliente', 'Equipo', 'Fecha Ingreso', 'Estado', 'Acción']
         for eq in qs:
             btn = f'<a href="/ingresos/{eq.pk}/" class="badge badge-ingresado" style="text-decoration:none; padding: 4px 8px;">Ver detallles</a>'
-            filas.append([eq.codigo_equipo, eq.cliente.nombres, eq.tipo_equipo_display, eq.fecha_ingreso.strftime('%d/%m/%Y'), eq.get_estado_display(), btn])
+            filas.append([eq.codigo_equipo, eq.cliente.nombres, eq.tipo_equipo_display, eq.fecha_ingreso.strftime('%d/%m/%Y'), estado_ingreso_para_modal(eq), btn])
 
     elif tipo == 'pendientes':
         titulo = "Equipos Pendientes en Taller"
@@ -306,7 +309,7 @@ def dashboard_details(request, tipo):
         
         for eq in ingresos:
             btn = f'<a href="/ingresos/{eq.pk}/" class="badge badge-ingresado" style="text-decoration:none; padding: 4px 8px;">Ver detallles</a>'
-            filas.append([eq.codigo_equipo, eq.cliente.nombres, eq.tipo_equipo_display, 'En Proceso', eq.get_estado_display(), btn])
+            filas.append([eq.codigo_equipo, eq.cliente.nombres, eq.tipo_equipo_display, 'En Proceso', estado_ingreso_para_modal(eq), btn])
         for sal in salidas:
             btn = f'<a href="/ingresos/{sal.ingreso.pk}/" class="badge badge-ingresado" style="text-decoration:none; padding: 4px 8px;">Ver detallles</a>'
             filas.append([sal.ingreso.codigo_equipo, sal.ingreso.cliente.nombres, sal.ingreso.tipo_equipo_display, 'Terminado', 'Listo (Pendiente Retiro)', btn])
@@ -1130,9 +1133,13 @@ def salida_menu(request):
     listos_para_entregar = SalidaEquipo.objects.filter(
         estado_reparacion='pendiente_retiro',
     ).count()
+    facturas_realizadas = SalidaEquipo.objects.filter(
+        factura_realizada='si',
+    ).count()
     return render(request, 'salidas/menu.html', {
         'total': total,
         'listos_para_entregar': listos_para_entregar,
+        'facturas_realizadas': facturas_realizadas,
     })
 
 

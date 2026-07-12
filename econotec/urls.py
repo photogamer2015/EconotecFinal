@@ -53,6 +53,8 @@ urlpatterns = [
     path('salidas/', views.salida_lista, name='salida_lista'),
     path('salidas/menu/', views.salida_menu, name='salida_menu'),
     path('salidas/totales/', views.salida_totales, name='salida_totales'),
+    path('salidas/facturas/',
+         views_admin.salida_facturas_lista, name='salida_facturas_lista'),
     path('ingresos/<int:ingreso_pk>/salida/registrar/',
          views.salida_registrar, name='salida_registrar'),
     path('salidas/<int:pk>/editar/', views.salida_editar, name='salida_editar'),

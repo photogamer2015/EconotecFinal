@@ -8,7 +8,7 @@ from io import BytesIO
 import json
 
 from django.contrib import messages
-from django.db.models import Sum
+from django.db.models import Count, Sum
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
@@ -20,8 +20,9 @@ from .gamificacion import (
     SALIDA_MALA_ESTADOS,
     calcular_puntaje_gamificacion,
 )
+from .busqueda import filtrar_objetos_normalizado, texto_salida_busqueda, total_resultados
 from .models import IngresoEquipo, SalidaEquipo, Abono, Egreso, CategoriaEgreso, Cliente, AvisoPanel
-from .permisos import admin_requerido
+from .permisos import admin_requerido, tecnico_requerido
 
 
 MESES_ES = [
@@ -109,8 +110,6 @@ def admin_dashboard(request):
         .values('estado_reparacion')
         .annotate(total=Sum('valor_final_cobrado'), count=Sum('id'))
     )
-    # Para el conteo correcto:
-    from django.db.models import Count
     salidas_por_estado = (
         SalidaEquipo.objects
         .filter(fecha_salida__year=year, fecha_salida__month=month)
@@ -145,6 +144,14 @@ def admin_dashboard(request):
         fecha_retiro_real__year=year, fecha_retiro_real__month=month,
         bodegaje_monto_congelado__gt=0, bodegaje_aplicado_al_pago=False,
     ).count()
+
+    # Facturas en salidas del mes
+    facturas_salidas_mes = SalidaEquipo.objects.filter(
+        fecha_salida__year=year,
+        fecha_salida__month=month,
+    )
+    facturas_si_count = facturas_salidas_mes.filter(factura_realizada='si').count()
+    facturas_no_count = facturas_salidas_mes.filter(factura_realizada='no').count()
 
     # Egresos por categoría
     egresos_por_cat = (
@@ -224,6 +231,8 @@ def admin_dashboard(request):
         'bodegaje_perdonado': bodegaje_perdonado,
         'bodegaje_cobrado_count': bodegaje_cobrado_count,
         'bodegaje_perdonado_count': bodegaje_perdonado_count,
+        'facturas_si_count': facturas_si_count,
+        'facturas_no_count': facturas_no_count,
         'anos_disp': anos_disp,
         'meses_es': MESES_ES,
         'chart_ganancias_labels': json.dumps(ganancias_tecnicos_labels),
@@ -233,6 +242,49 @@ def admin_dashboard(request):
         'chart_tendencia_egresos': json.dumps(tendencia_egresos),
         'chart_egresos_cat_labels': json.dumps(column_egresos_labels),
         'chart_egresos_cat_data': json.dumps(column_egresos_data),
+    })
+
+
+@tecnico_requerido
+def salida_facturas_lista(request):
+    """Listado de salidas que sí tienen factura realizada."""
+    hoy = date.today()
+    year = int(request.GET.get('ano') or hoy.year)
+    mes_param = (request.GET.get('mes') or str(hoy.month)).strip().lower()
+    month = None if mes_param == 'todos' else int(mes_param)
+    q = (request.GET.get('q') or '').strip()
+
+    base_qs = (
+        SalidaEquipo.objects
+        .select_related('ingreso', 'ingreso__cliente', 'registrado_por', 'tecnico_reparo')
+        .filter(fecha_salida__year=year, factura_realizada='si')
+        .order_by('-fecha_salida', '-creado')
+    )
+
+    if month is not None:
+        base_qs = base_qs.filter(fecha_salida__month=month)
+
+    total_periodo = base_qs.count()
+    qs = base_qs
+    qs = filtrar_objetos_normalizado(qs, q, texto_salida_busqueda)
+
+    anos_disp = sorted(set(
+        list(SalidaEquipo.objects.dates('fecha_salida', 'year').values_list('fecha_salida__year', flat=True))
+    ), reverse=True)
+    if not anos_disp:
+        anos_disp = [hoy.year]
+
+    return render(request, 'admin_panel/facturas_salidas.html', {
+        'year': year,
+        'month': month,
+        'mes_param': mes_param,
+        'mes_nombre': MESES_ES[month] if month else 'Todos los meses',
+        'meses_es': MESES_ES,
+        'anos_disp': anos_disp,
+        'q': q,
+        'salidas': qs,
+        'total': total_resultados(qs),
+        'total_periodo': total_periodo,
     })
 
 

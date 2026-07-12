@@ -90,6 +90,72 @@
         .closing-row .lbl { color: #444; }
         .closing-row .val { font-family: 'Courier New', monospace; font-weight: 700; }
 
+        .invoice-box {
+            border: 1.3px solid var(--naranja);
+            border-radius: 6px;
+            margin-top: 10px;
+            padding: 9px 12px;
+            background: #fffdfb;
+        }
+        .invoice-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            color: var(--naranja);
+            font-size: 12px;
+            font-weight: 800;
+            letter-spacing: 0.4px;
+            text-transform: uppercase;
+        }
+        .invoice-status {
+            border: 1px solid var(--naranja);
+            border-radius: 999px;
+            padding: 3px 10px;
+            color: #1f2937;
+            font-size: 10px;
+            font-weight: 900;
+            background: #fff8e1;
+            white-space: nowrap;
+        }
+        .invoice-status.no {
+            background: #fff5f5;
+            color: #b91c1c;
+        }
+        .invoice-grid {
+            display: grid;
+            grid-template-columns: 1.3fr 0.9fr 1.1fr;
+            gap: 8px;
+            margin-top: 8px;
+        }
+        .invoice-item {
+            border-top: 1px dashed #e5e7eb;
+            padding-top: 6px;
+            min-width: 0;
+        }
+        .invoice-item .lbl {
+            display: block;
+            color: #666;
+            font-size: 8.5px;
+            font-weight: 800;
+            text-transform: uppercase;
+        }
+        .invoice-item .val {
+            display: block;
+            margin-top: 2px;
+            color: #1f2937;
+            font-family: 'Courier New', monospace;
+            font-size: 10.5px;
+            font-weight: 800;
+            word-break: break-word;
+        }
+        .invoice-empty {
+            margin-top: 7px;
+            color: #555;
+            font-size: 10.5px;
+            font-weight: 700;
+        }
+
         .sig-grid {
             margin-top: 36px;
             display: grid; grid-template-columns: 1fr 1fr; gap: 32px;
@@ -193,6 +259,36 @@
         {% if salida.metodo_pago_final == 'mixto' %}
         <div class="field-line"><span class="label">Método 1:</span><span class="value">{{ salida.get_metodo_1_display }} ({{ salida.monto_1|dinero_signo }})</span></div>
         <div class="field-line"><span class="label">Método 2:</span><span class="value">{{ salida.get_metodo_2_display }} ({{ salida.monto_2|dinero_signo }})</span></div>
+        {% endif %}
+    </div>
+
+    <!-- FACTURA -->
+    <div class="invoice-box">
+        <div class="invoice-head">
+            <span>FACTURA REALIZADA</span>
+            {% if salida.factura_realizada == 'si' %}
+                <span class="invoice-status">Sí</span>
+            {% else %}
+                <span class="invoice-status no">No</span>
+            {% endif %}
+        </div>
+        {% if salida.factura_realizada == 'si' %}
+        <div class="invoice-grid">
+            <div class="invoice-item">
+                <span class="lbl">Nombres / Razón Social</span>
+                <span class="val">{{ salida.factura_nombres|default:"—" }}</span>
+            </div>
+            <div class="invoice-item">
+                <span class="lbl">Cédula / RUC</span>
+                <span class="val">{{ salida.factura_cedula|default:"—" }}</span>
+            </div>
+            <div class="invoice-item">
+                <span class="lbl">Correo electrónico</span>
+                <span class="val">{{ salida.factura_correo|default:"—" }}</span>
+            </div>
+        </div>
+        {% else %}
+        <div class="invoice-empty">No se registró factura para esta salida.</div>
         {% endif %}
     </div>
 

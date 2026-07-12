@@ -1,0 +1,166 @@
+{% extends 'base.html' %}
+{% load econotec_extras %}
+
+{% block title %}Facturas en Salidas — Econotec{% endblock %}
+
+{% block content %}
+<style>
+    .invoice-summary-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+        gap: 14px;
+        margin: 18px 0;
+    }
+    .invoice-summary-card {
+        background: var(--card-bg);
+        border-radius: 10px;
+        padding: 16px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        border-top: 4px solid var(--primary);
+    }
+    .invoice-summary-card .lbl {
+        color: var(--text-muted);
+        font-size: 12px;
+        font-weight: 800;
+        text-transform: uppercase;
+    }
+    .invoice-summary-card .val {
+        color: var(--text-main);
+        font-size: 28px;
+        font-weight: 900;
+        margin-top: 6px;
+    }
+    .invoice-summary-card.yes { border-top-color: var(--success); }
+    .invoice-summary-card.yes .val { color: var(--success); }
+    .invoice-badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 70px;
+        padding: 5px 10px;
+        border-radius: 999px;
+        font-size: 11px;
+        font-weight: 900;
+        text-transform: uppercase;
+    }
+    .invoice-badge.yes {
+        background: #e8f5e9;
+        color: #2e7d32;
+    }
+    .invoice-data {
+        display: grid;
+        gap: 3px;
+        min-width: 230px;
+        font-size: 12px;
+        line-height: 1.25;
+    }
+    .invoice-data strong {
+        color: var(--text-main);
+    }
+    .invoice-data span {
+        color: var(--text-muted);
+        font-weight: 700;
+    }
+    [data-theme="dark"] .invoice-badge.yes {
+        background: rgba(16, 185, 129, 0.18);
+        color: #6ee7b7;
+    }
+</style>
+
+<div class="crumb">
+    <a href="{% url 'econotec:bienvenida' %}">Inicio</a> /
+    <a href="{% url 'econotec:salida_menu' %}">Salida de Equipo</a> / Facturas Realizadas
+</div>
+
+<div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:14px;">
+    <div>
+        <h2 class="page-title">Facturas <span class="accent">Realizadas</span></h2>
+        <p class="page-subtitle">Salidas con factura registrada — {{ mes_nombre }} {{ year }} — {{ total }} resultado{{ total|pluralize }}</p>
+    </div>
+    <a href="{% url 'econotec:salida_menu' %}" class="btn btn-secondary">← Volver a Salidas</a>
+</div>
+
+<form method="get" class="toolbar" style="margin-top:18px;">
+    <input type="text" name="q" value="{{ q }}" placeholder="Buscar cliente, equipo, RUC, correo…" class="form-input" style="min-width:260px;">
+    <select name="ano" class="form-input" style="max-width:120px;">
+        {% for a in anos_disp %}
+            <option value="{{ a }}" {% if a == year %}selected{% endif %}>{{ a }}</option>
+        {% endfor %}
+    </select>
+    <select name="mes" class="form-input" style="max-width:160px;">
+        <option value="todos" {% if mes_param == 'todos' %}selected{% endif %}>Todos los meses</option>
+        {% for n in meses_es|slice:"1:13" %}
+            <option value="{{ forloop.counter }}" {% if forloop.counter == month %}selected{% endif %}>{{ n }}</option>
+        {% endfor %}
+    </select>
+    <button type="submit" class="btn btn-primary">Filtrar</button>
+</form>
+
+<div class="invoice-summary-grid">
+    <div class="invoice-summary-card yes">
+        <div class="lbl">Facturas realizadas</div>
+        <div class="val">{{ total_periodo }}</div>
+    </div>
+</div>
+
+{% if salidas %}
+<div class="table-wrap">
+    <table>
+        <thead>
+            <tr>
+                <th>Fecha</th>
+                <th>Equipo</th>
+                <th>Cliente</th>
+                <th>Datos de factura</th>
+                <th>Registró salida</th>
+                <th>Acciones</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for s in salidas %}
+            <tr>
+                <td>{{ s.fecha_salida|date:"d/m/Y" }}</td>
+                <td>
+                    <strong style="color:var(--primary);">{{ s.ingreso.codigo_equipo }}</strong><br>
+                    <small style="color:var(--text-muted);">{{ s.ingreso.tipo_equipo_display }} — {{ s.ingreso.marca|truncatechars:22 }}</small>
+                </td>
+                <td>
+                    <strong>{{ s.ingreso.cliente.nombres }}</strong><br>
+                    <small style="color:var(--text-muted);">{{ s.ingreso.cliente.cedula }} · {{ s.ingreso.cliente.whatsapp|default:"Sin WhatsApp" }}</small>
+                </td>
+                <td>
+                    <span class="invoice-badge yes">Sí</span>
+                    <div class="invoice-data" style="margin-top:6px;">
+                        <strong>{{ s.factura_nombres|default:"—" }}</strong>
+                        <span>RUC/Cédula: {{ s.factura_cedula|default:"—" }}</span>
+                        <span>Correo: {{ s.factura_correo|default:"—" }}</span>
+                    </div>
+                </td>
+                <td>
+                    {% if s.registrado_por %}
+                        {{ s.registrado_por.first_name|default:s.registrado_por.username }}
+                    {% else %}
+                        —
+                    {% endif %}
+                    <br>
+                    <small style="color:var(--text-muted);">{{ s.creado|date:"d/m/Y H:i" }}</small>
+                </td>
+                <td class="row-actions">
+                    <a href="{% url 'econotec:salida_editar' pk=s.pk %}" class="btn btn-sm btn-secondary">Editar</a>
+                    <a href="{% url 'econotec:salida_imprimir' pk=s.pk %}" target="_blank" class="btn btn-sm btn-info">Imprimir</a>
+                    <a href="{% url 'econotec:salida_pdf' pk=s.pk %}" class="btn btn-sm btn-primary">PDF</a>
+                </td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="empty-state">
+    <div class="icon">🧾</div>
+    <h3>No hay facturas realizadas para este filtro</h3>
+    <p>Cambia el mes, año o término de búsqueda.</p>
+</div>
+{% endif %}
+
+{% endblock %}
