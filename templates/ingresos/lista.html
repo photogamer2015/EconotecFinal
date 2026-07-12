@@ -202,14 +202,10 @@
                     {% endif %}
                 </td>
                 <td>
-                    <span class="badge badge-{{ i.estado }}">{{ i.get_estado_display }}</span>
-                    {% if i.estado == 'en_reparacion' and i.subestado_reparacion %}
+                    <span class="badge badge-{{ i.estado_visual_key }}">{{ i.estado_visual_display }}</span>
+                    {% if i.subestado_visual_display %}
                         <div style="font-size: 11px; margin-top: 4px; color: #555; font-weight: 600;">
-                            ↳ {{ i.get_subestado_reparacion_display }}
-                        </div>
-                    {% elif i.estado == 'entregado' and i.subestado_entregado %}
-                        <div style="font-size: 11px; margin-top: 4px; color: #555; font-weight: 600;">
-                            ↳ {{ i.get_subestado_entregado_display }}
+                            ↳ {{ i.subestado_visual_display }}
                         </div>
                     {% endif %}
                     {% if i.salida %}

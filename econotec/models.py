@@ -80,7 +80,7 @@ SUBESTADO_ENTREGADO = [
     ('con_solucion', 'Con solución'),
     ('sin_solucion', 'Sin solución'),
     ('no_quiso_reparar', 'No quiso repararlo'),
-    ('pendiente_retiro', 'Listo para entrega'),
+    ('pendiente_retiro', 'Pendiente de retiro'),
 ]
 
 
@@ -492,6 +492,41 @@ class IngresoEquipo(models.Model):
         if self.sede == 'quito':
             return 'Quito'
         return self.get_sede_display()
+
+    def _salida_relacionada(self):
+        try:
+            return self.salida
+        except AttributeError:
+            return None
+
+    @property
+    def pendiente_retiro_visual(self):
+        salida = self._salida_relacionada()
+        if salida is not None:
+            return salida.estado_reparacion == 'pendiente_retiro'
+        return self.estado == 'entregado' and self.subestado_entregado == 'pendiente_retiro'
+
+    @property
+    def estado_visual_key(self):
+        if self.pendiente_retiro_visual:
+            return 'pendiente_retiro'
+        return self.estado
+
+    @property
+    def estado_visual_display(self):
+        if self.pendiente_retiro_visual:
+            return 'Pendiente de retiro'
+        return self.get_estado_display()
+
+    @property
+    def subestado_visual_display(self):
+        if self.pendiente_retiro_visual:
+            return 'Reparado - pendiente de retiro'
+        if self.estado == 'en_reparacion' and self.subestado_reparacion:
+            return self.get_subestado_reparacion_display()
+        if self.estado == 'entregado' and self.subestado_entregado:
+            return self.get_subestado_entregado_display()
+        return ''
 
     @property
     def tipo_equipo_display(self):

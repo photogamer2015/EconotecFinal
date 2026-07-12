@@ -322,7 +322,7 @@ def _crear_o_actualizar_salida(request, ingreso, estado_rep):
     # Reflejar el subestado "entregado" en el ingreso para que coincida
     # con lo que muestra el resto del sistema.
     if estado_rep == 'pendiente_retiro':
-        ingreso.subestado_entregado = 'con_solucion'
+        ingreso.subestado_entregado = 'pendiente_retiro'
     elif estado_rep == 'cliente_no_acepta':
         ingreso.subestado_entregado = 'no_quiso_reparar'
     else:

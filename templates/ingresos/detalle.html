@@ -193,6 +193,10 @@
         border-color: #bbf7d0;
         background: #f0fdf4;
     }
+    .estado-equipo-panel.estado-pendiente_retiro {
+        border-color: #e9d5ff;
+        background: #faf5ff;
+    }
     .estado-equipo-panel.estado-garantia {
         border-color: #ddd6fe;
         background: #f5f3ff;
@@ -356,11 +360,9 @@
             <div class="field-row"><span class="label">Fecha de ingreso</span><span class="value">{{ ingreso.fecha_ingreso|date:"d/m/Y" }}</span></div>
             <div class="field-row"><span class="label">Factura N°</span><span class="value">{{ ingreso.numero_factura|default:"—" }}</span></div>
             <div class="field-row"><span class="label">Estado</span><span class="value">
-                <span class="badge badge-{{ ingreso.estado }}">{{ ingreso.get_estado_display }}</span>
-                {% if ingreso.estado == 'en_reparacion' and ingreso.subestado_reparacion %}
-                    <br><small style="color:#666; font-size:11px;">↳ {{ ingreso.get_subestado_reparacion_display }}</small>
-                {% elif ingreso.estado == 'entregado' and ingreso.subestado_entregado %}
-                    <br><small style="color:#666; font-size:11px;">↳ {{ ingreso.get_subestado_entregado_display }}</small>
+                <span class="badge badge-{{ ingreso.estado_visual_key }}">{{ ingreso.estado_visual_display }}</span>
+                {% if ingreso.subestado_visual_display %}
+                    <br><small style="color:#666; font-size:11px;">↳ {{ ingreso.subestado_visual_display }}</small>
                 {% endif %}
             </span></div>
             <div class="field-row">
@@ -418,13 +420,11 @@
     <div>
         <div class="info-card" style="margin-bottom:18px;">
             <h3>🔄 Estado del equipo</h3>
-            <div class="estado-equipo-panel estado-{{ ingreso.estado }}">
+            <div class="estado-equipo-panel estado-{{ ingreso.estado_visual_key }}">
                 <div class="estado-equipo-label">Estado actual</div>
-                <div class="estado-equipo-valor">{{ ingreso.get_estado_display }}</div>
-                {% if ingreso.estado == 'en_reparacion' and ingreso.subestado_reparacion %}
-                    <div class="estado-equipo-subestado">↳ {{ ingreso.get_subestado_reparacion_display }}</div>
-                {% elif ingreso.estado == 'entregado' and ingreso.subestado_entregado %}
-                    <div class="estado-equipo-subestado">↳ {{ ingreso.get_subestado_entregado_display }}</div>
+                <div class="estado-equipo-valor">{{ ingreso.estado_visual_display }}</div>
+                {% if ingreso.subestado_visual_display %}
+                    <div class="estado-equipo-subestado">↳ {{ ingreso.subestado_visual_display }}</div>
                 {% endif %}
                 {% if ingreso.estado == 'garantia' and ingreso.equipo_garantia_referencia %}
                     <div class="estado-equipo-garantia-ref">🛡 Garantía de {{ ingreso.equipo_garantia_referencia }}</div>

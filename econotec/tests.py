@@ -404,6 +404,54 @@ class VentasTests(TestCase):
         self.assertContains(response, ingreso.codigo_equipo)
         self.assertContains(response, 'Yandri Guevará')
 
+    def test_estado_visual_muestra_pendiente_retiro_si_salida_esta_pendiente(self):
+        ingreso = self.crear_ingreso_reparacion(
+            estado='entregado',
+            subestado_entregado='con_solucion',
+        )
+        SalidaEquipo.objects.create(
+            ingreso=ingreso,
+            fecha_salida=date(2026, 7, 9),
+            estado_reparacion='pendiente_retiro',
+            cliente_recibe_conforme='si',
+            valor_final_cobrado=Decimal('0.00'),
+            metodo_pago_final='sin_pago',
+            registrado_por=self.usuario,
+        )
+        ingreso.refresh_from_db()
+
+        self.assertEqual(ingreso.estado_visual_key, 'pendiente_retiro')
+        self.assertEqual(ingreso.estado_visual_display, 'Pendiente de retiro')
+        self.assertEqual(ingreso.subestado_visual_display, 'Reparado - pendiente de retiro')
+
+        response = self.client.get(reverse('econotec:ingreso_detalle', kwargs={'pk': ingreso.pk}))
+
+        self.assertContains(response, 'Pendiente de retiro')
+        self.assertContains(response, 'Reparado - pendiente de retiro')
+        self.assertNotContains(response, 'Listo para entrega')
+
+    def test_estado_visual_conserva_entregado_con_solucion_si_cliente_retiro(self):
+        ingreso = self.crear_ingreso_reparacion(estado='entregado')
+        SalidaEquipo.objects.create(
+            ingreso=ingreso,
+            fecha_salida=date(2026, 7, 9),
+            estado_reparacion='retirado',
+            cliente_recibe_conforme='si',
+            valor_final_cobrado=Decimal('0.00'),
+            metodo_pago_final='sin_pago',
+            registrado_por=self.usuario,
+        )
+        ingreso.refresh_from_db()
+
+        self.assertEqual(ingreso.estado_visual_key, 'entregado')
+        self.assertEqual(ingreso.estado_visual_display, 'Entregado al cliente')
+        self.assertEqual(ingreso.subestado_visual_display, 'Con solución')
+
+        response = self.client.get(reverse('econotec:ingreso_detalle', kwargs={'pk': ingreso.pk}))
+
+        self.assertContains(response, 'Entregado al cliente')
+        self.assertContains(response, 'Con solución')
+
     def test_busqueda_pagos_ignora_tildes_y_mayusculas(self):
         self.cliente_existente.nombres = 'Yandri Guevará'
         self.cliente_existente.save(update_fields=['nombres'])
