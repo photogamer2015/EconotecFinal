@@ -27,7 +27,7 @@ from .busqueda import (
     texto_salida_busqueda,
     total_resultados,
 )
-from .models import Cliente, IngresoEquipo, SalidaEquipo, Abono
+from .models import Cliente, IngresoEquipo, SalidaEquipo, Abono, SEDES_EQUIPOS
 from .permisos import admin_requerido, tecnico_requerido, es_tecnico
 from .gamificacion import (
     SALIDA_BUENA_ESTADOS,
@@ -108,6 +108,11 @@ def _confirmo_mismo_equipo_cliente(request):
 # Páginas base
 # ═════════════════════════════════════════════════════════════════
 
+
+def ingresos_de_equipo_qs():
+    return IngresoEquipo.objects.filter(sede__in=SEDES_EQUIPOS)
+
+
 def home(request):
     if request.user.is_authenticated:
         return redirect('econotec:bienvenida')
@@ -120,10 +125,11 @@ def bienvenida(request):
     hoy = date.today()
     mes_actual = hoy.month
     ano_actual = hoy.year
+    ingresos_equipos = ingresos_de_equipo_qs()
 
     stats = {
-        'total_ingresos': IngresoEquipo.objects.count(),
-        'ingresos_mes': IngresoEquipo.objects.filter(
+        'total_ingresos': ingresos_equipos.count(),
+        'ingresos_mes': ingresos_equipos.filter(
             fecha_ingreso__year=ano_actual, fecha_ingreso__month=mes_actual,
         ).count(),
         'total_salidas': SalidaEquipo.objects.count(),
@@ -131,9 +137,12 @@ def bienvenida(request):
             fecha_salida__year=ano_actual, fecha_salida__month=mes_actual,
         ).count(),
         'total_clientes': Cliente.objects.count(),
-        'pendientes_retiro': IngresoEquipo.objects.filter(
+        'pendientes_retiro': ingresos_equipos.filter(
             estado__in=['ingresado', 'en_reparacion']
-        ).count() + SalidaEquipo.objects.filter(estado_reparacion='pendiente_retiro').count(),
+        ).count() + SalidaEquipo.objects.filter(
+            ingreso__sede__in=SEDES_EQUIPOS,
+            estado_reparacion='pendiente_retiro',
+        ).count(),
     }
 
     # ── Equipos más ingresados ──────────────────────────────
@@ -141,7 +150,7 @@ def bienvenida(request):
     from .models import TIPOS_EQUIPO
 
     qs_equipos = (
-        IngresoEquipo.objects.values('tipo_equipo', 'tipo_equipo_otro')
+        ingresos_equipos.values('tipo_equipo', 'tipo_equipo_otro')
         .annotate(total=Count('id'))
         .order_by('-total')
     )
@@ -243,7 +252,12 @@ def bienvenida(request):
         })
     # ── Top Clientes ──────────────────────────────
     from django.db.models import Count
-    clientes_top = Cliente.objects.annotate(total_ingresos=Count('ingresos')).filter(total_ingresos__gt=0).order_by('-total_ingresos')[:5]
+    clientes_top = (
+        Cliente.objects
+        .annotate(total_ingresos=Count('ingresos', filter=Q(ingresos__sede__in=SEDES_EQUIPOS)))
+        .filter(total_ingresos__gt=0)
+        .order_by('-total_ingresos')[:5]
+    )
 
     ctx = {
         'usuario': request.user,
@@ -283,7 +297,7 @@ def dashboard_details(request, tipo):
     if tipo == 'equipos_total':
         titulo = "Total de Equipos Ingresados"
         link_ver_todos = "/ingresos/"
-        qs = IngresoEquipo.objects.select_related('cliente', 'salida').order_by('-fecha_ingreso')
+        qs = ingresos_de_equipo_qs().select_related('cliente', 'salida').order_by('-fecha_ingreso')
         columnas = ['Código', 'Cliente', 'Equipo', 'Fecha Ingreso', 'Estado', 'Acción']
         for eq in qs:
             btn = f'<a href="/ingresos/{eq.pk}/" class="badge badge-ingresado" style="text-decoration:none; padding: 4px 8px;">Ver detallles</a>'
@@ -292,7 +306,7 @@ def dashboard_details(request, tipo):
     elif tipo == 'ingresos_mes':
         titulo = f"Ingresos del Mes ({hoy.strftime('%B %Y').capitalize()})"
         link_ver_todos = "/ingresos/"
-        qs = IngresoEquipo.objects.select_related('cliente', 'salida').filter(
+        qs = ingresos_de_equipo_qs().select_related('cliente', 'salida').filter(
             fecha_ingreso__year=ano_actual, fecha_ingreso__month=mes_actual
         ).order_by('-fecha_ingreso')
         columnas = ['Código', 'Cliente', 'Equipo', 'Fecha Ingreso', 'Estado', 'Acción']
@@ -303,8 +317,11 @@ def dashboard_details(request, tipo):
     elif tipo == 'pendientes':
         titulo = "Equipos Pendientes en Taller"
         link_ver_todos = "/ingresos/"
-        ingresos = list(IngresoEquipo.objects.select_related('cliente').filter(estado__in=['ingresado', 'en_reparacion']))
-        salidas = list(SalidaEquipo.objects.select_related('ingreso__cliente').filter(estado_reparacion='pendiente_retiro'))
+        ingresos = list(ingresos_de_equipo_qs().select_related('cliente').filter(estado__in=['ingresado', 'en_reparacion']))
+        salidas = list(SalidaEquipo.objects.select_related('ingreso__cliente').filter(
+            ingreso__sede__in=SEDES_EQUIPOS,
+            estado_reparacion='pendiente_retiro',
+        ))
         columnas = ['Código', 'Cliente', 'Equipo', 'Fase', 'Estado', 'Acción']
         
         for eq in ingresos:
@@ -318,6 +335,7 @@ def dashboard_details(request, tipo):
         titulo = f"Salidas del Mes ({hoy.strftime('%B %Y').capitalize()})"
         link_ver_todos = "/salidas/"
         qs = SalidaEquipo.objects.select_related('ingreso__cliente').filter(
+            ingreso__sede__in=SEDES_EQUIPOS,
             fecha_salida__year=ano_actual, fecha_salida__month=mes_actual
         ).order_by('-fecha_salida')
         columnas = ['Código', 'Cliente', 'Equipo', 'Fecha Salida', 'Estado Reparación', 'Acción']
@@ -359,10 +377,14 @@ def reproductor_musica(request):
 @tecnico_requerido
 def ingreso_menu(request):
     """Menú de ingresos: registrar nuevo / ver lista."""
-    total = IngresoEquipo.objects.count()
-    pendientes = IngresoEquipo.objects.filter(
+    ingresos_equipos = ingresos_de_equipo_qs()
+    total = ingresos_equipos.count()
+    pendientes = ingresos_equipos.filter(
         estado__in=['ingresado', 'en_reparacion']
-    ).count() + SalidaEquipo.objects.filter(estado_reparacion='pendiente_retiro').count()
+    ).count() + SalidaEquipo.objects.filter(
+        ingreso__sede__in=SEDES_EQUIPOS,
+        estado_reparacion='pendiente_retiro',
+    ).count()
     pendientes_valor = _ingresos_pendientes_valor_qs().count()
     return render(request, 'ingresos/menu.html', {
         'total': total,
@@ -718,7 +740,7 @@ def ingreso_lista(request):
     else:
         sede_filtro = sede_sesion
 
-    qs = (IngresoEquipo.objects
+    qs = (ingresos_de_equipo_qs()
           .select_related('cliente', 'registrado_por', 'salida')
           .prefetch_related('abonos'))
 

@@ -88,6 +88,26 @@ class VentasTests(TestCase):
         data.update(overrides)
         return IngresoEquipo.objects.create(**data)
 
+    def crear_venta_producto(self, **overrides):
+        data = {
+            'sede': 'ventas',
+            'asesor_comercial': 'Kimberly',
+            'fecha_ingreso': date.today(),
+            'cliente': self.cliente_existente,
+            'tipo_equipo': 'otro',
+            'marca': 'N/A',
+            'modelo_serie': 'Producto',
+            'accesorios_entregados': 'Ninguno',
+            'problema_reportado': 'Venta de producto',
+            'valor_acordado': Decimal('10.00'),
+            'tecnico_encargado': self.usuario,
+            'estado': 'entregado',
+            'subestado_entregado': 'con_solucion',
+            'registrado_por': self.usuario,
+        }
+        data.update(overrides)
+        return IngresoEquipo.objects.create(**data)
+
     def ingreso_edit_post_data(self, ingreso, **overrides):
         data = {
             'cli-cedula': ingreso.cliente.cedula,
@@ -452,6 +472,43 @@ class VentasTests(TestCase):
         self.assertContains(response, ingreso.codigo_equipo)
         self.assertContains(response, 'Pendiente de retiro')
         self.assertNotContains(response, 'Entregado al cliente')
+
+    def test_dashboard_total_equipos_no_mezcla_ventas_producto(self):
+        ingreso = self.crear_ingreso_reparacion(fecha_ingreso=date.today())
+        venta = self.crear_venta_producto()
+
+        response = self.client.get(reverse('econotec:bienvenida'))
+
+        self.assertEqual(response.context['stats']['total_ingresos'], 1)
+        self.assertEqual(response.context['stats']['ingresos_mes'], 1)
+        self.assertEqual(response.context['equipos_top'][0]['nombre'], 'Laptop')
+        self.assertNotEqual(ingreso.codigo_equipo[0], venta.codigo_equipo[0])
+
+    def test_dashboard_modal_total_equipos_excluye_ventas_producto(self):
+        ingreso = self.crear_ingreso_reparacion(fecha_ingreso=date.today())
+        venta = self.crear_venta_producto()
+
+        response = self.client.get(
+            reverse('econotec:dashboard_details', kwargs={'tipo': 'equipos_total'})
+        )
+
+        self.assertContains(response, ingreso.codigo_equipo)
+        self.assertNotContains(response, venta.codigo_equipo)
+
+    def test_admin_dashboard_equipos_mes_excluye_ventas_producto(self):
+        User = get_user_model()
+        admin = User.objects.create_superuser(username='Admin', password='x')
+        self.client.force_login(admin)
+        hoy = date.today()
+        self.crear_ingreso_reparacion(fecha_ingreso=hoy)
+        self.crear_venta_producto(fecha_ingreso=hoy)
+
+        response = self.client.get(
+            reverse('econotec:admin_dashboard'),
+            {'ano': str(hoy.year), 'mes': str(hoy.month)},
+        )
+
+        self.assertEqual(response.context['equipos_ingresados'], 1)
 
     def test_estado_visual_conserva_entregado_con_solucion_si_cliente_retiro(self):
         ingreso = self.crear_ingreso_reparacion(estado='entregado')

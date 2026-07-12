@@ -62,6 +62,7 @@ SEDES = [
     ('quito', 'Quito'),
     ('ventas', 'Venta de Productos'),
 ]
+SEDES_EQUIPOS = ('guayaquil', 'quito')
 SEDE_PREFIJOS = {
     'guayaquil': 'G',
     'quito': 'U',

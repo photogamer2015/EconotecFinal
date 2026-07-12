@@ -21,7 +21,7 @@ from .gamificacion import (
     calcular_puntaje_gamificacion,
 )
 from .busqueda import filtrar_objetos_normalizado, texto_salida_busqueda, total_resultados
-from .models import IngresoEquipo, SalidaEquipo, Abono, Egreso, CategoriaEgreso, Cliente, AvisoPanel
+from .models import IngresoEquipo, SalidaEquipo, Abono, Egreso, CategoriaEgreso, Cliente, AvisoPanel, SEDES_EQUIPOS
 from .permisos import admin_requerido, tecnico_requerido
 
 
@@ -97,6 +97,7 @@ def admin_dashboard(request):
 
     # Equipos del mes
     equipos_ingresados = IngresoEquipo.objects.filter(
+        sede__in=SEDES_EQUIPOS,
         fecha_ingreso__year=year, fecha_ingreso__month=month,
     ).count()
     equipos_entregados = SalidaEquipo.objects.filter(
