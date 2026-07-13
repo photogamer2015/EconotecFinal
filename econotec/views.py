@@ -1378,10 +1378,26 @@ def cliente_lista(request):
 @tecnico_requerido
 def cliente_top_recurrentes(request):
     """Ranking de clientes recurrentes separados por sede (Top 10 cada una)."""
-    qs_base = Cliente.objects.annotate(total_ingresos=Count('ingresos')).filter(total_ingresos__gt=0).order_by('-total_ingresos')
-    
-    clientes_guayaquil = qs_base.filter(ingresos__sede='guayaquil').distinct()[:10]
-    clientes_quito = qs_base.filter(ingresos__sede='quito').distinct()[:10]
+    clientes_guayaquil = (
+        Cliente.objects
+        .annotate(total_ingresos=Count(
+            'ingresos',
+            filter=Q(ingresos__sede='guayaquil'),
+            distinct=True,
+        ))
+        .filter(total_ingresos__gt=0)
+        .order_by('-total_ingresos', 'nombres')[:10]
+    )
+    clientes_quito = (
+        Cliente.objects
+        .annotate(total_ingresos=Count(
+            'ingresos',
+            filter=Q(ingresos__sede='quito'),
+            distinct=True,
+        ))
+        .filter(total_ingresos__gt=0)
+        .order_by('-total_ingresos', 'nombres')[:10]
+    )
 
     return render(request, 'clientes/top.html', {
         'clientes_guayaquil': clientes_guayaquil,

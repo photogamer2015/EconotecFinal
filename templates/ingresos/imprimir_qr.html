@@ -13,7 +13,7 @@
         .page {
             background: white;
             padding: 14mm;
-            max-width: 210mm;
+            max-width: 297mm;
             margin: 0 auto;
             border: 1px solid #ddd;
             box-shadow: 0 4px 6px rgba(0,0,0,0.1);
@@ -23,37 +23,28 @@
             position: relative;
             display: grid;
             grid-template-columns: repeat(2, minmax(0, 1fr));
-            grid-template-rows: repeat(2, 1fr);
-            gap: 10mm 8mm;
+            grid-template-rows: 1fr;
+            gap: 0 12mm;
         }
-        .qr-sheet::before,
-        .qr-sheet::after {
+        .qr-sheet::before {
             content: "";
             position: absolute;
             z-index: 0;
             pointer-events: none;
             border-color: #9ca3af;
             border-style: dashed;
-        }
-        .qr-sheet::before {
             top: 0;
             bottom: 0;
             left: 50%;
             border-left-width: 1px;
         }
-        .qr-sheet::after {
-            left: 0;
-            right: 0;
-            top: 50%;
-            border-top-width: 1px;
-        }
         .qr-card {
             position: relative;
             z-index: 1;
             border: 1.5px dashed #9ca3af;
-            padding: 8mm 7mm;
+            padding: 10mm 9mm;
             text-align: center;
-            min-height: 118mm;
+            min-height: 166mm;
             border-radius: 4px;
             background: white;
             box-sizing: border-box;
@@ -75,29 +66,29 @@
             margin-bottom: 8px;
         }
         .qr-img {
-            width: 58mm;
-            height: 58mm;
+            width: 70mm;
+            height: 70mm;
             display: block;
             margin: 0 auto;
         }
         .qr-code {
-            font-size: 34px;
+            font-size: 38px;
             font-weight: 900;
             color: #1f2937;
-            margin-top: 9px;
+            margin-top: 11px;
         }
         .qr-type {
-            font-size: 18px;
+            font-size: 20px;
             font-weight: 900;
             color: #f97618; /* var(--primary) */
             text-transform: uppercase;
             margin-top: 4px;
         }
         .qr-problem {
-            max-width: 78mm;
-            margin: 7px auto 0;
+            max-width: 100mm;
+            margin: 8px auto 0;
             color: #374151;
-            font-size: 12px;
+            font-size: 13px;
             font-weight: 700;
             line-height: 1.25;
             overflow: hidden;
@@ -126,7 +117,7 @@
         }
         @media print {
             @page {
-                size: A4 portrait;
+                size: A4 landscape;
                 margin: 10mm;
             }
             body {
@@ -141,30 +132,30 @@
                 max-width: 100%;
             }
             .qr-sheet {
-                gap: 8mm 7mm;
+                gap: 0 12mm;
             }
             .qr-card {
-                min-height: 133mm;
-                padding: 8mm 6mm;
+                min-height: 190mm;
+                padding: 10mm 8mm;
             }
             .print-btn {
                 display: none;
             }
             .qr-name {
-                font-size: 19px;
+                font-size: 20px;
             }
             .qr-wp {
-                font-size: 16px;
-            }
-            .qr-code {
-                font-size: 32px;
-            }
-            .qr-type {
                 font-size: 17px;
             }
+            .qr-code {
+                font-size: 38px;
+            }
+            .qr-type {
+                font-size: 20px;
+            }
             .qr-problem {
-                font-size: 11.5px;
-                max-width: 76mm;
+                font-size: 13px;
+                max-width: 100mm;
             }
         }
     </style>
@@ -175,7 +166,7 @@
 
     <div class="page">
         <div class="qr-sheet">
-            {% for copia in "1234" %}
+            {% for copia in "12" %}
             <div class="qr-card">
                 <div class="qr-name">{{ cliente.nombres|truncatechars:25 }}</div>
                 <div class="qr-wp">{{ cliente.whatsapp }}</div>

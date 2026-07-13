@@ -5,6 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}Econotec — Reparación de Tecnología{% endblock %}</title>
+    <link rel="icon" type="image/jpeg" href="{% static 'logo.jpg' %}">
     <style>
         @keyframes godTecAnim {
             0% { background-position: 0% 50%; }
@@ -14,19 +15,19 @@
         :root {
             --primary: #f97618;
             --primary-dark: #d7642f;
-            --primary-light: #ffe6d3;
+            --primary-light: #ffe1d4;
             --secondary: #1f2937;
             --success: #2e7d32;
             --danger: #c62828;
             --warning: #f0ad4e;
             --info: #0d47a1;
             
-            --bg: #f5f7fb;
-            --card-bg: #ffffff;
+            --bg: #f4ece8;
+            --card-bg: #fff8f3;
             --text-main: #1f2937;
             --text-muted: #6b7280;
-            --border-color: #e0e0e0;
-            --hover-bg: #fff8f3;
+            --border-color: #ead8d1;
+            --hover-bg: #fff0e6;
             --shadow: 0 2px 8px rgba(0,0,0,0.06);
         }
 
@@ -64,64 +65,105 @@
         /* HEADER */
         header.top {
             position: relative;
-            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
-            color: white;
-            padding: 14px 28px;
+            background:
+                radial-gradient(circle at 12% 0%, rgba(250, 204, 21, 0.16), transparent 30%),
+                linear-gradient(135deg, #111111 0%, #260708 44%, #8d111b 100%);
+            color: #ffffff;
+            padding: 12px 28px;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            box-shadow: 0 2px 12px rgba(0,0,0,0.15);
+            border-bottom: 1px solid rgba(250, 204, 21, 0.14);
+            box-shadow: 0 12px 34px rgba(54, 7, 10, 0.24);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+        }
+        [data-theme="dark"] header.top {
+            background:
+                radial-gradient(circle at 12% 0%, rgba(249, 118, 24, 0.14), transparent 30%),
+                linear-gradient(135deg, #050505 0%, #1b0708 45%, #5f0d15 100%);
+            border-bottom-color: rgba(249, 118, 24, 0.22);
+            box-shadow: 0 12px 30px rgba(0,0,0,0.5);
         }
         header.top h1 {
-            font-size: 19px;
-            font-weight: 700;
-            letter-spacing: -0.3px;
+            font-size: 18px;
+            font-weight: 850;
+            letter-spacing: 0;
             margin: 0;
+            color: #ffffff;
         }
         header.top h1 .sub {
             display: block;
             font-size: 11px;
-            font-weight: 400;
-            opacity: 0.9;
-            letter-spacing: 0.5px;
+            font-weight: 650;
+            color: rgba(255, 255, 255, 0.78);
+            opacity: 1;
+            letter-spacing: 0;
         }
         header.top .brand {
             display: flex;
             align-items: center;
-            gap: 14px;
+            gap: 12px;
+        }
+        header.top .brand > a {
+            background: transparent !important;
+            color: inherit !important;
+            padding: 0 !important;
+            border: none !important;
+            border-radius: 0 !important;
+            box-shadow: none !important;
+            transform: none !important;
+        }
+        header.top .brand > a:hover {
+            background: transparent !important;
+            border-color: transparent !important;
+            transform: none !important;
         }
         header.top .logo-circle {
-            width: 56px;
-            height: 56px;
+            width: 48px;
+            height: 48px;
             border-radius: 50%;
             background: #1a1a1a;
             display: block;
             object-fit: cover;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-            border: 2px solid white;
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.36);
+            border: 1px solid rgba(250, 204, 21, 0.38);
             padding: 2px;
         }
 
         header.top nav { display: flex; gap: 8px; align-items: center; }
         header.top a, header.top button {
-            color: white; text-decoration: none;
-            background: rgba(255,255,255,0.2);
-            padding: 8px 14px; border: none; border-radius: 6px;
-            font-size: 13px; font-family: inherit; font-weight: 500;
-            cursor: pointer; transition: background 0.2s;
+            color: #ffffff; text-decoration: none;
+            background: rgba(255, 255, 255, 0.11);
+            padding: 9px 14px; border: 1px solid rgba(255, 255, 255, 0.16); border-radius: 8px;
+            font-size: 13px; font-family: inherit; font-weight: 750;
+            cursor: pointer; transition: background 0.2s, border-color 0.2s, transform 0.15s;
         }
-        header.top a:hover, header.top button:hover { background: rgba(255,255,255,0.32); }
+        header.top a:hover, header.top button:hover {
+            background: rgba(255, 255, 255, 0.18);
+            border-color: rgba(250, 204, 21, 0.38);
+            transform: translateY(-1px);
+        }
         header.top form { margin: 0; display: inline; }
 
         header.top .user-info {
             display: flex; flex-direction: column; align-items: flex-end;
-            gap: 5px; padding-right: 18px; margin-right: 18px;
-            border-right: 2px solid rgba(255,255,255,0.3);
+            gap: 6px; padding-right: 18px; margin-right: 10px;
+            border-right: 1px solid rgba(255, 255, 255, 0.16);
         }
         header.top .user-info h3 {
             margin: 0; padding: 0;
-            font-size: 14px; font-weight: 600;
+            font-size: 14px; font-weight: 800;
             color: #ffffff; line-height: 1;
+        }
+        #btn-logout {
+            background: #4b2119 !important;
+            border-color: rgba(250, 204, 21, 0.18) !important;
+            color: #ffffff !important;
+        }
+        #btn-logout:hover {
+            background: #6e211f !important;
+            border-color: rgba(250, 204, 21, 0.35) !important;
         }
         .role-badge {
             display: inline-block;
@@ -434,11 +476,12 @@
         }
 
         .theme-toggle {
-            background: transparent !important;
-            color: white !important;
+            background: rgba(255, 255, 255, 0.1) !important;
+            color: #ffffff !important;
             font-size: 18px !important;
             padding: 8px !important;
             border-radius: 50% !important;
+            border: 1px solid rgba(255, 255, 255, 0.16) !important;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -446,7 +489,8 @@
             height: 38px;
         }
         .theme-toggle:hover {
-            background: rgba(255,255,255,0.2) !important;
+            background: rgba(255, 255, 255, 0.18) !important;
+            border-color: rgba(250, 204, 21, 0.38) !important;
         }
 
         @media print {

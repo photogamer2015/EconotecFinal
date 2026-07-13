@@ -369,9 +369,38 @@ class VentasTests(TestCase):
             reverse('econotec:ingreso_imprimir_qr', kwargs={'pk': ingreso.pk})
         )
 
-        self.assertContains(response, 'Consola', count=4)
+        self.assertContains(response, 'Consola', count=2)
         self.assertContains(response, 'Problema:')
-        self.assertContains(response, 'No da grafica', count=4)
+        self.assertContains(response, 'No da grafica', count=2)
+
+    def test_top_clientes_cuenta_equipos_reales_por_sede_sin_multiplicar(self):
+        biomedics = Cliente.objects.create(
+            cedula='0993018740001',
+            nombres='BIOMEDICIS',
+            whatsapp='0967792636',
+            correo='eromero@grupobiomedics.com',
+            sector='norte',
+        )
+        for _ in range(5):
+            self.crear_ingreso_reparacion(cliente=biomedics, sede='guayaquil')
+        for _ in range(2):
+            self.crear_ingreso_reparacion(cliente=biomedics, sede='quito')
+        for _ in range(3):
+            self.crear_venta_producto(cliente=biomedics)
+
+        response = self.client.get(reverse('econotec:cliente_top_recurrentes'))
+
+        guayaquil = {
+            cliente.pk: cliente.total_ingresos
+            for cliente in response.context['clientes_guayaquil']
+        }
+        quito = {
+            cliente.pk: cliente.total_ingresos
+            for cliente in response.context['clientes_quito']
+        }
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(guayaquil[biomedics.pk], 5)
+        self.assertEqual(quito[biomedics.pk], 2)
 
     def test_busqueda_clientes_ignora_tildes_y_mayusculas(self):
         self.cliente_existente.nombres = 'Yandri Guevará'
