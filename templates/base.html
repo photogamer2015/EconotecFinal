@@ -1449,41 +1449,5 @@
             });
         }
     </script>
-    {% if request.user.is_authenticated %}
-    <script>
-        (function() {
-            let timeout;
-            const inactivityLimit = 30 * 60 * 1000; // 30 minutos
-
-            function showLogoutAlert() {
-                Swal.fire({
-                    icon: 'warning',
-                    title: 'Sesión inactiva',
-                    text: 'Tu sesión ha sido cerrada por inactividad (30 minutos).',
-                    confirmButtonText: 'Aceptar',
-                    confirmButtonColor: '#f97618',
-                    allowOutsideClick: false,
-                    allowEscapeKey: false
-                }).then((result) => {
-                    if (result.isConfirmed) {
-                        window.location.href = "{% url 'logout' %}";
-                    }
-                });
-            }
-
-            function resetTimer() {
-                clearTimeout(timeout);
-                timeout = setTimeout(showLogoutAlert, inactivityLimit);
-            }
-
-            // Reiniciar temporizador en cualquier actividad del usuario
-            window.onload = resetTimer;
-            document.onmousemove = resetTimer;
-            document.onkeypress = resetTimer;
-            document.onclick = resetTimer;
-            document.onscroll = resetTimer;
-        })();
-    </script>
-    {% endif %}
 </body>
 </html>

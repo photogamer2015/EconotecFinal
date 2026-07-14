@@ -1,15 +1,184 @@
+import re
 from datetime import date
 from decimal import Decimal
 from io import BytesIO
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
-from django.test import TestCase
+from django.core import mail
+from django.test import TestCase, override_settings
 from django.urls import reverse
 
 from .forms import IngresoEquipoForm
 from .models import Cliente, IngresoEquipo, SalidaEquipo
 from .qr_utils import token_para_ingreso
+from .views_auth import CAPTCHA_SESSION_KEY, LOGIN_2FA_SESSION_KEY, LOGIN_EMAIL_SETUP_SESSION_KEY
+
+
+@override_settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend')
+class LoginCaptchaTests(TestCase):
+    def setUp(self):
+        User = get_user_model()
+        self.usuario = User.objects.create_user(
+            username='captcha_user',
+            password='testpass123',
+            email='captcha_user@example.com',
+        )
+        self.usuario_sin_correo = User.objects.create_user(
+            username='sin_correo',
+            password='testpass123',
+        )
+
+    def _captcha_answer(self):
+        response = self.client.get(reverse('login'))
+        self.assertEqual(response.status_code, 200)
+        return str(self.client.session[CAPTCHA_SESSION_KEY])
+
+    def test_login_rechaza_captcha_incorrecto(self):
+        respuesta = self._captcha_answer()
+
+        response = self.client.post(reverse('login'), {
+            'username': self.usuario.username,
+            'password': 'testpass123',
+            'sede': 'guayaquil',
+            'captcha_respuesta': str(int(respuesta) + 1),
+        })
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Resuelve correctamente la suma de seguridad.')
+        self.assertNotIn('_auth_user_id', self.client.session)
+
+    def test_login_acepta_captcha_correcto_y_envia_codigo(self):
+        respuesta = self._captcha_answer()
+
+        response = self.client.post(reverse('login'), {
+            'username': self.usuario.username,
+            'password': 'testpass123',
+            'sede': 'quito',
+            'captcha_respuesta': respuesta,
+        })
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, reverse('login_2fa'))
+        self.assertNotIn('_auth_user_id', self.client.session)
+        self.assertEqual(self.client.session[LOGIN_2FA_SESSION_KEY]['sede'], 'quito')
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn('Código de acceso Econotec', mail.outbox[0].subject)
+
+    def test_doble_factor_acepta_codigo_correcto_y_guarda_sede(self):
+        respuesta = self._captcha_answer()
+        self.client.post(reverse('login'), {
+            'username': self.usuario.username,
+            'password': 'testpass123',
+            'sede': 'quito',
+            'captcha_respuesta': respuesta,
+        })
+        codigo = re.search(r'\b(\d{6})\b', mail.outbox[0].body).group(1)
+
+        response = self.client.post(reverse('login_2fa'), {
+            'codigo': codigo,
+        })
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, reverse('econotec:bienvenida'))
+        self.assertEqual(self.client.session['sede_actual'], 'quito')
+        self.assertEqual(int(self.client.session['_auth_user_id']), self.usuario.pk)
+        self.assertNotIn(LOGIN_2FA_SESSION_KEY, self.client.session)
+
+    def test_doble_factor_rechaza_codigo_incorrecto(self):
+        respuesta = self._captcha_answer()
+        self.client.post(reverse('login'), {
+            'username': self.usuario.username,
+            'password': 'testpass123',
+            'sede': 'guayaquil',
+            'captcha_respuesta': respuesta,
+        })
+        codigo = re.search(r'\b(\d{6})\b', mail.outbox[0].body).group(1)
+        codigo_incorrecto = '000000' if codigo != '000000' else '111111'
+
+        response = self.client.post(reverse('login_2fa'), {
+            'codigo': codigo_incorrecto,
+        })
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Código incorrecto.')
+        self.assertContains(response, 'Te quedan 9 intentos.')
+        self.assertNotIn('_auth_user_id', self.client.session)
+
+    def test_login_sin_correo_pide_registro_de_correo(self):
+        respuesta = self._captcha_answer()
+
+        response = self.client.post(reverse('login'), {
+            'username': self.usuario_sin_correo.username,
+            'password': 'testpass123',
+            'sede': 'guayaquil',
+            'captcha_respuesta': respuesta,
+        })
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, reverse('login_registrar_correo'))
+        self.assertNotIn('_auth_user_id', self.client.session)
+        self.assertEqual(
+            self.client.session[LOGIN_EMAIL_SETUP_SESSION_KEY]['user_id'],
+            self.usuario_sin_correo.pk,
+        )
+
+    def test_registro_correo_verificado_guarda_email_y_entra(self):
+        respuesta = self._captcha_answer()
+        self.client.post(reverse('login'), {
+            'username': self.usuario_sin_correo.username,
+            'password': 'testpass123',
+            'sede': 'quito',
+            'captcha_respuesta': respuesta,
+        })
+
+        response = self.client.post(reverse('login_registrar_correo'), {
+            'accion': 'enviar_codigo',
+            'email': 'nuevo@example.com',
+            'email_confirmacion': 'nuevo@example.com',
+        })
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, reverse('login_registrar_correo'))
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn('Verifica tu correo Econotec', mail.outbox[0].subject)
+        self.usuario_sin_correo.refresh_from_db()
+        self.assertEqual(self.usuario_sin_correo.email, '')
+
+        codigo = re.search(r'\b(\d{6})\b', mail.outbox[0].body).group(1)
+        response = self.client.post(reverse('login_registrar_correo'), {
+            'accion': 'verificar',
+            'codigo': codigo,
+        })
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, reverse('econotec:bienvenida'))
+        self.usuario_sin_correo.refresh_from_db()
+        self.assertEqual(self.usuario_sin_correo.email, 'nuevo@example.com')
+        self.assertEqual(self.client.session['sede_actual'], 'quito')
+        self.assertEqual(int(self.client.session['_auth_user_id']), self.usuario_sin_correo.pk)
+        self.assertNotIn(LOGIN_EMAIL_SETUP_SESSION_KEY, self.client.session)
+
+    def test_registro_correo_rechaza_email_duplicado(self):
+        respuesta = self._captcha_answer()
+        self.client.post(reverse('login'), {
+            'username': self.usuario_sin_correo.username,
+            'password': 'testpass123',
+            'sede': 'guayaquil',
+            'captcha_respuesta': respuesta,
+        })
+
+        response = self.client.post(reverse('login_registrar_correo'), {
+            'accion': 'enviar_codigo',
+            'email': self.usuario.email,
+            'email_confirmacion': self.usuario.email,
+        })
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Ese correo ya está registrado en otro usuario.')
+        self.assertEqual(len(mail.outbox), 0)
+        self.usuario_sin_correo.refresh_from_db()
+        self.assertEqual(self.usuario_sin_correo.email, '')
 
 
 class VentasTests(TestCase):

@@ -34,6 +34,23 @@ AWS_SECRET_ACCESS_KEY = env('AWS_SECRET_ACCESS_KEY', default='')
 AWS_S3_BUCKET_NAME = env('AWS_S3_BUCKET_NAME', default='')
 AWS_S3_REGION = env('AWS_S3_REGION', default='us-east-1')
 
+# ── Correo — doble factor de autenticación ──────────
+# En desarrollo el código se imprime en la terminal del servidor. Para enviar
+# correos reales, configura estas variables en .env con tu proveedor SMTP.
+EMAIL_HOST = env('EMAIL_HOST', default='')
+EMAIL_PORT = env.int('EMAIL_PORT', default=587)
+EMAIL_HOST_USER = env('EMAIL_HOST_USER', default='')
+EMAIL_HOST_PASSWORD = env('EMAIL_HOST_PASSWORD', default='')
+EMAIL_USE_TLS = env.bool('EMAIL_USE_TLS', default=True)
+DEFAULT_FROM_EMAIL = env('DEFAULT_FROM_EMAIL', default='Econotec <no-reply@econotec.local>')
+EMAIL_BACKEND = env('EMAIL_BACKEND', default='')
+if not EMAIL_BACKEND:
+    EMAIL_BACKEND = (
+        'django.core.mail.backends.smtp.EmailBackend'
+        if EMAIL_HOST and EMAIL_HOST_USER and EMAIL_HOST_PASSWORD
+        else 'django.core.mail.backends.console.EmailBackend'
+    )
+
 ALLOWED_HOSTS = ['127.0.0.1', 'localhost', '*']
 
 # Orígenes confiables para formularios POST (CSRF).
@@ -74,10 +91,11 @@ MIDDLEWARE = [
     'econotec.middleware.ActividadUsuarioMiddleware',
 ]
 
-# Configuración de Sesiones (Cierre automático por inactividad en 30 minutos)
-SESSION_COOKIE_AGE = 30 * 60  # 30 minutos en segundos
-SESSION_SAVE_EVERY_REQUEST = True
-SESSION_EXPIRE_AT_BROWSER_CLOSE = True
+# Sesiones persistentes: no se cierran por inactividad.
+# El cierre normal de sesión ocurre solo al usar el botón "Cerrar sesión".
+SESSION_COOKIE_AGE = 60 * 60 * 24 * 365  # 1 año
+SESSION_SAVE_EVERY_REQUEST = False
+SESSION_EXPIRE_AT_BROWSER_CLOSE = False
 
 ROOT_URLCONF = 'core.urls'
 
