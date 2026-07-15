@@ -630,10 +630,10 @@
                     {% else %}
                         {% if ingreso.valor_acordado is None %}
                             <button type="button" class="btn btn-salida-bloqueada" onclick="alertaValorAcordadoPendiente()">
-                                📤 Equipo reparado / Salidas Registrada
+                                📤 Registrar equipo reparado / Salida
                             </button>
                         {% else %}
-                            <a href="{% url 'econotec:salida_registrar' ingreso_pk=ingreso.pk %}" class="btn btn-primary">📤 Equipo reparado / Salidas Registrada</a>
+                            <a href="{% url 'econotec:salida_registrar' ingreso_pk=ingreso.pk %}" class="btn btn-primary">📤 Registrar equipo reparado / Salida</a>
                         {% endif %}
                     {% endif %}
                 {% endif %}
