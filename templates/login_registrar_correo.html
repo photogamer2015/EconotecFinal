@@ -3,6 +3,7 @@
 
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <title>Registrar correo - Econotec</title>
     <script>
         if (localStorage.getItem('theme') === 'dark' || (!localStorage.getItem('theme') && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
@@ -48,12 +49,15 @@
 
         body {
             min-height: 100vh;
+            min-height: 100dvh;
             display: flex;
             align-items: center;
             justify-content: center;
             padding: 20px;
             background: linear-gradient(135deg, var(--bg-grad-1) 0%, var(--bg-grad-2) 100%);
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+            overflow-x: hidden;
+            overflow-y: auto;
         }
 
         .setup-card {
@@ -98,7 +102,7 @@
             border-radius: 8px;
             background: var(--input-bg);
             color: var(--text-main);
-            font-size: 15px;
+            font-size: 16px;
             transition: border 0.2s;
         }
 
@@ -137,7 +141,7 @@
             border-radius: 8px;
             background: linear-gradient(135deg, #f97618, #d7642f);
             color: white;
-            font-size: 15px;
+            font-size: 16px;
             font-weight: 800;
             cursor: pointer;
         }
@@ -264,6 +268,99 @@
             border: none;
             background: linear-gradient(135deg, #f97618, #d7642f);
             color: white;
+        }
+
+        @media (max-width: 520px) {
+            body {
+                align-items: flex-start;
+                padding: max(14px, env(safe-area-inset-top)) max(14px, env(safe-area-inset-right)) max(18px, env(safe-area-inset-bottom)) max(14px, env(safe-area-inset-left));
+            }
+
+            .setup-card {
+                max-width: none;
+                padding: 28px 20px;
+                border-radius: 12px;
+                box-shadow: 0 14px 38px rgba(0, 0, 0, 0.28);
+            }
+
+            h1 {
+                font-size: 23px;
+                line-height: 1.18;
+                letter-spacing: 0;
+            }
+
+            .sub {
+                font-size: 14px;
+                margin-bottom: 20px;
+            }
+
+            label {
+                font-size: 14px;
+                margin-top: 14px;
+            }
+
+            input[type="email"],
+            input[type="text"],
+            .primary {
+                min-height: 52px;
+            }
+
+            input[type="email"],
+            input[type="text"] {
+                padding: 14px;
+            }
+
+            input[type="text"].code {
+                font-size: 21px;
+                letter-spacing: 4px;
+            }
+
+            .primary {
+                padding: 14px 12px;
+            }
+
+            .secondary-actions {
+                grid-template-columns: 1fr;
+            }
+
+            .secondary-actions button,
+            .secondary-actions a {
+                min-height: 46px;
+                font-size: 14px;
+            }
+
+            .hint {
+                font-size: 12.5px;
+            }
+
+            .confirm-overlay {
+                align-items: flex-end;
+                padding: max(14px, env(safe-area-inset-top)) max(14px, env(safe-area-inset-right)) max(14px, env(safe-area-inset-bottom)) max(14px, env(safe-area-inset-left));
+            }
+
+            .confirm-card {
+                max-width: none;
+                padding: 24px 18px;
+                border-radius: 12px;
+            }
+
+            .confirm-actions {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 340px) {
+            .setup-card {
+                padding: 24px 14px;
+            }
+
+            h1 {
+                font-size: 21px;
+            }
+
+            input[type="text"].code {
+                letter-spacing: 3px;
+            }
         }
     </style>
 </head>
