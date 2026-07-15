@@ -318,10 +318,17 @@
             var btnCancelResend = document.getElementById('btn-cancel-resend');
             var btnConfirmResend = document.getElementById('btn-confirm-resend');
             var resendConfirmed = false;
+            var verifyButtonText = 'Verificar y entrar';
 
             function limpiarCodigo() {
                 input.value = input.value.replace(/\D/g, '').slice(0, 6);
-                button.disabled = input.value.length !== 6;
+                var faltan = 6 - input.value.length;
+                button.disabled = faltan > 0;
+                if (faltan > 0) {
+                    button.textContent = faltan === 1 ? 'Falta 1 dígito' : 'Faltan ' + faltan + ' dígitos';
+                } else {
+                    button.textContent = verifyButtonText;
+                }
             }
 
             input.addEventListener('input', limpiarCodigo);

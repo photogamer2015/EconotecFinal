@@ -1586,6 +1586,7 @@ class UsuarioActividad(models.Model):
     user = models.OneToOneField('auth.User', on_delete=models.CASCADE, related_name='actividad')
     ultima_conexion = models.DateTimeField(auto_now=True)
     fecha_reinicio_perfil = models.DateTimeField(null=True, blank=True)
+    perfil_color_asesor = models.CharField(max_length=7, default='#0d47a1')
 
     def __str__(self):
         return f'Actividad de {self.user.username}'

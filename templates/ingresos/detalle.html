@@ -356,6 +356,19 @@
                 <h3>📥 Solicitud de Ingreso</h3>
             {% endif %}
             <div class="field-row"><span class="label">Asesora Comercial</span><span class="value">{{ ingreso.asesor_comercial|default:"—" }}</span></div>
+            <div class="field-row">
+                <span class="label">Asesor que registró</span>
+                <span class="value">
+                    {% if ingreso.registrado_por %}
+                        <span style="background: var(--primary-light); color: var(--primary-dark); padding: 3px 9px; border-radius: 10px; font-size: 12px; font-weight: 700;">
+                            👤 {{ ingreso.registrado_por.first_name|default:ingreso.registrado_por.username }}
+                        </span>
+                        {% if ingreso.registrado_por.email %}
+                            <br><small style="color: var(--text-muted); font-size: 11px;">{{ ingreso.registrado_por.email }}</small>
+                        {% endif %}
+                    {% else %}—{% endif %}
+                </span>
+            </div>
             <div class="field-row"><span class="label">Técnico Recibido</span><span class="value">{{ ingreso.tecnico_encargado_nombre|default:"— Sin asignar —" }}</span></div>
             <div class="field-row"><span class="label">Fecha de ingreso</span><span class="value">{{ ingreso.fecha_ingreso|date:"d/m/Y" }}</span></div>
             <div class="field-row"><span class="label">Factura N°</span><span class="value">{{ ingreso.numero_factura|default:"—" }}</span></div>
@@ -365,16 +378,6 @@
                     <br><small style="color:#666; font-size:11px;">↳ {{ ingreso.subestado_visual_display }}</small>
                 {% endif %}
             </span></div>
-            <div class="field-row">
-                <span class="label">Registrado por (sistema)</span>
-                <span class="value">
-                    {% if ingreso.registrado_por %}
-                        <span style="background: var(--primary-light); color: var(--primary-dark); padding: 3px 9px; border-radius: 10px; font-size: 12px; font-weight: 700;">
-                            👤 {{ ingreso.registrado_por.first_name|default:ingreso.registrado_por.username }}
-                        </span>
-                    {% else %}—{% endif %}
-                </span>
-            </div>
         </div>
 
         <div class="info-card" style="margin-top:18px;">
@@ -627,10 +630,10 @@
                     {% else %}
                         {% if ingreso.valor_acordado is None %}
                             <button type="button" class="btn btn-salida-bloqueada" onclick="alertaValorAcordadoPendiente()">
-                                📤 Registrar Salida
+                                📤 Equipo reparado / Salidas Registrada
                             </button>
                         {% else %}
-                            <a href="{% url 'econotec:salida_registrar' ingreso_pk=ingreso.pk %}" class="btn btn-primary">📤 Registrar Salida</a>
+                            <a href="{% url 'econotec:salida_registrar' ingreso_pk=ingreso.pk %}" class="btn btn-primary">📤 Equipo reparado / Salidas Registrada</a>
                         {% endif %}
                     {% endif %}
                 {% endif %}

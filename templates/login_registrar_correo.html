@@ -349,11 +349,18 @@
             var btnCancelResend = document.getElementById('btn-cancel-resend');
             var btnConfirmResend = document.getElementById('btn-confirm-resend');
             var resendConfirmed = false;
+            var verifyButtonText = 'Confirmar correo y entrar';
 
             if (codigo && btnVerificar) {
                 function limpiarCodigo() {
                     codigo.value = codigo.value.replace(/\D/g, '').slice(0, 6);
-                    btnVerificar.disabled = codigo.value.length !== 6;
+                    var faltan = 6 - codigo.value.length;
+                    btnVerificar.disabled = faltan > 0;
+                    if (faltan > 0) {
+                        btnVerificar.textContent = faltan === 1 ? 'Falta 1 dígito' : 'Faltan ' + faltan + ' dígitos';
+                    } else {
+                        btnVerificar.textContent = verifyButtonText;
+                    }
                 }
                 codigo.addEventListener('input', limpiarCodigo);
                 limpiarCodigo();

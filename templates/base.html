@@ -396,9 +396,20 @@
             margin: 0 auto 10px; box-shadow: 0 4px 10px rgba(0,0,0,0.2); border: 2px solid rgba(255,255,255,0.5);
         }
         .perfil-header h3 { margin: 0; font-size: 20px; font-weight: 700; text-shadow: 0 1px 2px rgba(0,0,0,0.3); }
+        .perfil-email {
+            margin: 5px auto 0;
+            max-width: 260px;
+            color: rgba(255,255,255,0.88);
+            font-size: 12px;
+            font-weight: 650;
+            line-height: 1.25;
+            overflow-wrap: anywhere;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.25);
+        }
         .perfil-nivel { margin: 5px 0 0; font-size: 13px; opacity: 0.9; text-transform: uppercase; letter-spacing: 1px; font-weight: bold;}
         
         .perfil-body { padding: 20px; }
+        .perfil-modal-content.asesor-simple .perfil-header { padding-bottom: 30px; }
         .perfil-stats { display: flex; justify-content: space-between; gap: 10px; margin-bottom: 20px; }
         .stat-box { text-align: center; flex: 1; background: rgba(150,150,150,0.08); border-radius: 10px; padding: 10px 6px; }
         .stat-num { display: block; font-size: 22px; font-weight: 800; color: var(--text-color, #333); }
@@ -445,6 +456,42 @@
             color: var(--primary, #f97618);
             font-size: 18px;
             font-weight: 900;
+        }
+        .perfil-color-panel {
+            margin-top: 14px;
+            padding: 12px;
+            background: rgba(150,150,150,0.08);
+            border-radius: 10px;
+        }
+        .perfil-color-title {
+            margin: 0 0 10px;
+            color: var(--text-color, #333);
+            font-size: 12px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .perfil-color-options {
+            display: grid;
+            grid-template-columns: repeat(6, 1fr);
+            gap: 8px;
+        }
+        .perfil-color-btn {
+            width: 34px;
+            height: 34px;
+            border-radius: 50%;
+            border: 2px solid rgba(255,255,255,0.9);
+            box-shadow: 0 2px 6px rgba(0,0,0,0.18);
+            cursor: pointer;
+            transition: transform 0.15s, box-shadow 0.15s, outline 0.15s;
+        }
+        .perfil-color-btn:hover {
+            transform: translateY(-1px) scale(1.04);
+            box-shadow: 0 4px 10px rgba(0,0,0,0.22);
+        }
+        .perfil-color-btn.is-selected {
+            outline: 3px solid var(--primary, #f97618);
+            outline-offset: 2px;
         }
         
         #btn-perfil:hover { background: rgba(255,255,255,0.25) !important; transform: translateY(-1px); }
@@ -859,8 +906,8 @@
                     <a href="/admin/" title="Panel administrativo de Django">Admin</a>
                 {% endif %}
                 
-                {% if es_tecnico %}
-                <button type="button" id="btn-perfil" title="Ver mi progreso" style="background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.3); color: white; border-radius: 20px; padding: 5px 14px; margin-right: 10px; cursor: pointer; transition: 0.2s; font-weight: bold; margin-left: 5px;">
+                {% if es_tecnico or es_asesor %}
+                <button type="button" id="btn-perfil" title="Ver mi perfil" style="background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.3); color: white; border-radius: 20px; padding: 5px 14px; margin-right: 10px; cursor: pointer; transition: 0.2s; font-weight: bold; margin-left: 5px;">
                     👤 Perfil
                 </button>
                 {% endif %}
@@ -1317,15 +1364,16 @@
     <!-- Modal de Perfil (Gamificación) -->
     <div id="perfil-modal" class="perfil-modal" style="display: none;">
         <div class="perfil-modal-content" id="perfil-modal-content">
-            <button class="perfil-help" onclick="mostrarAyudaPerfil()" title="¿Cómo funciona esto?">?</button>
+            <button class="perfil-help" id="perfil-help-btn" onclick="mostrarAyudaPerfil()" title="¿Cómo funciona esto?">?</button>
             <button class="perfil-close" onclick="document.getElementById('perfil-modal').style.display='none'">×</button>
             <div class="perfil-header" id="perfil-header" style="background: #ccc; transition: all 0.5s;">
                 <div class="perfil-avatar" id="perfil-avatar-icon" style="display:flex; justify-content:center; align-items:center;">👤</div>
                 <h3 id="perfil-nombre">Cargando...</h3>
+                <p class="perfil-email" id="perfil-email-texto"></p>
                 <p class="perfil-nivel" id="perfil-nivel-texto">Nivel: ---</p>
                 <div id="god-tec-message"></div>
             </div>
-            <div class="perfil-body">
+            <div class="perfil-body" id="perfil-body">
                 <div class="perfil-stats">
                     <div class="stat-box">
                         <span class="stat-num" id="stat-buenas" style="color: #28a745;">0</span>
@@ -1361,6 +1409,26 @@
                     </a>
                 </div>
             </div>
+            <div class="perfil-body" id="perfil-asesor-body" style="display: none;">
+                <div class="perfil-actions">
+                    <a href="{% url 'econotec:ingreso_lista' %}?registrador={{ request.user.id }}&sede=todas" class="perfil-action">
+                        <span class="perfil-action-icon">📥</span>
+                        <span class="perfil-action-text">Ver equipos que registré</span>
+                        <span class="perfil-action-arrow">➔</span>
+                    </a>
+                </div>
+                <div class="perfil-color-panel">
+                    <p class="perfil-color-title">Cambiar color del perfil</p>
+                    <div class="perfil-color-options" id="perfil-color-options">
+                        <button type="button" class="perfil-color-btn" data-color="#0d47a1" style="background:#0d47a1;" title="Azul" aria-label="Azul"></button>
+                        <button type="button" class="perfil-color-btn" data-color="#ec4899" style="background:#ec4899;" title="Rosa" aria-label="Rosa"></button>
+                        <button type="button" class="perfil-color-btn" data-color="#c62828" style="background:#c62828;" title="Rojo" aria-label="Rojo"></button>
+                        <button type="button" class="perfil-color-btn" data-color="#f97618" style="background:#f97618;" title="Naranja" aria-label="Naranja"></button>
+                        <button type="button" class="perfil-color-btn" data-color="#2e7d32" style="background:#2e7d32;" title="Verde" aria-label="Verde"></button>
+                        <button type="button" class="perfil-color-btn" data-color="#f9c74f" style="background:#f9c74f;" title="Amarillo" aria-label="Amarillo"></button>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -1368,6 +1436,45 @@
         document.addEventListener('DOMContentLoaded', function() {
             var btnPerfil = document.getElementById('btn-perfil');
             var modalPerfil = document.getElementById('perfil-modal');
+            var perfilColorButtons = document.querySelectorAll('.perfil-color-btn');
+
+            function marcarColorPerfil(color) {
+                perfilColorButtons.forEach(function(btn) {
+                    btn.classList.toggle('is-selected', btn.dataset.color === color);
+                });
+            }
+
+            function aplicarColorPerfil(color) {
+                document.getElementById('perfil-header').style.background = color;
+                marcarColorPerfil(color);
+            }
+
+            perfilColorButtons.forEach(function(btn) {
+                btn.addEventListener('click', function() {
+                    var color = btn.dataset.color;
+                    aplicarColorPerfil(color);
+
+                    fetch('{% url "econotec:api_perfil_color" %}', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRFToken': '{{ csrf_token }}'
+                        },
+                        body: JSON.stringify({ color: color })
+                    }).then(function(response) {
+                        if (!response.ok) {
+                            throw new Error('No se pudo guardar el color.');
+                        }
+                        return response.json();
+                    }).then(function(data) {
+                        if (data.color) aplicarColorPerfil(data.color);
+                    }).catch(function() {
+                        fetch('/api/perfil/')
+                            .then(r => r.json())
+                            .then(data => aplicarColorPerfil(data.color || '#0d47a1'));
+                    });
+                });
+            });
             
             if (btnPerfil && modalPerfil) {
                 btnPerfil.addEventListener('click', function() {
@@ -1376,9 +1483,34 @@
                     fetch('/api/perfil/')
                         .then(r => r.json())
                         .then(data => {
+                            var perfilContent = document.getElementById('perfil-modal-content');
+                            var perfilBody = document.getElementById('perfil-body');
+                            var perfilAsesorBody = document.getElementById('perfil-asesor-body');
+                            var perfilHelp = document.getElementById('perfil-help-btn');
+
+                            perfilContent.classList.remove('asesor-simple');
+                            if (perfilBody) perfilBody.style.display = '';
+                            if (perfilAsesorBody) perfilAsesorBody.style.display = 'none';
+                            if (perfilHelp) perfilHelp.style.display = '';
+
                             document.getElementById('perfil-nombre').textContent = data.nombre;
+                            document.getElementById('perfil-email-texto').textContent = data.email || 'Correo no registrado';
                             document.getElementById('perfil-nivel-texto').textContent = 'NIVEL: ' + data.nivel;
                             document.getElementById('perfil-header').style.background = data.color;
+
+                            if (data.tipo_perfil === 'asesor') {
+                                document.getElementById('perfil-nivel-texto').textContent = 'ASESOR REGISTRADO';
+                                document.getElementById('perfil-header').style.backgroundSize = 'auto';
+                                document.getElementById('perfil-header').style.animation = 'none';
+                                document.getElementById('perfil-avatar-icon').innerHTML = '👤';
+                                document.getElementById('god-tec-message').innerHTML = '';
+                                aplicarColorPerfil(data.color || '#0d47a1');
+                                if (perfilBody) perfilBody.style.display = 'none';
+                                if (perfilAsesorBody) perfilAsesorBody.style.display = '';
+                                if (perfilHelp) perfilHelp.style.display = 'none';
+                                perfilContent.classList.add('asesor-simple');
+                                return;
+                            }
                             
                             if (data.nivel === 'God Tec Econotec') {
                                 document.getElementById('perfil-header').style.backgroundSize = '200% 200%';

@@ -5,6 +5,7 @@ Maneja: bienvenida, ayuda, ingresos de equipos, salidas y clientes.
 from datetime import date
 from decimal import Decimal as D
 from io import BytesIO
+import json
 import unicodedata
 
 from django.contrib import messages
@@ -27,8 +28,8 @@ from .busqueda import (
     texto_salida_busqueda,
     total_resultados,
 )
-from .models import Cliente, IngresoEquipo, SalidaEquipo, Abono, SEDES_EQUIPOS
-from .permisos import admin_requerido, tecnico_requerido, es_tecnico
+from .models import Cliente, IngresoEquipo, SalidaEquipo, Abono, SEDES_EQUIPOS, UsuarioActividad
+from .permisos import admin_requerido, tecnico_requerido, es_asesor, es_tecnico
 from .gamificacion import (
     SALIDA_BUENA_ESTADOS,
     SALIDA_GARANTIA_ESTADOS,
@@ -2004,9 +2005,42 @@ def ingreso_diagnostico_silenciar(request, pk):
 # API Perfil (Gamificación)
 # ═════════════════════════════════════════════════════════════════
 
+COLORES_PERFIL_ASESOR = {
+    '#0d47a1': 'Azul',
+    '#ec4899': 'Rosa',
+    '#c62828': 'Rojo',
+    '#f97618': 'Naranja',
+    '#2e7d32': 'Verde',
+    '#f9c74f': 'Amarillo',
+}
+
+
 @login_required
 def api_perfil(request):
     user = request.user
+
+    if es_asesor(user) and not es_tecnico(user) and not user.is_superuser:
+        actividad, _ = UsuarioActividad.objects.get_or_create(user=user)
+        color = actividad.perfil_color_asesor
+        if color not in COLORES_PERFIL_ASESOR:
+            color = '#0d47a1'
+
+        return JsonResponse({
+            'username': user.username,
+            'nombre': user.first_name or user.username,
+            'email': user.email or '',
+            'tipo_perfil': 'asesor',
+            'rol': 'Asesor registrado',
+            'nivel': 'Asesor registrado',
+            'color': color,
+            'colores_disponibles': COLORES_PERFIL_ASESOR,
+            'ingresos': 0,
+            'salidas_buenas': 0,
+            'salidas_producto': 0,
+            'salidas_malas': 0,
+            'total': 0,
+            'proximo': None,
+        })
     
     # Verificar si el usuario tiene una fecha de reinicio
     fecha_reinicio = None
@@ -2093,6 +2127,8 @@ def api_perfil(request):
     return JsonResponse({
         'username': user.username,
         'nombre': user.first_name or user.username,
+        'email': user.email or '',
+        'tipo_perfil': 'tecnico',
         'ingresos': ingresos_count,
         'salidas_buenas': salidas_buenas,
         'salidas_producto': salidas_producto,
@@ -2102,3 +2138,25 @@ def api_perfil(request):
         'color': color,
         'proximo': proximo
     })
+
+
+@login_required
+@require_POST
+def api_perfil_color(request):
+    user = request.user
+    if not (es_asesor(user) and not es_tecnico(user) and not user.is_superuser):
+        return JsonResponse({'ok': False, 'error': 'No autorizado.'}, status=403)
+
+    try:
+        payload = json.loads(request.body.decode('utf-8') or '{}')
+    except json.JSONDecodeError:
+        payload = {}
+
+    color = (payload.get('color') or '').strip()
+    if color not in COLORES_PERFIL_ASESOR:
+        return JsonResponse({'ok': False, 'error': 'Color no permitido.'}, status=400)
+
+    actividad, _ = UsuarioActividad.objects.get_or_create(user=user)
+    actividad.perfil_color_asesor = color
+    actividad.save(update_fields=['perfil_color_asesor'])
+    return JsonResponse({'ok': True, 'color': color})

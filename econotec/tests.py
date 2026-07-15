@@ -10,7 +10,7 @@ from django.test import TestCase, override_settings
 from django.urls import reverse
 
 from .forms import IngresoEquipoForm
-from .models import Cliente, IngresoEquipo, SalidaEquipo
+from .models import Cliente, IngresoEquipo, SalidaEquipo, UsuarioActividad
 from .qr_utils import token_para_ingreso
 from .views_auth import CAPTCHA_SESSION_KEY, LOGIN_2FA_SESSION_KEY, LOGIN_EMAIL_SETUP_SESSION_KEY
 
@@ -187,10 +187,10 @@ class VentasTests(TestCase):
         asesores = Group.objects.create(name='Asesores')
         tecnicos = Group.objects.create(name='Tecnicos')
 
-        self.vendedor = User.objects.create_user(username='Kimberly')
+        self.vendedor = User.objects.create_user(username='Kimberly', email='kimberly@example.com')
         self.vendedor.groups.add(asesores)
 
-        self.usuario = User.objects.create_user(username='Yandri')
+        self.usuario = User.objects.create_user(username='Yandri', email='yandri@example.com')
         self.usuario.groups.add(tecnicos)
         self.client.force_login(self.usuario)
 
@@ -477,8 +477,76 @@ class VentasTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         data = response.json()
+        self.assertEqual(data['email'], 'yandri@example.com')
         self.assertEqual(data['salidas_producto'], 1)
         self.assertEqual(data['total'], 1)
+
+    def test_perfil_asesor_muestra_datos_basicos(self):
+        self.client.force_login(self.vendedor)
+
+        response = self.client.get(reverse('econotec:api_perfil'))
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data['tipo_perfil'], 'asesor')
+        self.assertEqual(data['nombre'], 'Kimberly')
+        self.assertEqual(data['email'], 'kimberly@example.com')
+        self.assertEqual(data['nivel'], 'Asesor registrado')
+        self.assertEqual(data['total'], 0)
+        self.assertEqual(data['color'], '#0d47a1')
+        self.assertIn('#ec4899', data['colores_disponibles'])
+
+    def test_perfil_asesor_guarda_color_preferido(self):
+        self.client.force_login(self.vendedor)
+
+        response = self.client.post(
+            reverse('econotec:api_perfil_color'),
+            data='{"color":"#ec4899"}',
+            content_type='application/json',
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['color'], '#ec4899')
+        actividad = UsuarioActividad.objects.get(user=self.vendedor)
+        self.assertEqual(actividad.perfil_color_asesor, '#ec4899')
+
+        response = self.client.get(reverse('econotec:api_perfil'))
+        self.assertEqual(response.json()['color'], '#ec4899')
+
+    def test_perfil_asesor_rechaza_color_no_permitido(self):
+        self.client.force_login(self.vendedor)
+
+        response = self.client.post(
+            reverse('econotec:api_perfil_color'),
+            data='{"color":"#000000"}',
+            content_type='application/json',
+        )
+
+        self.assertEqual(response.status_code, 400)
+
+    def test_bienvenida_muestra_boton_perfil_para_asesor(self):
+        self.client.force_login(self.vendedor)
+        self.activar_sede_guayaquil()
+
+        response = self.client.get(reverse('econotec:bienvenida'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'id="btn-perfil"')
+        self.assertContains(response, 'Asesor')
+        self.assertContains(response, 'Ver equipos que registré')
+        self.assertContains(response, f'?registrador={self.vendedor.pk}&sede=todas')
+        self.assertContains(response, 'Cambiar color del perfil')
+        self.assertContains(response, 'data-color="#ec4899"')
+
+    def test_detalle_muestra_asesor_que_registro_el_equipo(self):
+        ingreso = self.crear_ingreso_reparacion(registrado_por=self.vendedor)
+
+        response = self.client.get(reverse('econotec:ingreso_detalle', kwargs={'pk': ingreso.pk}))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Asesor que registró')
+        self.assertContains(response, 'Kimberly')
+        self.assertContains(response, 'kimberly@example.com')
 
     def test_perfil_suma_cuatro_puntos_por_salida_buena_positiva(self):
         ingreso = self.crear_ingreso_reparacion()
@@ -1128,7 +1196,7 @@ class VentasTests(TestCase):
         self.assertNotContains(response, 'Actualizar valor')
         self.assertContains(response, 'name="valor_pendiente_reporte"')
         self.assertContains(response, 'Reportar por qué está pendiente el valor acordado')
-        self.assertContains(response, 'Registrar salida')
+        self.assertContains(response, 'Registrar equipo listo o reparado')
         self.assertContains(response, 'id="btn-perfil-movil"')
         self.assertContains(response, 'Ver perfil')
         self.assertContains(response, 'id="perfil-mobile-modal"')

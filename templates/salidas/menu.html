@@ -1,13 +1,13 @@
 {% extends 'base.html' %}
 
-{% block title %}Salida de Equipos — Econotec{% endblock %}
+{% block title %}Equipo listo o reparado / salida de equipo — Econotec{% endblock %}
 
 {% block content %}
 <div class="crumb">
-    <a href="{% url 'econotec:bienvenida' %}">Inicio</a> / Salida de Equipo
+    <a href="{% url 'econotec:bienvenida' %}">Inicio</a> / Equipo listo o reparado / salida de equipo
 </div>
 
-<h2 class="page-title">Salida de <span class="accent">Equipo</span></h2>
+<h2 class="page-title">Equipo listo o reparado <span class="accent">/ salida de equipo</span></h2>
 <p class="page-subtitle">Cierra reparaciones y entrega los equipos al cliente.</p>
 
 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px;">
@@ -15,7 +15,7 @@
         <div style="display:flex; align-items:center; gap:14px;">
             <div style="font-size:38px;">📋</div>
             <div>
-                <h3 style="color: #1f2937; font-size:18px; margin-bottom:4px;">Ver Lista de Salidas</h3>
+                <h3 style="color: #1f2937; font-size:18px; margin-bottom:4px;">Ver lista de equipo reparado / salida</h3>
                 <p style="color:#666; font-size:13px;">{{ total }} actas de salida registradas.</p>
             </div>
         </div>
