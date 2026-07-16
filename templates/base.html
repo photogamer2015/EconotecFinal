@@ -339,6 +339,8 @@
         [data-theme="dark"] .badge-cliente_no_acepta { background: rgba(245, 158, 11, 0.2); color: #fbbf24; }
         [data-theme="dark"] .badge-reparado_parcial { background: rgba(249, 118, 24, 0.2); color: #fbd38d; }
         [data-theme="dark"] .badge-garantia { background: rgba(168, 85, 247, 0.2); color: #c084fc; }
+        [data-theme="dark"] .estado-subestado-inline.estado-subestado-no_reparable { color: #f87171; }
+        [data-theme="dark"] .estado-subestado-inline.estado-subestado-cliente_no_acepta { color: #fbbf24; }
         
         .badge-pagado    { background: #e8f5e9; color: #2e7d32; }
         .badge-pendiente { background: #ffebee; color: #c62828; }
@@ -352,6 +354,20 @@
         .badge-cliente_no_acepta { background: #fff8e1; color: #856404; }
         .badge-reparado_parcial { background: #fff3e0; color: #e65100; }
         .badge-garantia { background: #f3e5f5; color: #6a1b9a; }
+        .estado-subestado-inline {
+            color: #555;
+            font-size: 11px;
+            font-weight: 600;
+            margin-top: 4px;
+        }
+        .estado-subestado-inline.estado-subestado-no_reparable {
+            color: #c62828;
+            font-weight: 800;
+        }
+        .estado-subestado-inline.estado-subestado-cliente_no_acepta {
+            color: #856404;
+            font-weight: 800;
+        }
 
         /* MISC */
         .toast-body { font-size: 15px; color: var(--text-color); margin-bottom: 12px; }

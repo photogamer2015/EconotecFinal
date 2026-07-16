@@ -21,6 +21,7 @@ from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.crypto import constant_time_compare, salted_hmac
+from django.utils.html import escape
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_http_methods
@@ -32,6 +33,13 @@ LOGIN_2FA_SESSION_KEY = 'login_2fa_pending'
 LOGIN_EMAIL_SETUP_SESSION_KEY = 'login_email_setup_pending'
 LOGIN_2FA_EXPIRACION_MINUTOS = 10
 LOGIN_2FA_MAX_INTENTOS = 10
+EMAIL_COLOR_PRINCIPAL = '#f97618'
+EMAIL_COLOR_PRINCIPAL_OSCURO = '#d7642f'
+EMAIL_COLOR_FONDO = '#f4ece8'
+EMAIL_COLOR_TARJETA = '#fff8f3'
+EMAIL_COLOR_TEXTO = '#1f2937'
+EMAIL_COLOR_TEXTO_SUAVE = '#6b7280'
+EMAIL_COLOR_BORDE = '#ead8d1'
 
 
 def _nuevo_captcha_login(request):
@@ -104,33 +112,128 @@ def _mensaje_intentos_restantes(restantes):
     return f'Código incorrecto. Te quedan {restantes} {etiqueta}.'
 
 
+def _mensaje_codigo_email_texto(user, linea_codigo, codigo, aviso_seguridad):
+    return (
+        f'Hola {user.get_username()},\n\n'
+        f'{linea_codigo} {codigo}\n\n'
+        f'Este código vence en {LOGIN_2FA_EXPIRACION_MINUTOS} minutos. '
+        f'{aviso_seguridad}'
+    )
+
+
+def _mensaje_codigo_email_html(user, titulo, etiqueta, linea_codigo, codigo, aviso_seguridad):
+    usuario = escape(user.get_username())
+    titulo = escape(titulo)
+    etiqueta = escape(etiqueta)
+    linea_codigo = escape(linea_codigo)
+    codigo = escape(codigo)
+    aviso_seguridad = escape(aviso_seguridad)
+
+    return f"""<!doctype html>
+<html lang="es">
+  <body style="margin:0;padding:0;background:{EMAIL_COLOR_FONDO};font-family:Arial,Helvetica,sans-serif;color:{EMAIL_COLOR_TEXTO};">
+    <div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;">
+      Tu código Econotec vence en {LOGIN_2FA_EXPIRACION_MINUTOS} minutos.
+    </div>
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:{EMAIL_COLOR_FONDO};padding:28px 12px;">
+      <tr>
+        <td align="center">
+          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:620px;background:{EMAIL_COLOR_TARJETA};border:1px solid {EMAIL_COLOR_BORDE};border-radius:18px;overflow:hidden;box-shadow:0 14px 35px rgba(31,41,55,0.10);">
+            <tr>
+              <td style="background:{EMAIL_COLOR_TEXTO};padding:26px 30px;">
+                <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+                  <tr>
+                    <td style="vertical-align:middle;">
+                      <div style="display:inline-block;width:44px;height:44px;line-height:44px;border-radius:14px;background:{EMAIL_COLOR_PRINCIPAL};color:#ffffff;text-align:center;font-weight:800;font-size:24px;margin-right:12px;">E</div>
+                      <span style="color:#ffffff;font-size:24px;font-weight:800;vertical-align:middle;">Econotec</span>
+                    </td>
+                    <td align="right" style="vertical-align:middle;">
+                      <span style="display:inline-block;background:rgba(249,118,24,0.14);border:1px solid rgba(249,118,24,0.45);color:#ffd9c2;border-radius:999px;padding:8px 12px;font-size:13px;font-weight:700;">{etiqueta}</span>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:32px 30px 10px 30px;">
+                <p style="margin:0 0 10px 0;color:{EMAIL_COLOR_TEXTO_SUAVE};font-size:15px;font-weight:700;text-transform:uppercase;letter-spacing:0;">Verificación segura</p>
+                <h1 style="margin:0;color:{EMAIL_COLOR_TEXTO};font-size:28px;line-height:1.25;font-weight:800;">{titulo}</h1>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:8px 30px 0 30px;">
+                <p style="margin:0 0 18px 0;color:{EMAIL_COLOR_TEXTO};font-size:18px;line-height:1.55;">Hola <strong>{usuario}</strong>,</p>
+                <p style="margin:0;color:{EMAIL_COLOR_TEXTO_SUAVE};font-size:17px;line-height:1.55;">{linea_codigo}</p>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:22px 30px;">
+                <div style="background:#ffffff;border:2px solid {EMAIL_COLOR_PRINCIPAL};border-radius:16px;padding:24px;text-align:center;">
+                  <div style="color:{EMAIL_COLOR_PRINCIPAL_OSCURO};font-size:13px;font-weight:800;text-transform:uppercase;letter-spacing:0;margin-bottom:10px;">Código de verificación</div>
+                  <div style="color:{EMAIL_COLOR_TEXTO};font-size:38px;line-height:1;font-weight:900;letter-spacing:8px;font-family:'Courier New',Courier,monospace;">{codigo}</div>
+                </div>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:0 30px 30px 30px;">
+                <div style="background:#fff1e8;border:1px solid #ffd1b8;border-radius:14px;padding:16px 18px;color:{EMAIL_COLOR_TEXTO};font-size:16px;line-height:1.5;">
+                  <strong style="color:{EMAIL_COLOR_PRINCIPAL_OSCURO};">Vence en {LOGIN_2FA_EXPIRACION_MINUTOS} minutos.</strong>
+                  {aviso_seguridad}
+                </div>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:22px 30px;background:#ffffff;border-top:1px solid {EMAIL_COLOR_BORDE};">
+                <p style="margin:0;color:{EMAIL_COLOR_TEXTO_SUAVE};font-size:13px;line-height:1.55;">
+                  Este mensaje fue enviado automáticamente por Econotec. Por seguridad, no compartas este código con nadie.
+                </p>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>"""
+
+
 def _enviar_codigo_2fa(user, codigo):
+    linea_codigo = 'Tu código de verificación para ingresar a Econotec es:'
+    aviso_seguridad = 'Si no intentaste iniciar sesión, ignora este correo.'
     send_mail(
         subject='Código de acceso Econotec',
-        message=(
-            f'Hola {user.get_username()},\n\n'
-            f'Tu código de verificación para ingresar a Econotec es: {codigo}\n\n'
-            f'Este código vence en {LOGIN_2FA_EXPIRACION_MINUTOS} minutos. '
-            'Si no intentaste iniciar sesión, ignora este correo.'
-        ),
+        message=_mensaje_codigo_email_texto(user, linea_codigo, codigo, aviso_seguridad),
         from_email=settings.DEFAULT_FROM_EMAIL,
         recipient_list=[user.email],
         fail_silently=False,
+        html_message=_mensaje_codigo_email_html(
+            user,
+            'Código de acceso',
+            'Acceso seguro',
+            linea_codigo,
+            codigo,
+            aviso_seguridad,
+        ),
     )
 
 
 def _enviar_codigo_registro_correo(user, email, codigo):
+    linea_codigo = 'Tu código para registrar este correo en Econotec es:'
+    aviso_seguridad = 'Si no intentaste registrar este correo, ignora este mensaje.'
     send_mail(
         subject='Verifica tu correo Econotec',
-        message=(
-            f'Hola {user.get_username()},\n\n'
-            f'Tu código para registrar este correo en Econotec es: {codigo}\n\n'
-            f'Este código vence en {LOGIN_2FA_EXPIRACION_MINUTOS} minutos. '
-            'Si no intentaste registrar este correo, ignora este mensaje.'
-        ),
+        message=_mensaje_codigo_email_texto(user, linea_codigo, codigo, aviso_seguridad),
         from_email=settings.DEFAULT_FROM_EMAIL,
         recipient_list=[email],
         fail_silently=False,
+        html_message=_mensaje_codigo_email_html(
+            user,
+            'Verifica tu correo',
+            'Registrar correo',
+            linea_codigo,
+            codigo,
+            aviso_seguridad,
+        ),
     )
 
 

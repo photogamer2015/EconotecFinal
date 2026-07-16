@@ -511,6 +511,17 @@ class IngresoEquipo(models.Model):
     def estado_visual_key(self):
         if self.pendiente_retiro_visual:
             return 'pendiente_retiro'
+        salida = self._salida_relacionada()
+        if salida is not None:
+            if salida.estado_reparacion == 'no_reparable':
+                return 'no_reparable'
+            if salida.estado_reparacion == 'cliente_no_acepta':
+                return 'cliente_no_acepta'
+        if self.estado == 'entregado':
+            if self.subestado_entregado == 'sin_solucion':
+                return 'no_reparable'
+            if self.subestado_entregado == 'no_quiso_reparar':
+                return 'cliente_no_acepta'
         return self.estado
 
     @property
@@ -834,6 +845,13 @@ class IngresoEquipo(models.Model):
     @property
     def tiene_salida(self):
         return hasattr(self, 'salida')
+
+    @property
+    def retirado_por_cliente(self):
+        salida = self._salida_relacionada()
+        if salida is None:
+            return False
+        return salida.cliente_ya_retiro or salida.estado_reparacion == 'retirado'
 
     @property
     def equipo_garantia_referencia(self):

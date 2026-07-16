@@ -97,6 +97,22 @@ class IngresoEquipoForm(forms.ModelForm):
     Formulario que replica fielmente la hoja "Solicitud de Ingreso" de Econotec.
     El cliente NO se incluye aquí; se maneja aparte (ClienteForm) en la vista.
     """
+    CAMPOS_DIAGNOSTICO = [
+        'diagnostico_inmediato',
+        'valor_diagnostico',
+        'diagnostico_metodo',
+        'diagnostico_banco',
+        'diagnostico_banco_otro',
+        'diagnostico_tarjeta_app',
+        'diagnostico_comprobante_url',
+        'diagnostico_monto_1',
+        'diagnostico_metodo_1',
+        'diagnostico_banco_1',
+        'diagnostico_monto_2',
+        'diagnostico_metodo_2',
+        'diagnostico_banco_2',
+    ]
+
     VALOR_ACORDADO_ESTADOS = [
         ('si', 'Sí'),
         ('no', 'No / pendiente de valor'),
@@ -205,6 +221,27 @@ class IngresoEquipoForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.salida_registrada = None
+        self.estado_bloqueado_por_salida = False
+        self.estado_bloqueado_valor = None
+        self.subestado_bloqueado_valor = ''
+        if self.instance and self.instance.pk:
+            try:
+                self.salida_registrada = self.instance.salida
+            except IngresoEquipo.salida.RelatedObjectDoesNotExist:
+                self.salida_registrada = None
+            self.estado_bloqueado_por_salida = self.salida_registrada is not None
+            if self.estado_bloqueado_por_salida:
+                self.estado_bloqueado_valor = 'garantia' if self.salida_registrada.estado_reparacion == 'garantia' else 'entregado'
+                self.subestado_bloqueado_valor = {
+                    'pendiente_retiro': 'pendiente_retiro',
+                    'retirado': 'con_solucion',
+                    'cliente_no_acepta': 'no_quiso_reparar',
+                    'no_reparable': 'sin_solucion',
+                }.get(self.salida_registrada.estado_reparacion, '')
+                self.initial['estado'] = self.estado_bloqueado_valor
+                self.initial['subestado_reparacion'] = ''
+                self.initial['subestado_entregado'] = self.subestado_bloqueado_valor
         
         # Hacer obligatorios los campos de personal
         self.fields['tecnico_encargado'].required = True
@@ -219,6 +256,28 @@ class IngresoEquipoForm(forms.ModelForm):
             widget=forms.RadioSelect(attrs={'class': 'valor-acordado-radio'}),
             label='¿El técnico ya tiene el valor acordado?'
         )
+        if self.estado_bloqueado_por_salida:
+            self.initial['valor_acordado_estado'] = 'si' if self.instance.valor_acordado is not None else 'no'
+            self.initial['valor_acordado'] = (
+                f'{self.instance.valor_acordado:.2f}'
+                if self.instance.valor_acordado is not None
+                else ''
+            )
+            self.fields['valor_acordado_estado'].disabled = True
+            self.fields['valor_acordado_estado'].required = False
+            self.fields['valor_acordado'].disabled = True
+            self.fields['valor_acordado'].required = False
+            self.fields['valor_acordado'].widget.attrs.update({
+                'class': 'form-input estado-lock-input',
+                'aria-describedby': 'valor-salida-lock',
+            })
+            for nombre in self.CAMPOS_DIAGNOSTICO:
+                self.fields[nombre].disabled = True
+                self.fields[nombre].required = False
+                self.fields[nombre].widget.attrs.update({
+                    'class': 'form-input estado-lock-input',
+                    'aria-describedby': 'diagnostico-salida-lock',
+                })
         
         # Limita los técnicos disponibles a los del grupo "Tecnicos" + admins activos
         self.fields['tecnico_encargado'].queryset = _queryset_tecnicos()
@@ -274,12 +333,31 @@ class IngresoEquipoForm(forms.ModelForm):
 
         self.fields['equipo_garantia'].label_from_instance = lambda eq: f"{eq.codigo_equipo} — {eq.marca} {eq.modelo_serie_detalle} ({eq.creado.strftime('%d/%m/%Y')})"
 
-        # Quitar la opción "entregado" del campo estado
+        # En ingresos normales no se escoge "Entregado" desde este formulario.
+        # Cuando ya existe una salida, el estado queda bloqueado y se muestra el
+        # estado visual derivado de la salida para no caer en "Ingresado".
         if 'estado' in self.fields:
-            self.fields['estado'].choices = [
-                choice for choice in self.fields['estado'].choices
-                if choice[0] != 'entregado'
-            ]
+            if self.estado_bloqueado_por_salida:
+                self.fields['estado'].choices = [
+                    (self.estado_bloqueado_valor, self.instance.estado_visual_display)
+                ]
+                self.fields['estado'].disabled = True
+                self.fields['estado'].required = False
+                self.fields['estado'].widget.attrs.update({
+                    'class': 'form-input estado-lock-input',
+                    'aria-describedby': 'estado-salida-lock',
+                })
+                for nombre in ('subestado_reparacion', 'subestado_entregado'):
+                    self.fields[nombre].disabled = True
+                    self.fields[nombre].required = False
+                    self.fields[nombre].widget.attrs.update({
+                        'class': 'form-input estado-lock-input',
+                    })
+            else:
+                self.fields['estado'].choices = [
+                    choice for choice in self.fields['estado'].choices
+                    if choice[0] != 'entregado'
+                ]
 
     def _valor_acordado_estado_inicial(self):
         if self.is_bound:
@@ -296,6 +374,9 @@ class IngresoEquipoForm(forms.ModelForm):
         return 'si'
 
     def clean_valor_acordado(self):
+        if self.estado_bloqueado_por_salida:
+            return self.instance.valor_acordado
+
         estado = ''
         if self.is_bound:
             estado = (self.data.get(self.add_prefix('valor_acordado_estado')) or '').strip()
@@ -322,7 +403,9 @@ class IngresoEquipoForm(forms.ModelForm):
         estado = cleaned.get('estado')
         valor_acordado_estado = cleaned.get('valor_acordado_estado')
 
-        if valor_acordado_estado in ('no', 'pendiente'):
+        if self.estado_bloqueado_por_salida:
+            cleaned['valor_acordado'] = self.instance.valor_acordado
+        elif valor_acordado_estado in ('no', 'pendiente'):
             cleaned['valor_acordado'] = None
         elif valor_acordado_estado == 'si' and cleaned.get('valor_acordado') is None:
             self.add_error(
@@ -330,19 +413,27 @@ class IngresoEquipoForm(forms.ModelForm):
                 'Ingresa el valor acordado o marca No / pendiente de valor.'
             )
         
-        if estado == 'en_reparacion':
+        if self.estado_bloqueado_por_salida:
+            cleaned['estado'] = self.estado_bloqueado_valor
+            cleaned['subestado_reparacion'] = ''
+            cleaned['subestado_entregado'] = self.subestado_bloqueado_valor
+        elif estado == 'en_reparacion':
             if not cleaned.get('subestado_reparacion'):
                 self.add_error('subestado_reparacion', 'Debe seleccionar un detalle obligatorio para la reparación.')
-        else:
-            cleaned['subestado_reparacion'] = ''
-            
-        if estado == 'entregado':
+            cleaned['subestado_entregado'] = ''
+        elif estado == 'entregado':
             if not cleaned.get('subestado_entregado'):
                 self.add_error('subestado_entregado', 'Debe seleccionar cómo se entregó el equipo.')
+            cleaned['subestado_reparacion'] = ''
         else:
+            cleaned['subestado_reparacion'] = ''
             cleaned['subestado_entregado'] = ''
-            
-        if estado == 'garantia':
+
+        if self.estado_bloqueado_por_salida:
+            cleaned['equipo_garantia'] = self.instance.equipo_garantia
+            cleaned['equipo_garantia_manual'] = self.instance.equipo_garantia_manual or ''
+            cleaned['motivo_garantia'] = self.instance.motivo_garantia or ''
+        elif estado == 'garantia':
             motivo = cleaned.get('motivo_garantia')
             if not motivo or not motivo.strip():
                 self.add_error('motivo_garantia', 'Debe indicar obligatoriamente el motivo de la garantía.')
@@ -351,9 +442,18 @@ class IngresoEquipoForm(forms.ModelForm):
             cleaned['equipo_garantia_manual'] = ''
             cleaned['motivo_garantia'] = ''
 
+        if self.estado_bloqueado_por_salida:
+            for nombre in self.CAMPOS_DIAGNOSTICO:
+                cleaned[nombre] = getattr(self.instance, nombre)
+
         diagnostico_activo = cleaned.get('diagnostico_inmediato') == 'si'
         diagnostico = cleaned.get('valor_diagnostico') or Decimal('0.00')
-        if diagnostico_activo and diagnostico > 0 and cleaned.get('diagnostico_metodo') == 'mixto':
+        if (
+            not self.estado_bloqueado_por_salida
+            and diagnostico_activo
+            and diagnostico > 0
+            and cleaned.get('diagnostico_metodo') == 'mixto'
+        ):
             monto_1 = cleaned.get('diagnostico_monto_1') or Decimal('0.00')
             monto_2 = cleaned.get('diagnostico_monto_2') or Decimal('0.00')
 

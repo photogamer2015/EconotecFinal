@@ -128,6 +128,216 @@
     font-weight: 800;
     color: var(--primary);
   }
+  .movement-summary {
+    margin: -14px 0 24px;
+    padding: 0;
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 14px;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.05);
+    overflow: hidden;
+  }
+  .movement-summary-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 14px;
+    padding: 16px 18px;
+    cursor: pointer;
+    list-style: none;
+  }
+  .movement-summary-head::-webkit-details-marker {
+    display: none;
+  }
+  .movement-summary-head h3 {
+    margin: 0;
+    color: var(--secondary);
+    font-size: 19px;
+    font-weight: 900;
+  }
+  .movement-summary-head p {
+    margin: 5px 0 0;
+    color: var(--text-muted);
+    font-size: 13px;
+    line-height: 1.35;
+  }
+  .movement-summary-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .movement-scope {
+    display: inline-flex;
+    align-items: center;
+    padding: 6px 11px;
+    border-radius: 999px;
+    background: var(--primary-light);
+    color: var(--primary-dark);
+    font-size: 12px;
+    font-weight: 900;
+    white-space: nowrap;
+  }
+  .movement-mini-total {
+    display: inline-flex;
+    align-items: center;
+    padding: 6px 10px;
+    border-radius: 999px;
+    background: #ffffff;
+    border: 1px solid var(--border-color);
+    color: var(--secondary);
+    font-size: 12px;
+    font-weight: 900;
+    white-space: nowrap;
+  }
+  .movement-summary-chevron {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 999px;
+    background: #1f2937;
+    color: #ffffff;
+    font-size: 16px;
+    font-weight: 900;
+    transition: transform 0.2s ease, background 0.2s ease;
+  }
+  .movement-summary[open] .movement-summary-chevron {
+    transform: rotate(180deg);
+    background: var(--primary);
+  }
+  .movement-summary-body {
+    padding: 0 18px 18px;
+    border-top: 1px solid var(--border-color);
+  }
+  .movement-summary-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+    margin-top: 16px;
+  }
+  .movement-panel {
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    overflow: hidden;
+    background: rgba(255, 255, 255, 0.42);
+  }
+  .movement-panel-title {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 14px;
+    background: #fff8f3;
+    color: var(--secondary);
+    font-size: 14px;
+    font-weight: 900;
+    text-transform: uppercase;
+  }
+  .movement-panel-title span {
+    color: var(--primary);
+    font-size: 18px;
+  }
+  .movement-site-row,
+  .movement-total-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    padding: 11px 14px;
+    color: var(--text-main);
+    border-top: 1px dashed var(--border-color);
+    font-size: 14px;
+    font-weight: 750;
+  }
+  button.movement-site-row {
+    width: 100%;
+    appearance: none;
+    border-right: 0;
+    border-bottom: 0;
+    border-left: 0;
+    background: transparent;
+    font-family: inherit;
+    text-align: left;
+    cursor: pointer;
+    transition: background 0.16s ease, color 0.16s ease;
+  }
+  button.movement-site-row:hover {
+    background: #fff7ed;
+    color: var(--primary-dark);
+  }
+  button.movement-site-row:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: -2px;
+  }
+  .movement-row-hint {
+    color: var(--text-muted);
+    font-size: 12px;
+    font-weight: 800;
+    margin-left: auto;
+  }
+  button.movement-site-row:hover .movement-row-hint {
+    color: var(--primary-dark);
+  }
+  .movement-site-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .movement-code {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    border-radius: 8px;
+    background: #1f2937;
+    color: #fff;
+    font-size: 13px;
+    font-weight: 900;
+  }
+  .movement-site-row strong,
+  .movement-total-row strong {
+    color: var(--secondary);
+    font-size: 19px;
+    font-weight: 900;
+  }
+  .movement-total-row {
+    background: #fff1e8;
+    border-top: 1px solid #ffd1b8;
+    color: var(--primary-dark);
+  }
+  .movement-total-row strong {
+    color: var(--primary);
+    font-size: 22px;
+  }
+  .movement-grand-total {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 14px;
+    margin-top: 14px;
+    padding: 14px 16px;
+    border-radius: 10px;
+    background: var(--secondary);
+    color: #fff8f3;
+    font-size: 15px;
+    font-weight: 900;
+  }
+  .movement-grand-total small {
+    display: block;
+    margin-top: 3px;
+    color: rgba(255, 248, 243, 0.72);
+    font-size: 12px;
+    font-weight: 700;
+  }
+  .movement-grand-total strong {
+    color: #ffffff;
+    font-size: 26px;
+    font-weight: 900;
+  }
 
   .alert-box {
     margin-top: 32px;
@@ -1093,6 +1303,27 @@
   [data-theme="dark"] .card-icon {
     background: #0b0f19;
   }
+  [data-theme="dark"] .movement-panel {
+    background: rgba(15, 23, 42, 0.34);
+  }
+  [data-theme="dark"] .movement-panel-title {
+    background: rgba(249, 118, 24, 0.12);
+  }
+  [data-theme="dark"] .movement-mini-total {
+    background: rgba(255, 255, 255, 0.06);
+    border-color: rgba(255, 255, 255, 0.12);
+    color: var(--text-main);
+  }
+  [data-theme="dark"] button.movement-site-row:hover {
+    background: rgba(249, 118, 24, 0.12);
+  }
+  [data-theme="dark"] .movement-total-row {
+    background: rgba(249, 118, 24, 0.14);
+    border-color: rgba(249, 118, 24, 0.32);
+  }
+  [data-theme="dark"] .movement-grand-total {
+    background: #111827;
+  }
 
   @media (max-width: 1160px) {
     .stats-row {
@@ -1106,6 +1337,9 @@
     .stats-row,
     .dashboard-grid {
       grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .movement-summary-grid {
+      grid-template-columns: 1fr;
     }
     .dashboard-header {
       margin-bottom: 24px;
@@ -1123,6 +1357,15 @@
     .stat-card,
     .card-box {
       min-height: auto;
+    }
+    .movement-summary-head,
+    .movement-summary-actions,
+    .movement-grand-total {
+      align-items: stretch;
+      flex-direction: column;
+    }
+    .movement-scope {
+      width: fit-content;
     }
     .alerta-item {
       grid-template-columns: auto 1fr;
@@ -1604,6 +1847,72 @@
     <div class="value">{{ stats.total_clientes }}</div>
   </div>
 </div>
+
+<details class="movement-summary" aria-label="Totales de ingresos y salidas de equipos por sede">
+  <summary class="movement-summary-head">
+    <div>
+      <h3>Total de ingreso de equipo y salidas</h3>
+      <p>Resumen general dividido por sede: G Guayaquil y U Quito.</p>
+    </div>
+    <div class="movement-summary-actions">
+      <span class="movement-mini-total">Ingresos {{ resumen_movimientos.ingresos.total }}</span>
+      <span class="movement-mini-total">Salidas {{ resumen_movimientos.salidas.total }}</span>
+      <span class="movement-scope">Sedes G / U</span>
+      <span class="movement-summary-chevron">⌄</span>
+    </div>
+  </summary>
+  <div class="movement-summary-body">
+    <div class="movement-summary-grid">
+      <div class="movement-panel">
+        <div class="movement-panel-title">
+          Ingresos de equipo
+          <span>📥</span>
+        </div>
+        <button type="button" class="movement-site-row" onclick="abrirModalDashboard('ingresos_sede_guayaquil')">
+          <span class="movement-site-label"><span class="movement-code">G</span> Guayaquil</span>
+          <span class="movement-row-hint">Ver detalle</span>
+          <strong>{{ resumen_movimientos.ingresos.guayaquil }}</strong>
+        </button>
+        <button type="button" class="movement-site-row" onclick="abrirModalDashboard('ingresos_sede_quito')">
+          <span class="movement-site-label"><span class="movement-code">U</span> Quito</span>
+          <span class="movement-row-hint">Ver detalle</span>
+          <strong>{{ resumen_movimientos.ingresos.quito }}</strong>
+        </button>
+        <div class="movement-total-row">
+          <span>Total ingresos</span>
+          <strong>{{ resumen_movimientos.ingresos.total }}</strong>
+        </div>
+      </div>
+      <div class="movement-panel">
+        <div class="movement-panel-title">
+          Salidas de equipo
+          <span>📤</span>
+        </div>
+        <button type="button" class="movement-site-row" onclick="abrirModalDashboard('salidas_sede_guayaquil')">
+          <span class="movement-site-label"><span class="movement-code">G</span> Guayaquil</span>
+          <span class="movement-row-hint">Ver detalle</span>
+          <strong>{{ resumen_movimientos.salidas.guayaquil }}</strong>
+        </button>
+        <button type="button" class="movement-site-row" onclick="abrirModalDashboard('salidas_sede_quito')">
+          <span class="movement-site-label"><span class="movement-code">U</span> Quito</span>
+          <span class="movement-row-hint">Ver detalle</span>
+          <strong>{{ resumen_movimientos.salidas.quito }}</strong>
+        </button>
+        <div class="movement-total-row">
+          <span>Total salidas</span>
+          <strong>{{ resumen_movimientos.salidas.total }}</strong>
+        </div>
+      </div>
+    </div>
+    <div class="movement-grand-total">
+      <span>
+        Total general de ingresos y salidas
+        <small>Ingresos {{ resumen_movimientos.ingresos.total }} + salidas {{ resumen_movimientos.salidas.total }}</small>
+      </span>
+      <strong>{{ resumen_movimientos.total_general }}</strong>
+    </div>
+  </div>
+</details>
 
 <!-- Tarjetas principales -->
 <div class="dashboard-grid">

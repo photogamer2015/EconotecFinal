@@ -79,6 +79,7 @@ def equipos_demorados_qs(usuario=None, umbral_dias=UMBRAL_DIAS_DIAGNOSTICO, incl
         .select_related('cliente', 'tecnico_encargado')
         .filter(fecha_ingreso__lte=fecha_limite)
         .filter(estado__in=ESTADOS_ALERTA_DIAGNOSTICO)
+        .filter(salida__isnull=True)
         .order_by('fecha_ingreso', 'numero_equipo')
     )
 

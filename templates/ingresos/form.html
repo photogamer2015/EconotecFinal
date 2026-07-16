@@ -260,6 +260,86 @@
         pointer-events: none;
         filter: grayscale(10%);
     }
+
+    .estado-editor-bloqueado select,
+    .estado-lock-input {
+        background: #eef0f2 !important;
+        border-color: #d1d5db !important;
+        color: #4b5563 !important;
+        cursor: not-allowed;
+        font-weight: 800;
+    }
+
+    .estado-salida-lock {
+        margin-top: 10px;
+        padding: 12px 14px;
+        border-radius: 8px;
+        border: 1px solid #d1d5db;
+        background: #f3f4f6;
+        color: #4b5563;
+        font-size: 12px;
+        font-weight: 700;
+        line-height: 1.35;
+    }
+
+    .estado-salida-lock strong {
+        display: block;
+        color: #374151;
+        font-size: 13px;
+        font-weight: 900;
+        margin-bottom: 3px;
+        text-transform: uppercase;
+        letter-spacing: 0.2px;
+    }
+
+    .valor-bloqueado .valor-acordado-opcion,
+    .valor-bloqueado .valor-acordado-opcion:hover,
+    .valor-bloqueado .valor-acordado-opcion.is-active {
+        border-color: #d1d5db;
+        background: #eef0f2;
+        color: #4b5563;
+        cursor: not-allowed;
+        box-shadow: none;
+    }
+
+    .valor-bloqueado .valor-acordado-opcion input {
+        cursor: not-allowed;
+    }
+
+    .diagnostico-bloqueado #wrap_pago_diagnostico {
+        background: #eef0f2 !important;
+        border-color: #d1d5db !important;
+    }
+
+    [data-theme="dark"] .estado-editor-bloqueado select,
+    [data-theme="dark"] .estado-lock-input {
+        background: rgba(255, 255, 255, 0.08) !important;
+        border-color: rgba(255, 255, 255, 0.16) !important;
+        color: var(--text-muted) !important;
+    }
+
+    [data-theme="dark"] .estado-salida-lock {
+        border-color: rgba(255, 255, 255, 0.14);
+        background: rgba(255, 255, 255, 0.06);
+        color: var(--text-muted);
+    }
+
+    [data-theme="dark"] .estado-salida-lock strong {
+        color: var(--text-main);
+    }
+
+    [data-theme="dark"] .valor-bloqueado .valor-acordado-opcion,
+    [data-theme="dark"] .valor-bloqueado .valor-acordado-opcion:hover,
+    [data-theme="dark"] .valor-bloqueado .valor-acordado-opcion.is-active {
+        border-color: rgba(255, 255, 255, 0.16);
+        background: rgba(255, 255, 255, 0.08);
+        color: var(--text-muted);
+    }
+
+    [data-theme="dark"] .diagnostico-bloqueado #wrap_pago_diagnostico {
+        background: rgba(255, 255, 255, 0.06) !important;
+        border-color: rgba(255, 255, 255, 0.14) !important;
+    }
 </style>
 
 <div class="crumb">
@@ -435,7 +515,7 @@
     </div>
 
     <!-- Diagnóstico inmediato -->
-    <div class="form-section">
+    <div class="form-section {% if ing_form.estado_bloqueado_por_salida %}diagnostico-bloqueado{% endif %}">
         <h3>Diagnóstico Inmediato</h3>
         <div class="form-row cols-2">
             <div>
@@ -447,6 +527,13 @@
                 {{ ing_form.valor_diagnostico }}
             </div>
         </div>
+        {% if ing_form.estado_bloqueado_por_salida %}
+        <div id="diagnostico-salida-lock" class="estado-salida-lock">
+            <strong>Salida registrada</strong>
+            Ya se hizo una salida{% if ing_form.salida_registrada.fecha_salida %} el {{ ing_form.salida_registrada.fecha_salida|date:"d/m/Y" }}{% endif %}.
+            El diagnóstico inmediato y su método de pago quedan bloqueados tal cual fueron registrados.
+        </div>
+        {% endif %}
         <div id="wrap_pago_diagnostico" style="display:none; margin-top:14px; background:#f5f7fa; padding:15px; border-radius:8px; border:1px solid #e1e4e8;">
             <h4 style="margin-top:0; margin-bottom:10px; color:#333; font-size:14px;">MÉTODO DE PAGO DEL DIAGNÓSTICO</h4>
             <div class="form-row cols-2">
@@ -515,7 +602,7 @@
     <div class="form-section">
         <h3>Valor y Estado del Equipo</h3>
         <div class="form-row cols-2">
-            <div class="valor-acordado-panel">
+            <div class="valor-acordado-panel {% if ing_form.estado_bloqueado_por_salida %}valor-bloqueado{% endif %}">
                 <label class="form-label">{{ ing_form.valor_acordado_estado.label }}</label>
                 <div class="valor-acordado-opciones" id="valor-acordado-opciones">
                     {% for radio in ing_form.valor_acordado_estado %}
@@ -531,19 +618,39 @@
                     <label class="form-label" for="{{ ing_form.valor_acordado.id_for_label }}">Valor acordado (USD)</label>
                     {{ ing_form.valor_acordado }}
                     {{ ing_form.valor_acordado.errors }}
+                    {% if ing_form.estado_bloqueado_por_salida %}
+                    <small style="color:#888; font-size:11px; display:block; margin-top:4px;">El valor acordado queda tal cual fue registrado antes de la salida.</small>
+                    {% else %}
                     <small style="color:#888; font-size:11px; display:block; margin-top:4px;">Ingresa el monto acordado con el cliente.</small>
+                    {% endif %}
                 </div>
 
                 <div id="valor-acordado-aviso" class="valor-acordado-aviso">
                     Se guardará como pendiente y en la hoja se mostrará una raya (—).
                 </div>
+                {% if ing_form.estado_bloqueado_por_salida %}
+                <div id="valor-salida-lock" class="estado-salida-lock">
+                    <strong>Salida registrada</strong>
+                    Ya se hizo una salida{% if ing_form.salida_registrada.fecha_salida %} el {{ ing_form.salida_registrada.fecha_salida|date:"d/m/Y" }}{% endif %}.
+                    El valor acordado de este ingreso queda bloqueado y no se puede modificar.
+                </div>
+                {% endif %}
             </div>
-            <div id="estado-equipo-editor">
+            <div id="estado-equipo-editor" class="{% if ing_form.estado_bloqueado_por_salida %}estado-editor-bloqueado{% endif %}">
                 <label class="form-label">Estado del equipo</label>
                 {{ ing_form.estado }}
+                {{ ing_form.estado.errors }}
+                {% if ing_form.estado_bloqueado_por_salida %}
+                <div id="estado-salida-lock" class="estado-salida-lock">
+                    <strong>Salida registrada</strong>
+                    Ya se hizo una salida{% if ing_form.salida_registrada.fecha_salida %} el {{ ing_form.salida_registrada.fecha_salida|date:"d/m/Y" }}{% endif %}.
+                    El estado de este ingreso queda bloqueado; si necesitas cambiar el cierre, hazlo desde la salida registrada.
+                </div>
+                {% endif %}
             </div>
         </div>
 
+        {% if not ing_form.estado_bloqueado_por_salida %}
         <!-- Sub-estados condicionales -->
         <div class="form-row cols-2" style="margin-top:14px;">
             <div id="wrap_subestado_reparacion" style="display:none;">
@@ -599,6 +706,7 @@
             <span id="hint-auto-salida-texto" style="color:#1b5e20;"></span>
             <br><small style="color:#388e3c; margin-top:4px; display:block;">💡 Al hacer clic en <strong>Guardar cambios</strong>, se registrará la salida del equipo automáticamente. No tendrás que hacerlo por separado.</small>
         </div>
+        {% endif %}
     </div>
 
     <!-- Abono / anticipo -->

@@ -139,15 +139,43 @@ def bienvenida(request):
         ).count(),
         'total_clientes': Cliente.objects.count(),
         'pendientes_retiro': ingresos_equipos.filter(
-            estado__in=['ingresado', 'en_reparacion']
+            estado__in=['ingresado', 'en_reparacion'],
+            salida__isnull=True,
         ).count() + SalidaEquipo.objects.filter(
             ingreso__sede__in=SEDES_EQUIPOS,
             estado_reparacion='pendiente_retiro',
         ).count(),
     }
+    salidas_equipos = SalidaEquipo.objects.filter(ingreso__sede__in=SEDES_EQUIPOS)
+    ingresos_por_sede = dict(
+        ingresos_equipos
+        .values('sede')
+        .annotate(total=Count('id'))
+        .values_list('sede', 'total')
+    )
+    salidas_por_sede = dict(
+        salidas_equipos
+        .values('ingreso__sede')
+        .annotate(total=Count('id'))
+        .values_list('ingreso__sede', 'total')
+    )
+    resumen_movimientos = {
+        'ingresos': {
+            'guayaquil': ingresos_por_sede.get('guayaquil', 0),
+            'quito': ingresos_por_sede.get('quito', 0),
+            'total': stats['total_ingresos'],
+        },
+        'salidas': {
+            'guayaquil': salidas_por_sede.get('guayaquil', 0),
+            'quito': salidas_por_sede.get('quito', 0),
+            'total': salidas_equipos.count(),
+        },
+    }
+    resumen_movimientos['total_general'] = (
+        resumen_movimientos['ingresos']['total'] + resumen_movimientos['salidas']['total']
+    )
 
     # ── Equipos más ingresados ──────────────────────────────
-    from django.db.models import Count
     from .models import TIPOS_EQUIPO
 
     qs_equipos = (
@@ -219,6 +247,7 @@ def bienvenida(request):
         .select_related('cliente', 'tecnico_encargado')
         .filter(fecha_ingreso__lte=fecha_limite_diag)
         .filter(estado='ingresado')
+        .filter(salida__isnull=True)
         .filter(diagnostico_silenciado=True)
     )
     # No filtramos por usuario para los técnicos, ven todo
@@ -252,7 +281,6 @@ def bienvenida(request):
             'bodegaje_monto': bod['monto'],
         })
     # ── Top Clientes ──────────────────────────────
-    from django.db.models import Count
     clientes_top = (
         Cliente.objects
         .annotate(total_ingresos=Count('ingresos', filter=Q(ingresos__sede__in=SEDES_EQUIPOS)))
@@ -264,6 +292,7 @@ def bienvenida(request):
         'usuario': request.user,
         'es_admin': es_admin_user,
         'stats': stats,
+        'resumen_movimientos': resumen_movimientos,
         'equipos_top': equipos_top,
         'clientes_top': clientes_top,
         'demorados': demorados,
@@ -295,6 +324,16 @@ def dashboard_details(request, tipo):
     def estado_ingreso_para_modal(ingreso):
         return ingreso.estado_visual_display
 
+    sedes_dashboard = {
+        'guayaquil': ('Guayaquil', 'G'),
+        'quito': ('Quito', 'U'),
+    }
+
+    def dinero_modal(valor):
+        if valor is None:
+            return '—'
+        return f'${valor:.2f}'
+
     if tipo == 'equipos_total':
         titulo = "Total de Equipos Ingresados"
         link_ver_todos = "/ingresos/"
@@ -303,6 +342,30 @@ def dashboard_details(request, tipo):
         for eq in qs:
             btn = f'<a href="/ingresos/{eq.pk}/" class="badge badge-ingresado" style="text-decoration:none; padding: 4px 8px;">Ver detallles</a>'
             filas.append([eq.codigo_equipo, eq.cliente.nombres, eq.tipo_equipo_display, eq.fecha_ingreso.strftime('%d/%m/%Y'), estado_ingreso_para_modal(eq), btn])
+
+    elif tipo.startswith('ingresos_sede_'):
+        sede = tipo.replace('ingresos_sede_', '', 1)
+        sede_nombre, sede_codigo = sedes_dashboard.get(sede, ('Sede', ''))
+        titulo = f"Ingresos de Equipo {sede_nombre} ({sede_codigo})"
+        qs = (
+            ingresos_de_equipo_qs()
+            .select_related('cliente', 'tecnico_encargado', 'salida')
+            .filter(sede=sede)
+            .order_by('-fecha_ingreso', '-creado')
+        )
+        columnas = ['Código', 'Cliente', 'Equipo', 'Fecha', 'Técnico', 'Estado', 'Valor', 'Acción']
+        for eq in qs:
+            btn = f'<a href="/ingresos/{eq.pk}/" class="badge badge-ingresado" style="text-decoration:none; padding: 4px 8px;">Ver detalle</a>'
+            filas.append([
+                eq.codigo_equipo,
+                eq.cliente.nombres,
+                f'{eq.tipo_equipo_display} — {eq.marca} {eq.modelo_serie_detalle}',
+                eq.fecha_ingreso.strftime('%d/%m/%Y'),
+                eq.tecnico_encargado_nombre or '—',
+                estado_ingreso_para_modal(eq),
+                dinero_modal(eq.valor_acordado),
+                btn,
+            ])
 
     elif tipo == 'ingresos_mes':
         titulo = f"Ingresos del Mes ({hoy.strftime('%B %Y').capitalize()})"
@@ -318,7 +381,10 @@ def dashboard_details(request, tipo):
     elif tipo == 'pendientes':
         titulo = "Equipos Pendientes en Taller"
         link_ver_todos = "/ingresos/"
-        ingresos = list(ingresos_de_equipo_qs().select_related('cliente').filter(estado__in=['ingresado', 'en_reparacion']))
+        ingresos = list(ingresos_de_equipo_qs().select_related('cliente').filter(
+            estado__in=['ingresado', 'en_reparacion'],
+            salida__isnull=True,
+        ))
         salidas = list(SalidaEquipo.objects.select_related('ingreso__cliente').filter(
             ingreso__sede__in=SEDES_EQUIPOS,
             estado_reparacion='pendiente_retiro',
@@ -343,6 +409,30 @@ def dashboard_details(request, tipo):
         for sal in qs:
             btn = f'<a href="/salidas/{sal.pk}/imprimir/" class="badge badge-entregado" style="text-decoration:none; padding: 4px 8px;">Ver PDF</a>'
             filas.append([sal.ingreso.codigo_equipo, sal.ingreso.cliente.nombres, sal.ingreso.tipo_equipo_display, sal.fecha_salida.strftime('%d/%m/%Y'), sal.get_estado_reparacion_display(), btn])
+
+    elif tipo.startswith('salidas_sede_'):
+        sede = tipo.replace('salidas_sede_', '', 1)
+        sede_nombre, sede_codigo = sedes_dashboard.get(sede, ('Sede', ''))
+        titulo = f"Salidas de Equipo {sede_nombre} ({sede_codigo})"
+        qs = (
+            SalidaEquipo.objects
+            .select_related('ingreso', 'ingreso__cliente', 'tecnico_reparo')
+            .filter(ingreso__sede=sede)
+            .order_by('-fecha_salida', '-creado')
+        )
+        columnas = ['Código', 'Cliente', 'Equipo', 'Fecha', 'Técnico', 'Estado salida', 'Cobrado', 'Acción']
+        for sal in qs:
+            btn = f'<a href="/salidas/{sal.pk}/imprimir/" class="badge badge-entregado" style="text-decoration:none; padding: 4px 8px;">Ver PDF</a>'
+            filas.append([
+                sal.ingreso.codigo_equipo,
+                sal.ingreso.cliente.nombres,
+                f'{sal.ingreso.tipo_equipo_display} — {sal.ingreso.marca} {sal.ingreso.modelo_serie_detalle}',
+                sal.fecha_salida.strftime('%d/%m/%Y'),
+                sal.tecnico_reparo.get_username() if sal.tecnico_reparo else '—',
+                sal.get_estado_reparacion_display(),
+                dinero_modal(sal.valor_final_cobrado),
+                btn,
+            ])
 
     elif tipo == 'clientes':
         titulo = "Directorio de Clientes"
@@ -381,7 +471,8 @@ def ingreso_menu(request):
     ingresos_equipos = ingresos_de_equipo_qs()
     total = ingresos_equipos.count()
     pendientes = ingresos_equipos.filter(
-        estado__in=['ingresado', 'en_reparacion']
+        estado__in=['ingresado', 'en_reparacion'],
+        salida__isnull=True,
     ).count() + SalidaEquipo.objects.filter(
         ingreso__sede__in=SEDES_EQUIPOS,
         estado_reparacion='pendiente_retiro',
@@ -585,6 +676,14 @@ def ingreso_registrar(request):
 def ingreso_editar(request, pk):
     """Edita un ingreso existente."""
     ingreso = get_object_or_404(IngresoEquipo, pk=pk)
+    if ingreso.retirado_por_cliente:
+        messages.warning(
+            request,
+            f'Ya este equipo fue retirado por el cliente. '
+            f'La hoja de ingreso {ingreso.codigo_equipo} queda cerrada y no se puede editar.'
+        )
+        return redirect('econotec:ingreso_detalle', pk=ingreso.pk)
+
     identidad_original = _identidad_equipo_de_ingreso(ingreso)
     confirmar_mismo_equipo_cliente = (
         _confirmo_mismo_equipo_cliente(request) if request.method == 'POST' else False
@@ -1659,6 +1758,7 @@ def alertas_demora(request):
         .select_related('cliente', 'tecnico_encargado')
         .filter(fecha_ingreso__lte=fecha_limite)
         .filter(estado='ingresado')
+        .filter(salida__isnull=True)
         .filter(diagnostico_silenciado=True)
         .order_by('fecha_ingreso', 'numero_equipo')
     )

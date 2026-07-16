@@ -148,6 +148,50 @@
         background: #c4c9d1 !important;
         transform: none;
     }
+    .ingreso-edit-bloqueado {
+        background: #d1d5db !important;
+        border-color: #d1d5db !important;
+        color: #4b5563 !important;
+        cursor: not-allowed;
+        opacity: 1;
+        justify-content: center;
+    }
+    .ingreso-retirado-alert {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        margin: -8px 0 20px;
+        padding: 14px 16px;
+        border-radius: 10px;
+        border: 1px solid #bbf7d0;
+        background: #f0fdf4;
+        color: #166534;
+        font-size: 13px;
+        font-weight: 700;
+        line-height: 1.35;
+    }
+    .ingreso-retirado-alert strong {
+        display: block;
+        color: #14532d;
+        font-size: 14px;
+        font-weight: 900;
+        text-transform: uppercase;
+        letter-spacing: 0.2px;
+        margin-bottom: 2px;
+    }
+    [data-theme="dark"] .ingreso-edit-bloqueado {
+        background: rgba(255, 255, 255, 0.10) !important;
+        border-color: rgba(255, 255, 255, 0.14) !important;
+        color: var(--text-muted) !important;
+    }
+    [data-theme="dark"] .ingreso-retirado-alert {
+        border-color: rgba(34, 197, 94, 0.35);
+        background: rgba(34, 197, 94, 0.14);
+        color: #86efac;
+    }
+    [data-theme="dark"] .ingreso-retirado-alert strong {
+        color: #bbf7d0;
+    }
     .big-num {
         font-size: 32px;
         font-weight: 800;
@@ -192,6 +236,38 @@
     .estado-equipo-panel.estado-entregado {
         border-color: #bbf7d0;
         background: #f0fdf4;
+    }
+    .estado-equipo-panel.estado-no_reparable {
+        border-color: #fecaca;
+        background: #fef2f2;
+    }
+    .estado-equipo-panel.estado-no_reparable .estado-equipo-valor,
+    .estado-equipo-panel.estado-no_reparable .estado-equipo-subestado {
+        color: #991b1b;
+    }
+    .estado-equipo-panel.estado-cliente_no_acepta {
+        border-color: #fde68a;
+        background: #fffbeb;
+    }
+    .estado-equipo-panel.estado-cliente_no_acepta .estado-equipo-valor,
+    .estado-equipo-panel.estado-cliente_no_acepta .estado-equipo-subestado {
+        color: #92400e;
+    }
+    [data-theme="dark"] .estado-equipo-panel.estado-no_reparable {
+        border-color: rgba(239, 68, 68, 0.42);
+        background: rgba(239, 68, 68, 0.13);
+    }
+    [data-theme="dark"] .estado-equipo-panel.estado-no_reparable .estado-equipo-valor,
+    [data-theme="dark"] .estado-equipo-panel.estado-no_reparable .estado-equipo-subestado {
+        color: #fca5a5;
+    }
+    [data-theme="dark"] .estado-equipo-panel.estado-cliente_no_acepta {
+        border-color: rgba(245, 158, 11, 0.42);
+        background: rgba(245, 158, 11, 0.13);
+    }
+    [data-theme="dark"] .estado-equipo-panel.estado-cliente_no_acepta .estado-equipo-valor,
+    [data-theme="dark"] .estado-equipo-panel.estado-cliente_no_acepta .estado-equipo-subestado {
+        color: #fbbf24;
     }
     .estado-equipo-panel.estado-pendiente_retiro {
         border-color: #e9d5ff;
@@ -304,10 +380,26 @@
         <span class="pending-value-alert">⚠ Pendiente de valor acordado</span>
         {% endif %}
         <a href="{% url 'econotec:ingreso_pdf' pk=ingreso.pk %}" class="btn btn-primary" target="_blank">📄 Descargar PDF</a>
+        {% if ingreso.retirado_por_cliente %}
+        <button type="button" class="btn btn-secondary ingreso-edit-bloqueado" disabled title="Ya este equipo fue retirado por el cliente">
+            🔒 Editar
+        </button>
+        {% else %}
         <a href="{% url 'econotec:ingreso_editar' pk=ingreso.pk %}" class="btn btn-secondary">✏ Editar</a>
+        {% endif %}
         <button type="button" class="btn btn-secondary" onclick="document.getElementById('qr-modal').style.display='flex'">📱 Ver QR</button>
     </div>
 </div>
+
+{% if ingreso.retirado_por_cliente %}
+<div class="ingreso-retirado-alert">
+    <span>🔒</span>
+    <div>
+        <strong>Equipo retirado por el cliente</strong>
+        Ya este equipo fue retirado por el cliente. La hoja de ingreso está cerrada y no se puede editar.
+    </div>
+</div>
+{% endif %}
 
 <!-- MODAL QR -->
 <div id="qr-modal" onclick="if(event.target===this)this.style.display='none'"
@@ -375,7 +467,7 @@
             <div class="field-row"><span class="label">Estado</span><span class="value">
                 <span class="badge badge-{{ ingreso.estado_visual_key }}">{{ ingreso.estado_visual_display }}</span>
                 {% if ingreso.subestado_visual_display %}
-                    <br><small style="color:#666; font-size:11px;">↳ {{ ingreso.subestado_visual_display }}</small>
+                    <br><small class="estado-subestado-inline estado-subestado-{{ ingreso.estado_visual_key }}">↳ {{ ingreso.subestado_visual_display }}</small>
                 {% endif %}
             </span></div>
         </div>
@@ -434,9 +526,15 @@
                 {% endif %}
             </div>
             <div class="estado-equipo-actions">
+                {% if ingreso.retirado_por_cliente %}
+                <button type="button" class="btn btn-secondary ingreso-edit-bloqueado" disabled title="Ya este equipo fue retirado por el cliente">
+                    🔒 Hoja de ingreso cerrada
+                </button>
+                {% else %}
                 <a href="{% url 'econotec:ingreso_editar' pk=ingreso.pk %}#estado-equipo-editor" class="btn btn-secondary">
                     ✏ Editar estado
                 </a>
+                {% endif %}
             </div>
         </div>
 

@@ -1,5 +1,5 @@
 import re
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 from io import BytesIO
 
@@ -10,6 +10,7 @@ from django.test import TestCase, override_settings
 from django.urls import reverse
 
 from .forms import IngresoEquipoForm
+from .alertas import equipos_demorados_qs
 from .models import Cliente, IngresoEquipo, SalidaEquipo, UsuarioActividad
 from .qr_utils import token_para_ingreso
 from .views_auth import CAPTCHA_SESSION_KEY, LOGIN_2FA_SESSION_KEY, LOGIN_EMAIL_SETUP_SESSION_KEY
@@ -64,6 +65,14 @@ class LoginCaptchaTests(TestCase):
         self.assertEqual(self.client.session[LOGIN_2FA_SESSION_KEY]['sede'], 'quito')
         self.assertEqual(len(mail.outbox), 1)
         self.assertIn('Código de acceso Econotec', mail.outbox[0].subject)
+        html = next(
+            alternativa[0]
+            for alternativa in mail.outbox[0].alternatives
+            if alternativa[1] == 'text/html'
+        )
+        self.assertIn('Econotec', html)
+        self.assertIn('Verificación segura', html)
+        self.assertIn('#f97618', html)
 
     def test_doble_factor_acepta_codigo_correcto_y_guarda_sede(self):
         respuesta = self._captcha_answer()
@@ -142,6 +151,14 @@ class LoginCaptchaTests(TestCase):
         self.assertEqual(response.url, reverse('login_registrar_correo'))
         self.assertEqual(len(mail.outbox), 1)
         self.assertIn('Verifica tu correo Econotec', mail.outbox[0].subject)
+        html = next(
+            alternativa[0]
+            for alternativa in mail.outbox[0].alternatives
+            if alternativa[1] == 'text/html'
+        )
+        self.assertIn('Verifica tu correo', html)
+        self.assertIn('Registrar correo', html)
+        self.assertIn('#f97618', html)
         self.usuario_sin_correo.refresh_from_db()
         self.assertEqual(self.usuario_sin_correo.email, '')
 
@@ -717,6 +734,134 @@ class VentasTests(TestCase):
         self.assertContains(response, 'Reparado - pendiente de retiro')
         self.assertNotContains(response, 'Listo para entrega')
 
+    def test_alerta_diagnostico_excluye_ingreso_con_salida_registrada(self):
+        ingreso = self.crear_ingreso_reparacion(
+            estado='ingresado',
+            subestado_reparacion='',
+            fecha_ingreso=date.today() - timedelta(days=10),
+        )
+        SalidaEquipo.objects.create(
+            ingreso=ingreso,
+            fecha_salida=date.today() - timedelta(days=6),
+            estado_reparacion='pendiente_retiro',
+            cliente_recibe_conforme='si',
+            valor_final_cobrado=Decimal('0.00'),
+            metodo_pago_final='sin_pago',
+            registrado_por=self.usuario,
+        )
+        IngresoEquipo.objects.filter(pk=ingreso.pk).update(
+            estado='ingresado',
+            subestado_entregado='',
+        )
+        ingreso.refresh_from_db()
+
+        self.assertEqual(ingreso.estado_visual_display, 'Pendiente de retiro')
+        self.assertNotIn(ingreso, list(equipos_demorados_qs(usuario=None)))
+
+    def test_editar_ingreso_con_salida_muestra_estado_bloqueado(self):
+        ingreso = self.crear_ingreso_reparacion(
+            valor_acordado=Decimal('100.00'),
+            diagnostico_inmediato='si',
+            valor_diagnostico=Decimal('10.00'),
+            diagnostico_metodo='mixto',
+            diagnostico_monto_1=Decimal('5.00'),
+            diagnostico_metodo_1='transferencia',
+            diagnostico_banco_1='pichincha',
+            diagnostico_monto_2=Decimal('5.00'),
+            diagnostico_metodo_2='efectivo',
+        )
+        SalidaEquipo.objects.create(
+            ingreso=ingreso,
+            fecha_salida=date(2026, 7, 9),
+            estado_reparacion='pendiente_retiro',
+            cliente_recibe_conforme='si',
+            valor_final_cobrado=Decimal('0.00'),
+            metodo_pago_final='sin_pago',
+            registrado_por=self.usuario,
+        )
+
+        response = self.client.get(
+            reverse('econotec:ingreso_editar', kwargs={'pk': ingreso.pk})
+        )
+
+        self.assertContains(response, 'Pendiente de retiro')
+        self.assertContains(response, 'Salida registrada')
+        self.assertContains(response, 'El diagnóstico inmediato y su método de pago quedan bloqueados')
+        self.assertContains(response, 'El valor acordado de este ingreso queda bloqueado')
+        self.assertContains(response, '100.00')
+        self.assertContains(response, '10.00')
+        self.assertContains(response, 'disabled')
+        self.assertContains(response, 'value="entregado"')
+        self.assertNotContains(response, 'Ingresado / En diagnóstico')
+
+    def test_editar_ingreso_con_salida_ignora_estado_posteado(self):
+        ingreso = self.crear_ingreso_reparacion(
+            valor_acordado=Decimal('100.00'),
+            diagnostico_inmediato='si',
+            valor_diagnostico=Decimal('10.00'),
+            diagnostico_metodo='mixto',
+            diagnostico_monto_1=Decimal('5.00'),
+            diagnostico_metodo_1='transferencia',
+            diagnostico_banco_1='pichincha',
+            diagnostico_monto_2=Decimal('5.00'),
+            diagnostico_metodo_2='efectivo',
+        )
+        SalidaEquipo.objects.create(
+            ingreso=ingreso,
+            fecha_salida=date(2026, 7, 9),
+            estado_reparacion='pendiente_retiro',
+            cliente_recibe_conforme='si',
+            valor_final_cobrado=Decimal('0.00'),
+            metodo_pago_final='sin_pago',
+            registrado_por=self.usuario,
+        )
+        IngresoEquipo.objects.filter(pk=ingreso.pk).update(
+            estado='ingresado',
+            subestado_entregado='',
+        )
+        ingreso.refresh_from_db()
+
+        response = self.client.post(
+            reverse('econotec:ingreso_editar', kwargs={'pk': ingreso.pk}),
+            self.ingreso_edit_post_data(
+                ingreso,
+                **{
+                    'ing-estado': 'ingresado',
+                    'ing-subestado_entregado': '',
+                    'ing-valor_acordado': '999.00',
+                    'ing-valor_acordado_estado': 'si',
+                    'ing-diagnostico_inmediato': 'no',
+                    'ing-valor_diagnostico': '99.00',
+                    'ing-diagnostico_metodo': 'efectivo',
+                    'ing-diagnostico_monto_1': '',
+                    'ing-diagnostico_metodo_1': '',
+                    'ing-diagnostico_banco_1': '',
+                    'ing-diagnostico_monto_2': '',
+                    'ing-diagnostico_metodo_2': '',
+                    'ing-diagnostico_banco_2': '',
+                    'ing-modelo_serie': 'Elitebook actualizado',
+                },
+            ),
+        )
+
+        self.assertRedirects(
+            response,
+            reverse('econotec:ingreso_detalle', kwargs={'pk': ingreso.pk})
+        )
+        ingreso.refresh_from_db()
+        self.assertEqual(ingreso.estado, 'entregado')
+        self.assertEqual(ingreso.subestado_entregado, 'pendiente_retiro')
+        self.assertEqual(ingreso.valor_acordado, Decimal('100.00'))
+        self.assertEqual(ingreso.diagnostico_inmediato, 'si')
+        self.assertEqual(ingreso.valor_diagnostico, Decimal('10.00'))
+        self.assertEqual(ingreso.diagnostico_metodo, 'mixto')
+        self.assertEqual(ingreso.diagnostico_monto_1, Decimal('5.00'))
+        self.assertEqual(ingreso.diagnostico_metodo_1, 'transferencia')
+        self.assertEqual(ingreso.diagnostico_banco_1, 'pichincha')
+        self.assertEqual(ingreso.diagnostico_monto_2, Decimal('5.00'))
+        self.assertEqual(ingreso.diagnostico_metodo_2, 'efectivo')
+        self.assertEqual(ingreso.modelo_serie, 'Elitebook actualizado')
+
     def test_dashboard_modal_total_equipos_muestra_pendiente_retiro_visual(self):
         ingreso = self.crear_ingreso_reparacion(
             estado='entregado',
@@ -750,6 +895,73 @@ class VentasTests(TestCase):
         self.assertEqual(response.context['stats']['ingresos_mes'], 1)
         self.assertEqual(response.context['equipos_top'][0]['nombre'], 'Laptop')
         self.assertNotEqual(ingreso.codigo_equipo[0], venta.codigo_equipo[0])
+
+    def test_bienvenida_muestra_resumen_ingresos_y_salidas_por_sede_para_asesor(self):
+        ingreso_g_1 = self.crear_ingreso_reparacion(sede='guayaquil')
+        ingreso_g_2 = self.crear_ingreso_reparacion(sede='guayaquil')
+        ingreso_u_1 = self.crear_ingreso_reparacion(sede='quito')
+        venta = self.crear_venta_producto()
+        SalidaEquipo.objects.create(
+            ingreso=ingreso_g_1,
+            fecha_salida=date(2026, 7, 9),
+            estado_reparacion='pendiente_retiro',
+            cliente_recibe_conforme='si',
+            valor_final_cobrado=Decimal('0.00'),
+            metodo_pago_final='sin_pago',
+            registrado_por=self.usuario,
+        )
+        SalidaEquipo.objects.create(
+            ingreso=ingreso_u_1,
+            fecha_salida=date(2026, 7, 9),
+            estado_reparacion='pendiente_retiro',
+            cliente_recibe_conforme='si',
+            valor_final_cobrado=Decimal('0.00'),
+            metodo_pago_final='sin_pago',
+            registrado_por=self.usuario,
+        )
+        self.client.force_login(self.vendedor)
+
+        response = self.client.get(reverse('econotec:bienvenida'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Total de ingreso de equipo y salidas')
+        self.assertContains(response, 'Sedes G / U')
+        self.assertContains(response, '<details class="movement-summary"', html=False)
+        self.assertContains(response, "abrirModalDashboard('ingresos_sede_guayaquil')")
+        self.assertContains(response, "abrirModalDashboard('ingresos_sede_quito')")
+        self.assertContains(response, "abrirModalDashboard('salidas_sede_guayaquil')")
+        self.assertContains(response, "abrirModalDashboard('salidas_sede_quito')")
+        self.assertEqual(response.context['resumen_movimientos']['ingresos']['guayaquil'], 2)
+        self.assertEqual(response.context['resumen_movimientos']['ingresos']['quito'], 1)
+        self.assertEqual(response.context['resumen_movimientos']['ingresos']['total'], 3)
+        self.assertEqual(response.context['resumen_movimientos']['salidas']['guayaquil'], 1)
+        self.assertEqual(response.context['resumen_movimientos']['salidas']['quito'], 1)
+        self.assertEqual(response.context['resumen_movimientos']['salidas']['total'], 2)
+        self.assertEqual(response.context['resumen_movimientos']['total_general'], 5)
+
+        response_ingresos_g = self.client.get(
+            reverse('econotec:dashboard_details', kwargs={'tipo': 'ingresos_sede_guayaquil'})
+        )
+        response_ingresos_u = self.client.get(
+            reverse('econotec:dashboard_details', kwargs={'tipo': 'ingresos_sede_quito'})
+        )
+        response_salidas_g = self.client.get(
+            reverse('econotec:dashboard_details', kwargs={'tipo': 'salidas_sede_guayaquil'})
+        )
+        response_salidas_u = self.client.get(
+            reverse('econotec:dashboard_details', kwargs={'tipo': 'salidas_sede_quito'})
+        )
+
+        self.assertContains(response_ingresos_g, ingreso_g_1.codigo_equipo)
+        self.assertContains(response_ingresos_g, ingreso_g_2.codigo_equipo)
+        self.assertNotContains(response_ingresos_g, ingreso_u_1.codigo_equipo)
+        self.assertNotContains(response_ingresos_g, venta.codigo_equipo)
+        self.assertContains(response_ingresos_u, ingreso_u_1.codigo_equipo)
+        self.assertNotContains(response_ingresos_u, ingreso_g_1.codigo_equipo)
+        self.assertContains(response_salidas_g, ingreso_g_1.codigo_equipo)
+        self.assertNotContains(response_salidas_g, ingreso_u_1.codigo_equipo)
+        self.assertContains(response_salidas_u, ingreso_u_1.codigo_equipo)
+        self.assertNotContains(response_salidas_u, ingreso_g_1.codigo_equipo)
 
     def test_dashboard_modal_total_equipos_excluye_ventas_producto(self):
         ingreso = self.crear_ingreso_reparacion(fecha_ingreso=date.today())
@@ -798,6 +1010,110 @@ class VentasTests(TestCase):
 
         self.assertContains(response, 'Entregado al cliente')
         self.assertContains(response, 'Con solución')
+
+    def test_estado_visual_sin_solucion_usa_color_rojo(self):
+        ingreso = self.crear_ingreso_reparacion(
+            estado='entregado',
+            subestado_entregado='sin_solucion',
+        )
+        SalidaEquipo.objects.create(
+            ingreso=ingreso,
+            fecha_salida=date(2026, 7, 9),
+            estado_reparacion='no_reparable',
+            cliente_recibe_conforme='si',
+            valor_final_cobrado=Decimal('0.00'),
+            metodo_pago_final='sin_pago',
+            registrado_por=self.usuario,
+        )
+        ingreso.refresh_from_db()
+
+        self.assertEqual(ingreso.estado_visual_key, 'no_reparable')
+        self.assertEqual(ingreso.estado_visual_display, 'Entregado al cliente')
+        self.assertEqual(ingreso.subestado_visual_display, 'Sin solución')
+
+        response = self.client.get(reverse('econotec:ingreso_detalle', kwargs={'pk': ingreso.pk}))
+
+        self.assertContains(response, 'badge-no_reparable')
+        self.assertContains(response, 'estado-no_reparable')
+        self.assertContains(response, 'estado-subestado-no_reparable')
+
+    def test_estado_visual_cliente_no_quiso_usa_color_amarillo(self):
+        ingreso = self.crear_ingreso_reparacion(
+            estado='entregado',
+            subestado_entregado='no_quiso_reparar',
+        )
+        SalidaEquipo.objects.create(
+            ingreso=ingreso,
+            fecha_salida=date(2026, 7, 9),
+            estado_reparacion='cliente_no_acepta',
+            cliente_recibe_conforme='si',
+            valor_final_cobrado=Decimal('0.00'),
+            metodo_pago_final='sin_pago',
+            registrado_por=self.usuario,
+        )
+        ingreso.refresh_from_db()
+
+        self.assertEqual(ingreso.estado_visual_key, 'cliente_no_acepta')
+        self.assertEqual(ingreso.estado_visual_display, 'Entregado al cliente')
+        self.assertEqual(ingreso.subestado_visual_display, 'No quiso repararlo')
+
+        response = self.client.get(reverse('econotec:ingreso_detalle', kwargs={'pk': ingreso.pk}))
+
+        self.assertContains(response, 'badge-cliente_no_acepta')
+        self.assertContains(response, 'estado-cliente_no_acepta')
+        self.assertContains(response, 'estado-subestado-cliente_no_acepta')
+
+    def test_detalle_ingreso_retirado_bloquea_enlace_de_edicion(self):
+        ingreso = self.crear_ingreso_reparacion(estado='entregado')
+        SalidaEquipo.objects.create(
+            ingreso=ingreso,
+            fecha_salida=date(2026, 7, 9),
+            fecha_retiro_real=date(2026, 7, 10),
+            estado_reparacion='retirado',
+            cliente_recibe_conforme='si',
+            valor_final_cobrado=Decimal('0.00'),
+            metodo_pago_final='sin_pago',
+            registrado_por=self.usuario,
+        )
+        ingreso.refresh_from_db()
+        edit_url = reverse('econotec:ingreso_editar', kwargs={'pk': ingreso.pk})
+
+        response = self.client.get(reverse('econotec:ingreso_detalle', kwargs={'pk': ingreso.pk}))
+
+        self.assertTrue(ingreso.retirado_por_cliente)
+        self.assertContains(response, 'Ya este equipo fue retirado por el cliente')
+        self.assertContains(response, 'Hoja de ingreso cerrada')
+        self.assertNotContains(response, f'href="{edit_url}"')
+
+    def test_editar_ingreso_retirado_redirige_y_no_guarda_cambios(self):
+        ingreso = self.crear_ingreso_reparacion(estado='entregado')
+        SalidaEquipo.objects.create(
+            ingreso=ingreso,
+            fecha_salida=date(2026, 7, 9),
+            fecha_retiro_real=date(2026, 7, 10),
+            estado_reparacion='retirado',
+            cliente_recibe_conforme='si',
+            valor_final_cobrado=Decimal('0.00'),
+            metodo_pago_final='sin_pago',
+            registrado_por=self.usuario,
+        )
+        ingreso.refresh_from_db()
+        detalle_url = reverse('econotec:ingreso_detalle', kwargs={'pk': ingreso.pk})
+        editar_url = reverse('econotec:ingreso_editar', kwargs={'pk': ingreso.pk})
+
+        response_get = self.client.get(editar_url)
+        response_post = self.client.post(
+            editar_url,
+            self.ingreso_edit_post_data(
+                ingreso,
+                **{'ing-problema_reportado': 'Cambio no permitido'}
+            ),
+        )
+
+        self.assertRedirects(response_get, detalle_url)
+        self.assertRedirects(response_post, detalle_url)
+        ingreso.refresh_from_db()
+        self.assertNotEqual(ingreso.problema_reportado, 'Cambio no permitido')
 
     def test_salida_imprimir_muestra_datos_de_factura_si_fue_realizada(self):
         ingreso = self.crear_ingreso_reparacion(estado='entregado')

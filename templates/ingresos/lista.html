@@ -204,7 +204,7 @@
                 <td>
                     <span class="badge badge-{{ i.estado_visual_key }}">{{ i.estado_visual_display }}</span>
                     {% if i.subestado_visual_display %}
-                        <div style="font-size: 11px; margin-top: 4px; color: #555; font-weight: 600;">
+                        <div class="estado-subestado-inline estado-subestado-{{ i.estado_visual_key }}">
                             ↳ {{ i.subestado_visual_display }}
                         </div>
                     {% endif %}
