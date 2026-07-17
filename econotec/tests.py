@@ -1718,6 +1718,45 @@ class VentasTests(TestCase):
         self.assertTrue(notificacion.leida)
         self.assertIsNotNone(notificacion.leida_en)
 
+    def test_notificacion_asesora_muestra_hecho_si_saldo_esta_pagado(self):
+        ingreso = self.crear_ingreso_reparacion(
+            estado='garantia',
+            valor_acordado=Decimal('60.00'),
+            motivo_garantia='Garantía por retorno',
+        )
+        salida = SalidaEquipo.objects.create(
+            ingreso=ingreso,
+            fecha_salida=date(2026, 7, 17),
+            estado_reparacion='garantia_fallos_adicionales',
+            tecnico_reparo=self.usuario,
+            valor_final_cobrado=Decimal('0.00'),
+            metodo_pago_final='sin_pago',
+            registrado_por=self.usuario,
+        )
+        NotificacionAsesora.objects.create(
+            salida=salida,
+            ingreso=ingreso,
+            asesora=self.vendedor,
+            creado_por=self.usuario,
+            valor_acordado=Decimal('60.00'),
+            mensaje='Pendiente por cobrar.',
+            leida=True,
+        )
+        ingreso.abonos.create(
+            fecha=date(2026, 7, 17),
+            monto=Decimal('60.00'),
+            metodo='efectivo',
+            registrado_por=self.vendedor,
+        )
+
+        self.client.force_login(self.vendedor)
+        response = self.client.get(reverse('econotec:notificaciones_asesora'), {'estado': 'todas'})
+
+        self.assertContains(response, 'Hecho')
+        self.assertContains(response, 'noti-status-done')
+        self.assertContains(response, 'noti-card hecha')
+        self.assertContains(response, 'noti-valor pagado')
+
     def test_notificacion_asesora_limpiar_bandeja_borra_solo_sus_notificaciones(self):
         grupo_asesores = Group.objects.get(name='Asesores')
         otra_asesora = get_user_model().objects.create_user(
