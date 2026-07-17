@@ -453,6 +453,20 @@ class IngresoEquipoForm(forms.ModelForm):
         if self.estado_bloqueado_por_salida:
             for nombre in self.CAMPOS_DIAGNOSTICO:
                 cleaned[nombre] = getattr(self.instance, nombre)
+        elif estado == 'garantia':
+            cleaned['diagnostico_inmediato'] = 'no'
+            cleaned['valor_diagnostico'] = Decimal('0.00')
+            cleaned['diagnostico_metodo'] = 'efectivo'
+            cleaned['diagnostico_banco'] = ''
+            cleaned['diagnostico_banco_otro'] = ''
+            cleaned['diagnostico_tarjeta_app'] = ''
+            cleaned['diagnostico_comprobante_url'] = ''
+            cleaned['diagnostico_monto_1'] = None
+            cleaned['diagnostico_metodo_1'] = ''
+            cleaned['diagnostico_banco_1'] = ''
+            cleaned['diagnostico_monto_2'] = None
+            cleaned['diagnostico_metodo_2'] = ''
+            cleaned['diagnostico_banco_2'] = ''
 
         diagnostico_activo = cleaned.get('diagnostico_inmediato') == 'si'
         diagnostico = cleaned.get('valor_diagnostico') or Decimal('0.00')

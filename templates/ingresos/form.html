@@ -550,6 +550,10 @@
             El diagnóstico inmediato y su método de pago quedan bloqueados tal cual fueron registrados.
         </div>
         {% endif %}
+        <div id="diagnostico-garantia-lock" class="estado-salida-lock" style="display:none;">
+            <strong>Ingreso por garantía</strong>
+            El diagnóstico inmediato queda bloqueado en No y $0.00. Si hay un cobro, regístralo en la salida.
+        </div>
         <div id="wrap_pago_diagnostico" style="display:none; margin-top:14px; background:#f5f7fa; padding:15px; border-radius:8px; border:1px solid #e1e4e8;">
             <h4 style="margin-top:0; margin-bottom:10px; color:#333; font-size:14px;">MÉTODO DE PAGO DEL DIAGNÓSTICO</h4>
             <div class="form-row cols-2">
@@ -1349,7 +1353,9 @@
     (function() {
         var selDiag = document.querySelector('[name="ing-diagnostico_inmediato"]');
         var inpValorDiag = document.querySelector('[name="ing-valor_diagnostico"]');
+        var selEstadoEquipo = document.querySelector('[name="ing-estado"]');
         var wrapPagoDiag = document.getElementById('wrap_pago_diagnostico');
+        var avisoGarantiaDiag = document.getElementById('diagnostico-garantia-lock');
 
         var selMetodoDiag = document.querySelector('[name="ing-diagnostico_metodo"]');
         var wrapBancoDiag = document.getElementById('wrap_diagnostico_banco');
@@ -1366,13 +1372,113 @@
         var inpMontoDiag1 = document.querySelector('[name="ing-diagnostico_monto_1"]');
         var inpMontoDiag2 = document.querySelector('[name="ing-diagnostico_monto_2"]');
         var msgErrorDiag = document.getElementById('msg_error_diagnostico_mixto');
+        var diagnosticoBloqueadoPorSalida = (selDiag && selDiag.disabled) || (inpValorDiag && inpValorDiag.disabled);
+        var diagnosticoAntesGarantia = null;
+        var bloqueoGarantiaDiagnostico = false;
+
+        function esGarantiaIngreso() {
+            return selEstadoEquipo && selEstadoEquipo.value === 'garantia';
+        }
+
+        function limpiarPagoDiagnostico() {
+            if (selMetodoDiag) selMetodoDiag.value = 'efectivo';
+            if (selBancoDiag) selBancoDiag.value = '';
+            var camposTexto = [
+                document.querySelector('[name="ing-diagnostico_banco_otro"]'),
+                document.querySelector('[name="ing-diagnostico_tarjeta_app"]'),
+                document.querySelector('[name="ing-diagnostico_comprobante_url"]'),
+                inpMontoDiag1,
+                inpMontoDiag2,
+                selMetodoDiag1,
+                selMetodoDiag2,
+                document.querySelector('[name="ing-diagnostico_banco_1"]'),
+                document.querySelector('[name="ing-diagnostico_banco_2"]')
+            ];
+            camposTexto.forEach(function (campo) {
+                if (campo) campo.value = '';
+            });
+            if (msgErrorDiag) msgErrorDiag.style.display = 'none';
+            if (inpMontoDiag2) inpMontoDiag2.setCustomValidity("");
+        }
+
+        function bloquearControlDiagnostico(bloquear) {
+            if (diagnosticoBloqueadoPorSalida) return;
+            [selDiag, inpValorDiag].forEach(function (campo) {
+                if (!campo) return;
+                campo.classList.toggle('estado-lock-input', bloquear);
+                campo.setAttribute('aria-disabled', bloquear ? 'true' : 'false');
+                campo.style.pointerEvents = bloquear ? 'none' : '';
+            });
+            if (selDiag) {
+                if (bloquear) {
+                    selDiag.dataset.prevTabindex = selDiag.getAttribute('tabindex') || '';
+                    selDiag.setAttribute('tabindex', '-1');
+                } else if (selDiag.dataset.prevTabindex) {
+                    selDiag.setAttribute('tabindex', selDiag.dataset.prevTabindex);
+                } else {
+                    selDiag.removeAttribute('tabindex');
+                }
+            }
+            if (inpValorDiag) {
+                if (bloquear) {
+                    inpValorDiag.setAttribute('readonly', 'readonly');
+                    inpValorDiag.removeAttribute('required');
+                } else {
+                    inpValorDiag.removeAttribute('readonly');
+                }
+            }
+        }
+
+        function aplicarGarantiaDiagnostico() {
+            if (diagnosticoBloqueadoPorSalida) return false;
+
+            if (esGarantiaIngreso()) {
+                if (!bloqueoGarantiaDiagnostico) {
+                    diagnosticoAntesGarantia = {
+                        inmediato: selDiag ? selDiag.value : 'no',
+                        valor: inpValorDiag ? inpValorDiag.value : '0.00'
+                    };
+                }
+                bloqueoGarantiaDiagnostico = true;
+                if (selDiag) selDiag.value = 'no';
+                if (inpValorDiag) inpValorDiag.value = '0.00';
+                limpiarPagoDiagnostico();
+                bloquearControlDiagnostico(true);
+                if (wrapPagoDiag) wrapPagoDiag.style.display = 'none';
+                if (wrapMixtoDiag) wrapMixtoDiag.style.display = 'none';
+                if (wrapBancoDiag) wrapBancoDiag.style.display = 'none';
+                if (wrapTarjetaDiag) wrapTarjetaDiag.style.display = 'none';
+                if (wrapComprobanteDiag) wrapComprobanteDiag.style.display = 'none';
+                if (wrapBancoOtroDiag) wrapBancoOtroDiag.style.display = 'none';
+                if (wrapBancoDiag1) wrapBancoDiag1.style.display = 'none';
+                if (wrapBancoDiag2) wrapBancoDiag2.style.display = 'none';
+                if (avisoGarantiaDiag) avisoGarantiaDiag.style.display = '';
+                if (window.__checkRequired) window.__checkRequired();
+                return true;
+            }
+
+            if (bloqueoGarantiaDiagnostico) {
+                bloqueoGarantiaDiagnostico = false;
+                bloquearControlDiagnostico(false);
+                if (diagnosticoAntesGarantia) {
+                    if (selDiag) selDiag.value = diagnosticoAntesGarantia.inmediato || 'no';
+                    if (inpValorDiag) inpValorDiag.value = diagnosticoAntesGarantia.valor || '0.00';
+                }
+            } else {
+                bloquearControlDiagnostico(false);
+            }
+            if (avisoGarantiaDiag) avisoGarantiaDiag.style.display = 'none';
+            return false;
+        }
 
         function valorDiagnostico() {
+            if (esGarantiaIngreso()) return 0;
             var activo = selDiag && selDiag.value === 'si';
             return activo && inpValorDiag ? parseFloat(inpValorDiag.value.replace(',', '.')) || 0 : 0;
         }
 
         function checkPagoDiagnostico() {
+            if (aplicarGarantiaDiagnostico()) return;
             if (!wrapPagoDiag) return;
             wrapPagoDiag.style.display = valorDiagnostico() > 0 ? 'block' : 'none';
             validarSumaDiagnosticoMixto();
@@ -1384,6 +1490,14 @@
         }
 
         function checkMetodoDiagnostico() {
+            if (esGarantiaIngreso()) {
+                if (wrapMixtoDiag) wrapMixtoDiag.style.display = 'none';
+                if (wrapBancoDiag) wrapBancoDiag.style.display = 'none';
+                if (wrapTarjetaDiag) wrapTarjetaDiag.style.display = 'none';
+                if (wrapComprobanteDiag) wrapComprobanteDiag.style.display = 'none';
+                if (wrapBancoOtroDiag) wrapBancoOtroDiag.style.display = 'none';
+                return;
+            }
             var metodo = selMetodoDiag ? selMetodoDiag.value : 'efectivo';
             if (wrapMixtoDiag) wrapMixtoDiag.style.display = (metodo === 'mixto') ? 'block' : 'none';
             if (wrapBancoDiag) wrapBancoDiag.style.display = (metodo === 'transferencia') ? 'block' : 'none';
@@ -1398,6 +1512,12 @@
         }
 
         function checkMetodoDiagnosticoMixto() {
+            if (esGarantiaIngreso()) {
+                if (wrapBancoDiag1) wrapBancoDiag1.style.display = 'none';
+                if (wrapBancoDiag2) wrapBancoDiag2.style.display = 'none';
+                validarSumaDiagnosticoMixto();
+                return;
+            }
             if (wrapBancoDiag1 && selMetodoDiag1) {
                 wrapBancoDiag1.style.display = (selMetodoDiag1.value === 'transferencia') ? 'block' : 'none';
             }
@@ -1408,6 +1528,12 @@
         }
 
         function validarSumaDiagnosticoMixto() {
+            if (esGarantiaIngreso()) {
+                if (msgErrorDiag) msgErrorDiag.style.display = 'none';
+                if (inpMontoDiag2) inpMontoDiag2.setCustomValidity("");
+                if (window.__checkRequired) window.__checkRequired();
+                return;
+            }
             if (!selMetodoDiag || selMetodoDiag.value !== 'mixto') {
                 if (msgErrorDiag) msgErrorDiag.style.display = 'none';
                 if (inpMontoDiag2) inpMontoDiag2.setCustomValidity("");
@@ -1439,6 +1565,12 @@
         if (inpValorDiag) {
             inpValorDiag.addEventListener('input', checkPagoDiagnostico);
             inpValorDiag.addEventListener('change', checkPagoDiagnostico);
+        }
+        if (selEstadoEquipo) {
+            selEstadoEquipo.addEventListener('change', function () {
+                checkPagoDiagnostico();
+                checkMetodoDiagnostico();
+            });
         }
         if (selMetodoDiag) selMetodoDiag.addEventListener('change', checkMetodoDiagnostico);
         if (selBancoDiag) selBancoDiag.addEventListener('change', checkBancoDiagnostico);
