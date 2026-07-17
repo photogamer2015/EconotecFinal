@@ -1718,6 +1718,68 @@ class VentasTests(TestCase):
         self.assertTrue(notificacion.leida)
         self.assertIsNotNone(notificacion.leida_en)
 
+    def test_notificacion_asesora_limpiar_bandeja_borra_solo_sus_notificaciones(self):
+        grupo_asesores = Group.objects.get(name='Asesores')
+        otra_asesora = get_user_model().objects.create_user(
+            username='OtraAsesora',
+            email='otra@example.com',
+        )
+        otra_asesora.groups.add(grupo_asesores)
+
+        ingreso_1 = self.crear_ingreso_reparacion(
+            estado='garantia',
+            valor_acordado=Decimal('60.00'),
+            motivo_garantia='Garantía por retorno',
+        )
+        salida_1 = SalidaEquipo.objects.create(
+            ingreso=ingreso_1,
+            fecha_salida=date(2026, 7, 17),
+            estado_reparacion='garantia_fallos_adicionales',
+            tecnico_reparo=self.usuario,
+            valor_final_cobrado=Decimal('0.00'),
+            metodo_pago_final='sin_pago',
+            registrado_por=self.usuario,
+        )
+        NotificacionAsesora.objects.create(
+            salida=salida_1,
+            ingreso=ingreso_1,
+            asesora=self.vendedor,
+            creado_por=self.usuario,
+            valor_acordado=Decimal('60.00'),
+            mensaje='Pendiente por cobrar.',
+        )
+
+        ingreso_2 = self.crear_ingreso_reparacion(
+            estado='garantia',
+            valor_acordado=Decimal('40.00'),
+            marca='Lenovo',
+            motivo_garantia='Garantía por retorno',
+        )
+        salida_2 = SalidaEquipo.objects.create(
+            ingreso=ingreso_2,
+            fecha_salida=date(2026, 7, 17),
+            estado_reparacion='garantia_fallos_adicionales',
+            tecnico_reparo=self.usuario,
+            valor_final_cobrado=Decimal('0.00'),
+            metodo_pago_final='sin_pago',
+            registrado_por=self.usuario,
+        )
+        notificacion_otra = NotificacionAsesora.objects.create(
+            salida=salida_2,
+            ingreso=ingreso_2,
+            asesora=otra_asesora,
+            creado_por=self.usuario,
+            valor_acordado=Decimal('40.00'),
+            mensaje='Pendiente de otra asesora.',
+        )
+
+        self.client.force_login(self.vendedor)
+        response = self.client.post(reverse('econotec:notificacion_asesora_limpiar_bandeja'))
+
+        self.assertRedirects(response, reverse('econotec:notificaciones_asesora'))
+        self.assertFalse(NotificacionAsesora.objects.filter(asesora=self.vendedor).exists())
+        self.assertTrue(NotificacionAsesora.objects.filter(pk=notificacion_otra.pk).exists())
+
     def test_detalle_muestra_alerta_si_valor_acordado_pendiente(self):
         ingreso = self.crear_ingreso_reparacion(valor_acordado=None)
 

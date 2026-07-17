@@ -21,6 +21,13 @@
         font-size: 24px;
         color: var(--text-main);
     }
+    .noti-head-actions {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+    }
     .noti-tabs {
         display: flex;
         flex-wrap: wrap;
@@ -123,7 +130,16 @@
                 Cobros pendientes que deben revisarse antes del retiro.
             </p>
         </div>
-        <strong>{{ total_notificaciones }} registro{{ total_notificaciones|pluralize }}</strong>
+        <div class="noti-head-actions">
+            <strong>{{ total_notificaciones }} registro{{ total_notificaciones|pluralize }}</strong>
+            {% if total_bandeja > 0 %}
+            <form method="post" action="{% url 'econotec:notificacion_asesora_limpiar_bandeja' %}"
+                  onsubmit="return confirm('¿Seguro que deseas limpiar toda tu bandeja de notificaciones? Esta acción no se puede deshacer.');">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-secondary">Limpiar bandeja</button>
+            </form>
+            {% endif %}
+        </div>
     </div>
 
     <div class="noti-tabs">

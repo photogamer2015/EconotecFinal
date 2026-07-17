@@ -30,6 +30,8 @@ urlpatterns = [
          views.notificaciones_asesora, name='notificaciones_asesora'),
     path('notificaciones/asesoras/<int:pk>/vista/',
          views.notificacion_asesora_marcar_vista, name='notificacion_asesora_marcar_vista'),
+    path('notificaciones/asesoras/limpiar/',
+         views.notificacion_asesora_limpiar_bandeja, name='notificacion_asesora_limpiar_bandeja'),
 
     # ── Ingreso de equipos (la "Solicitud de Ingreso") ────
     path('ingresos/', views.ingreso_lista, name='ingreso_lista'),

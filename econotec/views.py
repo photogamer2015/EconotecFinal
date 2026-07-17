@@ -1499,6 +1499,7 @@ def notificaciones_asesora(request):
         .select_related('ingreso', 'ingreso__cliente', 'salida', 'asesora', 'creado_por')
         .filter(asesora=request.user)
     )
+    total_bandeja = qs.count()
 
     estado = (request.GET.get('estado') or 'pendientes').strip()
     if estado == 'vistas':
@@ -1511,6 +1512,7 @@ def notificaciones_asesora(request):
         'notificaciones': qs,
         'estado_filtro': estado,
         'total_notificaciones': total_resultados(qs),
+        'total_bandeja': total_bandeja,
     })
 
 
@@ -1527,6 +1529,21 @@ def notificacion_asesora_marcar_vista(request, pk):
     notificacion.leida_en = timezone.now()
     notificacion.save(update_fields=['leida', 'leida_en', 'actualizado'])
     messages.success(request, 'Notificación marcada como vista.')
+    return redirect('econotec:notificaciones_asesora')
+
+
+@login_required
+@require_POST
+def notificacion_asesora_limpiar_bandeja(request):
+    if not es_asesor(request.user):
+        messages.warning(request, 'No tienes acceso a las notificaciones de asesoras.')
+        return redirect('econotec:bienvenida')
+
+    total, _ = NotificacionAsesora.objects.filter(asesora=request.user).delete()
+    if total:
+        messages.success(request, f'Bandeja limpiada. Se eliminaron {total} notificación(es).')
+    else:
+        messages.info(request, 'La bandeja ya estaba vacía.')
     return redirect('econotec:notificaciones_asesora')
 
 
