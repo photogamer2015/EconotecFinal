@@ -100,14 +100,12 @@ def roles(request):
     notificaciones_asesora_preview = []
     try:
         from .models import NotificacionAsesora
-        qs_notificaciones = (
-            NotificacionAsesora.objects
-            .select_related('ingreso', 'ingreso__cliente', 'salida', 'asesora')
-            .filter(leida=False)
-        )
-        if not es_a:
-            qs_notificaciones = qs_notificaciones.filter(asesora=user)
-        if es_a or es_as:
+        if es_as:
+            qs_notificaciones = (
+                NotificacionAsesora.objects
+                .select_related('ingreso', 'ingreso__cliente', 'salida', 'asesora', 'creado_por')
+                .filter(asesora=user, leida=False)
+            )
             notificaciones_asesora_count = qs_notificaciones.count()
             notificaciones_asesora_preview = list(qs_notificaciones[:3])
     except Exception:

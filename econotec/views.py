@@ -1476,17 +1476,15 @@ def salida_editar(request, pk):
 
 @login_required
 def notificaciones_asesora(request):
-    if not (es_admin(request.user) or es_asesor(request.user)):
+    if not es_asesor(request.user):
         messages.warning(request, 'No tienes acceso a las notificaciones de asesoras.')
         return redirect('econotec:bienvenida')
 
     qs = (
         NotificacionAsesora.objects
         .select_related('ingreso', 'ingreso__cliente', 'salida', 'asesora', 'creado_por')
-        .all()
+        .filter(asesora=request.user)
     )
-    if not es_admin(request.user):
-        qs = qs.filter(asesora=request.user)
 
     estado = (request.GET.get('estado') or 'pendientes').strip()
     if estado == 'vistas':
@@ -1505,10 +1503,11 @@ def notificaciones_asesora(request):
 @login_required
 @require_POST
 def notificacion_asesora_marcar_vista(request, pk):
-    qs = NotificacionAsesora.objects.all()
-    if not es_admin(request.user):
-        qs = qs.filter(asesora=request.user)
+    if not es_asesor(request.user):
+        messages.warning(request, 'No tienes acceso a las notificaciones de asesoras.')
+        return redirect('econotec:bienvenida')
 
+    qs = NotificacionAsesora.objects.filter(asesora=request.user)
     notificacion = get_object_or_404(qs, pk=pk)
     notificacion.leida = True
     notificacion.leida_en = timezone.now()

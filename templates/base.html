@@ -165,6 +165,129 @@
             font-size: 14px; font-weight: 800;
             color: #ffffff; line-height: 1;
         }
+        .noti-bell-wrap {
+            position: relative;
+            display: inline-flex;
+            align-items: center;
+        }
+        header.top button.noti-bell-btn {
+            position: relative;
+            width: 42px;
+            min-width: 42px;
+            height: 40px;
+            padding: 0 !important;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.14);
+            border: 1px solid rgba(255, 255, 255, 0.24);
+            font-size: 18px;
+        }
+        header.top button.noti-bell-btn:hover {
+            background: rgba(255, 255, 255, 0.22);
+            border-color: rgba(250, 204, 21, 0.48);
+        }
+        .noti-bell-count {
+            position: absolute;
+            top: -6px;
+            right: -6px;
+            min-width: 18px;
+            height: 18px;
+            padding: 0 5px;
+            border-radius: 999px;
+            background: #f97316;
+            color: #ffffff;
+            border: 2px solid rgba(36, 7, 8, 0.95);
+            font-size: 10px;
+            line-height: 14px;
+            font-weight: 900;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .noti-menu {
+            display: none;
+            position: fixed;
+            top: 70px;
+            right: 22px;
+            z-index: 2000;
+            width: min(360px, calc(100vw - 24px));
+            background: var(--card-bg);
+            color: var(--text-main);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            box-shadow: 0 18px 46px rgba(0, 0, 0, 0.28);
+            overflow: hidden;
+        }
+        .noti-menu.open {
+            display: block;
+        }
+        .noti-menu-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            padding: 13px 14px;
+            border-bottom: 1px solid var(--border-color);
+            background: var(--primary-light);
+        }
+        .noti-menu-head strong {
+            font-size: 14px;
+            font-weight: 900;
+            color: var(--text-main);
+        }
+        .noti-menu-head span {
+            color: var(--primary-dark);
+            font-size: 12px;
+            font-weight: 900;
+        }
+        .noti-menu-list {
+            max-height: 280px;
+            overflow-y: auto;
+        }
+        header.top .noti-item {
+            display: block;
+            padding: 12px 14px;
+            color: var(--text-main) !important;
+            background: transparent !important;
+            border: 0 !important;
+            border-bottom: 1px solid var(--border-color) !important;
+            border-radius: 0 !important;
+            text-decoration: none;
+            transform: none !important;
+        }
+        header.top .noti-item:hover {
+            background: var(--hover-bg) !important;
+        }
+        .noti-item-title {
+            display: flex;
+            justify-content: space-between;
+            gap: 10px;
+            font-size: 13px;
+            font-weight: 900;
+            line-height: 1.25;
+        }
+        .noti-item-value {
+            color: var(--danger);
+            white-space: nowrap;
+        }
+        .noti-item-meta {
+            margin-top: 4px;
+            color: var(--text-muted);
+            font-size: 12px;
+            font-weight: 700;
+            line-height: 1.35;
+        }
+        header.top .noti-menu-foot {
+            display: block;
+            padding: 11px 14px;
+            text-align: center;
+            background: var(--primary) !important;
+            color: #ffffff !important;
+            border: 0 !important;
+            border-radius: 0 !important;
+            font-weight: 900;
+            text-decoration: none;
+            transform: none !important;
+        }
         #btn-logout {
             background: #4b2119 !important;
             border-color: rgba(250, 204, 21, 0.18) !important;
@@ -665,6 +788,15 @@
                 flex-basis: 40px;
                 height: 40px;
             }
+            .noti-bell-wrap {
+                flex: 0 0 auto;
+            }
+            .noti-menu {
+                top: 82px;
+                right: 12px;
+                left: 12px;
+                width: auto;
+            }
             #btn-perfil {
                 margin: 0 !important;
                 border-radius: 8px !important;
@@ -913,6 +1045,35 @@
                     {% endif %}
                 </div>
                 <a href="{% url 'econotec:bienvenida' %}">Inicio</a>
+                {% if es_asesor and notificaciones_asesora_count > 0 %}
+                    <div class="noti-bell-wrap">
+                        <button type="button" class="noti-bell-btn" id="noti-bell-btn" aria-expanded="false" aria-controls="noti-bell-menu" title="Notificaciones de garantía">
+                            🔔
+                            <span class="noti-bell-count">{{ notificaciones_asesora_count }}</span>
+                        </button>
+                        <div class="noti-menu" id="noti-bell-menu">
+                            <div class="noti-menu-head">
+                                <strong>Garantías notificadas</strong>
+                                <span>{{ notificaciones_asesora_count }} pendiente{{ notificaciones_asesora_count|pluralize }}</span>
+                            </div>
+                            <div class="noti-menu-list">
+                                {% for notificacion in notificaciones_asesora_preview %}
+                                    <a href="{% url 'econotec:notificaciones_asesora' %}" class="noti-item">
+                                        <div class="noti-item-title">
+                                            <span>{{ notificacion.ingreso.codigo_equipo }} — {{ notificacion.ingreso.cliente.nombres|truncatechars:24 }}</span>
+                                            <span class="noti-item-value">${{ notificacion.valor_acordado|floatformat:2 }}</span>
+                                        </div>
+                                        <div class="noti-item-meta">
+                                            Notificó {{ notificacion.creado_por.get_full_name|default:notificacion.creado_por.username|default:"el técnico" }}
+                                            · {{ notificacion.creado|date:"d/m/Y H:i" }}
+                                        </div>
+                                    </a>
+                                {% endfor %}
+                            </div>
+                            <a href="{% url 'econotec:notificaciones_asesora' %}" class="noti-menu-foot">Ver todas</a>
+                        </div>
+                    </div>
+                {% endif %}
                 {% if alertas_total_count > 0 %}
                     <a href="{% url 'econotec:bienvenida' %}" class="alert-badge-link"
                        title="Tienes alertas pendientes: ver dashboard">
@@ -1023,6 +1184,30 @@
                     localStorage.setItem('theme', 'dark');
                 }
                 updateBtnIcon();
+            });
+        }
+
+        const bellBtn = document.getElementById('noti-bell-btn');
+        const bellMenu = document.getElementById('noti-bell-menu');
+        if (bellBtn && bellMenu) {
+            function cerrarNotificaciones() {
+                bellMenu.classList.remove('open');
+                bellBtn.setAttribute('aria-expanded', 'false');
+            }
+
+            bellBtn.addEventListener('click', (event) => {
+                event.stopPropagation();
+                const abierto = bellMenu.classList.toggle('open');
+                bellBtn.setAttribute('aria-expanded', abierto ? 'true' : 'false');
+            });
+
+            bellMenu.addEventListener('click', (event) => {
+                event.stopPropagation();
+            });
+
+            document.addEventListener('click', cerrarNotificaciones);
+            document.addEventListener('keydown', (event) => {
+                if (event.key === 'Escape') cerrarNotificaciones();
             });
         }
     </script>
