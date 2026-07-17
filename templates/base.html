@@ -1047,13 +1047,13 @@
                 <a href="{% url 'econotec:bienvenida' %}">Inicio</a>
                 {% if es_asesor and notificaciones_asesora_count > 0 %}
                     <div class="noti-bell-wrap">
-                        <button type="button" class="noti-bell-btn" id="noti-bell-btn" aria-expanded="false" aria-controls="noti-bell-menu" title="Notificaciones de garantía">
+                        <button type="button" class="noti-bell-btn" id="noti-bell-btn" aria-expanded="false" aria-controls="noti-bell-menu" title="Notificaciones pendientes">
                             🔔
                             <span class="noti-bell-count">{{ notificaciones_asesora_count }}</span>
                         </button>
                         <div class="noti-menu" id="noti-bell-menu">
                             <div class="noti-menu-head">
-                                <strong>Garantías notificadas</strong>
+                                <strong>Notificaciones pendientes</strong>
                                 <span>{{ notificaciones_asesora_count }} pendiente{{ notificaciones_asesora_count|pluralize }}</span>
                             </div>
                             <div class="noti-menu-list">

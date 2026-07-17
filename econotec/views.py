@@ -54,12 +54,25 @@ from .alertas import (
 )
 
 
-def _sincronizar_notificacion_fallos_adicionales(form, salida, user):
-    """Crea/actualiza la notificación interna para garantía con fallos adicionales."""
-    if salida.estado_reparacion != 'garantia_fallos_adicionales':
+def _sincronizar_notificacion_asesora(form, salida, user):
+    """Crea/actualiza la notificación interna para cobros pendientes de asesora."""
+    tipos_controlados = [
+        NotificacionAsesora.TIPO_FALLOS_ADICIONALES,
+        NotificacionAsesora.TIPO_REVISION_PENDIENTE,
+        NotificacionAsesora.TIPO_SALDO_RETIRO,
+    ]
+    tipo = getattr(form, 'notificacion_asesora_tipo', None)
+    valor = getattr(form, 'notificacion_asesora_valor', D('0.00')) or D('0.00')
+
+    NotificacionAsesora.objects.filter(
+        salida=salida,
+        tipo__in=[tipo_actual for tipo_actual in tipos_controlados if tipo_actual != tipo],
+    ).delete()
+
+    if not tipo or valor <= 0:
         NotificacionAsesora.objects.filter(
             salida=salida,
-            tipo=NotificacionAsesora.TIPO_FALLOS_ADICIONALES,
+            tipo__in=tipos_controlados,
         ).delete()
         return
 
@@ -67,17 +80,18 @@ def _sincronizar_notificacion_fallos_adicionales(form, salida, user):
     if not asesora:
         return
 
-    valor = form.cleaned_data.get('valor_final_cobrado') or salida.ingreso.valor_acordado or D('0.00')
     mensaje = (form.cleaned_data.get('mensaje_notificacion') or '').strip()
     if not mensaje:
-        mensaje = (
-            f'El equipo {salida.ingreso.codigo_equipo} salió por garantía con fallos '
-            f'adicionales. Valor acordado pendiente: ${valor:.2f}.'
+        mensaje_default = getattr(form, 'notificacion_asesora_mensaje_default', '')
+        mensaje = mensaje_default.format(
+            codigo=salida.ingreso.codigo_equipo,
+            valor=valor,
+            cliente=salida.ingreso.cliente.nombres,
         )
 
     NotificacionAsesora.objects.update_or_create(
         salida=salida,
-        tipo=NotificacionAsesora.TIPO_FALLOS_ADICIONALES,
+        tipo=tipo,
         defaults={
             'ingreso': salida.ingreso,
             'asesora': asesora,
@@ -1414,7 +1428,7 @@ def salida_registrar(request, ingreso_pk):
             salida = form.save(commit=False)
             salida.registrado_por = request.user
             salida.save()
-            _sincronizar_notificacion_fallos_adicionales(form, salida, request.user)
+            _sincronizar_notificacion_asesora(form, salida, request.user)
             messages.success(
                 request,
                 f'Salida del equipo {ingreso.codigo_equipo} registrada como '
@@ -1456,7 +1470,7 @@ def salida_editar(request, pk):
         form = SalidaEquipoForm(request.POST, instance=salida)
         if form.is_valid():
             salida = form.save()
-            _sincronizar_notificacion_fallos_adicionales(form, salida, request.user)
+            _sincronizar_notificacion_asesora(form, salida, request.user)
             messages.success(request, 'Salida actualizada correctamente.')
             return redirect('econotec:salida_lista')
     else:

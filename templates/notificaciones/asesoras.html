@@ -118,9 +118,9 @@
 <div class="noti-wrap">
     <div class="noti-head">
         <div>
-            <h2>Notificaciones de garantías</h2>
+            <h2>Notificaciones pendientes</h2>
             <p style="margin:4px 0 0; color:var(--text-muted); font-weight:700;">
-                Fallos adicionales con valor pendiente de cobro.
+                Cobros pendientes que deben revisarse antes del retiro.
             </p>
         </div>
         <strong>{{ total_notificaciones }} registro{{ total_notificaciones|pluralize }}</strong>
@@ -140,7 +140,7 @@
                 <div>
                     <strong>{{ notificacion.ingreso.codigo_equipo }} — {{ notificacion.ingreso.cliente.nombres }}</strong>
                     <div class="noti-meta">
-                        {{ notificacion.ingreso.tipo_equipo_display }} — {{ notificacion.ingreso.marca }}
+                        {{ notificacion.get_tipo_display }} · {{ notificacion.ingreso.tipo_equipo_display }} — {{ notificacion.ingreso.marca }}
                         · Asesora: {{ notificacion.asesora.get_full_name|default:notificacion.asesora.username }}
                         · {{ notificacion.creado|date:"d/m/Y H:i" }}
                     </div>

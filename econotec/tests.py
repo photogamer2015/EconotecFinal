@@ -275,6 +275,36 @@ class VentasTests(TestCase):
         data.update(overrides)
         return IngresoEquipo.objects.create(**data)
 
+    def salida_post_data(self, **overrides):
+        data = {
+            'fecha_salida': '2026-07-17',
+            'estado_reparacion': 'pendiente_retiro',
+            'tecnico_reparo': str(self.usuario.pk),
+            'reporte_tecnico': 'Equipo revisado.',
+            'observaciones': '',
+            'valor_final_cobrado': '0.00',
+            'metodo_pago_final': 'efectivo',
+            'numero_recibo': '',
+            'banco': '',
+            'banco_otro': '',
+            'tarjeta_app': '',
+            'comprobante_url': '',
+            'monto_1': '',
+            'metodo_1': '',
+            'banco_1': '',
+            'monto_2': '',
+            'metodo_2': '',
+            'banco_2': '',
+            'factura_realizada': 'no',
+            'factura_nombres': '',
+            'factura_cedula': '',
+            'factura_correo': '',
+            'asesora_notificacion': '',
+            'mensaje_notificacion': '',
+        }
+        data.update(overrides)
+        return data
+
     def crear_venta_producto(self, **overrides):
         data = {
             'sede': 'ventas',
@@ -1551,6 +1581,99 @@ class VentasTests(TestCase):
         self.assertEqual(notificacion.asesora, self.vendedor)
         self.assertEqual(notificacion.valor_acordado, Decimal('75.00'))
         self.assertFalse(notificacion.leida)
+
+    def test_salida_cliente_no_acepta_revision_pendiente_notifica_asesora(self):
+        ingreso = self.crear_ingreso_reparacion(valor_acordado=Decimal('40.00'))
+
+        response = self.client.post(
+            reverse('econotec:salida_registrar', kwargs={'ingreso_pk': ingreso.pk}),
+            self.salida_post_data(
+                estado_reparacion='cliente_no_acepta',
+                valor_final_cobrado='12.00',
+                metodo_pago_final='sin_pago',
+                asesora_notificacion=str(self.vendedor.pk),
+                mensaje_notificacion='Cobrar revisión antes del retiro.',
+            ),
+        )
+
+        salida = SalidaEquipo.objects.get(ingreso=ingreso)
+        self.assertRedirects(response, reverse('econotec:salida_listo_aviso', kwargs={'pk': salida.pk}))
+        ingreso.refresh_from_db()
+        self.assertEqual(salida.valor_final_cobrado, Decimal('0.00'))
+        self.assertEqual(salida.metodo_pago_final, 'sin_pago')
+        self.assertEqual(ingreso.diferencia, Decimal('12.00'))
+        self.assertEqual(ingreso.estado_pago, 'Pendiente')
+
+        notificacion = NotificacionAsesora.objects.get(salida=salida)
+        self.assertEqual(notificacion.tipo, NotificacionAsesora.TIPO_REVISION_PENDIENTE)
+        self.assertEqual(notificacion.asesora, self.vendedor)
+        self.assertEqual(notificacion.valor_acordado, Decimal('12.00'))
+
+    def test_salida_no_reparable_revision_pendiente_notifica_asesora(self):
+        ingreso = self.crear_ingreso_reparacion(valor_acordado=Decimal('40.00'))
+
+        response = self.client.post(
+            reverse('econotec:salida_registrar', kwargs={'ingreso_pk': ingreso.pk}),
+            self.salida_post_data(
+                estado_reparacion='no_reparable',
+                valor_final_cobrado='7.00',
+                metodo_pago_final='sin_pago',
+                asesora_notificacion=str(self.vendedor.pk),
+                mensaje_notificacion='Cobrar revisión antes del retiro.',
+            ),
+        )
+
+        salida = SalidaEquipo.objects.get(ingreso=ingreso)
+        self.assertRedirects(response, reverse('econotec:salida_listo_aviso', kwargs={'pk': salida.pk}))
+        ingreso.refresh_from_db()
+        self.assertEqual(salida.valor_final_cobrado, Decimal('0.00'))
+        self.assertEqual(ingreso.diferencia, Decimal('7.00'))
+
+        notificacion = NotificacionAsesora.objects.get(salida=salida)
+        self.assertEqual(notificacion.tipo, NotificacionAsesora.TIPO_REVISION_PENDIENTE)
+        self.assertEqual(notificacion.valor_acordado, Decimal('7.00'))
+
+    def test_salida_pendiente_retiro_con_saldo_notifica_asesora(self):
+        ingreso = self.crear_ingreso_reparacion(valor_acordado=Decimal('100.00'))
+
+        response = self.client.post(
+            reverse('econotec:salida_registrar', kwargs={'ingreso_pk': ingreso.pk}),
+            self.salida_post_data(
+                estado_reparacion='pendiente_retiro',
+                valor_final_cobrado='20.00',
+                metodo_pago_final='efectivo',
+                asesora_notificacion=str(self.vendedor.pk),
+                mensaje_notificacion='Equipo listo, falta saldo.',
+            ),
+        )
+
+        salida = SalidaEquipo.objects.get(ingreso=ingreso)
+        self.assertRedirects(response, reverse('econotec:salida_listo_aviso', kwargs={'pk': salida.pk}))
+        ingreso.refresh_from_db()
+        self.assertEqual(salida.valor_final_cobrado, Decimal('20.00'))
+        self.assertEqual(ingreso.diferencia, Decimal('80.00'))
+
+        notificacion = NotificacionAsesora.objects.get(salida=salida)
+        self.assertEqual(notificacion.tipo, NotificacionAsesora.TIPO_SALDO_RETIRO)
+        self.assertEqual(notificacion.valor_acordado, Decimal('80.00'))
+
+    def test_salida_pendiente_retiro_pagada_no_crea_notificacion(self):
+        ingreso = self.crear_ingreso_reparacion(valor_acordado=Decimal('25.00'))
+
+        response = self.client.post(
+            reverse('econotec:salida_registrar', kwargs={'ingreso_pk': ingreso.pk}),
+            self.salida_post_data(
+                estado_reparacion='pendiente_retiro',
+                valor_final_cobrado='25.00',
+                metodo_pago_final='efectivo',
+            ),
+        )
+
+        salida = SalidaEquipo.objects.get(ingreso=ingreso)
+        self.assertRedirects(response, reverse('econotec:salida_listo_aviso', kwargs={'pk': salida.pk}))
+        ingreso.refresh_from_db()
+        self.assertEqual(ingreso.diferencia, Decimal('0.00'))
+        self.assertFalse(NotificacionAsesora.objects.filter(salida=salida).exists())
 
     def test_notificacion_asesora_se_puede_marcar_como_vista(self):
         ingreso = self.crear_ingreso_reparacion(

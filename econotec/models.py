@@ -753,15 +753,25 @@ class IngresoEquipo(models.Model):
         - Si no: el valor acordado completo.
         """
         if self.reparacion_cancelada:
+            salida = self.salida if hasattr(self, 'salida') else None
+            if salida:
+                revision_pendiente = (
+                    salida.notificaciones_asesora
+                    .filter(tipo='revision_pendiente')
+                    .order_by('-creado')
+                    .first()
+                )
+                if revision_pendiente:
+                    return _q2(revision_pendiente.valor_acordado)
             if self.diagnostico_inmediato == 'si':
                 # Si el diagnóstico fue inmediato, ya se cobró como valor adicional, no debe nada en la salida.
                 return Decimal('0.00')
             # Si se le cobró un valor final al salir, ese es el costo real de revisión
-            if hasattr(self, 'salida') and self.salida and self.salida.valor_final_cobrado is not None:
-                return _q2(self.salida.valor_final_cobrado)
+            if salida and salida.valor_final_cobrado is not None:
+                return _q2(salida.valor_final_cobrado)
             
             # NUEVO: Si no se pudo reparar, no se cobra diagnóstico (es gratuito).
-            if hasattr(self, 'salida') and self.salida and self.salida.estado_reparacion == 'no_reparable':
+            if salida and salida.estado_reparacion == 'no_reparable':
                 return Decimal('0.00')
 
             return _q2(self.valor_diagnostico or Decimal('0.00'))
@@ -1718,8 +1728,12 @@ class NotificacionAsesora(models.Model):
     """Aviso interno para que una asesora gestione cobros especiales."""
 
     TIPO_FALLOS_ADICIONALES = 'fallos_adicionales'
+    TIPO_REVISION_PENDIENTE = 'revision_pendiente'
+    TIPO_SALDO_RETIRO = 'saldo_retiro'
     TIPOS = [
         (TIPO_FALLOS_ADICIONALES, 'Garantía con fallos adicionales'),
+        (TIPO_REVISION_PENDIENTE, 'Revisión pendiente de pago'),
+        (TIPO_SALDO_RETIRO, 'Equipo listo con saldo pendiente'),
     ]
 
     tipo = models.CharField(

@@ -7,7 +7,7 @@ from django.db.models import Q
 from decimal import Decimal, InvalidOperation
 from .models import (
     Cliente, IngresoEquipo, Abono, SalidaEquipo,
-    CategoriaEgreso, Egreso, AvisoPanel,
+    CategoriaEgreso, Egreso, AvisoPanel, NotificacionAsesora,
 )
 from .permisos import GRUPOS_TECNICO, GRUPOS_ADMIN, GRUPOS_ASESOR_COMERCIAL
 
@@ -727,6 +727,8 @@ class AbonoForm(forms.ModelForm):
 # ─────────────────────────────────────────────────────────
 
 class SalidaEquipoForm(forms.ModelForm):
+    ESTADOS_REVISION_PENDIENTE = ('cliente_no_acepta', 'no_reparable')
+
     reporte_tecnico = forms.CharField(
         widget=forms.Textarea(attrs={
             'class': 'form-input', 'rows': 3,
@@ -812,18 +814,39 @@ class SalidaEquipoForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.notificacion_asesora_tipo = None
+        self.notificacion_asesora_valor = Decimal('0.00')
+        self.notificacion_asesora_mensaje_default = ''
 
         if self.instance and hasattr(self.instance, 'ingreso') and self.instance.ingreso:
             self.fields['reporte_tecnico'].initial = self.instance.ingreso.reporte_tecnico
-            if self.instance.estado_reparacion == 'garantia_fallos_adicionales':
-                self.initial['valor_final_cobrado'] = self.instance.ingreso.valor_acordado or Decimal('0.00')
-                self.initial['metodo_pago_final'] = 'sin_pago'
-                notificacion = (
-                    self.instance.notificaciones_asesora
-                    .filter(tipo='fallos_adicionales')
-                    .select_related('asesora')
-                    .first()
-                )
+            if self.instance.pk:
+                if self.instance.estado_reparacion == 'garantia_fallos_adicionales':
+                    self.initial['valor_final_cobrado'] = self.instance.ingreso.valor_acordado or Decimal('0.00')
+                    self.initial['metodo_pago_final'] = 'sin_pago'
+                    notificacion = (
+                        self.instance.notificaciones_asesora
+                        .filter(tipo=NotificacionAsesora.TIPO_FALLOS_ADICIONALES)
+                        .select_related('asesora')
+                        .first()
+                    )
+                else:
+                    notificacion = (
+                        self.instance.notificaciones_asesora
+                        .filter(tipo__in=[
+                            NotificacionAsesora.TIPO_REVISION_PENDIENTE,
+                            NotificacionAsesora.TIPO_SALDO_RETIRO,
+                        ])
+                        .select_related('asesora')
+                        .first()
+                    )
+                    if (
+                        notificacion
+                        and self.instance.estado_reparacion in self.ESTADOS_REVISION_PENDIENTE
+                        and notificacion.tipo == NotificacionAsesora.TIPO_REVISION_PENDIENTE
+                    ):
+                        self.initial['valor_final_cobrado'] = notificacion.valor_acordado
+                        self.initial['metodo_pago_final'] = 'sin_pago'
                 if notificacion:
                     self.initial['asesora_notificacion'] = notificacion.asesora_id
                     self.initial['mensaje_notificacion'] = notificacion.mensaje
@@ -884,9 +907,43 @@ class SalidaEquipoForm(forms.ModelForm):
                 
         self.fields['estado_reparacion'].choices = choices
 
+    def _limpiar_pago_pendiente(self, cleaned):
+        cleaned['metodo_pago_final'] = 'sin_pago'
+        cleaned['banco'] = ''
+        cleaned['banco_otro'] = ''
+        cleaned['tarjeta_app'] = ''
+        cleaned['comprobante_url'] = ''
+        cleaned['numero_recibo'] = ''
+        cleaned['monto_1'] = None
+        cleaned['metodo_1'] = ''
+        cleaned['banco_1'] = ''
+        cleaned['monto_2'] = None
+        cleaned['metodo_2'] = ''
+        cleaned['banco_2'] = ''
+
+    def _registrar_notificacion_pendiente(self, tipo, valor, mensaje_default):
+        self.notificacion_asesora_tipo = tipo
+        self.notificacion_asesora_valor = valor
+        self.notificacion_asesora_mensaje_default = mensaje_default
+
+    def _saldo_pendiente_despues_de_pago(self, valor_pagado_ahora):
+        if not (self.instance and self.instance.ingreso):
+            return Decimal('0.00')
+
+        ingreso = self.instance.ingreso
+        valor_total = ingreso.valor_acordado or Decimal('0.00')
+        abonado_previo = ingreso.total_abonado
+        if self.instance and self.instance.pk and self.instance.valor_final_cobrado:
+            abonado_previo -= self.instance.valor_final_cobrado
+        pendiente = valor_total - abonado_previo - (valor_pagado_ahora or Decimal('0.00'))
+        return pendiente if pendiente > 0 else Decimal('0.00')
+
     def clean(self):
         cleaned = super().clean()
         estado_reparacion = cleaned.get('estado_reparacion')
+        self.notificacion_asesora_tipo = None
+        self.notificacion_asesora_valor = Decimal('0.00')
+        self.notificacion_asesora_mensaje_default = ''
         
         # Validar que no se pueda marcar como retirado si hay saldo pendiente
         if estado_reparacion == 'retirado' and self.instance and self.instance.ingreso:
@@ -910,19 +967,55 @@ class SalidaEquipoForm(forms.ModelForm):
                     'asesora_notificacion',
                     'Selecciona la asesora que recibirá esta notificación.'
                 )
-            cleaned['metodo_pago_final'] = 'sin_pago'
-            cleaned['banco'] = ''
-            cleaned['banco_otro'] = ''
-            cleaned['tarjeta_app'] = ''
-            cleaned['comprobante_url'] = ''
-            cleaned['numero_recibo'] = ''
-            cleaned['monto_1'] = None
-            cleaned['metodo_1'] = ''
-            cleaned['banco_1'] = ''
-            cleaned['monto_2'] = None
-            cleaned['metodo_2'] = ''
-            cleaned['banco_2'] = ''
+            self._registrar_notificacion_pendiente(
+                NotificacionAsesora.TIPO_FALLOS_ADICIONALES,
+                valor,
+                (
+                    'El equipo {codigo} salió por garantía con fallos adicionales. '
+                    'Valor acordado pendiente: ${valor:.2f}.'
+                ),
+            )
+            self._limpiar_pago_pendiente(cleaned)
             return cleaned
+
+        if estado_reparacion in self.ESTADOS_REVISION_PENDIENTE and valor > 0:
+            if valor < Decimal('5.00'):
+                self.add_error(
+                    'valor_final_cobrado',
+                    'El valor de revisión pendiente debe ser de $5.00 o más.'
+                )
+            if not cleaned.get('asesora_notificacion'):
+                self.add_error(
+                    'asesora_notificacion',
+                    'Selecciona la asesora que recibirá esta notificación.'
+                )
+            self._registrar_notificacion_pendiente(
+                NotificacionAsesora.TIPO_REVISION_PENDIENTE,
+                valor,
+                (
+                    'El equipo {codigo} salió con revisión pendiente de pago. '
+                    'Valor pendiente: ${valor:.2f}. No entregar hasta registrar el pago.'
+                ),
+            )
+            self._limpiar_pago_pendiente(cleaned)
+            return cleaned
+
+        if estado_reparacion == 'pendiente_retiro':
+            saldo_pendiente = self._saldo_pendiente_despues_de_pago(valor)
+            if saldo_pendiente > 0:
+                if not cleaned.get('asesora_notificacion'):
+                    self.add_error(
+                        'asesora_notificacion',
+                        'Selecciona la asesora que recibirá esta notificación.'
+                    )
+                self._registrar_notificacion_pendiente(
+                    NotificacionAsesora.TIPO_SALDO_RETIRO,
+                    saldo_pendiente,
+                    (
+                        'El equipo {codigo} ya está listo para retiro, pero mantiene '
+                        'saldo pendiente de ${valor:.2f}. No entregar hasta registrar el pago.'
+                    ),
+                )
 
         if metodo == 'mixto':
             monto1 = cleaned.get('monto_1') or Decimal('0.00')
@@ -964,6 +1057,23 @@ class SalidaEquipoForm(forms.ModelForm):
         valor_fallos_adicionales = None
         if salida.estado_reparacion == 'garantia_fallos_adicionales':
             valor_fallos_adicionales = self.cleaned_data.get('valor_final_cobrado') or Decimal('0.00')
+            salida.valor_final_cobrado = Decimal('0.00')
+            salida.metodo_pago_final = 'sin_pago'
+            salida.numero_recibo = ''
+            salida.banco = ''
+            salida.banco_otro = ''
+            salida.tarjeta_app = ''
+            salida.comprobante_url = ''
+            salida.monto_1 = None
+            salida.metodo_1 = ''
+            salida.banco_1 = ''
+            salida.monto_2 = None
+            salida.metodo_2 = ''
+            salida.banco_2 = ''
+        elif (
+            salida.estado_reparacion in self.ESTADOS_REVISION_PENDIENTE
+            and self.notificacion_asesora_tipo == NotificacionAsesora.TIPO_REVISION_PENDIENTE
+        ):
             salida.valor_final_cobrado = Decimal('0.00')
             salida.metodo_pago_final = 'sin_pago'
             salida.numero_recibo = ''
