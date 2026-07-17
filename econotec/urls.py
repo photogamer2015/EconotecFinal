@@ -26,6 +26,10 @@ urlpatterns = [
          views.salida_deshacer_retiro, name='salida_deshacer_retiro'),
     path('salidas/<int:pk>/bodegaje-silenciar/',
          views.salida_bodegaje_silenciar, name='salida_bodegaje_silenciar'),
+    path('notificaciones/asesoras/',
+         views.notificaciones_asesora, name='notificaciones_asesora'),
+    path('notificaciones/asesoras/<int:pk>/vista/',
+         views.notificacion_asesora_marcar_vista, name='notificacion_asesora_marcar_vista'),
 
     # ── Ingreso de equipos (la "Solicitud de Ingreso") ────
     path('ingresos/', views.ingreso_lista, name='ingreso_lista'),

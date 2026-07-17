@@ -235,6 +235,10 @@
             <span class="check-box">{% if salida.estado_reparacion == 'garantia' %}X{% endif %}</span>
             🛡 SALIDA POR GARANTÍA
         </div>
+        <div class="checkbox-item-l {% if salida.estado_reparacion == 'garantia_fallos_adicionales' %}activo{% endif %}">
+            <span class="check-box">{% if salida.estado_reparacion == 'garantia_fallos_adicionales' %}X{% endif %}</span>
+            🛡 GARANTÍA + FALLOS ADICIONALES
+        </div>
     </div>
 
     <!-- PROBLEMA REPORTADO (del ingreso) -->

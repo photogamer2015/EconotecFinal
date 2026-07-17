@@ -371,7 +371,7 @@
 
         <div class="form-row cols-2">
             <div>
-                <label class="form-label">Valor cobrado ahora (USD)</label>
+                <label class="form-label" id="label-valor-cobrado">Valor cobrado ahora (USD)</label>
                 {{ form.valor_final_cobrado }}
                 <small id="ayuda-valor-cobrado" style="color:#888; font-size:11px; transition: color 0.3s; display: block; margin-top: 4px; line-height: 1.4;">Si ya estaba pagado o si aún no ha pagado, déjalo en 0 para que se registre como saldo pendiente. Si está pagando ahora mismo, ingresa el valor aquí.</small>
             </div>
@@ -379,6 +379,25 @@
                 <label class="form-label">Método de pago</label>
                 {{ form.metodo_pago_final }}
             </div>
+        </div>
+
+        <div id="wrap-notificar-asesora" style="display:none; margin-top:14px; background:#fff3cd; padding:14px; border-radius:8px; border:1px solid #ffe08a;">
+            <div style="font-weight:800; color:#856404; margin-bottom:10px;">Notificar a asesora por fallos adicionales</div>
+            <div class="form-row cols-2">
+                <div>
+                    <label class="form-label">{{ form.asesora_notificacion.label }} *</label>
+                    {{ form.asesora_notificacion }}
+                    {{ form.asesora_notificacion.errors }}
+                </div>
+                <div>
+                    <label class="form-label">{{ form.mensaje_notificacion.label }}</label>
+                    {{ form.mensaje_notificacion }}
+                    {{ form.mensaje_notificacion.errors }}
+                </div>
+            </div>
+            <small style="display:block; margin-top:8px; color:#856404; font-weight:700; line-height:1.35;">
+                La asesora verá esta notificación en su apartado y el valor quedará como saldo pendiente para cobrar antes del retiro.
+            </small>
         </div>
 
         {# Banco — solo si método = transferencia #}
@@ -506,6 +525,10 @@
         var saldoNota = document.getElementById('saldo-nota');
         var envioCard = document.getElementById('envio-pdf-card');
         var envioCardSinWA = document.getElementById('envio-pdf-card-sinwa');
+        var wrapNotificarAsesora = document.getElementById('wrap-notificar-asesora');
+        var asesoraNotificacion = document.querySelector('[name="asesora_notificacion"]');
+        var labelValorCobrado = document.getElementById('label-valor-cobrado');
+        var mensajeNotificacion = document.querySelector('[name="mensaje_notificacion"]');
 
         // Datos del ingreso (vienen de Django)
         var valorDiagnostico = parseFloat("{{ ingreso.valor_diagnostico|default:0 }}") || 0;
@@ -513,7 +536,33 @@
         var diferenciaNormal = parseFloat("{{ ingreso.valor_acordado|default:0 }}") - totalAbonado;
 
         // Estados considerados "positivos" → permiten enviar la hoja
-        var ESTADOS_POSITIVOS = ['pendiente_retiro', 'garantia', 'reparado_parcial', 'retirado'];
+        var ESTADOS_POSITIVOS = ['pendiente_retiro', 'garantia', 'garantia_fallos_adicionales', 'reparado_parcial', 'retirado'];
+
+        function setNotificacionAsesora(mostrar) {
+            if (wrapNotificarAsesora) wrapNotificarAsesora.style.display = mostrar ? 'block' : 'none';
+            if (asesoraNotificacion) {
+                if (mostrar) {
+                    asesoraNotificacion.setAttribute('required', 'required');
+                } else {
+                    asesoraNotificacion.removeAttribute('required');
+                    asesoraNotificacion.setCustomValidity('');
+                }
+            }
+        }
+
+        function bloquearMetodoPagoPendiente(metodoPago, bloquear) {
+            if (!metodoPago) return;
+            if (bloquear) {
+                metodoPago.value = 'sin_pago';
+                metodoPago.style.pointerEvents = 'none';
+                metodoPago.style.background = '#eef0f2';
+                metodoPago.style.color = '#4b5563';
+            } else {
+                metodoPago.style.pointerEvents = '';
+                metodoPago.style.background = '';
+                metodoPago.style.color = '';
+            }
+        }
 
         function actualizar() {
             if (!selEstado) return;
@@ -531,12 +580,40 @@
                 var ayudaValor = document.getElementById('ayuda-valor-cobrado');
 
                 // Reiniciamos el texto de ayuda por defecto
+                if (labelValorCobrado) {
+                    labelValorCobrado.textContent = 'Valor cobrado ahora (USD)';
+                }
                 if (ayudaValor) {
                     ayudaValor.innerHTML = 'Si ya estaba pagado o si aún no ha pagado, déjalo en 0 para que se registre como saldo pendiente. Si está pagando ahora mismo, ingresa el valor aquí.';
                     ayudaValor.style.color = '#888';
                 }
+                setNotificacionAsesora(v === 'garantia_fallos_adicionales');
+                bloquearMetodoPagoPendiente(metodoPago, false);
 
-                if (v === 'garantia') {
+                if (v === 'garantia_fallos_adicionales') {
+                    var valorFallos = inputCobrado ? parseFloat((inputCobrado.value || '0').replace(',', '.')) || 0 : 0;
+                    saldoDisplay.textContent = '$' + valorFallos.toFixed(2);
+                    saldoDisplay.style.color = valorFallos > 0 ? 'var(--danger)' : '#856404';
+                    if (saldoNota) {
+                        saldoNota.style.display = '';
+                        saldoNota.textContent = 'Valor acordado adicional pendiente de pago.';
+                    }
+                    if (inputCobrado) {
+                        inputCobrado.removeAttribute('readonly');
+                        if (inputCobrado.value === '0') inputCobrado.value = '';
+                    }
+                    bloquearMetodoPagoPendiente(metodoPago, true);
+                    if (labelValorCobrado) {
+                        labelValorCobrado.textContent = 'Valor acordado por fallos adicionales (USD)';
+                    }
+                    if (ayudaValor) {
+                        ayudaValor.innerHTML = 'Este valor se guardará como <strong>valor acordado pendiente</strong>. No se registra como pago recibido ahora.';
+                        ayudaValor.style.color = '#856404';
+                    }
+                    if (mensajeNotificacion && !mensajeNotificacion.value.trim()) {
+                        mensajeNotificacion.placeholder = 'Ej.: Se detectaron fallos adicionales fuera de garantía. Cobrar antes del retiro.';
+                    }
+                } else if (v === 'garantia') {
                     saldoDisplay.textContent = '$0.00';
                     saldoDisplay.style.color = 'var(--success)';
                     if (saldoNota) {
@@ -625,6 +702,11 @@
         var cobrarDiagSel = document.getElementById('cobrar_diagnostico_select');
         if (cobrarDiagSel) {
             cobrarDiagSel.addEventListener('change', actualizar);
+        }
+        var inputCobrado = document.querySelector('input[name="valor_final_cobrado"]');
+        if (inputCobrado) {
+            inputCobrado.addEventListener('input', actualizar);
+            inputCobrado.addEventListener('change', actualizar);
         }
         if (selEstado) {
             actualizar();

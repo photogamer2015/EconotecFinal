@@ -1,0 +1,170 @@
+{% extends 'base.html' %}
+{% load econotec_extras %}
+
+{% block title %}Notificaciones de asesoras — Econotec{% endblock %}
+
+{% block content %}
+<style>
+    .noti-wrap {
+        max-width: 980px;
+        margin: 0 auto;
+    }
+    .noti-head {
+        display: flex;
+        justify-content: space-between;
+        gap: 14px;
+        align-items: center;
+        margin-bottom: 18px;
+    }
+    .noti-head h2 {
+        margin: 0;
+        font-size: 24px;
+        color: var(--text-main);
+    }
+    .noti-tabs {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-bottom: 18px;
+    }
+    .noti-tab {
+        padding: 8px 12px;
+        border: 1px solid var(--border-color);
+        border-radius: 999px;
+        text-decoration: none;
+        color: var(--text-main);
+        font-weight: 800;
+        font-size: 13px;
+        background: var(--card-bg);
+    }
+    .noti-tab.active {
+        border-color: var(--primary);
+        color: var(--primary-dark);
+        background: var(--primary-light);
+    }
+    .noti-list {
+        display: grid;
+        gap: 12px;
+    }
+    .noti-card {
+        background: var(--card-bg);
+        border: 1px solid var(--border-color);
+        border-left: 4px solid var(--primary);
+        border-radius: 10px;
+        padding: 16px;
+        box-shadow: 0 3px 10px rgba(0,0,0,0.05);
+    }
+    .noti-card.leida {
+        border-left-color: #9ca3af;
+        opacity: 0.78;
+    }
+    .noti-title {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        align-items: flex-start;
+        margin-bottom: 8px;
+    }
+    .noti-title strong {
+        font-size: 16px;
+        color: var(--text-main);
+    }
+    .noti-meta {
+        color: var(--text-muted);
+        font-size: 13px;
+        line-height: 1.45;
+    }
+    .noti-valor {
+        color: var(--danger);
+        font-weight: 900;
+        font-size: 18px;
+        white-space: nowrap;
+    }
+    .noti-msg {
+        margin: 12px 0;
+        padding: 11px 12px;
+        border-radius: 8px;
+        background: #fff3cd;
+        color: #856404;
+        font-weight: 700;
+        line-height: 1.35;
+        white-space: pre-line;
+    }
+    .noti-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 12px;
+    }
+    .noti-actions .btn {
+        font-size: 12px;
+        padding: 8px 12px;
+    }
+    .empty-state {
+        background: var(--card-bg);
+        border: 1px dashed var(--border-color);
+        border-radius: 10px;
+        padding: 26px;
+        color: var(--text-muted);
+        text-align: center;
+        font-weight: 800;
+    }
+</style>
+
+<div class="crumb">
+    <a href="{% url 'econotec:bienvenida' %}">Inicio</a> / Notificaciones de asesoras
+</div>
+
+<div class="noti-wrap">
+    <div class="noti-head">
+        <div>
+            <h2>Notificaciones de garantías</h2>
+            <p style="margin:4px 0 0; color:var(--text-muted); font-weight:700;">
+                Fallos adicionales con valor pendiente de cobro.
+            </p>
+        </div>
+        <strong>{{ total_notificaciones }} registro{{ total_notificaciones|pluralize }}</strong>
+    </div>
+
+    <div class="noti-tabs">
+        <a class="noti-tab {% if estado_filtro == 'pendientes' %}active{% endif %}" href="?estado=pendientes">Pendientes</a>
+        <a class="noti-tab {% if estado_filtro == 'vistas' %}active{% endif %}" href="?estado=vistas">Vistas</a>
+        <a class="noti-tab {% if estado_filtro == 'todas' %}active{% endif %}" href="?estado=todas">Todas</a>
+    </div>
+
+    {% if notificaciones %}
+    <div class="noti-list">
+        {% for notificacion in notificaciones %}
+        <div class="noti-card {% if notificacion.leida %}leida{% endif %}">
+            <div class="noti-title">
+                <div>
+                    <strong>{{ notificacion.ingreso.codigo_equipo }} — {{ notificacion.ingreso.cliente.nombres }}</strong>
+                    <div class="noti-meta">
+                        {{ notificacion.ingreso.tipo_equipo_display }} — {{ notificacion.ingreso.marca }}
+                        · Asesora: {{ notificacion.asesora.get_full_name|default:notificacion.asesora.username }}
+                        · {{ notificacion.creado|date:"d/m/Y H:i" }}
+                    </div>
+                </div>
+                <div class="noti-valor">{{ notificacion.valor_acordado|dinero_signo }}</div>
+            </div>
+
+            <div class="noti-msg">{{ notificacion.mensaje }}</div>
+
+            <div class="noti-actions">
+                <a class="btn btn-secondary" href="{% url 'econotec:ingreso_detalle' pk=notificacion.ingreso.pk %}">Ver equipo</a>
+                <a class="btn btn-primary" href="{% url 'econotec:ingreso_abonos' pk=notificacion.ingreso.pk %}">Ir a pagos</a>
+                {% if not notificacion.leida %}
+                <form method="post" action="{% url 'econotec:notificacion_asesora_marcar_vista' pk=notificacion.pk %}">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-secondary">Marcar como vista</button>
+                </form>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+        <div class="empty-state">No hay notificaciones para este filtro.</div>
+    {% endif %}
+</div>
+{% endblock %}

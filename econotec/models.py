@@ -1087,6 +1087,7 @@ class SalidaEquipo(models.Model):
         ('cliente_no_acepta', '🚫 Cliente no quiso reparar'),
         ('no_reparable', '❌ No se pudo reparar'),
         ('garantia', '🛡 Salida por garantía'),
+        ('garantia_fallos_adicionales', '🛡 Salida + fallos adicionales'),
         ('retirado', '✅ Retirado por el cliente'),
         ('chatarrerizacion', '♻️ Chatarrerización'),
     ]
@@ -1349,12 +1350,19 @@ class SalidaEquipo(models.Model):
     @property
     def es_positivo(self):
         """¿La salida es positiva (cliente se llevó equipo reparado)?"""
-        return self.estado_reparacion in ('garantia', 'pendiente_retiro', 'retirado')
+        return self.estado_reparacion in ('garantia', 'garantia_fallos_adicionales', 'pendiente_retiro', 'retirado')
 
     @property
     def pendiente_de_retiro_fisico(self):
         """¿Está esperando que el cliente venga a retirar (cualquier resultado)?"""
-        return self.estado_reparacion in ('garantia', 'pendiente_retiro', 'retirado', 'cliente_no_acepta', 'no_reparable')
+        return self.estado_reparacion in (
+            'garantia',
+            'garantia_fallos_adicionales',
+            'pendiente_retiro',
+            'retirado',
+            'cliente_no_acepta',
+            'no_reparable',
+        )
 
     @property
     def cliente_ya_retiro(self):
@@ -1440,7 +1448,7 @@ class SalidaEquipo(models.Model):
             self.numero_recibo = SalidaEquipo.generar_numero_recibo()
         # Sincronizar estado del ingreso al guardar la salida
         if self.ingreso_id:
-            if self.estado_reparacion == 'garantia':
+            if self.estado_reparacion in ('garantia', 'garantia_fallos_adicionales'):
                 self.ingreso.estado = 'garantia'
             else:
                 self.ingreso.estado = 'entregado'
@@ -1700,3 +1708,84 @@ class AvisoPanel(models.Model):
 
     def __str__(self):
         return f'{self.titulo} ({self.estado_texto})'
+
+
+# ─────────────────────────────────────────────────────────
+# Notificaciones internas para asesoras
+# ─────────────────────────────────────────────────────────
+
+class NotificacionAsesora(models.Model):
+    """Aviso interno para que una asesora gestione cobros especiales."""
+
+    TIPO_FALLOS_ADICIONALES = 'fallos_adicionales'
+    TIPOS = [
+        (TIPO_FALLOS_ADICIONALES, 'Garantía con fallos adicionales'),
+    ]
+
+    tipo = models.CharField(
+        max_length=30,
+        choices=TIPOS,
+        default=TIPO_FALLOS_ADICIONALES,
+        verbose_name='Tipo de notificación',
+    )
+    salida = models.ForeignKey(
+        SalidaEquipo,
+        on_delete=models.CASCADE,
+        related_name='notificaciones_asesora',
+        verbose_name='Salida relacionada',
+    )
+    ingreso = models.ForeignKey(
+        IngresoEquipo,
+        on_delete=models.CASCADE,
+        related_name='notificaciones_asesora',
+        verbose_name='Ingreso relacionado',
+    )
+    asesora = models.ForeignKey(
+        'auth.User',
+        on_delete=models.CASCADE,
+        related_name='notificaciones_asesora',
+        verbose_name='Asesora notificada',
+    )
+    creado_por = models.ForeignKey(
+        'auth.User',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='notificaciones_asesora_creadas',
+        verbose_name='Notificado por',
+    )
+    valor_acordado = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        verbose_name='Valor acordado por fallos adicionales',
+    )
+    mensaje = models.TextField(
+        blank=True,
+        verbose_name='Mensaje para la asesora',
+    )
+    leida = models.BooleanField(
+        default=False,
+        verbose_name='Vista por la asesora',
+    )
+    leida_en = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name='Vista el',
+    )
+    creado = models.DateTimeField(auto_now_add=True)
+    actualizado = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'Notificación de asesora'
+        verbose_name_plural = 'Notificaciones de asesoras'
+        ordering = ['leida', '-creado']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['salida', 'tipo'],
+                name='uniq_notificacion_asesora_salida_tipo',
+            )
+        ]
+
+    def __str__(self):
+        return f'{self.get_tipo_display()} — {self.ingreso.codigo_equipo} — {self.asesora}'

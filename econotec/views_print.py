@@ -641,6 +641,7 @@ def salida_pdf(request, pk):
         ('no_reparable', 'No se pudo reparar'),
         ('cliente_no_acepta', 'Cliente no quiso reparar'),
         ('garantia', 'Salida por garantía'),
+        ('garantia_fallos_adicionales', 'Garantía + fallos adicionales'),
     ]
     for key, label in estados:
         c.setStrokeColor(naranja)

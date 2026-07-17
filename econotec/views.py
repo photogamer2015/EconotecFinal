@@ -28,8 +28,11 @@ from .busqueda import (
     texto_salida_busqueda,
     total_resultados,
 )
-from .models import Cliente, IngresoEquipo, SalidaEquipo, Abono, SEDES_EQUIPOS, UsuarioActividad
-from .permisos import admin_requerido, tecnico_requerido, es_asesor, es_tecnico
+from .models import (
+    Cliente, IngresoEquipo, SalidaEquipo, Abono, SEDES_EQUIPOS,
+    UsuarioActividad, NotificacionAsesora,
+)
+from .permisos import admin_requerido, tecnico_requerido, es_admin, es_asesor, es_tecnico
 from .gamificacion import (
     SALIDA_BUENA_ESTADOS,
     SALIDA_GARANTIA_ESTADOS,
@@ -49,6 +52,42 @@ from .alertas import (
     UMBRAL_DIAS_BODEGAJE,
     COSTO_BODEGAJE_DIA,
 )
+
+
+def _sincronizar_notificacion_fallos_adicionales(form, salida, user):
+    """Crea/actualiza la notificación interna para garantía con fallos adicionales."""
+    if salida.estado_reparacion != 'garantia_fallos_adicionales':
+        NotificacionAsesora.objects.filter(
+            salida=salida,
+            tipo=NotificacionAsesora.TIPO_FALLOS_ADICIONALES,
+        ).delete()
+        return
+
+    asesora = form.cleaned_data.get('asesora_notificacion')
+    if not asesora:
+        return
+
+    valor = form.cleaned_data.get('valor_final_cobrado') or salida.ingreso.valor_acordado or D('0.00')
+    mensaje = (form.cleaned_data.get('mensaje_notificacion') or '').strip()
+    if not mensaje:
+        mensaje = (
+            f'El equipo {salida.ingreso.codigo_equipo} salió por garantía con fallos '
+            f'adicionales. Valor acordado pendiente: ${valor:.2f}.'
+        )
+
+    NotificacionAsesora.objects.update_or_create(
+        salida=salida,
+        tipo=NotificacionAsesora.TIPO_FALLOS_ADICIONALES,
+        defaults={
+            'ingreso': salida.ingreso,
+            'asesora': asesora,
+            'creado_por': user,
+            'valor_acordado': valor,
+            'mensaje': mensaje,
+            'leida': False,
+            'leida_en': None,
+        }
+    )
 
 
 def _normalizar_comparacion(valor):
@@ -1375,6 +1414,7 @@ def salida_registrar(request, ingreso_pk):
             salida = form.save(commit=False)
             salida.registrado_por = request.user
             salida.save()
+            _sincronizar_notificacion_fallos_adicionales(form, salida, request.user)
             messages.success(
                 request,
                 f'Salida del equipo {ingreso.codigo_equipo} registrada como '
@@ -1415,7 +1455,8 @@ def salida_editar(request, pk):
     if request.method == 'POST':
         form = SalidaEquipoForm(request.POST, instance=salida)
         if form.is_valid():
-            form.save()
+            salida = form.save()
+            _sincronizar_notificacion_fallos_adicionales(form, salida, request.user)
             messages.success(request, 'Salida actualizada correctamente.')
             return redirect('econotec:salida_lista')
     else:
@@ -1431,6 +1472,49 @@ def salida_editar(request, pk):
         # junto con el PDF de la hoja de salida.
         'wa_link': whatsapp_link_equipo_listo(salida),
     })
+
+
+@login_required
+def notificaciones_asesora(request):
+    if not (es_admin(request.user) or es_asesor(request.user)):
+        messages.warning(request, 'No tienes acceso a las notificaciones de asesoras.')
+        return redirect('econotec:bienvenida')
+
+    qs = (
+        NotificacionAsesora.objects
+        .select_related('ingreso', 'ingreso__cliente', 'salida', 'asesora', 'creado_por')
+        .all()
+    )
+    if not es_admin(request.user):
+        qs = qs.filter(asesora=request.user)
+
+    estado = (request.GET.get('estado') or 'pendientes').strip()
+    if estado == 'vistas':
+        qs = qs.filter(leida=True)
+    elif estado != 'todas':
+        estado = 'pendientes'
+        qs = qs.filter(leida=False)
+
+    return render(request, 'notificaciones/asesoras.html', {
+        'notificaciones': qs,
+        'estado_filtro': estado,
+        'total_notificaciones': total_resultados(qs),
+    })
+
+
+@login_required
+@require_POST
+def notificacion_asesora_marcar_vista(request, pk):
+    qs = NotificacionAsesora.objects.all()
+    if not es_admin(request.user):
+        qs = qs.filter(asesora=request.user)
+
+    notificacion = get_object_or_404(qs, pk=pk)
+    notificacion.leida = True
+    notificacion.leida_en = timezone.now()
+    notificacion.save(update_fields=['leida', 'leida_en', 'actualizado'])
+    messages.success(request, 'Notificación marcada como vista.')
+    return redirect('econotec:notificaciones_asesora')
 
 
 @admin_requerido
@@ -1650,7 +1734,7 @@ def salida_totales(request):
             estado = salida.estado_reparacion
             
             # Conteo de salidas
-            if estado in ['pendiente_retiro', 'garantia', 'retirado']:
+            if estado in ['pendiente_retiro', 'garantia', 'garantia_fallos_adicionales', 'retirado']:
                 salidas_positivas += 1
             elif estado in ['no_reparable', 'cliente_no_acepta', 'chatarrerizacion']:
                 salidas_negativas += 1
@@ -1698,7 +1782,14 @@ def salida_totales(request):
         sal_global = sal_global.filter(fecha_salida__lte=hasta)
     total_salidas_global = sal_global.count()
     total_positivas_global = sal_global.filter(
-        estado_reparacion__in=['pendiente_retiro', 'garantia', 'retirado', 'cliente_no_acepta', 'no_reparable']
+        estado_reparacion__in=[
+            'pendiente_retiro',
+            'garantia',
+            'garantia_fallos_adicionales',
+            'retirado',
+            'cliente_no_acepta',
+            'no_reparable',
+        ]
     ).count()
     cobrado_final_global = sal_global.aggregate(s=Sum('valor_final_cobrado'))['s'] or D('0.00')
 

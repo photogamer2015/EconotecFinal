@@ -232,7 +232,11 @@ class IngresoEquipoForm(forms.ModelForm):
                 self.salida_registrada = None
             self.estado_bloqueado_por_salida = self.salida_registrada is not None
             if self.estado_bloqueado_por_salida:
-                self.estado_bloqueado_valor = 'garantia' if self.salida_registrada.estado_reparacion == 'garantia' else 'entregado'
+                self.estado_bloqueado_valor = (
+                    'garantia'
+                    if self.salida_registrada.estado_reparacion in ('garantia', 'garantia_fallos_adicionales')
+                    else 'entregado'
+                )
                 self.subestado_bloqueado_valor = {
                     'pendiente_retiro': 'pendiente_retiro',
                     'retirado': 'con_solucion',
@@ -732,6 +736,22 @@ class SalidaEquipoForm(forms.ModelForm):
         label='Reporte del técnico (lo que se le realizó al equipo)',
         help_text='(Se completa aquí al registrar la salida)'
     )
+    asesora_notificacion = forms.ModelChoiceField(
+        queryset=User.objects.none(),
+        required=False,
+        widget=forms.Select(attrs={'class': 'form-input'}),
+        label='Notificar a asesora',
+        empty_label='— Selecciona una asesora —',
+    )
+    mensaje_notificacion = forms.CharField(
+        required=False,
+        widget=forms.Textarea(attrs={
+            'class': 'form-input',
+            'rows': 2,
+            'placeholder': 'Detalle breve para la asesora (opcional)',
+        }),
+        label='Mensaje para la asesora',
+    )
 
     class Meta:
         model = SalidaEquipo
@@ -795,6 +815,18 @@ class SalidaEquipoForm(forms.ModelForm):
 
         if self.instance and hasattr(self.instance, 'ingreso') and self.instance.ingreso:
             self.fields['reporte_tecnico'].initial = self.instance.ingreso.reporte_tecnico
+            if self.instance.estado_reparacion == 'garantia_fallos_adicionales':
+                self.initial['valor_final_cobrado'] = self.instance.ingreso.valor_acordado or Decimal('0.00')
+                self.initial['metodo_pago_final'] = 'sin_pago'
+                notificacion = (
+                    self.instance.notificaciones_asesora
+                    .filter(tipo='fallos_adicionales')
+                    .select_related('asesora')
+                    .first()
+                )
+                if notificacion:
+                    self.initial['asesora_notificacion'] = notificacion.asesora_id
+                    self.initial['mensaje_notificacion'] = notificacion.mensaje
 
         # ── Técnico que reparó: OBLIGATORIO ──────────────────────────
         # El responsable de la reparación se declara aquí, en la salida.
@@ -813,6 +845,13 @@ class SalidaEquipoForm(forms.ModelForm):
         self.fields['tecnico_reparo'].required = True
         self.fields['tecnico_reparo'].label = 'Técnico que reparó el equipo'
         self.fields['tecnico_reparo'].empty_label = '— Selecciona el técnico —'
+        self.fields['asesora_notificacion'].queryset = _queryset_asesores()
+        self.fields['asesora_notificacion'].label_from_instance = (
+            lambda u: (
+                f'{u.first_name} {u.last_name}'.strip()
+                or u.username
+            )
+        )
 
         choices = list(self.fields['estado_reparacion'].choices)
         
@@ -831,11 +870,17 @@ class SalidaEquipoForm(forms.ModelForm):
                            self.instance.ingreso.equipo_garantia_manual)
             
             if es_garantia:
-                # Si el ingreso ES por garantía, solo permitir la salida por garantía
-                choices = [c for c in choices if c[0] == 'garantia']
+                # Si el ingreso ES por garantía, permitir garantía normal o garantía con valor adicional.
+                choices = [
+                    c for c in choices
+                    if c[0] in ('garantia', 'garantia_fallos_adicionales')
+                ]
             else:
                 # Si el ingreso NO ES por garantía, ocultar la opción de salida por garantía
-                choices = [c for c in choices if c[0] != 'garantia']
+                choices = [
+                    c for c in choices
+                    if c[0] not in ('garantia', 'garantia_fallos_adicionales')
+                ]
                 
         self.fields['estado_reparacion'].choices = choices
 
@@ -853,6 +898,31 @@ class SalidaEquipoForm(forms.ModelForm):
         banco = cleaned.get('banco')
         banco_otro = cleaned.get('banco_otro')
         tarjeta_app = cleaned.get('tarjeta_app')
+
+        if estado_reparacion == 'garantia_fallos_adicionales':
+            if valor <= 0:
+                self.add_error(
+                    'valor_final_cobrado',
+                    'Ingresa el valor acordado por los fallos adicionales.'
+                )
+            if not cleaned.get('asesora_notificacion'):
+                self.add_error(
+                    'asesora_notificacion',
+                    'Selecciona la asesora que recibirá esta notificación.'
+                )
+            cleaned['metodo_pago_final'] = 'sin_pago'
+            cleaned['banco'] = ''
+            cleaned['banco_otro'] = ''
+            cleaned['tarjeta_app'] = ''
+            cleaned['comprobante_url'] = ''
+            cleaned['numero_recibo'] = ''
+            cleaned['monto_1'] = None
+            cleaned['metodo_1'] = ''
+            cleaned['banco_1'] = ''
+            cleaned['monto_2'] = None
+            cleaned['metodo_2'] = ''
+            cleaned['banco_2'] = ''
+            return cleaned
 
         if metodo == 'mixto':
             monto1 = cleaned.get('monto_1') or Decimal('0.00')
@@ -891,13 +961,35 @@ class SalidaEquipoForm(forms.ModelForm):
 
     def save(self, commit=True):
         salida = super().save(commit=False)
+        valor_fallos_adicionales = None
+        if salida.estado_reparacion == 'garantia_fallos_adicionales':
+            valor_fallos_adicionales = self.cleaned_data.get('valor_final_cobrado') or Decimal('0.00')
+            salida.valor_final_cobrado = Decimal('0.00')
+            salida.metodo_pago_final = 'sin_pago'
+            salida.numero_recibo = ''
+            salida.banco = ''
+            salida.banco_otro = ''
+            salida.tarjeta_app = ''
+            salida.comprobante_url = ''
+            salida.monto_1 = None
+            salida.metodo_1 = ''
+            salida.banco_1 = ''
+            salida.monto_2 = None
+            salida.metodo_2 = ''
+            salida.banco_2 = ''
+
         salida.cliente_recibe_conforme = 'si' if salida.es_positivo else 'no'
         reporte = self.cleaned_data.get('reporte_tecnico')
         
         if hasattr(salida, 'ingreso') and salida.ingreso:
             salida.ingreso.reporte_tecnico = reporte
+            if valor_fallos_adicionales is not None:
+                salida.ingreso.valor_acordado = valor_fallos_adicionales
             if commit:
-                salida.ingreso.save(update_fields=['reporte_tecnico'])
+                update_fields = ['reporte_tecnico']
+                if valor_fallos_adicionales is not None:
+                    update_fields.append('valor_acordado')
+                salida.ingreso.save(update_fields=update_fields)
                 
         if commit:
             salida.save()

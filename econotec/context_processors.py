@@ -50,6 +50,8 @@ def roles(request):
             'alertas_bodegaje_count': 0,
             'alertas_bodegaje_count_global': 0,
             'alertas_total_count': 0,
+            'notificaciones_asesora_count': 0,
+            'notificaciones_asesora_preview': [],
         }
 
     es_a = _es_admin(user)
@@ -94,6 +96,23 @@ def roles(request):
     except Exception:
         pass
 
+    notificaciones_asesora_count = 0
+    notificaciones_asesora_preview = []
+    try:
+        from .models import NotificacionAsesora
+        qs_notificaciones = (
+            NotificacionAsesora.objects
+            .select_related('ingreso', 'ingreso__cliente', 'salida', 'asesora')
+            .filter(leida=False)
+        )
+        if not es_a:
+            qs_notificaciones = qs_notificaciones.filter(asesora=user)
+        if es_a or es_as:
+            notificaciones_asesora_count = qs_notificaciones.count()
+            notificaciones_asesora_preview = list(qs_notificaciones[:3])
+    except Exception:
+        pass
+
     return {
         'es_admin': es_a,
         'es_tecnico': es_t,
@@ -111,4 +130,6 @@ def roles(request):
         'alertas_bodegaje_count_global': bodegaje_count_global,
         'alertas_total_count': total,
         'avisos_vigentes': avisos_vigentes,
+        'notificaciones_asesora_count': notificaciones_asesora_count,
+        'notificaciones_asesora_preview': notificaciones_asesora_preview,
     }

@@ -7,7 +7,7 @@ PUNTOS_SALIDA_GARANTIA_RESTA = 2
 
 SALIDA_BUENA_ESTADOS = ('pendiente_retiro', 'retirado')
 SALIDA_MALA_ESTADOS = ('no_reparable',)
-SALIDA_GARANTIA_ESTADOS = ('garantia',)
+SALIDA_GARANTIA_ESTADOS = ('garantia', 'garantia_fallos_adicionales')
 
 
 def calcular_puntaje_gamificacion(

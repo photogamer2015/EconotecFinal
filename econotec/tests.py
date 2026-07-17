@@ -11,7 +11,7 @@ from django.urls import reverse
 
 from .forms import IngresoEquipoForm
 from .alertas import equipos_demorados_qs
-from .models import Cliente, IngresoEquipo, SalidaEquipo, UsuarioActividad
+from .models import Cliente, IngresoEquipo, NotificacionAsesora, SalidaEquipo, UsuarioActividad
 from .qr_utils import token_para_ingreso
 from .views_auth import CAPTCHA_SESSION_KEY, LOGIN_2FA_SESSION_KEY, LOGIN_EMAIL_SETUP_SESSION_KEY
 
@@ -1498,6 +1498,96 @@ class VentasTests(TestCase):
             reverse('econotec:ingreso_detalle', kwargs={'pk': ingreso.pk})
         )
         self.assertFalse(SalidaEquipo.objects.filter(ingreso=ingreso).exists())
+
+    def test_salida_garantia_fallos_adicionales_deja_valor_pendiente_y_notifica_asesora(self):
+        ingreso = self.crear_ingreso_reparacion(
+            estado='garantia',
+            valor_acordado=Decimal('0.00'),
+            motivo_garantia='Garantía por retorno',
+            equipo_garantia_manual='G1000',
+        )
+
+        response = self.client.post(
+            reverse('econotec:salida_registrar', kwargs={'ingreso_pk': ingreso.pk}),
+            {
+                'fecha_salida': '2026-07-17',
+                'estado_reparacion': 'garantia_fallos_adicionales',
+                'tecnico_reparo': str(self.usuario.pk),
+                'reporte_tecnico': 'Se detectaron fallos adicionales.',
+                'observaciones': '',
+                'valor_final_cobrado': '75.00',
+                'metodo_pago_final': 'sin_pago',
+                'numero_recibo': '',
+                'banco': '',
+                'banco_otro': '',
+                'tarjeta_app': '',
+                'comprobante_url': '',
+                'monto_1': '',
+                'metodo_1': '',
+                'banco_1': '',
+                'monto_2': '',
+                'metodo_2': '',
+                'banco_2': '',
+                'factura_realizada': 'no',
+                'factura_nombres': '',
+                'factura_cedula': '',
+                'factura_correo': '',
+                'asesora_notificacion': str(self.vendedor.pk),
+                'mensaje_notificacion': 'Cobrar fallos adicionales antes del retiro.',
+            },
+        )
+
+        salida = SalidaEquipo.objects.get(ingreso=ingreso)
+        self.assertRedirects(response, reverse('econotec:salida_listo_aviso', kwargs={'pk': salida.pk}))
+        ingreso.refresh_from_db()
+        self.assertEqual(salida.estado_reparacion, 'garantia_fallos_adicionales')
+        self.assertEqual(salida.valor_final_cobrado, Decimal('0.00'))
+        self.assertEqual(salida.metodo_pago_final, 'sin_pago')
+        self.assertEqual(ingreso.valor_acordado, Decimal('75.00'))
+        self.assertEqual(ingreso.diferencia, Decimal('75.00'))
+        self.assertEqual(ingreso.estado_pago, 'Pendiente')
+
+        notificacion = NotificacionAsesora.objects.get(salida=salida)
+        self.assertEqual(notificacion.asesora, self.vendedor)
+        self.assertEqual(notificacion.valor_acordado, Decimal('75.00'))
+        self.assertFalse(notificacion.leida)
+
+    def test_notificacion_asesora_se_puede_marcar_como_vista(self):
+        ingreso = self.crear_ingreso_reparacion(
+            estado='garantia',
+            valor_acordado=Decimal('60.00'),
+            motivo_garantia='Garantía por retorno',
+        )
+        salida = SalidaEquipo.objects.create(
+            ingreso=ingreso,
+            fecha_salida=date(2026, 7, 17),
+            estado_reparacion='garantia_fallos_adicionales',
+            tecnico_reparo=self.usuario,
+            valor_final_cobrado=Decimal('0.00'),
+            metodo_pago_final='sin_pago',
+            registrado_por=self.usuario,
+        )
+        notificacion = NotificacionAsesora.objects.create(
+            salida=salida,
+            ingreso=ingreso,
+            asesora=self.vendedor,
+            creado_por=self.usuario,
+            valor_acordado=Decimal('60.00'),
+            mensaje='Pendiente por cobrar.',
+        )
+
+        self.client.force_login(self.vendedor)
+        response = self.client.get(reverse('econotec:notificaciones_asesora'))
+        self.assertContains(response, ingreso.codigo_equipo)
+        self.assertContains(response, 'Pendiente por cobrar.')
+
+        response = self.client.post(
+            reverse('econotec:notificacion_asesora_marcar_vista', kwargs={'pk': notificacion.pk})
+        )
+        self.assertRedirects(response, reverse('econotec:notificaciones_asesora'))
+        notificacion.refresh_from_db()
+        self.assertTrue(notificacion.leida)
+        self.assertIsNotNone(notificacion.leida_en)
 
     def test_detalle_muestra_alerta_si_valor_acordado_pendiente(self):
         ingreso = self.crear_ingreso_reparacion(valor_acordado=None)
