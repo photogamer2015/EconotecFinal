@@ -1001,6 +1001,14 @@ class SalidaEquipoForm(forms.ModelForm):
             return cleaned
 
         if estado_reparacion == 'pendiente_retiro':
+            if not (self.instance and self.instance.pk):
+                valor = Decimal('0.00')
+                cleaned['valor_final_cobrado'] = valor
+                self._limpiar_pago_pendiente(cleaned)
+                metodo = 'sin_pago'
+                banco = ''
+                banco_otro = ''
+                tarjeta_app = ''
             saldo_pendiente = self._saldo_pendiente_despues_de_pago(valor)
             if saldo_pendiente > 0:
                 if not cleaned.get('asesora_notificacion'):

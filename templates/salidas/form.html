@@ -369,7 +369,7 @@
             </select>
         </div>
 
-        <div class="form-row cols-2">
+        <div class="form-row cols-2" id="wrap-pago-final">
             <div>
                 <label class="form-label" id="label-valor-cobrado">Valor cobrado ahora (USD)</label>
                 {{ form.valor_final_cobrado }}
@@ -460,7 +460,7 @@
             </div>
         </div>
 
-        <div style="margin-top: 14px;">
+        <div style="margin-top: 14px;" id="wrap-numero-recibo">
             <label class="form-label">Número de recibo (opcional)</label>
             {{ form.numero_recibo }}
             <small style="color:#888; font-size:11px;">Si lo dejas vacío y hay un cobro, se genera automáticamente.</small>
@@ -531,6 +531,8 @@
         var mensajeNotificacion = document.querySelector('[name="mensaje_notificacion"]');
         var tituloNotificarAsesora = document.getElementById('notificar-asesora-titulo');
         var ayudaNotificarAsesora = document.getElementById('notificar-asesora-ayuda');
+        var wrapPagoFinal = document.getElementById('wrap-pago-final');
+        var wrapNumeroRecibo = document.getElementById('wrap-numero-recibo');
 
         // Datos del ingreso (vienen de Django)
         var valorDiagnostico = parseFloat("{{ ingreso.valor_diagnostico|default:0 }}") || 0;
@@ -619,6 +621,9 @@
                     ayudaValor.innerHTML = 'Si ya estaba pagado o si aún no ha pagado, déjalo en 0 para que se registre como saldo pendiente. Si está pagando ahora mismo, ingresa el valor aquí.';
                     ayudaValor.style.color = '#888';
                 }
+                if (wrapPagoFinal) wrapPagoFinal.style.display = '';
+                if (wrapNumeroRecibo) wrapNumeroRecibo.style.display = '';
+                if (inputCobrado) inputCobrado.setAttribute('min', '0');
                 setNotificacionAsesora(false);
                 bloquearMetodoPagoPendiente(metodoPago, false);
 
@@ -680,19 +685,19 @@
                             metodoPago.dispatchEvent(new Event('change'));
                         }
                     } else {
+                        if (inputCobrado) {
+                            if (inputCobrado.hasAttribute('readonly') || inputCobrado.value === '0') {
+                                inputCobrado.value = '5';
+                            }
+                            inputCobrado.removeAttribute('readonly');
+                            inputCobrado.setAttribute('min', '5');
+                        }
                         var valorRevision = valorInputCobrado(inputCobrado);
-                        if (!valorRevision || valorRevision < 5) valorRevision = 5;
                         saldoDisplay.textContent = '$' + valorRevision.toFixed(2);
                         saldoDisplay.style.color = 'var(--danger)';
                         if (saldoNota) {
                             saldoNota.style.display = '';
                             saldoNota.textContent = 'Revisión pendiente de pago antes del retiro.';
-                        }
-                        if (inputCobrado) {
-                            if (valorInputCobrado(inputCobrado) < 5 || inputCobrado.hasAttribute('readonly') || inputCobrado.value === '0') {
-                                inputCobrado.value = '5';
-                            }
-                            inputCobrado.removeAttribute('readonly');
                         }
                         bloquearMetodoPagoPendiente(metodoPago, true);
                         setNotificacionAsesora(true, 'revision');
@@ -703,6 +708,23 @@
                             ayudaValor.innerHTML = '<strong>Nota:</strong> Ingresa el valor pendiente (puede ser 5 o mayor). No se registra como pago recibido ahora.';
                             ayudaValor.style.color = '#856404';
                         }
+                    }
+                } else if (v === 'pendiente_retiro') {
+                    if (wrapPagoFinal) wrapPagoFinal.style.display = 'none';
+                    if (wrapNumeroRecibo) wrapNumeroRecibo.style.display = 'none';
+                    var saldoPendienteRetiro = Math.max(diferenciaNormal, 0);
+                    saldoDisplay.textContent = '$' + saldoPendienteRetiro.toFixed(2);
+                    saldoDisplay.style.color = saldoPendienteRetiro > 0 ? 'var(--danger)' : 'var(--success)';
+                    if (metodoPago) metodoPago.value = 'sin_pago';
+                    if (inputCobrado && !inputCobrado.value) inputCobrado.value = '0';
+                    if (saldoPendienteRetiro > 0) {
+                        setNotificacionAsesora(true, 'retiro');
+                        if (saldoNota) {
+                            saldoNota.style.display = '';
+                            saldoNota.textContent = 'Equipo listo, pero con saldo pendiente antes del retiro.';
+                        }
+                    } else if (saldoNota) {
+                        saldoNota.style.display = 'none';
                     }
                 } else {
                     var saldoNormal = Math.max(diferenciaNormal, 0);
@@ -716,14 +738,7 @@
                             inputCobrado.removeAttribute('readonly');
                         }
                     }
-                    var saldoDespuesPago = Math.max(diferenciaNormal - valorInputCobrado(inputCobrado), 0);
-                    if (v === 'pendiente_retiro' && saldoDespuesPago > 0) {
-                        setNotificacionAsesora(true, 'retiro');
-                        if (saldoNota) {
-                            saldoNota.style.display = '';
-                            saldoNota.textContent = 'Equipo listo, pero con saldo pendiente antes del retiro.';
-                        }
-                    } else if (saldoNota) {
+                    if (saldoNota) {
                         saldoNota.style.display = 'none';
                     }
                 }

@@ -1650,15 +1650,19 @@ class VentasTests(TestCase):
         salida = SalidaEquipo.objects.get(ingreso=ingreso)
         self.assertRedirects(response, reverse('econotec:salida_listo_aviso', kwargs={'pk': salida.pk}))
         ingreso.refresh_from_db()
-        self.assertEqual(salida.valor_final_cobrado, Decimal('20.00'))
-        self.assertEqual(ingreso.diferencia, Decimal('80.00'))
+        self.assertEqual(salida.valor_final_cobrado, Decimal('0.00'))
+        self.assertEqual(salida.metodo_pago_final, 'sin_pago')
+        self.assertEqual(ingreso.diferencia, Decimal('100.00'))
 
         notificacion = NotificacionAsesora.objects.get(salida=salida)
         self.assertEqual(notificacion.tipo, NotificacionAsesora.TIPO_SALDO_RETIRO)
-        self.assertEqual(notificacion.valor_acordado, Decimal('80.00'))
+        self.assertEqual(notificacion.valor_acordado, Decimal('100.00'))
 
     def test_salida_pendiente_retiro_pagada_no_crea_notificacion(self):
-        ingreso = self.crear_ingreso_reparacion(valor_acordado=Decimal('25.00'))
+        ingreso = self.crear_ingreso_reparacion(
+            valor_acordado=Decimal('25.00'),
+            abono_anticipo=Decimal('25.00'),
+        )
 
         response = self.client.post(
             reverse('econotec:salida_registrar', kwargs={'ingreso_pk': ingreso.pk}),
@@ -1672,6 +1676,8 @@ class VentasTests(TestCase):
         salida = SalidaEquipo.objects.get(ingreso=ingreso)
         self.assertRedirects(response, reverse('econotec:salida_listo_aviso', kwargs={'pk': salida.pk}))
         ingreso.refresh_from_db()
+        self.assertEqual(salida.valor_final_cobrado, Decimal('0.00'))
+        self.assertEqual(salida.metodo_pago_final, 'sin_pago')
         self.assertEqual(ingreso.diferencia, Decimal('0.00'))
         self.assertFalse(NotificacionAsesora.objects.filter(salida=salida).exists())
 
