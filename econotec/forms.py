@@ -377,6 +377,12 @@ class IngresoEquipoForm(forms.ModelForm):
         if self.estado_bloqueado_por_salida:
             return self.instance.valor_acordado
 
+        estado_equipo = ''
+        if self.is_bound:
+            estado_equipo = (self.data.get(self.add_prefix('estado')) or '').strip()
+        if estado_equipo == 'garantia':
+            return Decimal('0.00')
+
         estado = ''
         if self.is_bound:
             estado = (self.data.get(self.add_prefix('valor_acordado_estado')) or '').strip()
@@ -405,6 +411,8 @@ class IngresoEquipoForm(forms.ModelForm):
 
         if self.estado_bloqueado_por_salida:
             cleaned['valor_acordado'] = self.instance.valor_acordado
+        elif estado == 'garantia':
+            cleaned['valor_acordado'] = Decimal('0.00')
         elif valor_acordado_estado in ('no', 'pendiente'):
             cleaned['valor_acordado'] = None
         elif valor_acordado_estado == 'si' and cleaned.get('valor_acordado') is None:

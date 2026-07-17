@@ -1425,6 +1425,30 @@ class VentasTests(TestCase):
         self.assertFalse(form.is_valid())
         self.assertIn('valor_acordado', form.errors)
 
+    def test_ingreso_garantia_fuerza_valor_acordado_cero(self):
+        form = IngresoEquipoForm(data=self.ingreso_form_data(
+            estado='garantia',
+            subestado_reparacion='',
+            valor_acordado_estado='si',
+            valor_acordado='99.00',
+            motivo_garantia='Falla cubierta por garantía',
+        ))
+
+        self.assertTrue(form.is_valid(), form.errors.as_json())
+        self.assertEqual(form.cleaned_data['valor_acordado'], Decimal('0.00'))
+
+    def test_ingreso_garantia_no_valida_monto_manual(self):
+        form = IngresoEquipoForm(data=self.ingreso_form_data(
+            estado='garantia',
+            subestado_reparacion='',
+            valor_acordado_estado='si',
+            valor_acordado='valor indebido',
+            motivo_garantia='Falla cubierta por garantía',
+        ))
+
+        self.assertTrue(form.is_valid(), form.errors.as_json())
+        self.assertEqual(form.cleaned_data['valor_acordado'], Decimal('0.00'))
+
     def test_detalle_bloquea_boton_salida_si_valor_acordado_pendiente(self):
         ingreso = self.crear_ingreso_reparacion(valor_acordado=None)
 

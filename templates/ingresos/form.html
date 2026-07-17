@@ -225,6 +225,20 @@
         box-shadow: 0 0 0 3px rgba(249, 118, 24, 0.10);
     }
 
+    .valor-acordado-opcion.is-disabled,
+    .valor-acordado-opcion.is-disabled:hover {
+        border-color: #d1d5db;
+        background: #eef0f2;
+        color: #4b5563;
+        cursor: not-allowed;
+        box-shadow: none;
+        opacity: 0.72;
+    }
+
+    .valor-acordado-opcion.is-disabled input {
+        cursor: not-allowed;
+    }
+
     .valor-acordado-monto {
         display: none;
         margin-top: 2px;
@@ -330,7 +344,9 @@
 
     [data-theme="dark"] .valor-bloqueado .valor-acordado-opcion,
     [data-theme="dark"] .valor-bloqueado .valor-acordado-opcion:hover,
-    [data-theme="dark"] .valor-bloqueado .valor-acordado-opcion.is-active {
+    [data-theme="dark"] .valor-bloqueado .valor-acordado-opcion.is-active,
+    [data-theme="dark"] .valor-acordado-opcion.is-disabled,
+    [data-theme="dark"] .valor-acordado-opcion.is-disabled:hover {
         border-color: rgba(255, 255, 255, 0.16);
         background: rgba(255, 255, 255, 0.08);
         color: var(--text-muted);
@@ -871,11 +887,15 @@
     (function () {
         var radios = Array.prototype.slice.call(document.querySelectorAll('input[name="ing-valor_acordado_estado"]'));
         var inpValor = document.querySelector('[name="ing-valor_acordado"]');
+        var selEstadoEquipo = document.querySelector('[name="ing-estado"]');
         var wrapMonto = document.getElementById('wrap_valor_acordado_monto');
         var aviso = document.getElementById('valor-acordado-aviso');
         var ultimoValor = '';
+        var valorAntesGarantia = '';
+        var bloqueoGarantiaActivo = false;
 
         if (!radios.length || !inpValor) return;
+        var valorBloqueadoPorSalida = inpValor.disabled;
 
         function esPendiente(valor) {
             var limpio = String(valor || '').trim();
@@ -893,12 +913,29 @@
             return null;
         }
 
-        function asegurarSeleccion() {
-            if (radioActivo()) return;
-            var valor = esPendiente(inpValor.value) ? 'no' : 'si';
+        function esGarantiaIngreso() {
+            return selEstadoEquipo && selEstadoEquipo.value === 'garantia';
+        }
+
+        function seleccionarRadio(valor) {
             radios.forEach(function (radio) {
                 radio.checked = radio.value === valor;
             });
+        }
+
+        function bloquearRadios(bloquear) {
+            if (valorBloqueadoPorSalida) return;
+            radios.forEach(function (radio) {
+                radio.disabled = bloquear;
+                var label = radio.closest('.valor-acordado-opcion');
+                if (label) label.classList.toggle('is-disabled', bloquear);
+            });
+        }
+
+        function asegurarSeleccion() {
+            if (radioActivo()) return;
+            var valor = esPendiente(inpValor.value) ? 'no' : 'si';
+            seleccionarRadio(valor);
         }
 
         function estadoActual() {
@@ -915,6 +952,52 @@
         }
 
         function actualizarValorAcordado() {
+            if (valorBloqueadoPorSalida) {
+                var estadoBloqueado = estadoActual();
+                marcarOpcionActiva();
+                if (wrapMonto) wrapMonto.style.display = (estadoBloqueado === 'si') ? 'block' : 'none';
+                if (aviso) aviso.style.display = (estadoBloqueado === 'si') ? 'none' : 'block';
+                if (window.__checkRequired) window.__checkRequired();
+                return;
+            }
+
+            if (esGarantiaIngreso()) {
+                if (!bloqueoGarantiaActivo && !esPendiente(inpValor.value) && inpValor.value !== '0.00') {
+                    valorAntesGarantia = inpValor.value;
+                }
+                bloqueoGarantiaActivo = true;
+                seleccionarRadio('si');
+                bloquearRadios(true);
+                marcarOpcionActiva();
+                inpValor.value = '0.00';
+                inpValor.removeAttribute('required');
+                inpValor.setAttribute('readonly', 'readonly');
+                inpValor.classList.add('estado-lock-input');
+                if (wrapMonto) wrapMonto.style.display = 'block';
+                if (aviso) {
+                    aviso.style.display = 'block';
+                    aviso.textContent = 'Ingreso por garantía: el valor acordado queda bloqueado en $0.00. Si hay un cobro, regístralo en la salida.';
+                }
+                if (window.__checkRequired) window.__checkRequired();
+                return;
+            }
+
+            if (bloqueoGarantiaActivo) {
+                bloqueoGarantiaActivo = false;
+                bloquearRadios(false);
+                inpValor.classList.remove('estado-lock-input');
+                if (valorAntesGarantia) {
+                    inpValor.value = valorAntesGarantia;
+                    seleccionarRadio('si');
+                } else {
+                    inpValor.value = '.';
+                    seleccionarRadio('no');
+                }
+            } else {
+                bloquearRadios(false);
+                inpValor.classList.remove('estado-lock-input');
+            }
+
             var estado = estadoActual();
             marcarOpcionActiva();
 
@@ -949,10 +1032,13 @@
             radio.addEventListener('change', actualizarValorAcordado);
         });
         inpValor.addEventListener('input', function () {
-            if (estadoActual() === 'si' && !esPendiente(inpValor.value)) {
+            if (!esGarantiaIngreso() && estadoActual() === 'si' && !esPendiente(inpValor.value)) {
                 ultimoValor = inpValor.value;
             }
         });
+        if (selEstadoEquipo) {
+            selEstadoEquipo.addEventListener('change', actualizarValorAcordado);
+        }
 
         actualizarValorAcordado();
         setTimeout(actualizarValorAcordado, 150);
