@@ -1449,6 +1449,98 @@
     </div>
 
     <script>
+        (function() {
+            function esLinkWhatsApp(href) {
+                return href.indexOf('https://wa.me/') === 0
+                    || href.indexOf('https://api.whatsapp.com/') === 0
+                    || href.indexOf('https://web.whatsapp.com/') === 0
+                    || href.indexOf('whatsapp://') === 0;
+            }
+
+            function datosWhatsApp(href) {
+                try {
+                    var url = new URL(href, window.location.href);
+                    var phone = '';
+                    var text = '';
+
+                    if (url.protocol === 'whatsapp:') {
+                        phone = url.searchParams.get('phone') || '';
+                        text = url.searchParams.get('text') || '';
+                    } else if (url.hostname === 'wa.me') {
+                        phone = url.pathname.replace(/\D/g, '');
+                        text = url.searchParams.get('text') || '';
+                    } else {
+                        phone = url.searchParams.get('phone') || '';
+                        text = url.searchParams.get('text') || '';
+                    }
+
+                    phone = (phone || '').replace(/\D/g, '');
+                    if (!phone) return null;
+                    return { phone: phone, text: text || '' };
+                } catch (error) {
+                    return null;
+                }
+            }
+
+            function whatsappDesktopLink(datos) {
+                return 'whatsapp://send?phone=' + encodeURIComponent(datos.phone)
+                    + '&text=' + encodeURIComponent(datos.text);
+            }
+
+            function whatsappWebLink(datos) {
+                return 'https://web.whatsapp.com/send?phone=' + encodeURIComponent(datos.phone)
+                    + '&text=' + encodeURIComponent(datos.text);
+            }
+
+            function abrirWhatsAppConRespaldo(desktopUrl, webUrl) {
+                var tab = window.open('about:blank', '_blank');
+                if (!tab) {
+                    window.location.href = webUrl;
+                    return;
+                }
+
+                var desktopJson = JSON.stringify(desktopUrl);
+                var webJson = JSON.stringify(webUrl);
+                tab.document.open();
+                tab.document.write(
+                    '<!doctype html><html lang="es"><head><meta charset="utf-8">' +
+                    '<title>Abriendo WhatsApp...</title>' +
+                    '<style>body{font-family:Arial,sans-serif;padding:32px;color:#1f2937;background:#fff8f3}h2{margin:0 0 10px;font-size:22px}p{font-size:15px;color:#6b7280;line-height:1.45}</style>' +
+                    '</head><body>' +
+                    '<h2>Abriendo WhatsApp...</h2>' +
+                    '<p>Si WhatsApp Desktop no se abre, esta pestaña cargará WhatsApp Web con el mensaje preparado. Si Desktop abre correctamente, puedes cerrar esta pestaña.</p>' +
+                    '<script>(function(){' +
+                    'var desktop=' + desktopJson + ';' +
+                    'var web=' + webJson + ';' +
+                    'var abierto=false;' +
+                    'function marcarAbierto(){abierto=true;}' +
+                    'window.addEventListener("blur",marcarAbierto,{once:true});' +
+                    'document.addEventListener("visibilitychange",function(){if(document.hidden)marcarAbierto();});' +
+                    'window.location.href=desktop;' +
+                    'setTimeout(function(){if(!abierto&&!document.hidden){window.location.href=web;}},3500);' +
+                    '})();<\/script>' +
+                    '</body></html>'
+                );
+                tab.document.close();
+            }
+
+            document.addEventListener('click', function(event) {
+                var link = event.target.closest('a[href]');
+                if (!link) return;
+
+                var hrefOriginal = link.getAttribute('href') || '';
+                if (!esLinkWhatsApp(hrefOriginal)) return;
+
+                var datos = datosWhatsApp(hrefOriginal);
+                if (!datos) return;
+
+                event.preventDefault();
+
+                var fallbackWeb = whatsappWebLink(datos);
+                abrirWhatsAppConRespaldo(whatsappDesktopLink(datos), fallbackWeb);
+            });
+        })();
+
         document.addEventListener('DOMContentLoaded', function() {
             var btnPerfil = document.getElementById('btn-perfil');
             var modalPerfil = document.getElementById('perfil-modal');
