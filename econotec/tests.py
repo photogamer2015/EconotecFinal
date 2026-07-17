@@ -210,6 +210,11 @@ class VentasTests(TestCase):
         self.usuario = User.objects.create_user(username='Yandri', email='yandri@example.com')
         self.usuario.groups.add(tecnicos)
         self.client.force_login(self.usuario)
+        self.admin = User.objects.create_superuser(
+            username='RootAdmin',
+            email='admin@example.com',
+            password='adminpass123',
+        )
 
         self.cliente_existente = Cliente.objects.create(
             cedula='1207342716',
@@ -304,6 +309,34 @@ class VentasTests(TestCase):
         }
         data.update(overrides)
         return data
+
+    def crear_notificacion_asesora(self, asesora=None, mensaje='Pendiente por cobrar.', **overrides):
+        asesora = asesora or self.vendedor
+        ingreso = self.crear_ingreso_reparacion(
+            estado=overrides.pop('estado_ingreso', 'garantia'),
+            valor_acordado=overrides.pop('valor_acordado_ingreso', Decimal('60.00')),
+            marca=overrides.pop('marca', 'HP'),
+            motivo_garantia='Garantía por retorno',
+        )
+        salida = SalidaEquipo.objects.create(
+            ingreso=ingreso,
+            fecha_salida=date(2026, 7, 17),
+            estado_reparacion=overrides.pop('estado_reparacion', 'garantia_fallos_adicionales'),
+            tecnico_reparo=self.usuario,
+            valor_final_cobrado=Decimal('0.00'),
+            metodo_pago_final='sin_pago',
+            registrado_por=self.usuario,
+        )
+        notificacion = NotificacionAsesora.objects.create(
+            salida=salida,
+            ingreso=ingreso,
+            asesora=asesora,
+            creado_por=self.usuario,
+            valor_acordado=overrides.pop('valor_acordado', Decimal('60.00')),
+            mensaje=mensaje,
+            **overrides,
+        )
+        return notificacion
 
     def crear_venta_producto(self, **overrides):
         data = {
@@ -1818,6 +1851,65 @@ class VentasTests(TestCase):
         self.assertRedirects(response, reverse('econotec:notificaciones_asesora'))
         self.assertFalse(NotificacionAsesora.objects.filter(asesora=self.vendedor).exists())
         self.assertTrue(NotificacionAsesora.objects.filter(pk=notificacion_otra.pk).exists())
+
+    def test_admin_ve_todas_las_notificaciones_de_asesoras_y_filtra_por_asesora(self):
+        grupo_asesores = Group.objects.get(name='Asesores')
+        otra_asesora = get_user_model().objects.create_user(
+            username='OtraAsesora',
+            email='otra@example.com',
+        )
+        otra_asesora.groups.add(grupo_asesores)
+        self.crear_notificacion_asesora(self.vendedor, 'Pendiente de Kimberly.')
+        self.crear_notificacion_asesora(
+            otra_asesora,
+            'Pendiente de otra asesora.',
+            marca='Lenovo',
+            valor_acordado=Decimal('40.00'),
+        )
+
+        self.client.force_login(self.admin)
+        response = self.client.get(reverse('econotec:notificaciones_asesora'))
+
+        self.assertContains(response, 'Control de notificaciones de asesoras')
+        self.assertContains(response, 'Pendiente de Kimberly.')
+        self.assertContains(response, 'Pendiente de otra asesora.')
+        self.assertContains(response, 'Responder / gestionar pago')
+
+        response = self.client.get(
+            reverse('econotec:notificaciones_asesora'),
+            {'asesora': str(otra_asesora.pk), 'estado': 'todas'},
+        )
+
+        self.assertNotContains(response, 'Pendiente de Kimberly.')
+        self.assertContains(response, 'Pendiente de otra asesora.')
+
+    def test_admin_puede_marcar_notificacion_de_asesora_como_gestionada(self):
+        notificacion = self.crear_notificacion_asesora(
+            self.vendedor,
+            'Gestionar desde admin.',
+        )
+
+        self.client.force_login(self.admin)
+        next_url = reverse('econotec:notificaciones_asesora') + '?estado=todas'
+        response = self.client.post(
+            reverse('econotec:notificacion_asesora_marcar_vista', kwargs={'pk': notificacion.pk}),
+            {'next': next_url},
+        )
+
+        self.assertRedirects(response, next_url)
+        notificacion.refresh_from_db()
+        self.assertTrue(notificacion.leida)
+        self.assertIsNotNone(notificacion.leida_en)
+
+    def test_admin_ve_acceso_a_notificaciones_asesoras_en_inicio(self):
+        self.crear_notificacion_asesora(self.vendedor, 'Pendiente visible para admin.')
+        self.client.force_login(self.admin)
+
+        response = self.client.get(reverse('econotec:bienvenida'))
+
+        self.assertContains(response, 'Notificaciones asesoras')
+        self.assertContains(response, 'Asesoras')
+        self.assertContains(response, 'Pendientes: 1')
 
     def test_detalle_muestra_alerta_si_valor_acordado_pendiente(self):
         ingreso = self.crear_ingreso_reparacion(valor_acordado=None)

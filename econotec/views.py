@@ -16,6 +16,7 @@ from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
+from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_GET, require_POST
 
 from .forms import (
@@ -1490,16 +1491,47 @@ def salida_editar(request, pk):
 
 @login_required
 def notificaciones_asesora(request):
-    if not es_asesor(request.user):
+    admin_mode = es_admin(request.user)
+    if not (admin_mode or es_asesor(request.user)):
         messages.warning(request, 'No tienes acceso a las notificaciones de asesoras.')
         return redirect('econotec:bienvenida')
 
     qs = (
         NotificacionAsesora.objects
         .select_related('ingreso', 'ingreso__cliente', 'salida', 'asesora', 'creado_por')
-        .filter(asesora=request.user)
     )
+    asesora_filtro_id = None
+    asesoras_filtro = []
+
+    if admin_mode:
+        from django.contrib.auth import get_user_model
+
+        ids_asesoras = (
+            NotificacionAsesora.objects
+            .exclude(asesora_id__isnull=True)
+            .values_list('asesora_id', flat=True)
+            .distinct()
+        )
+        asesoras_filtro = (
+            get_user_model().objects
+            .filter(pk__in=ids_asesoras)
+            .order_by('first_name', 'last_name', 'username')
+        )
+
+        asesora_param = (request.GET.get('asesora') or '').strip()
+        if asesora_param and asesora_param != 'todas':
+            try:
+                asesora_filtro_id = int(asesora_param)
+            except (TypeError, ValueError):
+                asesora_filtro_id = None
+            if asesora_filtro_id:
+                qs = qs.filter(asesora_id=asesora_filtro_id)
+    else:
+        qs = qs.filter(asesora=request.user)
+
     total_bandeja = qs.count()
+    total_pendientes = qs.filter(leida=False).count()
+    total_vistas = qs.filter(leida=True).count()
 
     estado = (request.GET.get('estado') or 'pendientes').strip()
     if estado == 'vistas':
@@ -1513,22 +1545,39 @@ def notificaciones_asesora(request):
         'estado_filtro': estado,
         'total_notificaciones': total_resultados(qs),
         'total_bandeja': total_bandeja,
+        'total_pendientes': total_pendientes,
+        'total_vistas': total_vistas,
+        'admin_notificaciones': admin_mode,
+        'asesoras_filtro': asesoras_filtro,
+        'asesora_filtro_id': asesora_filtro_id,
     })
 
 
 @login_required
 @require_POST
 def notificacion_asesora_marcar_vista(request, pk):
-    if not es_asesor(request.user):
+    admin_mode = es_admin(request.user)
+    if not (admin_mode or es_asesor(request.user)):
         messages.warning(request, 'No tienes acceso a las notificaciones de asesoras.')
         return redirect('econotec:bienvenida')
 
-    qs = NotificacionAsesora.objects.filter(asesora=request.user)
+    qs = NotificacionAsesora.objects.all() if admin_mode else NotificacionAsesora.objects.filter(asesora=request.user)
     notificacion = get_object_or_404(qs, pk=pk)
     notificacion.leida = True
     notificacion.leida_en = timezone.now()
     notificacion.save(update_fields=['leida', 'leida_en', 'actualizado'])
-    messages.success(request, 'Notificación marcada como vista.')
+    if admin_mode:
+        messages.success(request, 'Notificación marcada como gestionada.')
+    else:
+        messages.success(request, 'Notificación marcada como vista.')
+
+    next_url = request.POST.get('next') or ''
+    if next_url and url_has_allowed_host_and_scheme(
+        next_url,
+        allowed_hosts={request.get_host()},
+        require_https=request.is_secure(),
+    ):
+        return redirect(next_url)
     return redirect('econotec:notificaciones_asesora')
 
 

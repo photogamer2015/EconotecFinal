@@ -10,6 +10,7 @@ Variables disponibles:
     {{ alertas_bodegaje_count }}          # salidas con bodegaje del usuario
     {{ alertas_bodegaje_count_global }}   # global, solo admin
     {{ alertas_total_count }}             # suma de las dos (la que vea el usuario)
+    {{ notificaciones_asesora_admin_count }} # pendientes globales, solo admin
 """
 from .permisos import (
     es_admin as _es_admin,
@@ -52,6 +53,8 @@ def roles(request):
             'alertas_total_count': 0,
             'notificaciones_asesora_count': 0,
             'notificaciones_asesora_preview': [],
+            'notificaciones_asesora_admin_count': 0,
+            'notificaciones_asesora_admin_total': 0,
         }
 
     es_a = _es_admin(user)
@@ -98,6 +101,8 @@ def roles(request):
 
     notificaciones_asesora_count = 0
     notificaciones_asesora_preview = []
+    notificaciones_asesora_admin_count = 0
+    notificaciones_asesora_admin_total = 0
     try:
         from .models import NotificacionAsesora
         if es_as:
@@ -108,6 +113,10 @@ def roles(request):
             )
             notificaciones_asesora_count = qs_notificaciones.count()
             notificaciones_asesora_preview = list(qs_notificaciones[:3])
+        if es_a:
+            qs_notificaciones_admin = NotificacionAsesora.objects.all()
+            notificaciones_asesora_admin_count = qs_notificaciones_admin.filter(leida=False).count()
+            notificaciones_asesora_admin_total = qs_notificaciones_admin.count()
     except Exception:
         pass
 
@@ -130,4 +139,6 @@ def roles(request):
         'avisos_vigentes': avisos_vigentes,
         'notificaciones_asesora_count': notificaciones_asesora_count,
         'notificaciones_asesora_preview': notificaciones_asesora_preview,
+        'notificaciones_asesora_admin_count': notificaciones_asesora_admin_count,
+        'notificaciones_asesora_admin_total': notificaciones_asesora_admin_total,
     }

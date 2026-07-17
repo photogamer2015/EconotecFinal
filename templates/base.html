@@ -203,6 +203,28 @@
             align-items: center;
             justify-content: center;
         }
+        header.top a.admin-noti-link {
+            position: relative;
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            padding-right: 12px;
+        }
+        .admin-noti-link .admin-noti-count {
+            min-width: 18px;
+            height: 18px;
+            padding: 0 5px;
+            border-radius: 999px;
+            background: #f97316;
+            color: #ffffff;
+            border: 1px solid rgba(255, 255, 255, 0.35);
+            font-size: 10px;
+            line-height: 16px;
+            font-weight: 900;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
         .noti-menu {
             display: none;
             position: fixed;
@@ -995,9 +1017,219 @@
             white-space: nowrap;
         }
 
+        .whatsapp-choice-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            z-index: 10030;
+            align-items: center;
+            justify-content: center;
+            padding: 18px;
+            background: rgba(17, 24, 39, 0.58);
+            backdrop-filter: blur(5px);
+            -webkit-backdrop-filter: blur(5px);
+        }
+        .whatsapp-choice-overlay.is-open {
+            display: flex;
+        }
+        .whatsapp-choice-box {
+            position: relative;
+            width: min(460px, calc(100vw - 28px));
+            overflow: hidden;
+            border-radius: 16px;
+            background: var(--card-bg);
+            color: var(--text-main);
+            border: 1px solid var(--border-color);
+            box-shadow: 0 26px 80px rgba(26, 8, 8, 0.32);
+            animation: whatsappChoiceIn 0.2s ease;
+        }
+        .whatsapp-choice-topline {
+            height: 5px;
+            background:
+                linear-gradient(90deg, #111111 0%, #f97618 42%, #8d111b 100%);
+        }
+        .whatsapp-choice-body {
+            padding: 28px 28px 24px;
+            text-align: center;
+        }
+        .whatsapp-choice-close {
+            position: absolute;
+            top: 14px;
+            right: 14px;
+            width: 38px;
+            height: 38px;
+            border-radius: 999px;
+            border: 1px solid var(--border-color);
+            background: var(--hover-bg);
+            color: var(--text-muted);
+            font-size: 25px;
+            line-height: 1;
+            font-weight: 700;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            transition: transform 0.15s, background 0.15s, color 0.15s;
+        }
+        .whatsapp-choice-close:hover {
+            transform: translateY(-1px);
+            background: var(--primary-light);
+            color: var(--primary-dark);
+        }
+        .whatsapp-choice-brand {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            min-height: 28px;
+            padding: 5px 11px 5px 6px;
+            border-radius: 999px;
+            background: var(--hover-bg);
+            border: 1px solid var(--border-color);
+            color: var(--primary-dark);
+            font-size: 11px;
+            font-weight: 900;
+            letter-spacing: 0;
+        }
+        .whatsapp-choice-brand img {
+            width: 21px;
+            height: 21px;
+            border-radius: 50%;
+            object-fit: cover;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.18);
+        }
+        .whatsapp-choice-icon {
+            width: 64px;
+            height: 64px;
+            margin: 16px auto 14px;
+            border-radius: 18px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #e7f8ed;
+            color: #128c4a;
+            font-size: 25px;
+            font-weight: 950;
+            box-shadow: inset 0 0 0 1px rgba(18, 140, 74, 0.08), 0 10px 24px rgba(18, 140, 74, 0.12);
+        }
+        .whatsapp-choice-box h3 {
+            margin: 0 40px 9px;
+            color: var(--text-main);
+            font-size: 22px;
+            line-height: 1.2;
+            font-weight: 900;
+        }
+        .whatsapp-choice-message {
+            margin: 0 auto 22px;
+            max-width: 370px;
+            color: var(--text-muted);
+            font-size: 14px;
+            line-height: 1.55;
+            font-weight: 650;
+        }
+        .whatsapp-choice-actions {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+        .whatsapp-choice-fallback {
+            display: none;
+        }
+        .whatsapp-choice-box.is-fallback .whatsapp-choice-actions-primary {
+            display: none;
+        }
+        .whatsapp-choice-box.is-fallback .whatsapp-choice-fallback {
+            display: grid;
+        }
+        .whatsapp-choice-btn {
+            min-height: 46px;
+            border: 0;
+            border-radius: 10px;
+            padding: 11px 14px;
+            font-family: inherit;
+            font-size: 14px;
+            font-weight: 900;
+            line-height: 1.15;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 7px;
+            text-decoration: none;
+            transition: transform 0.15s, filter 0.15s, box-shadow 0.15s;
+        }
+        .whatsapp-choice-btn:hover {
+            transform: translateY(-1px);
+            filter: brightness(1.04);
+        }
+        .whatsapp-choice-btn:disabled {
+            opacity: 0.72;
+            transform: none;
+        }
+        .whatsapp-choice-btn.web {
+            background: #22c55e;
+            color: #ffffff;
+            box-shadow: 0 10px 22px rgba(34, 197, 94, 0.22);
+        }
+        .whatsapp-choice-btn.desktop {
+            background: #1f2937;
+            color: #ffffff;
+            box-shadow: 0 10px 22px rgba(31, 41, 55, 0.18);
+            border: 1px solid rgba(249, 118, 24, 0.18);
+        }
+        .whatsapp-choice-btn.secondary {
+            background: var(--hover-bg);
+            color: var(--text-main);
+            border: 1px solid var(--border-color);
+            box-shadow: none;
+        }
+        .whatsapp-choice-help {
+            margin: 14px 0 0;
+            color: var(--text-muted);
+            font-size: 12px;
+            line-height: 1.4;
+            font-weight: 650;
+        }
+        .whatsapp-choice-box.is-checking .whatsapp-choice-icon {
+            background: #eef4ff;
+            color: #0d47a1;
+        }
+        .whatsapp-choice-box.is-fallback .whatsapp-choice-icon {
+            background: #fff3e0;
+            color: #e65100;
+        }
+        [data-theme="dark"] .whatsapp-choice-overlay {
+            background: rgba(3, 7, 18, 0.68);
+        }
+        [data-theme="dark"] .whatsapp-choice-box {
+            box-shadow: 0 28px 90px rgba(0, 0, 0, 0.48);
+        }
+        [data-theme="dark"] .whatsapp-choice-btn.desktop {
+            background: #111827;
+        }
+        @media (max-width: 520px) {
+            .whatsapp-choice-body {
+                padding: 26px 18px 20px;
+            }
+            .whatsapp-choice-close {
+                width: 34px;
+                height: 34px;
+                font-size: 22px;
+            }
+            .whatsapp-choice-box h3 {
+                margin-left: 26px;
+                margin-right: 26px;
+                font-size: 20px;
+            }
+            .whatsapp-choice-actions {
+                grid-template-columns: 1fr;
+            }
+        }
+
         @keyframes pill-pulse {
             0%, 100% { transform: scale(1); }
             50% { transform: scale(1.15); filter: drop-shadow(0 0 5px rgba(249, 118, 24, 0.6)); }
+        }
+        @keyframes whatsappChoiceIn {
+            0% { opacity: 0; transform: translateY(8px) scale(0.98); }
+            100% { opacity: 1; transform: translateY(0) scale(1); }
         }
 
     </style>
@@ -1082,6 +1314,12 @@
                     </a>
                 {% endif %}
                 {% if es_admin %}
+                    <a href="{% url 'econotec:notificaciones_asesora' %}" class="admin-noti-link" title="Ver todas las notificaciones de asesoras">
+                        Asesoras
+                        {% if notificaciones_asesora_admin_count > 0 %}
+                            <span class="admin-noti-count">{{ notificaciones_asesora_admin_count }}</span>
+                        {% endif %}
+                    </a>
                     <a href="/admin/" title="Panel administrativo de Django">Admin</a>
                 {% endif %}
                 
@@ -1156,6 +1394,34 @@
     {% endif %}
 
     {% block extra_js %}{% endblock %}
+    <div id="whatsapp-choice-overlay" class="whatsapp-choice-overlay" aria-hidden="true">
+        <div class="whatsapp-choice-box" role="dialog" aria-modal="true" aria-labelledby="whatsapp-choice-title">
+            <div class="whatsapp-choice-topline"></div>
+            <button type="button" class="whatsapp-choice-close" id="whatsapp-choice-close" aria-label="Cerrar">×</button>
+            <div class="whatsapp-choice-body">
+                <div class="whatsapp-choice-brand">
+                    <img src="{% static 'logo.jpg' %}" alt="">
+                    <span>ECONOTEC</span>
+                </div>
+                <div class="whatsapp-choice-icon">WA</div>
+                <h3 id="whatsapp-choice-title">Abrir mensaje por WhatsApp</h3>
+                <p class="whatsapp-choice-message" id="whatsapp-choice-message">
+                    Elige dónde preparar el mensaje del cliente: WhatsApp Web o WhatsApp Desktop.
+                </p>
+                <div class="whatsapp-choice-actions whatsapp-choice-actions-primary">
+                    <button type="button" class="whatsapp-choice-btn web" id="whatsapp-choice-web">WhatsApp Web</button>
+                    <button type="button" class="whatsapp-choice-btn desktop" id="whatsapp-choice-desktop">WhatsApp Desktop</button>
+                </div>
+                <div class="whatsapp-choice-actions whatsapp-choice-fallback">
+                    <button type="button" class="whatsapp-choice-btn web" id="whatsapp-choice-fallback-web">Abrir WhatsApp Web</button>
+                    <button type="button" class="whatsapp-choice-btn secondary" id="whatsapp-choice-fallback-close">Cerrar</button>
+                </div>
+                <p class="whatsapp-choice-help" id="whatsapp-choice-help">
+                    Web abre una pestaña nueva; Desktop intenta abrir la aplicación instalada.
+                </p>
+            </div>
+        </div>
+    </div>
     <script>
 
 
@@ -1637,23 +1903,56 @@
 
     <script>
         (function() {
+            var overlay = document.getElementById('whatsapp-choice-overlay');
+            if (!overlay) return;
+
+            var box = overlay.querySelector('.whatsapp-choice-box');
+            var title = document.getElementById('whatsapp-choice-title');
+            var message = document.getElementById('whatsapp-choice-message');
+            var help = document.getElementById('whatsapp-choice-help');
+            var closeBtn = document.getElementById('whatsapp-choice-close');
+            var webBtn = document.getElementById('whatsapp-choice-web');
+            var desktopBtn = document.getElementById('whatsapp-choice-desktop');
+            var fallbackWebBtn = document.getElementById('whatsapp-choice-fallback-web');
+            var fallbackCloseBtn = document.getElementById('whatsapp-choice-fallback-close');
+            var current = null;
+            var lastFocus = null;
+            var desktopTimer = null;
+            var desktopHandled = false;
+            var visibilityHandler = null;
+
+            function limpiarHref(href) {
+                return (href || '').replace(/&amp;/g, '&').trim();
+            }
+
+            function normalizarUrl(href) {
+                return new URL(limpiarHref(href), window.location.href);
+            }
+
             function esLinkWhatsApp(href) {
-                return href.indexOf('https://wa.me/') === 0
-                    || href.indexOf('https://api.whatsapp.com/') === 0
-                    || href.indexOf('https://web.whatsapp.com/') === 0
-                    || href.indexOf('whatsapp://') === 0;
+                try {
+                    var url = normalizarUrl(href);
+                    var host = url.hostname.toLowerCase();
+                    return url.protocol === 'whatsapp:'
+                        || host === 'wa.me'
+                        || host === 'api.whatsapp.com'
+                        || host === 'web.whatsapp.com';
+                } catch (error) {
+                    return false;
+                }
             }
 
             function datosWhatsApp(href) {
                 try {
-                    var url = new URL(href, window.location.href);
+                    var url = normalizarUrl(href);
+                    var host = url.hostname.toLowerCase();
                     var phone = '';
                     var text = '';
 
                     if (url.protocol === 'whatsapp:') {
                         phone = url.searchParams.get('phone') || '';
                         text = url.searchParams.get('text') || '';
-                    } else if (url.hostname === 'wa.me') {
+                    } else if (host === 'wa.me') {
                         phone = url.pathname.replace(/\D/g, '');
                         text = url.searchParams.get('text') || '';
                     } else {
@@ -1662,53 +1961,105 @@
                     }
 
                     phone = (phone || '').replace(/\D/g, '');
-                    if (!phone) return null;
-                    return { phone: phone, text: text || '' };
+                    text = text || '';
+                    if (!phone && !text) return null;
+                    return { phone: phone, text: text };
                 } catch (error) {
                     return null;
                 }
             }
 
+            function crearLinkWhatsApp(base, datos) {
+                var params = new URLSearchParams();
+                if (datos.phone) params.set('phone', datos.phone);
+                if (datos.text) params.set('text', datos.text);
+                var query = params.toString();
+                return query ? base + '?' + query : base;
+            }
+
             function whatsappDesktopLink(datos) {
-                return 'whatsapp://send?phone=' + encodeURIComponent(datos.phone)
-                    + '&text=' + encodeURIComponent(datos.text);
+                return crearLinkWhatsApp('whatsapp://send', datos);
             }
 
             function whatsappWebLink(datos) {
-                return 'https://web.whatsapp.com/send?phone=' + encodeURIComponent(datos.phone)
-                    + '&text=' + encodeURIComponent(datos.text);
+                return crearLinkWhatsApp('https://web.whatsapp.com/send', datos);
             }
 
-            function abrirWhatsAppConRespaldo(desktopUrl, webUrl) {
-                var tab = window.open('about:blank', '_blank');
-                if (!tab) {
-                    window.location.href = webUrl;
-                    return;
+            function limpiarIntentoDesktop() {
+                if (desktopTimer) {
+                    window.clearTimeout(desktopTimer);
+                    desktopTimer = null;
                 }
+                window.removeEventListener('blur', marcarDesktopAbierto);
+                window.removeEventListener('pagehide', marcarDesktopAbierto);
+                if (visibilityHandler) {
+                    document.removeEventListener('visibilitychange', visibilityHandler);
+                    visibilityHandler = null;
+                }
+            }
 
-                var desktopJson = JSON.stringify(desktopUrl);
-                var webJson = JSON.stringify(webUrl);
-                tab.document.open();
-                tab.document.write(
-                    '<!doctype html><html lang="es"><head><meta charset="utf-8">' +
-                    '<title>Abriendo WhatsApp...</title>' +
-                    '<style>body{font-family:Arial,sans-serif;padding:32px;color:#1f2937;background:#fff8f3}h2{margin:0 0 10px;font-size:22px}p{font-size:15px;color:#6b7280;line-height:1.45}</style>' +
-                    '</head><body>' +
-                    '<h2>Abriendo WhatsApp...</h2>' +
-                    '<p>Si WhatsApp Desktop no se abre, esta pestaña cargará WhatsApp Web con el mensaje preparado. Si Desktop abre correctamente, puedes cerrar esta pestaña.</p>' +
-                    '<script>(function(){' +
-                    'var desktop=' + desktopJson + ';' +
-                    'var web=' + webJson + ';' +
-                    'var abierto=false;' +
-                    'function marcarAbierto(){abierto=true;}' +
-                    'window.addEventListener("blur",marcarAbierto,{once:true});' +
-                    'document.addEventListener("visibilitychange",function(){if(document.hidden)marcarAbierto();});' +
-                    'window.location.href=desktop;' +
-                    'setTimeout(function(){if(!abierto&&!document.hidden){window.location.href=web;}},3500);' +
-                    '})();<\/script>' +
-                    '</body></html>'
-                );
-                tab.document.close();
+            function resetModal() {
+                limpiarIntentoDesktop();
+                box.classList.remove('is-checking', 'is-fallback');
+                title.textContent = 'Abrir mensaje por WhatsApp';
+                message.textContent = 'Elige dónde preparar el mensaje del cliente: WhatsApp Web o WhatsApp Desktop.';
+                help.textContent = 'Web abre una pestaña nueva; Desktop intenta abrir la aplicación instalada.';
+                desktopHandled = false;
+                webBtn.disabled = false;
+                desktopBtn.disabled = false;
+            }
+
+            function cerrarModal() {
+                overlay.classList.remove('is-open');
+                overlay.setAttribute('aria-hidden', 'true');
+                document.body.style.overflow = '';
+                current = null;
+                resetModal();
+                if (lastFocus && typeof lastFocus.focus === 'function') {
+                    lastFocus.focus();
+                }
+                lastFocus = null;
+            }
+
+            function abrirModal(link, datos) {
+                var desktopOverride = limpiarHref(link.getAttribute('data-whatsapp-desktop'));
+                var webOverride = limpiarHref(link.getAttribute('data-whatsapp-web'));
+
+                current = {
+                    web: webOverride || whatsappWebLink(datos),
+                    desktop: desktopOverride || whatsappDesktopLink(datos)
+                };
+                lastFocus = link;
+                resetModal();
+                overlay.classList.add('is-open');
+                overlay.setAttribute('aria-hidden', 'false');
+                document.body.style.overflow = 'hidden';
+                window.setTimeout(function() {
+                    webBtn.focus();
+                }, 0);
+            }
+
+            function mostrarDesktopNoDetectado() {
+                limpiarIntentoDesktop();
+                box.classList.remove('is-checking');
+                box.classList.add('is-fallback');
+                title.textContent = 'WhatsApp Desktop no se confirmó';
+                message.textContent = 'Si la aplicación no se abrió, puedes continuar por WhatsApp Web con el mismo mensaje preparado.';
+                help.textContent = 'Este aviso también aparece si el navegador bloqueó la apertura de la aplicación.';
+                fallbackWebBtn.focus();
+            }
+
+            function marcarDesktopAbierto() {
+                if (desktopHandled) return;
+                desktopHandled = true;
+                cerrarModal();
+            }
+
+            function abrirWhatsAppWeb() {
+                if (!current) return;
+                var tab = window.open(current.web, '_blank', 'noopener');
+                if (!tab) window.location.href = current.web;
+                cerrarModal();
             }
 
             document.addEventListener('click', function(event) {
@@ -1722,9 +2073,45 @@
                 if (!datos) return;
 
                 event.preventDefault();
+                abrirModal(link, datos);
+            });
 
-                var fallbackWeb = whatsappWebLink(datos);
-                abrirWhatsAppConRespaldo(whatsappDesktopLink(datos), fallbackWeb);
+            webBtn.addEventListener('click', abrirWhatsAppWeb);
+            fallbackWebBtn.addEventListener('click', abrirWhatsAppWeb);
+            closeBtn.addEventListener('click', cerrarModal);
+            fallbackCloseBtn.addEventListener('click', cerrarModal);
+            overlay.addEventListener('click', function(event) {
+                if (event.target === overlay) cerrarModal();
+            });
+            document.addEventListener('keydown', function(event) {
+                if (event.key === 'Escape' && overlay.classList.contains('is-open')) {
+                    cerrarModal();
+                }
+            });
+
+            desktopBtn.addEventListener('click', function() {
+                if (!current) return;
+                limpiarIntentoDesktop();
+                desktopHandled = false;
+                box.classList.add('is-checking');
+                title.textContent = 'Abriendo WhatsApp Desktop';
+                message.textContent = 'Si el navegador pide permiso para abrir WhatsApp, acepta la solicitud.';
+                help.textContent = 'Si Desktop no responde, el sistema mostrará la opción de continuar por WhatsApp Web.';
+                desktopBtn.disabled = true;
+                webBtn.disabled = true;
+
+                visibilityHandler = function() {
+                    if (document.hidden) marcarDesktopAbierto();
+                };
+                window.addEventListener('blur', marcarDesktopAbierto);
+                window.addEventListener('pagehide', marcarDesktopAbierto);
+                document.addEventListener('visibilitychange', visibilityHandler);
+
+                desktopTimer = window.setTimeout(function() {
+                    if (!desktopHandled) mostrarDesktopNoDetectado();
+                }, 6500);
+
+                window.location.href = current.desktop;
             });
         })();
 

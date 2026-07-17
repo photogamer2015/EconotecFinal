@@ -49,6 +49,50 @@
         color: var(--primary-dark);
         background: var(--primary-light);
     }
+    .noti-filter-bar {
+        display: flex;
+        align-items: flex-end;
+        gap: 10px;
+        flex-wrap: wrap;
+        margin: 0 0 18px;
+        padding: 12px;
+        background: var(--card-bg);
+        border: 1px solid var(--border-color);
+        border-radius: 10px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+    }
+    .noti-filter-bar .field {
+        min-width: 220px;
+        display: grid;
+        gap: 5px;
+    }
+    .noti-filter-bar label {
+        color: var(--text-muted);
+        font-size: 12px;
+        font-weight: 900;
+        text-transform: uppercase;
+    }
+    .noti-filter-bar select {
+        min-height: 38px;
+    }
+    .noti-summary {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin-bottom: 14px;
+    }
+    .noti-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        border-radius: 999px;
+        padding: 6px 10px;
+        background: var(--hover-bg);
+        border: 1px solid var(--border-color);
+        color: var(--text-main);
+        font-size: 12px;
+        font-weight: 900;
+    }
     .noti-list {
         display: grid;
         gap: 12px;
@@ -152,14 +196,18 @@
 <div class="noti-wrap">
     <div class="noti-head">
         <div>
-            <h2>Notificaciones pendientes</h2>
+            <h2>{% if admin_notificaciones %}Control de notificaciones de asesoras{% else %}Notificaciones pendientes{% endif %}</h2>
             <p style="margin:4px 0 0; color:var(--text-muted); font-weight:700;">
-                Cobros pendientes que deben revisarse antes del retiro.
+                {% if admin_notificaciones %}
+                    Bandeja global para revisar cada asesora y responder desde pagos.
+                {% else %}
+                    Cobros pendientes que deben revisarse antes del retiro.
+                {% endif %}
             </p>
         </div>
         <div class="noti-head-actions">
             <strong>{{ total_notificaciones }} registro{{ total_notificaciones|pluralize }}</strong>
-            {% if total_bandeja > 0 %}
+            {% if total_bandeja > 0 and not admin_notificaciones %}
             <form method="post" action="{% url 'econotec:notificacion_asesora_limpiar_bandeja' %}"
                   onsubmit="return confirm('¿Seguro que deseas limpiar toda tu bandeja de notificaciones? Esta acción no se puede deshacer.');">
                 {% csrf_token %}
@@ -169,10 +217,42 @@
         </div>
     </div>
 
+    {% if admin_notificaciones %}
+    <form method="get" class="noti-filter-bar">
+        <div class="field">
+            <label for="filtro-asesora">Asesora</label>
+            <select id="filtro-asesora" name="asesora" class="form-input">
+                <option value="todas">Todas las asesoras</option>
+                {% for asesora in asesoras_filtro %}
+                    <option value="{{ asesora.pk }}" {% if asesora_filtro_id == asesora.pk %}selected{% endif %}>
+                        {{ asesora.get_full_name|default:asesora.username }}
+                    </option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="field">
+            <label for="filtro-estado">Estado</label>
+            <select id="filtro-estado" name="estado" class="form-input">
+                <option value="pendientes" {% if estado_filtro == 'pendientes' %}selected{% endif %}>Pendientes</option>
+                <option value="vistas" {% if estado_filtro == 'vistas' %}selected{% endif %}>Gestionadas</option>
+                <option value="todas" {% if estado_filtro == 'todas' %}selected{% endif %}>Todas</option>
+            </select>
+        </div>
+        <button type="submit" class="btn btn-primary">Filtrar</button>
+        <a href="{% url 'econotec:notificaciones_asesora' %}" class="btn btn-secondary">Limpiar filtros</a>
+    </form>
+    {% endif %}
+
+    <div class="noti-summary">
+        <span class="noti-pill">Total: {{ total_bandeja }}</span>
+        <span class="noti-pill">Pendientes: {{ total_pendientes }}</span>
+        <span class="noti-pill">{% if admin_notificaciones %}Gestionadas{% else %}Vistas{% endif %}: {{ total_vistas }}</span>
+    </div>
+
     <div class="noti-tabs">
-        <a class="noti-tab {% if estado_filtro == 'pendientes' %}active{% endif %}" href="?estado=pendientes">Pendientes</a>
-        <a class="noti-tab {% if estado_filtro == 'vistas' %}active{% endif %}" href="?estado=vistas">Vistas</a>
-        <a class="noti-tab {% if estado_filtro == 'todas' %}active{% endif %}" href="?estado=todas">Todas</a>
+        <a class="noti-tab {% if estado_filtro == 'pendientes' %}active{% endif %}" href="?estado=pendientes{% if admin_notificaciones and asesora_filtro_id %}&asesora={{ asesora_filtro_id }}{% endif %}">Pendientes</a>
+        <a class="noti-tab {% if estado_filtro == 'vistas' %}active{% endif %}" href="?estado=vistas{% if admin_notificaciones and asesora_filtro_id %}&asesora={{ asesora_filtro_id }}{% endif %}">{% if admin_notificaciones %}Gestionadas{% else %}Vistas{% endif %}</a>
+        <a class="noti-tab {% if estado_filtro == 'todas' %}active{% endif %}" href="?estado=todas{% if admin_notificaciones and asesora_filtro_id %}&asesora={{ asesora_filtro_id }}{% endif %}">Todas</a>
     </div>
 
     {% if notificaciones %}
@@ -202,11 +282,16 @@
 
             <div class="noti-actions">
                 <a class="btn btn-secondary" href="{% url 'econotec:ingreso_detalle' pk=notificacion.ingreso.pk %}">Ver equipo</a>
-                <a class="btn btn-primary" href="{% url 'econotec:ingreso_abonos' pk=notificacion.ingreso.pk %}">Ir a pagos</a>
+                <a class="btn btn-primary" href="{% url 'econotec:ingreso_abonos' pk=notificacion.ingreso.pk %}">
+                    {% if admin_notificaciones %}Responder / gestionar pago{% else %}Ir a pagos{% endif %}
+                </a>
                 {% if not notificacion.leida %}
                 <form method="post" action="{% url 'econotec:notificacion_asesora_marcar_vista' pk=notificacion.pk %}">
                     {% csrf_token %}
-                    <button type="submit" class="btn btn-secondary">Marcar como vista</button>
+                    <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                    <button type="submit" class="btn btn-secondary">
+                        {% if admin_notificaciones %}Marcar como gestionada{% else %}Marcar como vista{% endif %}
+                    </button>
                 </form>
                 {% endif %}
             </div>
