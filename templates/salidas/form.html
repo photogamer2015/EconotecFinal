@@ -365,7 +365,7 @@
             <label class="form-label" style="color: #856404; margin-bottom: 8px;">¿Cobrar diagnóstico / revisión?</label>
             <select id="cobrar_diagnostico_select" class="form-input" style="width: 100%; border-color: #ffeeba;">
                 <option value="no">No, no cobrar nada</option>
-                <option value="si">Sí, cobrar valor manual ($5 min)</option>
+                <option value="si">Sí, cobrar valor manual ($1 min)</option>
             </select>
         </div>
 
@@ -687,10 +687,10 @@
                     } else {
                         if (inputCobrado) {
                             if (inputCobrado.hasAttribute('readonly') || inputCobrado.value === '0') {
-                                inputCobrado.value = '5';
+                                inputCobrado.value = '1';
                             }
                             inputCobrado.removeAttribute('readonly');
-                            inputCobrado.setAttribute('min', '5');
+                            inputCobrado.setAttribute('min', '1');
                         }
                         var valorRevision = valorInputCobrado(inputCobrado);
                         saldoDisplay.textContent = '$' + valorRevision.toFixed(2);
@@ -705,7 +705,7 @@
                             labelValorCobrado.textContent = 'Valor acordado por revisión (USD)';
                         }
                         if (ayudaValor) {
-                            ayudaValor.innerHTML = '<strong>Nota:</strong> Ingresa el valor pendiente (puede ser 5 o mayor). No se registra como pago recibido ahora.';
+                            ayudaValor.innerHTML = '<strong>Nota:</strong> Ingresa el valor pendiente (puede ser 1 o mayor). No se registra como pago recibido ahora.';
                             ayudaValor.style.color = '#856404';
                         }
                     }

@@ -979,10 +979,10 @@ class SalidaEquipoForm(forms.ModelForm):
             return cleaned
 
         if estado_reparacion in self.ESTADOS_REVISION_PENDIENTE and valor > 0:
-            if valor < Decimal('5.00'):
+            if valor < Decimal('1.00'):
                 self.add_error(
                     'valor_final_cobrado',
-                    'El valor de revisión pendiente debe ser de $5.00 o más.'
+                    'El valor de revisión pendiente debe ser de $1.00 o más.'
                 )
             if not cleaned.get('asesora_notificacion'):
                 self.add_error(

@@ -1666,6 +1666,29 @@ class VentasTests(TestCase):
         self.assertEqual(notificacion.tipo, NotificacionAsesora.TIPO_REVISION_PENDIENTE)
         self.assertEqual(notificacion.valor_acordado, Decimal('7.00'))
 
+    def test_salida_revision_pendiente_acepta_minimo_un_dolar(self):
+        ingreso = self.crear_ingreso_reparacion(valor_acordado=Decimal('40.00'))
+
+        response = self.client.post(
+            reverse('econotec:salida_registrar', kwargs={'ingreso_pk': ingreso.pk}),
+            self.salida_post_data(
+                estado_reparacion='cliente_no_acepta',
+                valor_final_cobrado='1.00',
+                metodo_pago_final='sin_pago',
+                asesora_notificacion=str(self.vendedor.pk),
+                mensaje_notificacion='Cobrar revisión antes del retiro.',
+            ),
+        )
+
+        salida = SalidaEquipo.objects.get(ingreso=ingreso)
+        self.assertRedirects(response, reverse('econotec:salida_listo_aviso', kwargs={'pk': salida.pk}))
+        ingreso.refresh_from_db()
+        self.assertEqual(ingreso.diferencia, Decimal('1.00'))
+
+        notificacion = NotificacionAsesora.objects.get(salida=salida)
+        self.assertEqual(notificacion.tipo, NotificacionAsesora.TIPO_REVISION_PENDIENTE)
+        self.assertEqual(notificacion.valor_acordado, Decimal('1.00'))
+
     def test_salida_pendiente_retiro_con_saldo_notifica_asesora(self):
         ingreso = self.crear_ingreso_reparacion(valor_acordado=Decimal('100.00'))
 
