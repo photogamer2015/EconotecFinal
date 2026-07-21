@@ -675,10 +675,11 @@ class VentasTests(TestCase):
         self.assertContains(response, 'Control de Pago de Ventas')
         self.assertContains(response, reverse('econotec:pagos_ventas_lista'))
 
-    def test_hoja_qr_muestra_categoria_modelo_serie_y_problema(self):
+    def test_hoja_qr_muestra_categoria_marca_modelo_serie_y_problema(self):
         ingreso = self.crear_ingreso_reparacion(
             tipo_equipo='otro',
             tipo_equipo_otro='Consola',
+            marca='Sony',
             modelo_serie='Playstation 5',
             serie='PS5-001',
             problema_reportado='No da grafica',
@@ -689,6 +690,8 @@ class VentasTests(TestCase):
         )
 
         self.assertContains(response, 'Consola', count=2)
+        self.assertContains(response, 'Marca:', count=2)
+        self.assertContains(response, 'Sony', count=2)
         self.assertContains(response, 'Modelo:', count=2)
         self.assertContains(response, 'Playstation 5', count=2)
         self.assertContains(response, 'Serie:', count=2)
@@ -696,7 +699,8 @@ class VentasTests(TestCase):
         self.assertContains(response, 'Problema:')
         self.assertContains(response, 'No da grafica', count=2)
         html = response.content.decode()
-        self.assertLess(html.index('Consola'), html.index('Modelo:'))
+        self.assertLess(html.index('Consola'), html.index('Marca:'))
+        self.assertLess(html.index('Marca:'), html.index('Modelo:'))
         self.assertLess(html.index('Modelo:'), html.index('Serie:'))
         self.assertLess(html.index('Serie:'), html.index('Problema:'))
 

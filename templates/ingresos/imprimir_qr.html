@@ -195,6 +195,12 @@
                 <div class="qr-code">{{ ingreso.codigo_equipo }}</div>
                 <div class="qr-type">{{ ingreso.tipo_equipo_display }}</div>
                 <div class="qr-details">
+                    {% if ingreso.marca %}
+                    <div class="qr-detail">
+                        <span class="qr-detail-label">Marca:</span>
+                        {{ ingreso.marca|truncatechars:55 }}
+                    </div>
+                    {% endif %}
                     {% if ingreso.modelo_serie %}
                     <div class="qr-detail">
                         <span class="qr-detail-label">Modelo:</span>
