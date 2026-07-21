@@ -10,7 +10,7 @@ from django.test import TestCase, override_settings
 from django.urls import reverse
 
 from .forms import IngresoEquipoForm
-from .alertas import equipos_demorados_qs
+from .alertas import equipos_demorados_qs, salidas_bodegaje_qs
 from .models import Cliente, IngresoEquipo, NotificacionAsesora, SalidaEquipo, UsuarioActividad
 from .qr_utils import token_para_ingreso
 from .views_auth import CAPTCHA_SESSION_KEY, LOGIN_2FA_SESSION_KEY, LOGIN_EMAIL_SETUP_SESSION_KEY
@@ -675,10 +675,12 @@ class VentasTests(TestCase):
         self.assertContains(response, 'Control de Pago de Ventas')
         self.assertContains(response, reverse('econotec:pagos_ventas_lista'))
 
-    def test_hoja_qr_muestra_problema_reportado_debajo_de_categoria(self):
+    def test_hoja_qr_muestra_categoria_modelo_serie_y_problema(self):
         ingreso = self.crear_ingreso_reparacion(
             tipo_equipo='otro',
             tipo_equipo_otro='Consola',
+            modelo_serie='Playstation 5',
+            serie='PS5-001',
             problema_reportado='No da grafica',
         )
 
@@ -687,8 +689,80 @@ class VentasTests(TestCase):
         )
 
         self.assertContains(response, 'Consola', count=2)
+        self.assertContains(response, 'Modelo:', count=2)
+        self.assertContains(response, 'Playstation 5', count=2)
+        self.assertContains(response, 'Serie:', count=2)
+        self.assertContains(response, 'PS5-001', count=2)
         self.assertContains(response, 'Problema:')
         self.assertContains(response, 'No da grafica', count=2)
+        html = response.content.decode()
+        self.assertLess(html.index('Consola'), html.index('Modelo:'))
+        self.assertLess(html.index('Modelo:'), html.index('Serie:'))
+        self.assertLess(html.index('Serie:'), html.index('Problema:'))
+
+    def test_hoja_qr_oculta_serie_si_no_se_registra(self):
+        ingreso = self.crear_ingreso_reparacion(
+            tipo_equipo='laptop',
+            modelo_serie='Elitebook',
+            serie='',
+        )
+
+        response = self.client.get(
+            reverse('econotec:ingreso_imprimir_qr', kwargs={'pk': ingreso.pk})
+        )
+
+        self.assertContains(response, 'Modelo:', count=2)
+        self.assertContains(response, 'Elitebook', count=2)
+        self.assertNotContains(response, 'Serie:')
+
+    def test_alerta_bodegaje_usa_tecnico_de_salida_y_tiene_desplegable(self):
+        User = get_user_model()
+        tecnicos = Group.objects.get(name='Tecnicos')
+        tecnico_entrada = User.objects.create_user(
+            username='EntradaTec',
+            first_name='Entrada',
+            last_name='Tec',
+        )
+        tecnico_salida = User.objects.create_user(
+            username='SalidaTec',
+            first_name='Salida',
+            last_name='Tec',
+        )
+        tecnico_entrada.groups.add(tecnicos)
+        tecnico_salida.groups.add(tecnicos)
+        ingreso = self.crear_ingreso_reparacion(
+            tecnico_encargado=tecnico_entrada,
+            estado='entregado',
+            subestado_entregado='con_solucion',
+        )
+        salida = SalidaEquipo.objects.create(
+            ingreso=ingreso,
+            fecha_salida=date.today() - timedelta(days=5),
+            estado_reparacion='pendiente_retiro',
+            cliente_recibe_conforme='si',
+            valor_final_cobrado=Decimal('0.00'),
+            metodo_pago_final='sin_pago',
+            tecnico_reparo=tecnico_salida,
+            registrado_por=self.usuario,
+        )
+
+        self.assertEqual(list(salidas_bodegaje_qs(usuario=tecnico_salida)), [salida])
+        self.assertEqual(list(salidas_bodegaje_qs(usuario=tecnico_entrada)), [])
+
+        response = self.client.get(reverse('econotec:bienvenida'))
+
+        self.assertContains(response, 'Téc.:')
+        self.assertContains(response, 'Salida Tec')
+        self.assertNotContains(response, 'Entrada Tec')
+        self.assertContains(response, 'id="btn-toggle-bodegaje"')
+        self.assertContains(response, 'aria-controls="alerta-bodegaje-body"')
+        self.assertContains(response, 'function toggleDashboardBodegaje')
+
+        response = self.client.get(reverse('econotec:alertas_bodegaje'))
+
+        self.assertContains(response, 'Técnico de salida', count=1)
+        self.assertContains(response, 'Salida Tec')
+        self.assertNotContains(response, 'Entrada Tec')
 
     def test_top_clientes_cuenta_equipos_reales_por_sede_sin_multiplicar(self):
         biomedics = Cliente.objects.create(

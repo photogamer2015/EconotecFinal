@@ -317,7 +317,7 @@ def bienvenida(request):
     fecha_limite_bod = date.today() - _td(days=UMBRAL_DIAS_BODEGAJE)
     qs_bod_silenciados = (
         SalidaEquipo.objects
-        .select_related('ingreso', 'ingreso__cliente', 'ingreso__tecnico_encargado')
+        .select_related('ingreso', 'ingreso__cliente', 'ingreso__tecnico_encargado', 'tecnico_reparo')
         .filter(fecha_salida__lte=fecha_limite_bod)
         .filter(fecha_retiro_real__isnull=True)
         .filter(bodegaje_silenciado=True)
@@ -1978,7 +1978,7 @@ def alertas_bodegaje(request):
     fecha_limite = date.today() - _td(days=UMBRAL_DIAS_BODEGAJE)
     qs_silenciados = (
         SalidaEquipo.objects
-        .select_related('ingreso', 'ingreso__cliente', 'ingreso__tecnico_encargado')
+        .select_related('ingreso', 'ingreso__cliente', 'ingreso__tecnico_encargado', 'tecnico_reparo')
         .filter(fecha_salida__lte=fecha_limite)
         .filter(fecha_retiro_real__isnull=True)
         .filter(bodegaje_silenciado=True)

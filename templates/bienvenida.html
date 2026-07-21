@@ -426,6 +426,42 @@
   .alerta-cabecera.naranja .ver-todos {
     color: #d7642f;
   }
+  .alerta-header-actions {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+  .alerta-cabecera .alerta-header-actions .ver-todos {
+    margin-left: 0;
+  }
+  .alerta-toggle-btn {
+    background: rgba(255, 255, 255, 0.18);
+    color: white;
+    border: 1px solid rgba(255, 255, 255, 0.6);
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 800;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-family: inherit;
+  }
+  .alerta-toggle-btn:hover {
+    background: rgba(255, 255, 255, 0.28);
+  }
+  .alerta-toggle-btn .arrow {
+    font-size: 9px;
+    line-height: 1;
+  }
+  .alerta-cabecera.naranja .alerta-toggle-btn {
+    color: #d7642f;
+    background: white;
+  }
 
   .alerta-item {
     padding: 12px 22px;
@@ -589,6 +625,10 @@
     .alerta-cabecera .ver-todos {
       margin-left: 0;
       margin-top: 4px;
+    }
+    .alerta-header-actions {
+      margin-left: 0;
+      justify-content: flex-start;
     }
     .alerta-item {
       grid-template-columns: auto 1fr;
@@ -1754,10 +1794,24 @@
         {% if umbral_bodegaje > 0 %} Equipos entregados hace más de {{ umbral_bodegaje }} día{{ umbral_bodegaje|pluralize }}. Bodegaje: {{ costo_bodegaje_dia|dinero_signo }}/día. {% else %} Equipos listos pendientes de retiro. Bodegaje: {{ costo_bodegaje_dia|dinero_signo }}/día. {% endif %}
       </p>
     </div>
-    <a href="{% url 'econotec:alertas_bodegaje' %}" class="ver-todos"
-      >Ver todos &rarr;</a
-    >
+    <div class="alerta-header-actions">
+      <button
+        type="button"
+        class="alerta-toggle-btn"
+        id="btn-toggle-bodegaje"
+        aria-expanded="true"
+        aria-controls="alerta-bodegaje-body"
+        onclick="toggleDashboardBodegaje(event)"
+      >
+        <span class="toggle-label">Ocultar</span>
+        <span class="arrow">▲</span>
+      </button>
+      <a href="{% url 'econotec:alertas_bodegaje' %}" class="ver-todos"
+        >Ver todos &rarr;</a
+      >
+    </div>
   </div>
+  <div id="alerta-bodegaje-body">
   {% for b in bodegajes %}
   <div class="alerta-item naranja">
     <span class="codigo">{{ b.ingreso.codigo_equipo }}</span>
@@ -1766,8 +1820,8 @@
       <div class="det">
         {{ b.ingreso.tipo_equipo_display }} {{ b.ingreso.marca }} — Listo desde
         {{ b.salida.fecha_salida|date:"d/m/Y" }} ({{ b.dias_desde_salida }}
-        día{{ b.dias_desde_salida|pluralize }}) {% if b.ingreso.tecnico_encargado %} · Téc.:
-        <strong>{{ b.ingreso.tecnico_encargado_nombre }}</strong>
+        día{{ b.dias_desde_salida|pluralize }}) {% if b.salida.tecnico_reparo %} · Téc.:
+        <strong>{{ b.salida.tecnico_reparo_nombre }}</strong>
         {% endif %}
       </div>
     </div>
@@ -1821,6 +1875,7 @@
     </div>
   </div>
   {% endfor %}
+  </div>
 </div>
 {% endif %}
 
@@ -2162,6 +2217,22 @@
       if (arrow) arrow.style.transform = "rotate(0deg)";
       if (btn) btn.innerHTML = 'Ver silenciados <span class="arrow">▼</span>';
     }
+  }
+
+  function toggleDashboardBodegaje(event) {
+    event.stopPropagation();
+    const body = document.getElementById("alerta-bodegaje-body");
+    const btn = document.getElementById("btn-toggle-bodegaje");
+    if (!body || !btn) return;
+
+    const label = btn.querySelector(".toggle-label");
+    const arrow = btn.querySelector(".arrow");
+    const isHidden = body.style.display === "none";
+
+    body.style.display = isHidden ? "block" : "none";
+    btn.setAttribute("aria-expanded", isHidden ? "true" : "false");
+    if (label) label.textContent = isHidden ? "Ocultar" : "Ver equipos";
+    if (arrow) arrow.textContent = isHidden ? "▲" : "▼";
   }
 
   function abrirModalDashboard(tipo) {

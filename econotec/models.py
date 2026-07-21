@@ -1379,6 +1379,14 @@ class SalidaEquipo(models.Model):
         """¿El cliente ya vino físicamente a retirar el equipo?"""
         return self.fecha_retiro_real is not None
 
+    @property
+    def tecnico_reparo_nombre(self):
+        """Nombre del técnico responsable registrado en la salida."""
+        u = self.tecnico_reparo
+        if not u:
+            return ''
+        return (f'{u.first_name} {u.last_name}'.strip()) or u.username
+
     def calcular_bodegaje(self, hoy=None, umbral=None, costo_dia=None):
         """
         Calcula el bodegaje acumulado al día de hoy (o al día indicado).

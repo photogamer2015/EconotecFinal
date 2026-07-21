@@ -227,9 +227,9 @@
                     </div>
                 </div>
                 <div class="tecnico">
-                    <div class="label">Técnico encargado</div>
+                    <div class="label">Técnico de salida</div>
                     <div class="valor">
-                        {% if b.ingreso.tecnico_encargado %}{{ b.ingreso.tecnico_encargado_nombre }}
+                        {% if b.salida.tecnico_reparo %}{{ b.salida.tecnico_reparo_nombre }}
                         {% else %}<em style="color: var(--text-muted);">— Sin asignar —</em>{% endif %}
                     </div>
                 </div>
@@ -287,9 +287,9 @@
                     </div>
                 </div>
                 <div class="tecnico">
-                    <div class="label">Técnico encargado</div>
+                    <div class="label">Técnico de salida</div>
                     <div class="valor">
-                        {% if b.ingreso.tecnico_encargado %}{{ b.ingreso.tecnico_encargado_nombre }}
+                        {% if b.salida.tecnico_reparo %}{{ b.salida.tecnico_reparo_nombre }}
                         {% else %}<em style="color: var(--text-muted);">— Sin asignar —</em>{% endif %}
                     </div>
                 </div>

@@ -125,14 +125,14 @@ def salidas_bodegaje_qs(usuario=None, umbral_dias=UMBRAL_DIAS_BODEGAJE, incluir_
     (modo "no molestar" — el bodegaje sigue acumulándose pero no
     aparece en las alertas del dashboard).
 
-    Si se pasa `usuario`, filtra solo las salidas cuyo equipo tenga
-    como técnico encargado a ese usuario.
+    Si se pasa `usuario`, filtra solo las salidas cuyo técnico que reparó
+    sea ese usuario.
     """
     fecha_limite = date.today() - timedelta(days=umbral_dias)
 
     qs = (
         SalidaEquipo.objects
-        .select_related('ingreso', 'ingreso__cliente', 'ingreso__tecnico_encargado')
+        .select_related('ingreso', 'ingreso__cliente', 'ingreso__tecnico_encargado', 'tecnico_reparo')
         .filter(fecha_salida__lte=fecha_limite)
         .filter(estado_reparacion__in=ESTADOS_SALIDA_CON_BODEGAJE)
         .filter(fecha_retiro_real__isnull=True)
@@ -143,7 +143,7 @@ def salidas_bodegaje_qs(usuario=None, umbral_dias=UMBRAL_DIAS_BODEGAJE, incluir_
         qs = qs.filter(bodegaje_silenciado=False)
 
     if usuario is not None and usuario.is_authenticated:
-        qs = qs.filter(ingreso__tecnico_encargado=usuario)
+        qs = qs.filter(tecnico_reparo=usuario)
 
     return qs
 
@@ -292,7 +292,7 @@ def whatsapp_link_bodegaje(salida):
 
     dias_desde = dias_desde_salida(salida)
     nombre_cliente = (ingreso.cliente.nombres or '').split(' ')[0] or 'cliente'
-    nombre_tecnico = ingreso.tecnico_encargado_nombre or 'el equipo técnico de Econotec'
+    nombre_tecnico = salida.tecnico_reparo_nombre or 'el equipo técnico de Econotec'
 
     monto_fmt = f"{bodegaje['monto']:.2f}".replace('.', ',')
     costo_dia_fmt = f"{COSTO_BODEGAJE_DIA:.2f}".replace('.', ',')
