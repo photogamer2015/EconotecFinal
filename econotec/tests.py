@@ -2283,6 +2283,67 @@ class VentasTests(TestCase):
         self.assertEqual(ingreso.diferencia, Decimal('0.00'))
         self.assertFalse(NotificacionAsesora.objects.filter(salida=salida).exists())
 
+    def test_salida_retirado_oculta_y_limpia_cierre_economico(self):
+        ingreso = self.crear_ingreso_reparacion(
+            valor_acordado=Decimal('25.00'),
+            abono_anticipo=Decimal('25.00'),
+        )
+        salida = SalidaEquipo.objects.create(
+            ingreso=ingreso,
+            fecha_salida=date(2026, 7, 17),
+            fecha_retiro_real=date(2026, 7, 18),
+            estado_reparacion='retirado',
+            tecnico_reparo=self.usuario,
+            valor_final_cobrado=Decimal('0.00'),
+            metodo_pago_final='sin_pago',
+            registrado_por=self.usuario,
+        )
+
+        response = self.client.get(reverse('econotec:salida_editar', kwargs={'pk': salida.pk}))
+        self.assertContains(response, 'id="section-cierre-economico" style="display:none;"')
+        self.assertContains(response, "v === 'retirado'")
+
+        response = self.client.post(
+            reverse('econotec:salida_editar', kwargs={'pk': salida.pk}),
+            self.salida_post_data(
+                fecha_salida='2026-07-22',
+                estado_reparacion='retirado',
+                tecnico_reparo=str(self.usuario.pk),
+                valor_final_cobrado='99.00',
+                metodo_pago_final='transferencia',
+                numero_recibo='REC-RETIRADO',
+                banco='pichincha',
+                comprobante_url='https://example.com/comprobante',
+            ),
+        )
+
+        self.assertRedirects(response, reverse('econotec:salida_lista'))
+        salida.refresh_from_db()
+        self.assertEqual(salida.valor_final_cobrado, Decimal('0.00'))
+        self.assertEqual(salida.metodo_pago_final, 'sin_pago')
+        self.assertEqual(salida.numero_recibo, '')
+        self.assertEqual(salida.banco, '')
+        self.assertEqual(salida.comprobante_url, '')
+
+    def test_aviso_salida_negativa_no_dice_equipo_reparado(self):
+        for estado in ('no_reparable', 'cliente_no_acepta'):
+            with self.subTest(estado=estado):
+                ingreso = self.crear_ingreso_reparacion()
+                salida = SalidaEquipo.objects.create(
+                    ingreso=ingreso,
+                    fecha_salida=date(2026, 7, 17),
+                    estado_reparacion=estado,
+                    tecnico_reparo=self.usuario,
+                    valor_final_cobrado=Decimal('0.00'),
+                    metodo_pago_final='sin_pago',
+                    registrado_por=self.usuario,
+                )
+
+                response = self.client.get(reverse('econotec:salida_listo_aviso', kwargs={'pk': salida.pk}))
+
+                self.assertContains(response, '¡Listo equipo para su salida!')
+                self.assertNotContains(response, '¡Listo equipo reparado para su salida!')
+
     def test_whatsapp_retirado_usa_mensaje_de_cierre_sin_bodegaje(self):
         ingreso = self.crear_ingreso_reparacion(
             valor_acordado=Decimal('25.00'),

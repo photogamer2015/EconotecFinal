@@ -135,6 +135,8 @@
         <h2>
             {% if salida.estado_reparacion == 'retirado' or salida.cliente_ya_retiro %}
                 ¡Equipo retirado por el cliente!
+            {% elif salida.estado_reparacion == 'no_reparable' or salida.estado_reparacion == 'cliente_no_acepta' %}
+                ¡Listo equipo para su salida!
             {% else %}
                 ¡Listo equipo reparado para su salida!
             {% endif %}

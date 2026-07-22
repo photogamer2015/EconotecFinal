@@ -1012,9 +1012,12 @@ class SalidaEquipoForm(forms.ModelForm):
         self.notificacion_asesora_mensaje_default = ''
         
         # Validar que no se pueda marcar como retirado si hay saldo pendiente
-        if estado_reparacion == 'retirado' and self.instance and self.instance.ingreso:
-            if self.instance.ingreso.diferencia > 0:
+        if estado_reparacion == 'retirado':
+            if self.instance and self.instance.ingreso and self.instance.ingreso.diferencia > 0:
                 self.add_error('estado_reparacion', f'No se puede marcar como retirado porque hay un saldo pendiente de ${self.instance.ingreso.diferencia}. El cliente debe pagar todo primero.')
+            cleaned['valor_final_cobrado'] = Decimal('0.00')
+            self._limpiar_pago_pendiente(cleaned)
+            return cleaned
                 
         metodo = cleaned.get('metodo_pago_final')
         valor = cleaned.get('valor_final_cobrado') or Decimal('0.00')

@@ -369,7 +369,7 @@
         </div>
     </div>
 
-    <div class="form-section">
+    <div class="form-section" id="section-cierre-economico"{% if form.estado_reparacion.value == 'retirado' %} style="display:none;"{% endif %}>
         <h3>Cierre Económico</h3>
         
         <div id="wrap-cobrar-diagnostico" style="display:none; margin-bottom: 14px; background: #fff3cd; padding: 10px; border-radius: 8px; border: 1px solid #ffeeba;">
@@ -542,6 +542,7 @@
         var mensajeNotificacion = document.querySelector('[name="mensaje_notificacion"]');
         var tituloNotificarAsesora = document.getElementById('notificar-asesora-titulo');
         var ayudaNotificarAsesora = document.getElementById('notificar-asesora-ayuda');
+        var sectionCierreEconomico = document.getElementById('section-cierre-economico');
         var wrapPagoFinal = document.getElementById('wrap-pago-final');
         var wrapNumeroRecibo = document.getElementById('wrap-numero-recibo');
 
@@ -632,6 +633,7 @@
                     ayudaValor.innerHTML = 'Si ya estaba pagado o si aún no ha pagado, déjalo en 0 para que se registre como saldo pendiente. Si está pagando ahora mismo, ingresa el valor aquí.';
                     ayudaValor.style.color = '#888';
                 }
+                if (sectionCierreEconomico) sectionCierreEconomico.style.display = '';
                 if (wrapPagoFinal) wrapPagoFinal.style.display = '';
                 if (wrapNumeroRecibo) wrapNumeroRecibo.style.display = '';
                 if (inputCobrado) inputCobrado.setAttribute('min', '0');
@@ -736,6 +738,24 @@
                         }
                     } else if (saldoNota) {
                         saldoNota.style.display = 'none';
+                    }
+                } else if (v === 'retirado') {
+                    if (sectionCierreEconomico) sectionCierreEconomico.style.display = 'none';
+                    if (wrapPagoFinal) wrapPagoFinal.style.display = 'none';
+                    if (wrapNumeroRecibo) wrapNumeroRecibo.style.display = 'none';
+                    saldoDisplay.textContent = '$0.00';
+                    saldoDisplay.style.color = 'var(--success)';
+                    if (inputCobrado) {
+                        inputCobrado.value = '0';
+                        inputCobrado.setAttribute('readonly', 'readonly');
+                    }
+                    if (metodoPago) {
+                        metodoPago.value = 'sin_pago';
+                        metodoPago.dispatchEvent(new Event('change'));
+                    }
+                    if (saldoNota) {
+                        saldoNota.style.display = '';
+                        saldoNota.textContent = 'Cliente retiró el equipo con el saldo pagado.';
                     }
                 } else {
                     var saldoNormal = Math.max(diferenciaNormal, 0);
