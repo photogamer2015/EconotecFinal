@@ -2,15 +2,18 @@
 Vistas del Registro Administrativo: dashboard de egresos/ingresos del taller.
 Solo accesible por administradores.
 """
-from datetime import date
+from datetime import date, time
 from decimal import Decimal
 from io import BytesIO
 import json
 
 from django.contrib import messages
+from django.contrib.auth import get_user_model
 from django.db.models import Count, Sum
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
+from django.utils import timezone
 from django.views.decorators.http import require_POST
 
 from .forms import EgresoForm
@@ -21,7 +24,10 @@ from .gamificacion import (
     calcular_puntaje_gamificacion,
 )
 from .busqueda import filtrar_objetos_normalizado, texto_salida_busqueda, total_resultados
-from .models import IngresoEquipo, SalidaEquipo, Abono, Egreso, CategoriaEgreso, Cliente, AvisoPanel, SEDES_EQUIPOS
+from .models import (
+    IngresoEquipo, SalidaEquipo, Abono, Egreso, CategoriaEgreso, Cliente,
+    AvisoPanel, SEDES_EQUIPOS, HorarioTecnico,
+)
 from .permisos import admin_requerido, tecnico_requerido
 
 
@@ -82,6 +88,69 @@ def _egresos_mes(year, month):
     return Egreso.objects.filter(
         fecha__year=year, fecha__month=month,
     ).aggregate(s=Sum('monto'))['s'] or Decimal('0.00')
+
+
+def _nombre_usuario(user):
+    return user.get_full_name() or user.username
+
+
+def _horarios_tecnicos_dashboard():
+    User = get_user_model()
+    ahora = timezone.now()
+    hoy = timezone.localdate(ahora)
+    tecnicos = (
+        User.objects
+        .filter(is_active=True, groups__name__in=['Tecnicos', 'Tecnico'])
+        .distinct()
+        .order_by('first_name', 'username')
+    )
+    horarios = []
+    avisos = []
+    avisos_fuera = []
+    for tecnico in tecnicos:
+        horario, _ = HorarioTecnico.objects.get_or_create(tecnico=tecnico)
+        ultimo = horario.ultima_notificacion_laboral
+        aviso_hoy = bool(ultimo and timezone.localdate(ultimo) == hoy)
+        ultimo_fuera = horario.ultima_notificacion_fuera_laboral
+        aviso_fuera_hoy = bool(ultimo_fuera and timezone.localdate(ultimo_fuera) == hoy)
+        item = {
+            'user': tecnico,
+            'nombre': _nombre_usuario(tecnico),
+            'horario': horario,
+            'dias': [
+                (campo, label, getattr(horario, campo))
+                for campo, label in HorarioTecnico.DIAS
+            ],
+            'es_dia_laboral': horario.es_dia_laboral(hoy),
+            'esta_en_horario': horario.esta_en_horario(ahora),
+            'aviso_hoy': aviso_hoy,
+            'aviso_fuera_hoy': aviso_fuera_hoy,
+        }
+        horarios.append(item)
+        if aviso_hoy:
+            avisos.append({
+                'user': tecnico,
+                'nombre': item['nombre'],
+                'momento': ultimo,
+                'horario': horario,
+            })
+        if aviso_fuera_hoy:
+            motivo = (
+                'fuera de su día laboral'
+                if horario.ultima_notificacion_fuera_motivo == 'dia'
+                else 'fuera de su horario laboral'
+            )
+            avisos_fuera.append({
+                'user': tecnico,
+                'nombre': item['nombre'],
+                'momento': ultimo_fuera,
+                'motivo': motivo,
+                'horario': horario,
+            })
+
+    avisos.sort(key=lambda aviso: aviso['momento'], reverse=True)
+    avisos_fuera.sort(key=lambda aviso: aviso['momento'], reverse=True)
+    return horarios, avisos, avisos_fuera
 
 
 @admin_requerido
@@ -214,6 +283,8 @@ def admin_dashboard(request):
             'ultima_conexion': ultima.ultima_conexion if ultima else None
         })
 
+    horarios_tecnicos, avisos_laborales_hoy, avisos_fuera_laboral_hoy = _horarios_tecnicos_dashboard()
+
     return render(request, 'admin_panel/dashboard.html', {
         'year': year,
         'month': month,
@@ -221,6 +292,9 @@ def admin_dashboard(request):
         'hoy': hoy,
         'anos_disp': anos_disp,
         'lista_usuarios': lista_usuarios,
+        'horarios_tecnicos': horarios_tecnicos,
+        'avisos_laborales_hoy': avisos_laborales_hoy,
+        'avisos_fuera_laboral_hoy': avisos_fuera_laboral_hoy,
         'dinero_in': dinero_in,
         'egresos_total': egresos_total,
         'utilidad': utilidad,
@@ -244,6 +318,40 @@ def admin_dashboard(request):
         'chart_egresos_cat_labels': json.dumps(column_egresos_labels),
         'chart_egresos_cat_data': json.dumps(column_egresos_data),
     })
+
+
+@admin_requerido
+@require_POST
+def admin_horario_tecnico_guardar(request, user_id):
+    User = get_user_model()
+    tecnico_qs = (
+        User.objects
+        .filter(pk=user_id, is_active=True, groups__name__in=['Tecnicos', 'Tecnico'])
+        .distinct()
+    )
+    tecnico = get_object_or_404(tecnico_qs)
+    horario, _ = HorarioTecnico.objects.get_or_create(tecnico=tecnico)
+
+    try:
+        hora_inicio = time.fromisoformat(request.POST.get('hora_inicio') or '09:00')
+        hora_fin = time.fromisoformat(request.POST.get('hora_fin') or '18:00')
+    except ValueError:
+        messages.error(request, 'Horario inválido. Usa formato HH:MM.')
+        return redirect(reverse('econotec:admin_dashboard') + '#horarios-tecnicos')
+
+    if hora_inicio >= hora_fin:
+        messages.error(request, 'La hora de entrada debe ser menor que la hora de salida.')
+        return redirect(reverse('econotec:admin_dashboard') + '#horarios-tecnicos')
+
+    horario.activo = request.POST.get('activo') == 'on'
+    for campo, _label in HorarioTecnico.DIAS:
+        setattr(horario, campo, request.POST.get(campo) == 'on')
+    horario.hora_inicio = hora_inicio
+    horario.hora_fin = hora_fin
+    horario.save()
+
+    messages.success(request, f'Horario laboral de {_nombre_usuario(tecnico)} actualizado.')
+    return redirect(reverse('econotec:admin_dashboard') + '#horarios-tecnicos')
 
 
 @tecnico_requerido

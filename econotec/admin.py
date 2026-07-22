@@ -1,7 +1,7 @@
 from django.contrib import admin
 from .models import (
     Cliente, IngresoEquipo, Abono, SalidaEquipo,
-    CategoriaEgreso, Egreso, BitacoraTecnico,
+    CategoriaEgreso, Egreso, BitacoraTecnico, HorarioTecnico,
 )
 
 
@@ -74,6 +74,16 @@ class EgresoAdmin(admin.ModelAdmin):
     list_filter = ('categoria', 'fecha')
     search_fields = ('concepto', 'notas')
     date_hierarchy = 'fecha'
+
+
+@admin.register(HorarioTecnico)
+class HorarioTecnicoAdmin(admin.ModelAdmin):
+    list_display = (
+        'tecnico', 'activo', 'dias_display', 'hora_inicio', 'hora_fin',
+        'ultima_notificacion_laboral', 'ultima_notificacion_fuera_laboral',
+    )
+    list_filter = ('activo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes')
+    search_fields = ('tecnico__username', 'tecnico__first_name', 'tecnico__last_name')
 
 
 @admin.register(BitacoraTecnico)

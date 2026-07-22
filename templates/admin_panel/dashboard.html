@@ -80,6 +80,127 @@
         margin-right: 6px;
         font-size: 16px;
     }
+    .labor-alerts {
+        display: grid;
+        gap: 8px;
+        margin: 12px 0 14px;
+    }
+    .labor-alert {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 10px 12px;
+        border-radius: 9px;
+        border: 1px solid #bbf7d0;
+        background: #ecfdf5;
+        color: #166534;
+        font-size: 13px;
+        font-weight: 800;
+    }
+    .labor-alert small {
+        color: #047857;
+        font-weight: 700;
+    }
+    .labor-alert.warn {
+        border-color: #fecaca;
+        background: #fef2f2;
+        color: #b91c1c;
+    }
+    .labor-alert.warn small {
+        color: #991b1b;
+    }
+    .horarios-wrap {
+        display: grid;
+        gap: 8px;
+        margin: 12px 0 18px;
+    }
+    .horario-item {
+        border: 1px solid #ead8d1;
+        border-radius: 10px;
+        background: #fff8f3;
+        overflow: hidden;
+    }
+    .horario-item summary {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 12px 14px;
+        cursor: pointer;
+        list-style: none;
+    }
+    .horario-item summary::-webkit-details-marker { display: none; }
+    .horario-main {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+    }
+    .horario-name {
+        color: var(--text-main);
+        font-size: 14px;
+        font-weight: 900;
+    }
+    .horario-resumen {
+        color: var(--text-muted);
+        font-size: 12px;
+        font-weight: 700;
+    }
+    .horario-badge {
+        display: inline-flex;
+        align-items: center;
+        border-radius: 999px;
+        padding: 5px 9px;
+        font-size: 11px;
+        font-weight: 900;
+        white-space: nowrap;
+    }
+    .horario-badge.ok {
+        background: #dcfce7;
+        color: #166534;
+    }
+    .horario-badge.off {
+        background: #f3f4f6;
+        color: #6b7280;
+    }
+    .horario-form {
+        display: grid;
+        gap: 12px;
+        padding: 0 14px 14px;
+        border-top: 1px dashed #ead8d1;
+    }
+    .horario-days {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        padding-top: 12px;
+    }
+    .horario-days label,
+    .horario-activo {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 7px 9px;
+        border: 1px solid #e5e7eb;
+        border-radius: 8px;
+        background: var(--card-bg);
+        color: var(--text-main);
+        font-size: 12px;
+        font-weight: 800;
+    }
+    .horario-times {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        align-items: end;
+    }
+    [data-theme="dark"] .horario-item {
+        background: var(--card-bg);
+        border-color: rgba(255,255,255,0.14);
+    }
+    [data-theme="dark"] .horario-form {
+        border-top-color: rgba(255,255,255,0.14);
+    }
 </style>
 
 <div class="crumb">
@@ -295,8 +416,80 @@
 
 <!-- USUARIOS EN LÍNEA -->
 <div class="breakdown-grid" style="margin-top: 22px;">
-    <div class="breakdown-card" style="grid-column: 1 / -1;">
+    <div class="breakdown-card" id="horarios-tecnicos" style="grid-column: 1 / -1;">
         <h3>👥 USUARIOS DEL SISTEMA (Estado de Conexión)</h3>
+        {% if avisos_laborales_hoy %}
+        <div class="labor-alerts">
+            {% for aviso in avisos_laborales_hoy %}
+            <div class="labor-alert">
+                <span>✅ {{ aviso.nombre }} entró a su día laboral.</span>
+                <small>{{ aviso.momento|date:"d/m/Y H:i" }}</small>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+        {% if avisos_fuera_laboral_hoy %}
+        <div class="labor-alerts">
+            {% for aviso in avisos_fuera_laboral_hoy %}
+            <div class="labor-alert warn">
+                <span>⚠ {{ aviso.nombre }} entró {{ aviso.motivo }}.</span>
+                <small>{{ aviso.momento|date:"d/m/Y H:i" }}</small>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        {% if horarios_tecnicos %}
+        <h4 style="margin: 14px 0 8px; color: var(--text-main); font-size: 15px;">Horarios laborales de técnicos</h4>
+        <div class="horarios-wrap">
+            {% for item in horarios_tecnicos %}
+            <details class="horario-item">
+                <summary>
+                    <span class="horario-main">
+                        <span class="horario-name">{{ item.nombre }}</span>
+                        <span class="horario-resumen">
+                            {{ item.horario.dias_display }} · {{ item.horario.hora_inicio|time:"H:i" }} - {{ item.horario.hora_fin|time:"H:i" }}
+                        </span>
+                    </span>
+                    {% if item.esta_en_horario %}
+                        <span class="horario-badge ok">En horario laboral</span>
+                    {% elif item.es_dia_laboral %}
+                        <span class="horario-badge ok">Día laboral</span>
+                    {% else %}
+                        <span class="horario-badge off">Fuera de día laboral</span>
+                    {% endif %}
+                </summary>
+                <form method="post" action="{% url 'econotec:admin_horario_tecnico_guardar' item.user.pk %}" class="horario-form">
+                    {% csrf_token %}
+                    <div class="horario-days">
+                        <label class="horario-activo">
+                            <input type="checkbox" name="activo" {% if item.horario.activo %}checked{% endif %}>
+                            Horario activo
+                        </label>
+                        {% for campo, label, activo in item.dias %}
+                        <label>
+                            <input type="checkbox" name="{{ campo }}" {% if activo %}checked{% endif %}>
+                            {{ label }}
+                        </label>
+                        {% endfor %}
+                    </div>
+                    <div class="horario-times">
+                        <div>
+                            <label class="form-label">Entrada</label>
+                            <input type="time" name="hora_inicio" value="{{ item.horario.hora_inicio|time:'H:i' }}" class="form-input" required>
+                        </div>
+                        <div>
+                            <label class="form-label">Salida</label>
+                            <input type="time" name="hora_fin" value="{{ item.horario.hora_fin|time:'H:i' }}" class="form-input" required>
+                        </div>
+                        <button type="submit" class="btn btn-primary">Guardar horario</button>
+                    </div>
+                </form>
+            </details>
+            {% endfor %}
+        </div>
+        {% endif %}
+
         <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 10px;">
             {% for item in lista_usuarios %}
             <div class="row-item" style="align-items: center;">

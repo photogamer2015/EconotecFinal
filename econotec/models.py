@@ -8,7 +8,7 @@ Mapea fielmente la hoja "SOLICITUD DE INGRESO" de Econotec:
 - Diagnóstico / Valores / Abono / Diferencia
 - Y suma una "Salida de equipo" con estado del trabajo realizado
 """
-from datetime import date
+from datetime import date, time
 from decimal import Decimal, ROUND_HALF_UP
 from django.db import models
 from django.utils import timezone
@@ -1645,6 +1645,77 @@ class UsuarioActividad(models.Model):
 
     def __str__(self):
         return f'Actividad de {self.user.username}'
+
+
+class HorarioTecnico(models.Model):
+    """
+    Horario laboral configurable por técnico.
+
+    El dashboard administrativo usa este registro para mostrar el horario y
+    para avisar cuando el técnico entra al sistema en un día laboral.
+    """
+    tecnico = models.OneToOneField(
+        'auth.User',
+        on_delete=models.CASCADE,
+        related_name='horario_laboral',
+    )
+    activo = models.BooleanField(default=True)
+    lunes = models.BooleanField(default=True)
+    martes = models.BooleanField(default=True)
+    miercoles = models.BooleanField(default=True)
+    jueves = models.BooleanField(default=True)
+    viernes = models.BooleanField(default=True)
+    hora_inicio = models.TimeField(default=time(9, 0))
+    hora_fin = models.TimeField(default=time(18, 0))
+    ultima_notificacion_laboral = models.DateTimeField(null=True, blank=True)
+    ultima_notificacion_fuera_laboral = models.DateTimeField(null=True, blank=True)
+    ultima_notificacion_fuera_motivo = models.CharField(max_length=20, blank=True)
+    actualizado = models.DateTimeField(auto_now=True)
+
+    DIAS = [
+        ('lunes', 'Lunes'),
+        ('martes', 'Martes'),
+        ('miercoles', 'Miércoles'),
+        ('jueves', 'Jueves'),
+        ('viernes', 'Viernes'),
+    ]
+
+    class Meta:
+        verbose_name = 'Horario de técnico'
+        verbose_name_plural = 'Horarios de técnicos'
+        ordering = ['tecnico__first_name', 'tecnico__username']
+
+    def __str__(self):
+        return f'Horario de {self.nombre_tecnico}'
+
+    @property
+    def nombre_tecnico(self):
+        return self.tecnico.get_full_name() or self.tecnico.username
+
+    def es_dia_laboral(self, dia=None):
+        if not self.activo:
+            return False
+        dia = dia or timezone.localdate()
+        mapa = {
+            0: self.lunes,
+            1: self.martes,
+            2: self.miercoles,
+            3: self.jueves,
+            4: self.viernes,
+        }
+        return bool(mapa.get(dia.weekday(), False))
+
+    def esta_en_horario(self, momento=None):
+        momento = timezone.localtime(momento or timezone.now())
+        if not self.es_dia_laboral(momento.date()):
+            return False
+        hora = momento.time()
+        return self.hora_inicio <= hora <= self.hora_fin
+
+    @property
+    def dias_display(self):
+        activos = [label for campo, label in self.DIAS if getattr(self, campo)]
+        return ', '.join(activos) if activos else 'Sin días asignados'
 
 
 class BitacoraTecnico(models.Model):

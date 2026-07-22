@@ -105,6 +105,8 @@ urlpatterns = [
          views_admin.admin_perfiles_reiniciar, name='admin_perfiles_reiniciar'),
     path('admin-panel/perfiles/exportar/<str:formato>/',
          views_admin.admin_perfiles_exportar, name='admin_perfiles_exportar'),
+    path('admin-panel/horarios/<int:user_id>/guardar/',
+         views_admin.admin_horario_tecnico_guardar, name='admin_horario_tecnico_guardar'),
     path('admin-panel/mantenimiento/',
          views_admin.admin_mantenimiento_reset, name='admin_mantenimiento_reset'),
     path('admin-panel/egresos/',

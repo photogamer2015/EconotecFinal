@@ -1,7 +1,8 @@
 import re
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 from io import BytesIO
+from unittest.mock import patch
 from urllib.parse import parse_qs, urlparse
 from zoneinfo import ZoneInfo
 
@@ -14,8 +15,9 @@ from django.utils import timezone
 
 from .forms import IngresoEquipoForm
 from .alertas import equipos_demorados_qs, salidas_bodegaje_qs, whatsapp_link_equipo_listo
+from .horarios import registrar_entrada_laboral
 from .models import (
-    BitacoraTecnico, Cliente, IngresoEquipo, NotificacionAsesora,
+    BitacoraTecnico, Cliente, HorarioTecnico, IngresoEquipo, NotificacionAsesora,
     SalidaEquipo, UsuarioActividad,
 )
 from .qr_utils import token_para_ingreso
@@ -1319,6 +1321,95 @@ class VentasTests(TestCase):
         )
 
         self.assertEqual(response.context['equipos_ingresados'], 1)
+
+    def test_admin_dashboard_muestra_horarios_y_avisos_laborales(self):
+        self.client.force_login(self.admin)
+        HorarioTecnico.objects.create(
+            tecnico=self.usuario,
+            hora_inicio=time(8, 30),
+            hora_fin=time(17, 30),
+            ultima_notificacion_laboral=timezone.now(),
+        )
+
+        response = self.client.get(reverse('econotec:admin_dashboard'))
+
+        self.assertContains(response, 'Horarios laborales de técnicos')
+        self.assertContains(response, 'Yandri')
+        self.assertContains(response, '08:30 - 17:30')
+        self.assertContains(response, 'entró a su día laboral')
+        self.assertEqual(len(response.context['avisos_laborales_hoy']), 1)
+
+    def test_admin_puede_actualizar_horario_laboral_de_tecnico(self):
+        self.client.force_login(self.admin)
+
+        response = self.client.post(
+            reverse('econotec:admin_horario_tecnico_guardar', kwargs={'user_id': self.usuario.pk}),
+            {
+                'activo': 'on',
+                'lunes': 'on',
+                'miercoles': 'on',
+                'viernes': 'on',
+                'hora_inicio': '08:15',
+                'hora_fin': '17:45',
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertIn('#horarios-tecnicos', response.url)
+        horario = HorarioTecnico.objects.get(tecnico=self.usuario)
+        self.assertTrue(horario.activo)
+        self.assertTrue(horario.lunes)
+        self.assertFalse(horario.martes)
+        self.assertTrue(horario.miercoles)
+        self.assertFalse(horario.jueves)
+        self.assertTrue(horario.viernes)
+        self.assertEqual(horario.hora_inicio.strftime('%H:%M'), '08:15')
+        self.assertEqual(horario.hora_fin.strftime('%H:%M'), '17:45')
+
+    def test_registrar_entrada_laboral_avisa_una_vez_por_dia(self):
+        dia_lunes = date(2026, 7, 20)
+        momento_lunes = datetime(2026, 7, 20, 10, 0, tzinfo=ZoneInfo('America/Guayaquil'))
+
+        with patch('econotec.horarios.timezone.localdate', return_value=dia_lunes), \
+             patch('econotec.horarios.timezone.now', return_value=momento_lunes):
+            primer_aviso = registrar_entrada_laboral(self.usuario)
+            segundo_aviso = registrar_entrada_laboral(self.usuario)
+
+        self.assertIsNotNone(primer_aviso)
+        self.assertIsNone(segundo_aviso)
+        horario = HorarioTecnico.objects.get(tecnico=self.usuario)
+        self.assertIsNotNone(horario.ultima_notificacion_laboral)
+
+    def test_registrar_entrada_fuera_de_dia_laboral_avisa_en_admin(self):
+        self.client.force_login(self.admin)
+        dia_miercoles = date(2026, 7, 22)
+        momento_miercoles = datetime(2026, 7, 22, 10, 0, tzinfo=ZoneInfo('America/Guayaquil'))
+        HorarioTecnico.objects.create(
+            tecnico=self.usuario,
+            lunes=True,
+            martes=False,
+            miercoles=False,
+            jueves=False,
+            viernes=True,
+        )
+
+        with patch('econotec.horarios.timezone.localdate', return_value=dia_miercoles), \
+             patch('econotec.horarios.timezone.now', return_value=momento_miercoles):
+            primer_aviso = registrar_entrada_laboral(self.usuario)
+            segundo_aviso = registrar_entrada_laboral(self.usuario)
+
+        horario = HorarioTecnico.objects.get(tecnico=self.usuario)
+        self.assertIsNotNone(primer_aviso)
+        self.assertIsNone(segundo_aviso)
+        self.assertIsNotNone(horario.ultima_notificacion_fuera_laboral)
+        self.assertEqual(horario.ultima_notificacion_fuera_motivo, 'dia')
+
+        with patch('econotec.views_admin.timezone.localdate', return_value=dia_miercoles), \
+             patch('econotec.views_admin.timezone.now', return_value=momento_miercoles):
+            response = self.client.get(reverse('econotec:admin_dashboard'))
+
+        self.assertContains(response, 'entró fuera de su día laboral')
+        self.assertEqual(len(response.context['avisos_fuera_laboral_hoy']), 1)
 
     def test_estado_visual_conserva_entregado_con_solucion_si_cliente_retiro(self):
         ingreso = self.crear_ingreso_reparacion(estado='entregado')

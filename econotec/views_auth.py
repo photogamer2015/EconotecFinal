@@ -27,6 +27,7 @@ from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_http_methods
 
 from .bitacora import registrar_bitacora
+from .horarios import registrar_entrada_laboral
 
 
 SEDES_VALIDAS = {'guayaquil', 'quito'}
@@ -520,6 +521,7 @@ def registrar_correo_doble_factor(request):
                         'login',
                         f'Inicio de sesión en el sistema ({etiqueta}).',
                     )
+                    registrar_entrada_laboral(user)
                     messages.success(
                         request,
                         f'Correo registrado y sesión iniciada en sede {etiqueta}.'
@@ -623,6 +625,7 @@ def verificar_doble_factor(request):
                     'login',
                     f'Inicio de sesión en el sistema ({etiqueta}).',
                 )
+                registrar_entrada_laboral(user)
                 messages.success(request, f'Sesión iniciada en sede {etiqueta}.')
                 return redirect(destino)
 
