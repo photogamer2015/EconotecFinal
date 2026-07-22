@@ -9,8 +9,16 @@
         border-radius: 14px;
         padding: 28px;
         box-shadow: 0 4px 14px rgba(0, 0, 0, 0.06);
+        width: min(100%, 980px);
         max-width: 980px;
         margin: 0 auto;
+    }
+
+    .form-card,
+    .form-section,
+    .form-row > div,
+    .firma-panel {
+        min-width: 0;
     }
 
     .form-section {
@@ -470,6 +478,7 @@
         justify-content: center;
         padding: 16px;
         background: rgba(17, 24, 39, 0.68);
+        overscroll-behavior: contain;
     }
 
     .firma-modal.show {
@@ -478,6 +487,9 @@
 
     .firma-card {
         width: min(760px, 96vw);
+        max-height: calc(100dvh - 32px);
+        display: flex;
+        flex-direction: column;
         background: var(--card-bg);
         color: var(--text-color);
         border-radius: 14px;
@@ -515,6 +527,9 @@
 
     .firma-body {
         padding: 16px;
+        min-height: 0;
+        overflow: auto;
+        -webkit-overflow-scrolling: touch;
     }
 
     .firma-instruccion {
@@ -534,7 +549,7 @@
     #firma-canvas {
         display: block;
         width: 100%;
-        height: min(280px, 48vh);
+        height: clamp(210px, 44dvh, 280px);
         touch-action: none;
         cursor: crosshair;
     }
@@ -572,6 +587,239 @@
     [data-theme="dark"] .firma-card {
         border-color: rgba(255, 255, 255, 0.14);
         background: var(--card-bg);
+    }
+
+    body.firma-modal-open {
+        overflow: hidden;
+        touch-action: none;
+    }
+
+    .accesorios-opciones {
+        display: flex;
+        gap: 20px;
+        align-items: center;
+        margin-bottom: 10px;
+    }
+
+    .garantia-selector-line {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    @media (max-width: 768px) {
+        .form-card {
+            padding: 20px;
+            border-radius: 12px;
+        }
+
+        .form-section {
+            margin-bottom: 20px;
+            padding-bottom: 20px;
+        }
+
+        .form-section h3 {
+            font-size: 15px;
+            line-height: 1.25;
+            margin-bottom: 14px;
+        }
+
+        .form-row {
+            grid-template-columns: 1fr;
+            gap: 12px;
+        }
+
+        .form-card .form-input,
+        .form-card input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]),
+        .form-card select,
+        .form-card textarea {
+            width: 100%;
+            min-width: 0;
+            max-width: 100%;
+            min-height: 46px;
+            font-size: 16px;
+        }
+
+        .form-card textarea {
+            min-height: 112px;
+        }
+
+        .actions-bar {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 10px;
+        }
+
+        .actions-bar .btn,
+        .actions-bar button,
+        .actions-bar a {
+            width: 100%;
+            min-height: 48px;
+        }
+
+        #wrap_pago_diagnostico,
+        #wrap_pago_inicial,
+        #wrap_diagnostico_mixto,
+        #wrap_pago_mixto,
+        #wrap_garantia,
+        #hint-auto-salida,
+        .estado-salida-lock,
+        .valor-acordado-aviso,
+        .equipo-duplicado-alerta,
+        .equipo-reingreso-confirmacion {
+            padding: 13px !important;
+            border-radius: 9px !important;
+        }
+    }
+
+    @media (max-width: 640px) {
+        .form-card {
+            padding: 16px 14px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+        }
+
+        .top-meta {
+            padding: 13px;
+        }
+
+        .top-meta .num-equipo {
+            width: 100%;
+            text-align: center;
+            font-size: 16px;
+            padding: 9px 12px;
+        }
+
+        .firma-panel {
+            padding: 14px;
+        }
+
+        .firma-label {
+            font-size: 13px;
+            line-height: 1.25;
+        }
+
+        .firma-opciones {
+            grid-template-columns: 1fr;
+        }
+
+        .firma-opcion,
+        .valor-acordado-opcion {
+            min-height: 54px;
+            font-size: 15px;
+            line-height: 1.25;
+        }
+
+        .firma-controls {
+            display: grid;
+            grid-template-columns: 1fr;
+            align-items: stretch;
+        }
+
+        #btn-abrir-firma {
+            width: 100%;
+            min-height: 52px;
+            font-size: 15px;
+        }
+
+        .firma-status {
+            font-size: 13px;
+            line-height: 1.35;
+        }
+
+        .firma-preview {
+            width: 100%;
+            min-height: 78px;
+        }
+
+        .firma-modal {
+            align-items: stretch;
+            padding:
+                max(10px, env(safe-area-inset-top))
+                max(10px, env(safe-area-inset-right))
+                max(10px, env(safe-area-inset-bottom))
+                max(10px, env(safe-area-inset-left));
+        }
+
+        .firma-card {
+            width: 100%;
+            max-height: calc(100dvh - 20px);
+            border-radius: 13px;
+        }
+
+        .firma-head {
+            padding: 12px 14px;
+        }
+
+        .firma-head h3 {
+            font-size: 15px;
+        }
+
+        .firma-body {
+            padding: 14px;
+        }
+
+        .firma-instruccion,
+        .firma-aviso-texto {
+            font-size: 13px;
+            line-height: 1.35;
+        }
+
+        #firma-canvas {
+            height: clamp(220px, 45dvh, 320px);
+        }
+
+        .firma-actions {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 8px;
+        }
+
+        .firma-btn {
+            width: 100%;
+            min-height: 48px;
+            font-size: 15px;
+        }
+
+        .accesorios-opciones {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+        }
+
+        .accesorios-opciones label {
+            min-height: 46px;
+            padding: 10px 12px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            background: var(--card-bg);
+        }
+
+        .garantia-selector-line {
+            align-items: stretch;
+        }
+    }
+
+    @media (max-width: 420px) {
+        .form-card {
+            padding: 14px 12px;
+            border-radius: 10px;
+        }
+
+        .form-section h3 {
+            font-size: 14px;
+        }
+
+        .equipo-duplicado-alerta .titulo {
+            font-size: 16px;
+        }
+
+        #firma-canvas {
+            height: clamp(210px, 42dvh, 300px);
+        }
+
+        .firma-actions {
+            margin-top: 12px;
+        }
     }
 </style>
 
@@ -720,7 +968,7 @@
         </div>
         <div style="margin-top:14px;">
             <label class="form-label" style="margin-bottom:8px;">¿Trajo accesorios? *</label>
-            <div style="display: flex; gap: 20px; align-items: center; margin-bottom: 10px;">
+            <div class="accesorios-opciones">
                 <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
                     <input type="radio" name="trajo_accesorios" value="si" required onclick="toggleAccesorios(true)">
                     <span style="font-weight: 600;">Sí</span>
@@ -913,7 +1161,7 @@
             <div class="form-row cols-2">
                 <div>
                     <label class="form-label" style="color: #e65100; margin-bottom: 4px;">Selecciona el equipo anterior <span style="color:#888; font-weight:600;">(opcional)</span></label>
-                    <div style="display:flex; align-items:center; gap:8px;">
+                    <div class="garantia-selector-line">
                         <span style="color:#e65100; font-weight:bold;">—</span>
                         <div style="flex:1;">
                             {{ ing_form.equipo_garantia }}
@@ -1124,6 +1372,12 @@
         var tieneFirmaCanvas = false;
         var ratio = 1;
 
+        function actualizarBloqueoFondo() {
+            var firmaAbierta = modal && modal.classList.contains('show');
+            var avisoAbierto = avisoModal && avisoModal.classList.contains('show');
+            document.body.classList.toggle('firma-modal-open', !!(firmaAbierta || avisoAbierto));
+        }
+
         function ajustarCanvas() {
             var rect = canvas.getBoundingClientRect();
             ratio = window.devicePixelRatio || 1;
@@ -1287,12 +1541,14 @@
             }
             modal.classList.add('show');
             modal.setAttribute('aria-hidden', 'false');
+            actualizarBloqueoFondo();
             window.setTimeout(ajustarCanvas, 50);
         }
 
         function cerrarModal() {
             modal.classList.remove('show');
             modal.setAttribute('aria-hidden', 'true');
+            actualizarBloqueoFondo();
             actualizarVistaFirma();
         }
 
@@ -1300,12 +1556,14 @@
             if (!avisoModal) return;
             avisoModal.classList.add('show');
             avisoModal.setAttribute('aria-hidden', 'false');
+            actualizarBloqueoFondo();
         }
 
         function cerrarAvisoFirma() {
             if (!avisoModal) return;
             avisoModal.classList.remove('show');
             avisoModal.setAttribute('aria-hidden', 'true');
+            actualizarBloqueoFondo();
         }
 
         canvas.addEventListener('pointerdown', function (event) {
@@ -1331,6 +1589,9 @@
                 if (!dibujando) return;
                 event.preventDefault();
                 dibujando = false;
+                if (canvas.hasPointerCapture && canvas.hasPointerCapture(event.pointerId)) {
+                    canvas.releasePointerCapture(event.pointerId);
+                }
             });
         });
 

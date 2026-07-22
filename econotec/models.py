@@ -39,6 +39,7 @@ TIPOS_EQUIPO = [
     ('celular', 'Celular'),
     ('tablet', 'Tablet'),
     ('consola', 'Consola'),
+    ('mando', 'Mando'),
     ('otro', 'Otros equipos'),
 ]
 

@@ -9,7 +9,8 @@ import json
 
 from django.contrib import messages
 from django.contrib.auth import get_user_model
-from django.db.models import Count, Sum
+from django.db import transaction
+from django.db.models import Count, Q, Sum
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -153,6 +154,56 @@ def _horarios_tecnicos_dashboard():
     return horarios, avisos, avisos_fuera
 
 
+def _equipos_mes_resumen(year, month):
+    equipos = (
+        IngresoEquipo.objects
+        .filter(sede__in=SEDES_EQUIPOS)
+        .filter(
+            Q(fecha_ingreso__year=year, fecha_ingreso__month=month) |
+            Q(salida__fecha_salida__year=year, salida__fecha_salida__month=month)
+        )
+        .select_related('cliente', 'tecnico_encargado', 'salida', 'salida__tecnico_reparo')
+        .distinct()
+        .order_by('-fecha_ingreso', '-numero_equipo')
+    )
+
+    resumen = []
+    for ingreso in equipos:
+        try:
+            salida = ingreso.salida
+        except SalidaEquipo.DoesNotExist:
+            salida = None
+
+        ingresado_en_mes = ingreso.fecha_ingreso.year == year and ingreso.fecha_ingreso.month == month
+        entregado_en_mes = bool(
+            salida and
+            salida.fecha_salida.year == year and
+            salida.fecha_salida.month == month
+        )
+
+        resumen.append({
+            'ingreso': ingreso,
+            'salida': salida,
+            'ingresado_en_mes': ingresado_en_mes,
+            'entregado_en_mes': entregado_en_mes,
+            'tecnico_nombre': _nombre_usuario(salida.tecnico_reparo) if salida and salida.tecnico_reparo else ingreso.tecnico_encargado_nombre,
+        })
+
+    return resumen
+
+
+def _periodo_admin_request(request, metodo='GET'):
+    datos = request.POST if metodo == 'POST' else request.GET
+    hoy = date.today()
+    try:
+        year = int(datos.get('ano') or hoy.year)
+        month = int(datos.get('mes') or hoy.month)
+    except (TypeError, ValueError):
+        year, month = hoy.year, hoy.month
+    month = min(max(month, 1), 12)
+    return year, month
+
+
 @admin_requerido
 def admin_dashboard(request):
     """Dashboard financiero mensual."""
@@ -172,6 +223,7 @@ def admin_dashboard(request):
     equipos_entregados = SalidaEquipo.objects.filter(
         fecha_salida__year=year, fecha_salida__month=month,
     ).count()
+    equipos_mes_resumen = _equipos_mes_resumen(year, month)
 
     # Desglose por tipo de salida
     salidas_por_estado = (
@@ -300,6 +352,7 @@ def admin_dashboard(request):
         'utilidad': utilidad,
         'equipos_ingresados': equipos_ingresados,
         'equipos_entregados': equipos_entregados,
+        'equipos_mes_resumen': equipos_mes_resumen,
         'salidas_resumen': salidas_resumen,
         'egresos_por_cat': egresos_por_cat,
         'bodegaje_cobrado': bodegaje_cobrado,
@@ -318,6 +371,128 @@ def admin_dashboard(request):
         'chart_egresos_cat_labels': json.dumps(column_egresos_labels),
         'chart_egresos_cat_data': json.dumps(column_egresos_data),
     })
+
+
+@admin_requerido
+def admin_equipos_mes_exportar(request):
+    year, month = _periodo_admin_request(request)
+    resumen = _equipos_mes_resumen(year, month)
+
+    try:
+        from openpyxl import Workbook
+        from openpyxl.styles import Font, PatternFill
+    except ImportError:
+        messages.error(request, 'No se pudo generar el Excel (falta openpyxl).')
+        return redirect(f"{reverse('econotec:admin_dashboard')}?ano={year}&mes={month}#equipos-mes-resumen")
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = f'Equipos {MESES_ES[month][:3]} {year}'
+    ws.append([f'Resumen de equipos del mes - {MESES_ES[month]} {year}'])
+    ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=16)
+    ws.cell(row=1, column=1).font = Font(bold=True, size=14, color='F97618')
+
+    headers = [
+        'Codigo', 'Movimiento', 'Fecha ingreso', 'Fecha entrega', 'Cliente',
+        'Cedula', 'WhatsApp', 'Tipo', 'Marca', 'Modelo / Serie', 'Sede',
+        'Tecnico', 'Estado actual', 'Estado salida', 'Valor acordado',
+        'Valor salida',
+    ]
+    ws.append(headers)
+    fill = PatternFill('solid', fgColor='F97618')
+    for col in range(1, len(headers) + 1):
+        cell = ws.cell(row=2, column=col)
+        cell.font = Font(bold=True, color='FFFFFF')
+        cell.fill = fill
+
+    for item in resumen:
+        ingreso = item['ingreso']
+        salida = item['salida']
+        movimientos = []
+        if item['ingresado_en_mes']:
+            movimientos.append('Ingresado')
+        if item['entregado_en_mes']:
+            movimientos.append('Entregado')
+        ws.append([
+            ingreso.codigo_equipo,
+            ' / '.join(movimientos) or 'Relacionado',
+            ingreso.fecha_ingreso.strftime('%d/%m/%Y'),
+            salida.fecha_salida.strftime('%d/%m/%Y') if salida else '',
+            ingreso.cliente.nombres,
+            ingreso.cliente.cedula,
+            ingreso.cliente.whatsapp,
+            ingreso.tipo_equipo_display,
+            ingreso.marca,
+            ingreso.modelo_serie_detalle,
+            ingreso.get_sede_display(),
+            item['tecnico_nombre'],
+            ingreso.get_estado_display(),
+            salida.get_estado_reparacion_display() if salida else 'Sin salida',
+            float(ingreso.valor_acordado or 0),
+            float(salida.valor_final_cobrado or 0) if salida else 0,
+        ])
+
+    widths = [14, 18, 14, 14, 26, 16, 16, 16, 18, 34, 16, 18, 26, 30, 16, 16]
+    for idx, width in enumerate(widths, 1):
+        ws.column_dimensions[ws.cell(row=2, column=idx).column_letter].width = width
+
+    buf = BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+
+    response = HttpResponse(
+        buf.getvalue(),
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    )
+    filename = f"equipos_mes_{year}_{month:02d}.xlsx"
+    response['Content-Disposition'] = f'attachment; filename="{filename}"'
+    return response
+
+
+@admin_requerido
+@require_POST
+def admin_equipos_mes_borrar(request):
+    year, month = _periodo_admin_request(request, metodo='POST')
+    mes_nombre = MESES_ES[month]
+    admin_password = request.POST.get('admin_password', '')
+    dashboard_url = f"{reverse('econotec:admin_dashboard')}?ano={year}&mes={month}#equipos-mes-resumen"
+
+    if not request.user.check_password(admin_password):
+        messages.error(request, f'Contraseña de administrador incorrecta. No se eliminó {mes_nombre} {year}.')
+        return redirect(dashboard_url)
+
+    ingresos_mes_ids = list(
+        IngresoEquipo.objects.filter(
+            sede__in=SEDES_EQUIPOS,
+            fecha_ingreso__year=year,
+            fecha_ingreso__month=month,
+        ).values_list('id', flat=True)
+    )
+    salidas_qs = SalidaEquipo.objects.filter(
+        Q(fecha_salida__year=year, fecha_salida__month=month, ingreso__sede__in=SEDES_EQUIPOS) |
+        Q(ingreso_id__in=ingresos_mes_ids)
+    )
+    abonos_qs = Abono.objects.filter(
+        Q(fecha__year=year, fecha__month=month, ingreso__sede__in=SEDES_EQUIPOS) |
+        Q(ingreso_id__in=ingresos_mes_ids)
+    )
+    salidas_ids = list(salidas_qs.values_list('id', flat=True))
+
+    ingresos_count = len(ingresos_mes_ids)
+    salidas_count = len(salidas_ids)
+    abonos_count = abonos_qs.count()
+
+    with transaction.atomic():
+        abonos_qs.delete()
+        SalidaEquipo.objects.filter(id__in=salidas_ids).delete()
+        IngresoEquipo.objects.filter(id__in=ingresos_mes_ids).delete()
+
+    messages.success(
+        request,
+        f'{mes_nombre} {year} eliminado: {ingresos_count} ingresos, '
+        f'{salidas_count} salidas y {abonos_count} abonos. Los clientes no fueron borrados.'
+    )
+    return redirect(dashboard_url)
 
 
 @admin_requerido

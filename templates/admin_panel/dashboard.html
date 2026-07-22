@@ -45,6 +45,224 @@
     .balance-card.bodegaje .sub { margin-top: 6px; font-size: 12px; color: var(--text-muted); }
     .balance-card.card-link { display: block; color: inherit; text-decoration: none; }
     .balance-card.card-link:hover { transform: translateY(-3px); box-shadow: 0 6px 14px rgba(0,0,0,0.06); }
+    .equipos-mes-card {
+        background: var(--card-bg);
+        border-radius: 12px;
+        padding: 20px;
+        margin-bottom: 24px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+    }
+    .equipos-mes-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 14px;
+        margin-bottom: 14px;
+        padding-bottom: 12px;
+        border-bottom: 2px solid rgba(249, 118, 24, 0.18);
+    }
+    .equipos-mes-head h3 {
+        margin: 0;
+        color: var(--primary);
+        font-size: 16px;
+        font-weight: 900;
+        text-transform: uppercase;
+    }
+    .equipos-mes-head p {
+        margin: 4px 0 0;
+        color: var(--text-muted);
+        font-size: 13px;
+        font-weight: 700;
+    }
+    .equipos-mes-counts {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+        gap: 8px;
+    }
+    .equipos-mes-count {
+        display: inline-flex;
+        align-items: center;
+        min-height: 32px;
+        padding: 7px 10px;
+        border-radius: 999px;
+        background: #fff7ed;
+        color: #c2410c;
+        border: 1px solid #fed7aa;
+        font-size: 12px;
+        font-weight: 900;
+        white-space: nowrap;
+    }
+    .equipos-mes-count.ok {
+        background: #ecfdf5;
+        color: #166534;
+        border-color: #bbf7d0;
+    }
+    .equipos-mes-table-wrap {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+    .equipos-mes-details {
+        border: 1px solid #fed7aa;
+        border-radius: 10px;
+        background: rgba(255, 247, 237, 0.58);
+        overflow: hidden;
+    }
+    .equipos-mes-details summary {
+        list-style: none;
+    }
+    .equipos-mes-details summary::-webkit-details-marker {
+        display: none;
+    }
+    .equipos-mes-toggle {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        min-height: 48px;
+        padding: 12px 14px;
+        cursor: pointer;
+        color: var(--primary);
+        font-size: 13px;
+        font-weight: 900;
+    }
+    .equipos-mes-toggle .chev {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 28px;
+        height: 28px;
+        border-radius: 999px;
+        background: var(--primary);
+        color: white;
+        transition: transform .18s ease;
+        flex: 0 0 auto;
+    }
+    .equipos-mes-details[open] .equipos-mes-toggle .chev {
+        transform: rotate(180deg);
+    }
+    .equipos-mes-detail-body {
+        padding: 0 14px 14px;
+    }
+    .equipos-mes-table {
+        width: 100%;
+        min-width: 920px;
+        border-collapse: collapse;
+    }
+    .equipos-mes-table th,
+    .equipos-mes-table td {
+        padding: 11px 10px;
+        border-bottom: 1px solid #ead8d1;
+        vertical-align: top;
+        text-align: left;
+        font-size: 12px;
+    }
+    .equipos-mes-table th {
+        color: #ffffff;
+        background: var(--primary);
+        font-size: 11px;
+        font-weight: 900;
+        text-transform: uppercase;
+        white-space: nowrap;
+    }
+    .equipos-mes-table th:first-child { border-top-left-radius: 8px; }
+    .equipos-mes-table th:last-child { border-top-right-radius: 8px; }
+    .equipos-mes-table a {
+        color: var(--primary);
+        font-weight: 900;
+        text-decoration: none;
+    }
+    .equipos-mes-table small {
+        display: block;
+        margin-top: 3px;
+        color: var(--text-muted);
+        font-size: 11px;
+        font-weight: 700;
+        line-height: 1.3;
+    }
+    .mov-tags {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 5px;
+        margin-top: 5px;
+    }
+    .mov-tag {
+        display: inline-flex;
+        align-items: center;
+        padding: 3px 7px;
+        border-radius: 999px;
+        background: #eef2ff;
+        color: #3730a3;
+        font-size: 10px;
+        font-weight: 900;
+        white-space: nowrap;
+    }
+    .mov-tag.in { background: #fff7ed; color: #c2410c; }
+    .mov-tag.out { background: #dcfce7; color: #166534; }
+    .estado-chip {
+        display: inline-flex;
+        align-items: center;
+        padding: 4px 8px;
+        border-radius: 999px;
+        background: #f3f4f6;
+        color: #374151;
+        font-size: 11px;
+        font-weight: 900;
+    }
+    .estado-chip.ok {
+        background: #dcfce7;
+        color: #166534;
+    }
+    .estado-chip.pending {
+        background: #fff7ed;
+        color: #c2410c;
+    }
+    .equipos-mes-empty {
+        padding: 18px;
+        border: 1px dashed #ead8d1;
+        border-radius: 10px;
+        color: var(--text-muted);
+        font-size: 13px;
+        font-weight: 800;
+        text-align: center;
+    }
+    .equipos-mes-actions {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 14px;
+        padding-top: 14px;
+        border-top: 1px dashed #ead8d1;
+    }
+    .equipos-mes-actions form {
+        margin: 0;
+    }
+    .btn-excel-month {
+        background: #16a34a;
+        color: white;
+    }
+    .btn-excel-month:hover {
+        background: #15803d;
+    }
+    .btn-delete-month {
+        background: #dc2626;
+        color: white;
+    }
+    .btn-delete-month:hover {
+        background: #b91c1c;
+    }
+    [data-theme="dark"] .equipos-mes-table td {
+        border-bottom-color: rgba(255,255,255,0.12);
+    }
+    [data-theme="dark"] .equipos-mes-empty {
+        border-color: rgba(255,255,255,0.14);
+    }
+    [data-theme="dark"] .equipos-mes-details {
+        border-color: rgba(249, 118, 24, 0.28);
+        background: rgba(249, 118, 24, 0.08);
+    }
 
     .breakdown-grid {
         display: grid;
@@ -201,6 +419,75 @@
     [data-theme="dark"] .horario-form {
         border-top-color: rgba(255,255,255,0.14);
     }
+    @media (max-width: 760px) {
+        .equipos-mes-card {
+            padding: 16px 14px;
+        }
+        .equipos-mes-head {
+            display: grid;
+            grid-template-columns: 1fr;
+        }
+        .equipos-mes-counts {
+            justify-content: flex-start;
+        }
+        .equipos-mes-table-wrap {
+            overflow: visible;
+        }
+        .equipos-mes-detail-body {
+            padding: 0 10px 12px;
+        }
+        .equipos-mes-table {
+            min-width: 0;
+        }
+        .equipos-mes-table,
+        .equipos-mes-table tbody,
+        .equipos-mes-table tr,
+        .equipos-mes-table td {
+            display: block;
+            width: 100%;
+        }
+        .equipos-mes-table thead {
+            display: none;
+        }
+        .equipos-mes-table tr {
+            padding: 10px 0;
+            border: 1px solid #ead8d1;
+            border-radius: 10px;
+            margin-bottom: 10px;
+            background: var(--card-bg);
+            overflow: hidden;
+        }
+        .equipos-mes-table td {
+            display: grid;
+            grid-template-columns: 112px minmax(0, 1fr);
+            gap: 10px;
+            padding: 9px 12px;
+            border-bottom: 1px dashed #ead8d1;
+        }
+        .equipos-mes-table td:last-child {
+            border-bottom: 0;
+        }
+        .equipos-mes-table td::before {
+            content: attr(data-label);
+            color: var(--text-muted);
+            font-size: 11px;
+            font-weight: 900;
+            text-transform: uppercase;
+        }
+        [data-theme="dark"] .equipos-mes-table tr,
+        [data-theme="dark"] .equipos-mes-table td {
+            border-color: rgba(255,255,255,0.12);
+        }
+        .equipos-mes-actions {
+            display: grid;
+            grid-template-columns: 1fr;
+        }
+        .equipos-mes-actions .btn,
+        .equipos-mes-actions form,
+        .equipos-mes-actions button {
+            width: 100%;
+        }
+    }
 </style>
 
 <div class="crumb">
@@ -313,6 +600,104 @@
         <div class="val" style="color:#0d47a1;">{{ facturas_si_count }}</div>
         <div class="sub">Salidas con factura realizada</div>
     </a>
+</div>
+
+<!-- Resumen mensual de equipos -->
+<div class="equipos-mes-card" id="equipos-mes-resumen">
+    <div class="equipos-mes-head">
+        <div>
+            <h3>Resumen de Equipos del Mes</h3>
+            <p>{{ mes_nombre }} {{ year }} · se reinicia automáticamente al cambiar de mes y los meses anteriores quedan consultables con el filtro.</p>
+        </div>
+        <div class="equipos-mes-counts">
+            <span class="equipos-mes-count">{{ equipos_ingresados }} ingresados</span>
+            <span class="equipos-mes-count ok">{{ equipos_entregados }} entregados</span>
+        </div>
+    </div>
+    <details class="equipos-mes-details">
+        <summary class="equipos-mes-toggle">
+            <span>Ver detalle de equipos de {{ mes_nombre }} {{ year }}</span>
+            <span class="chev">⌄</span>
+        </summary>
+        <div class="equipos-mes-detail-body">
+            {% if equipos_mes_resumen %}
+            <div class="equipos-mes-table-wrap">
+                <table class="equipos-mes-table">
+                    <thead>
+                        <tr>
+                            <th>Código</th>
+                            <th>Ingreso</th>
+                            <th>Cliente</th>
+                            <th>Equipo</th>
+                            <th>Técnico</th>
+                            <th>Estado actual</th>
+                            <th>Entrega</th>
+                            <th>Valor</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in equipos_mes_resumen %}
+                        <tr>
+                            <td data-label="Código">
+                                <a href="{% url 'econotec:ingreso_detalle' item.ingreso.pk %}">{{ item.ingreso.codigo_equipo }}</a>
+                                <div class="mov-tags">
+                                    {% if item.ingresado_en_mes %}<span class="mov-tag in">Ingresó</span>{% endif %}
+                                    {% if item.entregado_en_mes %}<span class="mov-tag out">Entregado</span>{% endif %}
+                                </div>
+                            </td>
+                            <td data-label="Ingreso">{{ item.ingreso.fecha_ingreso|date:"d/m/Y" }}</td>
+                            <td data-label="Cliente">
+                                <strong>{{ item.ingreso.cliente.nombres }}</strong>
+                                <small>{{ item.ingreso.cliente.cedula }}</small>
+                            </td>
+                            <td data-label="Equipo">
+                                <strong>{{ item.ingreso.tipo_equipo_display }}</strong>
+                                <small>{{ item.ingreso.marca }} {{ item.ingreso.modelo_serie_detalle }}</small>
+                            </td>
+                            <td data-label="Técnico">{{ item.tecnico_nombre|default:"—" }}</td>
+                            <td data-label="Estado actual">
+                                <span class="estado-chip pending">{{ item.ingreso.get_estado_display }}</span>
+                            </td>
+                            <td data-label="Entrega">
+                                {% if item.salida %}
+                                    {% if item.entregado_en_mes %}
+                                        <span class="estado-chip ok">Entregado este mes</span>
+                                    {% else %}
+                                        <span class="estado-chip">Entregado otro mes</span>
+                                    {% endif %}
+                                    <small>{{ item.salida.fecha_salida|date:"d/m/Y" }} · {{ item.salida.get_estado_reparacion_display }}</small>
+                                {% else %}
+                                    <span class="estado-chip">Sin salida</span>
+                                {% endif %}
+                            </td>
+                            <td data-label="Valor">
+                                <strong>{{ item.ingreso.valor_acordado|dinero_signo:"—" }}</strong>
+                                {% if item.salida %}
+                                    <small>Salida: {{ item.salida.valor_final_cobrado|dinero_signo }}</small>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+                <div class="equipos-mes-empty">Sin equipos ingresados o entregados en {{ mes_nombre }} {{ year }}.</div>
+            {% endif %}
+            <div class="equipos-mes-actions">
+                <a href="{% url 'econotec:admin_equipos_mes_exportar' %}?ano={{ year }}&mes={{ month }}" class="btn btn-excel-month">Guardar Excel</a>
+                <form method="post" action="{% url 'econotec:admin_equipos_mes_borrar' %}" id="form-borrar-equipos-mes">
+                    {% csrf_token %}
+                    <input type="hidden" name="ano" value="{{ year }}">
+                    <input type="hidden" name="mes" value="{{ month }}">
+                    <input type="hidden" name="admin_password" id="equipos-mes-admin-password">
+                    <button type="button" class="btn btn-delete-month" onclick="confirmarBorradoEquiposMes('{{ mes_nombre|escapejs }}', '{{ year }}')">
+                        Borrar mes {{ mes_nombre }}
+                    </button>
+                </form>
+            </div>
+        </div>
+    </details>
 </div>
 
 <!-- Desglose detallado -->
@@ -540,6 +925,51 @@
 
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 <script>
+    function confirmarBorradoEquiposMes(mesNombre, year) {
+        Swal.fire({
+            title: '¿Está seguro?',
+            html: '<p style="font-size:14px;">¿Quiere eliminar los datos de equipos del mes <b>' + mesNombre + ' ' + year + '</b>?</p>' +
+                  '<p style="font-size:13px;color:#b91c1c;margin-top:10px;"><b>Se borrarán ingresos del mes, salidas del mes y abonos relacionados. No se borran clientes.</b></p>',
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#dc2626',
+            cancelButtonColor: '#6b7280',
+            confirmButtonText: 'Sí, borrar mes',
+            cancelButtonText: 'Cancelar',
+        }).then((primero) => {
+            if (!primero.isConfirmed) return;
+            Swal.fire({
+                title: 'Contraseña de administrador',
+                html: '<p style="font-size:14px;">Para borrar <b>' + mesNombre + ' ' + year + '</b>, ingresa tu contraseña de admin.</p>',
+                icon: 'question',
+                input: 'password',
+                inputPlaceholder: 'Contraseña de admin',
+                inputAttributes: {
+                    autocapitalize: 'off',
+                    autocorrect: 'off'
+                },
+                showCancelButton: true,
+                confirmButtonColor: '#dc2626',
+                cancelButtonColor: '#6b7280',
+                confirmButtonText: 'Confirmar borrado',
+                cancelButtonText: 'Cancelar',
+                preConfirm: (password) => {
+                    if (!password) {
+                        Swal.showValidationMessage('Debes ingresar tu contraseña de administrador.');
+                    }
+                    return password;
+                }
+            }).then((segundo) => {
+                if (!segundo.isConfirmed) return;
+                const form = document.getElementById('form-borrar-equipos-mes');
+                const passwordInput = document.getElementById('equipos-mes-admin-password');
+                if (!form || !passwordInput) return;
+                passwordInput.value = segundo.value;
+                form.submit();
+            });
+        });
+    }
+
     function confirmarReinicioPerfiles() {
         Swal.fire({
             title: '¿Reiniciar Progreso de Gamificación?',

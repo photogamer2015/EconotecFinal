@@ -17,7 +17,7 @@ from .forms import IngresoEquipoForm
 from .alertas import equipos_demorados_qs, salidas_bodegaje_qs, whatsapp_link_equipo_listo
 from .horarios import registrar_entrada_laboral
 from .models import (
-    BitacoraTecnico, Cliente, HorarioTecnico, IngresoEquipo, NotificacionAsesora,
+    Abono, BitacoraTecnico, Cliente, HorarioTecnico, IngresoEquipo, NotificacionAsesora,
     SalidaEquipo, UsuarioActividad,
 )
 from .qr_utils import token_para_ingreso
@@ -877,6 +877,39 @@ class VentasTests(TestCase):
         self.assertEqual(pdf_response.status_code, 200)
         self.assertEqual(pdf_response['Content-Type'], 'application/pdf')
 
+    def test_tipo_equipo_mando_se_acepta_y_se_imprime(self):
+        form = IngresoEquipoForm(data=self.ingreso_form_data(
+            tipo_equipo='mando',
+            tipo_equipo_otro='',
+            marca='Sony',
+            modelo_serie='DualSense',
+        ))
+
+        self.assertTrue(form.is_valid(), form.errors.as_json())
+
+        ingreso = self.crear_ingreso_reparacion(
+            tipo_equipo='mando',
+            marca='Sony',
+            modelo_serie='DualSense',
+        )
+        response = self.client.get(reverse('econotec:ingreso_imprimir', kwargs={'pk': ingreso.pk}))
+
+        self.assertContains(response, 'MANDO <span class="check-box">X</span>', html=False)
+        self.assertContains(response, 'Mando')
+
+    def test_formulario_ingreso_incluye_responsive_movil_y_firma_tactil(self):
+        self.activar_sede_guayaquil()
+
+        response = self.client.get(reverse('econotec:ingreso_registrar'))
+
+        self.assertContains(response, '<meta name="viewport" content="width=device-width, initial-scale=1.0">')
+        self.assertContains(response, '@media (max-width: 640px)')
+        self.assertContains(response, 'id="firma-modal"')
+        self.assertContains(response, 'id="firma-canvas"')
+        self.assertContains(response, 'touch-action: none')
+        self.assertContains(response, 'firma-modal-open')
+        self.assertContains(response, 'accesorios-opciones')
+
     def test_alerta_bodegaje_usa_tecnico_de_salida_y_tiene_desplegable(self):
         User = get_user_model()
         tecnicos = Group.objects.get(name='Tecnicos')
@@ -1321,6 +1354,158 @@ class VentasTests(TestCase):
         )
 
         self.assertEqual(response.context['equipos_ingresados'], 1)
+
+    def test_admin_dashboard_resumen_equipos_mes_separa_periodos(self):
+        self.client.force_login(self.admin)
+        ingreso_julio = self.crear_ingreso_reparacion(
+            fecha_ingreso=date(2026, 7, 5),
+            modelo_serie='Equipo ingresado en julio',
+        )
+        ingreso_junio_entregado_julio = self.crear_ingreso_reparacion(
+            fecha_ingreso=date(2026, 6, 28),
+            modelo_serie='Equipo junio entregado julio',
+        )
+        ingreso_agosto = self.crear_ingreso_reparacion(
+            fecha_ingreso=date(2026, 8, 2),
+            modelo_serie='Equipo ingresado en agosto',
+        )
+        SalidaEquipo.objects.create(
+            ingreso=ingreso_julio,
+            fecha_salida=date(2026, 7, 20),
+            estado_reparacion='retirado',
+            tecnico_reparo=self.usuario,
+            valor_final_cobrado=Decimal('15.00'),
+            metodo_pago_final='efectivo',
+            registrado_por=self.usuario,
+        )
+        SalidaEquipo.objects.create(
+            ingreso=ingreso_junio_entregado_julio,
+            fecha_salida=date(2026, 7, 21),
+            estado_reparacion='retirado',
+            tecnico_reparo=self.usuario,
+            valor_final_cobrado=Decimal('20.00'),
+            metodo_pago_final='efectivo',
+            registrado_por=self.usuario,
+        )
+
+        response_julio = self.client.get(
+            reverse('econotec:admin_dashboard'),
+            {'ano': '2026', 'mes': '7'},
+        )
+        resumen_julio = response_julio.context['equipos_mes_resumen']
+
+        self.assertEqual(response_julio.context['equipos_ingresados'], 1)
+        self.assertEqual(response_julio.context['equipos_entregados'], 2)
+        self.assertEqual(len(resumen_julio), 2)
+        self.assertContains(response_julio, 'Resumen de Equipos del Mes')
+        self.assertContains(response_julio, '<details class="equipos-mes-details">', html=False)
+        self.assertContains(response_julio, 'Guardar Excel')
+        self.assertContains(response_julio, 'Borrar mes Julio')
+        self.assertContains(response_julio, ingreso_julio.codigo_equipo)
+        self.assertContains(response_julio, ingreso_junio_entregado_julio.codigo_equipo)
+        self.assertNotContains(response_julio, ingreso_agosto.codigo_equipo)
+
+        response_agosto = self.client.get(
+            reverse('econotec:admin_dashboard'),
+            {'ano': '2026', 'mes': '8'},
+        )
+        resumen_agosto = response_agosto.context['equipos_mes_resumen']
+
+        self.assertEqual(response_agosto.context['equipos_ingresados'], 1)
+        self.assertEqual(response_agosto.context['equipos_entregados'], 0)
+        self.assertEqual(len(resumen_agosto), 1)
+        self.assertContains(response_agosto, ingreso_agosto.codigo_equipo)
+        self.assertNotContains(response_agosto, ingreso_julio.codigo_equipo)
+
+    def test_admin_exporta_y_borra_resumen_equipos_mes_con_password(self):
+        from openpyxl import load_workbook
+
+        self.client.force_login(self.admin)
+        ingreso_julio = self.crear_ingreso_reparacion(
+            fecha_ingreso=date(2026, 7, 5),
+            modelo_serie='Equipo julio para borrar',
+        )
+        ingreso_junio = self.crear_ingreso_reparacion(
+            fecha_ingreso=date(2026, 6, 28),
+            modelo_serie='Equipo junio con salida julio',
+        )
+        ingreso_agosto = self.crear_ingreso_reparacion(
+            fecha_ingreso=date(2026, 8, 2),
+            modelo_serie='Equipo agosto protegido',
+        )
+        salida_julio = SalidaEquipo.objects.create(
+            ingreso=ingreso_julio,
+            fecha_salida=date(2026, 7, 20),
+            estado_reparacion='retirado',
+            tecnico_reparo=self.usuario,
+            valor_final_cobrado=Decimal('15.00'),
+            metodo_pago_final='efectivo',
+            registrado_por=self.usuario,
+        )
+        salida_junio_julio = SalidaEquipo.objects.create(
+            ingreso=ingreso_junio,
+            fecha_salida=date(2026, 7, 21),
+            estado_reparacion='retirado',
+            tecnico_reparo=self.usuario,
+            valor_final_cobrado=Decimal('20.00'),
+            metodo_pago_final='efectivo',
+            registrado_por=self.usuario,
+        )
+        abono_julio = Abono.objects.create(
+            ingreso=ingreso_junio,
+            fecha=date(2026, 7, 10),
+            monto=Decimal('5.00'),
+            metodo='efectivo',
+            registrado_por=self.usuario,
+        )
+        abono_agosto = Abono.objects.create(
+            ingreso=ingreso_agosto,
+            fecha=date(2026, 8, 3),
+            monto=Decimal('8.00'),
+            metodo='efectivo',
+            registrado_por=self.usuario,
+        )
+
+        export_response = self.client.get(
+            reverse('econotec:admin_equipos_mes_exportar'),
+            {'ano': '2026', 'mes': '7'},
+        )
+
+        self.assertEqual(export_response.status_code, 200)
+        self.assertEqual(
+            export_response['Content-Type'],
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        )
+        workbook = load_workbook(BytesIO(export_response.content))
+        worksheet = workbook.active
+        self.assertEqual(worksheet['A1'].value, 'Resumen de equipos del mes - Julio 2026')
+        self.assertEqual(worksheet['A2'].value, 'Codigo')
+        codigos = [worksheet.cell(row=row, column=1).value for row in range(3, worksheet.max_row + 1)]
+        self.assertIn(ingreso_julio.codigo_equipo, codigos)
+        self.assertIn(ingreso_junio.codigo_equipo, codigos)
+
+        wrong_response = self.client.post(
+            reverse('econotec:admin_equipos_mes_borrar'),
+            {'ano': '2026', 'mes': '7', 'admin_password': 'mal'},
+        )
+
+        self.assertEqual(wrong_response.status_code, 302)
+        self.assertTrue(IngresoEquipo.objects.filter(pk=ingreso_julio.pk).exists())
+        self.assertTrue(SalidaEquipo.objects.filter(pk=salida_julio.pk).exists())
+
+        ok_response = self.client.post(
+            reverse('econotec:admin_equipos_mes_borrar'),
+            {'ano': '2026', 'mes': '7', 'admin_password': 'adminpass123'},
+        )
+
+        self.assertEqual(ok_response.status_code, 302)
+        self.assertFalse(IngresoEquipo.objects.filter(pk=ingreso_julio.pk).exists())
+        self.assertFalse(SalidaEquipo.objects.filter(pk=salida_julio.pk).exists())
+        self.assertFalse(SalidaEquipo.objects.filter(pk=salida_junio_julio.pk).exists())
+        self.assertFalse(Abono.objects.filter(pk=abono_julio.pk).exists())
+        self.assertTrue(IngresoEquipo.objects.filter(pk=ingreso_junio.pk).exists())
+        self.assertTrue(IngresoEquipo.objects.filter(pk=ingreso_agosto.pk).exists())
+        self.assertTrue(Abono.objects.filter(pk=abono_agosto.pk).exists())
 
     def test_admin_dashboard_muestra_horarios_y_avisos_laborales(self):
         self.client.force_login(self.admin)

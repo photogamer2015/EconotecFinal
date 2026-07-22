@@ -466,7 +466,8 @@ def ingreso_pdf(request, pk):
         ]
         tipos_fila2 = [
             ('celular', 'CELULAR'), ('tablet', 'TABLET'),
-            ('consola', 'CONSOLA'), ('otro', 'OTROS EQUIPOS'),
+            ('consola', 'CONSOLA'), ('mando', 'MANDO'),
+            ('otro', 'OTROS EQUIPOS'),
         ]
         _draw_checkbox_row(c, margen, y, tipos_fila1, marcado_key=ingreso.tipo_equipo)
         y -= 22
