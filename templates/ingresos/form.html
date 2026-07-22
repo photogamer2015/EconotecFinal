@@ -1233,6 +1233,53 @@
             marcarCanvasFirmado(false);
         }
 
+        function firmaRecortadaDataUrl() {
+            var ancho = canvas.width;
+            var alto = canvas.height;
+            var datos = ctx.getImageData(0, 0, ancho, alto).data;
+            var minX = ancho;
+            var minY = alto;
+            var maxX = 0;
+            var maxY = 0;
+            var encontrado = false;
+
+            for (var y = 0; y < alto; y += 1) {
+                for (var x = 0; x < ancho; x += 1) {
+                    var i = (y * ancho + x) * 4;
+                    var alpha = datos[i + 3];
+                    var noBlanco = datos[i] < 245 || datos[i + 1] < 245 || datos[i + 2] < 245;
+                    if (alpha > 0 && noBlanco) {
+                        encontrado = true;
+                        if (x < minX) minX = x;
+                        if (y < minY) minY = y;
+                        if (x > maxX) maxX = x;
+                        if (y > maxY) maxY = y;
+                    }
+                }
+            }
+
+            if (!encontrado) return canvas.toDataURL('image/png');
+
+            var margen = Math.max(10, Math.round(12 * ratio));
+            minX = Math.max(0, minX - margen);
+            minY = Math.max(0, minY - margen);
+            maxX = Math.min(ancho - 1, maxX + margen);
+            maxY = Math.min(alto - 1, maxY + margen);
+
+            var recorte = document.createElement('canvas');
+            recorte.width = Math.max(1, maxX - minX + 1);
+            recorte.height = Math.max(1, maxY - minY + 1);
+            var recorteCtx = recorte.getContext('2d');
+            recorteCtx.fillStyle = '#ffffff';
+            recorteCtx.fillRect(0, 0, recorte.width, recorte.height);
+            recorteCtx.drawImage(
+                canvas,
+                minX, minY, recorte.width, recorte.height,
+                0, 0, recorte.width, recorte.height
+            );
+            return recorte.toDataURL('image/png');
+        }
+
         function abrirModal() {
             if (decisionFirma() !== 'si') {
                 abrirAvisoFirma();
@@ -1294,7 +1341,7 @@
         if (btnAceptar) {
             btnAceptar.addEventListener('click', function () {
                 if (!tieneFirmaCanvas) return;
-                inputFirma.value = canvas.toDataURL('image/png');
+                inputFirma.value = firmaRecortadaDataUrl();
                 actualizarVistaFirma();
                 cerrarModal();
             });

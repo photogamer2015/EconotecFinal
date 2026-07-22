@@ -105,6 +105,11 @@
             <option value="pendiente" {% if valor_filtro == 'pendiente' %}selected{% endif %}>Pendiente de valor acordado</option>
             <option value="con_valor" {% if valor_filtro == 'con_valor' %}selected{% endif %}>Con valor acordado</option>
         </select>
+        <select name="firma" class="form-input" style="max-width:150px;">
+            <option value="">— Firma —</option>
+            <option value="con_firma" {% if firma_filtro == 'con_firma' %}selected{% endif %}>Con firma</option>
+            <option value="sin_firma" {% if firma_filtro == 'sin_firma' %}selected{% endif %}>Sin firma</option>
+        </select>
         <select name="tipo" class="form-input" style="max-width:140px;">
             <option value="">— Tipo —</option>
             {% for value, label in tipos %}

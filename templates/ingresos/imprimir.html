@@ -5,7 +5,7 @@
     <title>Solicitud de Ingreso {{ ingreso.codigo_equipo }} — Econotec</title>
     {% load static econotec_extras %}
     <style>
-        @page { size: A4; margin: 14mm 14mm 12mm 14mm; }
+        @page { size: A4; margin: 8mm 8mm 8mm 8mm; }
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
             font-family: 'Helvetica', 'Arial', sans-serif;
@@ -15,10 +15,10 @@
         }
         :root { --naranja: #f97618; }
         .sheet {
-            width: 210mm;
-            min-height: 290mm;
+            width: 194mm;
+            min-height: auto;
             margin: 0 auto;
-            padding: 6mm;
+            padding: 5mm;
             background: white;
             border: 1.5px solid var(--naranja);
             position: relative;
@@ -218,19 +218,21 @@
         }
 
         .nota-importante {
-            margin-top: 12px;
+            margin-top: 10px;
             border: 1.5px solid var(--naranja);
             border-radius: 6px;
-            padding: 8px 10px;
-            font-size: 9.5px;
-            line-height: 1.45;
+            padding: 6px 8px;
+            font-size: 8.7px;
+            line-height: 1.32;
             color: #333;
+            page-break-inside: avoid;
+            break-inside: avoid;
         }
         .nota-importante .nota-title {
             color: var(--naranja);
             font-weight: 800;
-            font-size: 11px;
-            margin-bottom: 4px;
+            font-size: 10px;
+            margin-bottom: 3px;
         }
         .nota-importante .highlighted {
             background: #fff3a0;
@@ -238,25 +240,29 @@
         }
 
         .signatures {
-            margin-top: 28px;
+            margin-top: 12px;
             display: grid;
             grid-template-columns: 1fr 1fr 1fr;
             gap: 16px;
             text-align: center;
+            page-break-inside: avoid;
+            break-inside: avoid;
         }
         .signature-slot {
-            min-height: 54px;
+            height: 34px;
+            min-height: 34px;
             display: flex;
             align-items: flex-end;
             justify-content: center;
             position: relative;
+            overflow: hidden;
         }
         .signature-img {
             max-width: 92%;
-            max-height: 48px;
+            max-height: 30px;
             object-fit: contain;
             display: block;
-            margin-bottom: -1px;
+            margin-bottom: -4px;
         }
         .signatures .sig-line {
             border-top: 1px solid #555;
@@ -269,7 +275,12 @@
         @media print {
             .actions-bar { display: none !important; }
             body { background: white; }
-            .sheet { border: 0; box-shadow: none; }
+            .sheet {
+                width: 100%;
+                padding: 0;
+                border: 0;
+                box-shadow: none;
+            }
         }
     </style>
 </head>

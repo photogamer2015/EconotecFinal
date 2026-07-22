@@ -984,6 +984,40 @@ class VentasTests(TestCase):
         self.assertContains(response, ingreso.codigo_equipo)
         self.assertContains(response, 'Yandri Guevará')
 
+    def test_lista_equipos_filtra_por_firma_cliente(self):
+        self.activar_sede_guayaquil()
+        ingreso_con_firma = self.crear_ingreso_reparacion(
+            marca='Epson',
+            modelo_serie='L3250 con firma',
+            firma_cliente=True,
+            firma_cliente_imagen=self.FIRMA_PNG_DATA_URI,
+        )
+        ingreso_sin_firma = self.crear_ingreso_reparacion(
+            marca='HP',
+            modelo_serie='Elitebook sin firma',
+            firma_cliente=False,
+            firma_cliente_imagen='',
+        )
+
+        response_con_firma = self.client.get(
+            reverse('econotec:ingreso_lista'),
+            {'firma': 'con_firma'},
+        )
+        response_sin_firma = self.client.get(
+            reverse('econotec:ingreso_lista'),
+            {'firma': 'sin_firma'},
+        )
+
+        self.assertEqual(response_con_firma.context['total'], 1)
+        self.assertContains(response_con_firma, ingreso_con_firma.codigo_equipo)
+        self.assertNotContains(response_con_firma, ingreso_sin_firma.codigo_equipo)
+        self.assertContains(response_con_firma, 'value="con_firma" selected')
+
+        self.assertEqual(response_sin_firma.context['total'], 1)
+        self.assertContains(response_sin_firma, ingreso_sin_firma.codigo_equipo)
+        self.assertNotContains(response_sin_firma, ingreso_con_firma.codigo_equipo)
+        self.assertContains(response_sin_firma, 'value="sin_firma" selected')
+
     def test_busqueda_lista_salidas_ignora_tildes_y_mayusculas(self):
         self.cliente_existente.nombres = 'Yandri Guevará'
         self.cliente_existente.save(update_fields=['nombres'])

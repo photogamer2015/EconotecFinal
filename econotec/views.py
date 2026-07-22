@@ -952,6 +952,7 @@ def ingreso_lista(request):
     estado = (request.GET.get('estado') or '').strip()
     tipo = (request.GET.get('tipo') or '').strip()
     valor = (request.GET.get('valor') or '').strip()
+    firma = (request.GET.get('firma') or '').strip()
 
     # Filtro por sede:
     # - Si el querystring trae explícitamente sede=todas → no filtrar
@@ -1008,6 +1009,11 @@ def ingreso_lista(request):
     elif valor == 'con_valor':
         qs = qs.filter(valor_acordado__isnull=False)
 
+    if firma == 'con_firma':
+        qs = qs.filter(firma_cliente=True).exclude(firma_cliente_imagen='')
+    elif firma == 'sin_firma':
+        qs = qs.filter(Q(firma_cliente=False) | Q(firma_cliente_imagen=''))
+
     tecnico_filtro = (request.GET.get('tecnico') or '').strip()
     registrador_filtro = (request.GET.get('registrador') or '').strip()
     asesor_filtro = (request.GET.get('asesor') or '').strip()
@@ -1051,6 +1057,7 @@ def ingreso_lista(request):
         'estado_filtro': estado,
         'tipo_filtro': tipo,
         'valor_filtro': valor,
+        'firma_filtro': firma,
         'sede_filtro': sede_filtro,
         'sede_sesion': sede_sesion,
         'tecnico_filtro': tecnico_filtro,

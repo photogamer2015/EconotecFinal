@@ -443,7 +443,7 @@ def ingreso_pdf(request, pk):
         # ── Firmas ──
         c.setStrokeColor(Color(0.4, 0.4, 0.4))
         if ingreso.firma_cliente and ingreso.firma_cliente_imagen:
-            _draw_signature_image(c, ingreso.firma_cliente_imagen, margen + 12, y + 3, 176, 44)
+            _draw_signature_image(c, ingreso.firma_cliente_imagen, margen + 12, y + 1, 176, 32)
         c.line(margen, y, margen + 200, y)
         c.line(margen + 310, y, margen + 510, y)
 
@@ -561,14 +561,15 @@ def ingreso_pdf(request, pk):
         y -= 6
         c.setStrokeColor(naranja)
         c.setLineWidth(1)
-        c.rect(margen, y - 110, 510, 110, stroke=1, fill=0)
+        nota_alto = 96
+        c.rect(margen, y - nota_alto, 510, nota_alto, stroke=1, fill=0)
 
         c.setFillColor(naranja)
         c.setFont('Helvetica-Bold', 10)
         c.drawString(margen + 6, y - 12, 'NOTA IMPORTANTE')
 
         c.setFillColor(black)
-        c.setFont('Helvetica', 7.5)
+        c.setFont('Helvetica', 7.1)
         nota_lines = [
             'El tiempo de revisión GRATUITA es de 24 a 96 horas, tiempo en el cual el cliente recibirá un mensaje con el',
             'informe técnico y la respectiva cotización. Si el presupuesto es menor a $40,00 se procederá a reparar el equipo.',
@@ -581,17 +582,17 @@ def ingreso_pdf(request, pk):
             'ADICIONAL: pasados 5 DÍAS a partir de que el técnico le indique que puede retirar el equipo, deberá cancelar',
             '$1,00 diario por concepto de bodegaje.',
         ]
-        cy = y - 26
+        cy = y - 23
         for line in nota_lines:
             c.drawString(margen + 6, cy, line)
-            cy -= 9
+            cy -= 8
 
         y -= 130
 
         # ── Firmas ──
         c.setStrokeColor(Color(0.4, 0.4, 0.4))
         if ingreso.firma_cliente and ingreso.firma_cliente_imagen:
-            _draw_signature_image(c, ingreso.firma_cliente_imagen, margen + 8, y + 3, 124, 44)
+            _draw_signature_image(c, ingreso.firma_cliente_imagen, margen + 8, y + 1, 124, 28)
         c.line(margen, y, margen + 140, y)
         c.line(margen + 180, y, margen + 320, y)
         c.line(margen + 360, y, margen + 510, y)
