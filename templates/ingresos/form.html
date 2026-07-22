@@ -356,6 +356,223 @@
         background: rgba(255, 255, 255, 0.06) !important;
         border-color: rgba(255, 255, 255, 0.14) !important;
     }
+
+    .firma-panel {
+        display: grid;
+        gap: 12px;
+        padding: 16px;
+        border: 1px solid #ead8d1;
+        border-radius: 10px;
+        background: #fff8f3;
+    }
+
+    .firma-label {
+        color: #6b7280;
+        font-size: 13px;
+        font-weight: 900;
+    }
+
+    .firma-opciones {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px;
+    }
+
+    .firma-opcion {
+        min-height: 46px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 12px;
+        border: 1.5px solid #d9d9d9;
+        border-radius: 8px;
+        background: var(--card-bg);
+        color: var(--text-color);
+        font-size: 13px;
+        font-weight: 900;
+        cursor: pointer;
+        transition: border-color .18s, background .18s, box-shadow .18s;
+    }
+
+    .firma-opcion:hover {
+        border-color: var(--primary);
+        background: rgba(249, 118, 24, 0.06);
+    }
+
+    .firma-opcion input {
+        width: 17px;
+        height: 17px;
+        margin: 0;
+        accent-color: var(--primary);
+    }
+
+    .firma-opcion.is-active {
+        border-color: var(--primary);
+        background: rgba(249, 118, 24, 0.10);
+        box-shadow: 0 0 0 3px rgba(249, 118, 24, 0.10);
+    }
+
+    .firma-controls {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .firma-preview {
+        display: none;
+        width: min(360px, 100%);
+        min-height: 90px;
+        padding: 8px 10px;
+        border: 1px solid #e5e7eb;
+        border-radius: 8px;
+        background: white;
+    }
+
+    .firma-preview img {
+        display: block;
+        max-width: 100%;
+        max-height: 86px;
+        object-fit: contain;
+    }
+
+    .firma-status {
+        color: #6b7280;
+        font-size: 12px;
+        font-weight: 800;
+    }
+
+    #btn-abrir-firma.firma-no-disponible {
+        background: #d1d5db;
+        color: #3f3f46;
+        box-shadow: none;
+        cursor: not-allowed;
+    }
+
+    #btn-abrir-firma.firma-lista {
+        background: #b45309;
+        color: white;
+        border-color: #92400e;
+        box-shadow: 0 6px 14px rgba(180, 83, 9, 0.24);
+        cursor: pointer;
+    }
+
+    #btn-abrir-firma.firma-lista:hover {
+        background: #92400e;
+    }
+
+    .firma-modal {
+        position: fixed;
+        inset: 0;
+        z-index: 10080;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        padding: 16px;
+        background: rgba(17, 24, 39, 0.68);
+    }
+
+    .firma-modal.show {
+        display: flex;
+    }
+
+    .firma-card {
+        width: min(760px, 96vw);
+        background: var(--card-bg);
+        color: var(--text-color);
+        border-radius: 14px;
+        box-shadow: 0 24px 70px rgba(0,0,0,0.32);
+        overflow: hidden;
+    }
+
+    .firma-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        padding: 14px 16px;
+        background: linear-gradient(135deg, #f97618, #c75b12);
+        color: white;
+    }
+
+    .firma-head h3 {
+        margin: 0;
+        font-size: 16px;
+        font-weight: 900;
+    }
+
+    .firma-aviso-card {
+        width: min(440px, 94vw);
+    }
+
+    .firma-aviso-texto {
+        margin: 0;
+        color: var(--text-color);
+        font-size: 15px;
+        font-weight: 800;
+        line-height: 1.45;
+    }
+
+    .firma-body {
+        padding: 16px;
+    }
+
+    .firma-instruccion {
+        margin: 0 0 10px;
+        color: #6b7280;
+        font-size: 13px;
+        font-weight: 800;
+    }
+
+    .firma-canvas-wrap {
+        border: 2px solid #d1d5db;
+        border-radius: 12px;
+        background: white;
+        overflow: hidden;
+    }
+
+    #firma-canvas {
+        display: block;
+        width: 100%;
+        height: min(280px, 48vh);
+        touch-action: none;
+        cursor: crosshair;
+    }
+
+    .firma-actions {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+        gap: 10px;
+        margin-top: 14px;
+    }
+
+    .firma-btn {
+        border: 0;
+        border-radius: 9px;
+        padding: 10px 14px;
+        font-family: inherit;
+        font-size: 13px;
+        font-weight: 900;
+        cursor: pointer;
+    }
+
+    .firma-btn.cancelar { background: #e5e7eb; color: #222; }
+    .firma-btn.reintentar { display: none; background: #374151; color: white; }
+    .firma-btn.aceptar { background: var(--primary); color: white; }
+    .firma-btn.aceptar:disabled {
+        background: #d1d5db;
+        color: #6b7280;
+        cursor: not-allowed;
+    }
+
+    [data-theme="dark"] .firma-panel,
+    [data-theme="dark"] .firma-opcion,
+    [data-theme="dark"] .firma-preview,
+    [data-theme="dark"] .firma-card {
+        border-color: rgba(255, 255, 255, 0.14);
+        background: var(--card-bg);
+    }
 </style>
 
 <div class="crumb">
@@ -807,6 +1024,35 @@
         </div>
     </div>
 
+    <!-- Firma del cliente -->
+    <div class="form-section">
+        <h3>Firma del Cliente</h3>
+        <div class="firma-panel">
+            {{ ing_form.firma_cliente }}
+            {{ ing_form.firma_cliente_imagen }}
+            <div>
+                <div class="firma-label">Seleccione si el cliente firma *</div>
+                <div class="firma-opciones" id="firma-cliente-opciones">
+                    {% for radio in ing_form.firma_cliente_opcion %}
+                        <label class="firma-opcion" data-firma-opcion="{{ radio.data.value }}">
+                            {{ radio.tag }}
+                            <span>{{ radio.choice_label }}</span>
+                        </label>
+                    {% endfor %}
+                </div>
+            </div>
+            {{ ing_form.firma_cliente_opcion.errors }}
+            {{ ing_form.firma_cliente_imagen.errors }}
+            <div class="firma-controls">
+                <button type="button" class="btn btn-secondary firma-no-disponible" id="btn-abrir-firma" aria-disabled="true">Firmar ahora</button>
+                <span class="firma-status" id="firma-status">Selecciona Sí o No para continuar.</span>
+            </div>
+            <div class="firma-preview" id="firma-preview" aria-live="polite">
+                <img id="firma-preview-img" alt="Firma del cliente capturada">
+            </div>
+        </div>
+    </div>
+
     <div class="equipo-duplicado-alerta compacta" data-equipo-duplicado-alerta role="alert" aria-live="assertive">
         <span class="titulo">ESTE EQUIPO YA SE ENCUENTRA REGISTRADO, POR FAVOR VERIFICA EN LA LISTA DE EQUIPOS.</span>
         <span class="detalle" data-equipo-duplicado-detalle></span>
@@ -820,7 +1066,276 @@
     </div>
 </form>
 
+<div class="firma-modal" id="firma-modal" aria-hidden="true">
+    <div class="firma-card" role="dialog" aria-modal="true" aria-labelledby="firma-modal-title">
+        <div class="firma-head">
+            <h3 id="firma-modal-title">Firma del cliente</h3>
+        </div>
+        <div class="firma-body">
+            <p class="firma-instruccion">Firme dentro del recuadro. Funciona con trackpad, mouse, pantalla táctil o pluma.</p>
+            <div class="firma-canvas-wrap">
+                <canvas id="firma-canvas"></canvas>
+            </div>
+            <div class="firma-actions">
+                <button type="button" class="firma-btn cancelar" id="firma-cancelar">Cancelar</button>
+                <button type="button" class="firma-btn reintentar" id="firma-reintentar">Reintentar</button>
+                <button type="button" class="firma-btn aceptar" id="firma-aceptar" disabled>Aceptar firma</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="firma-modal" id="firma-aviso-modal" aria-hidden="true">
+    <div class="firma-card firma-aviso-card" role="dialog" aria-modal="true" aria-labelledby="firma-aviso-title">
+        <div class="firma-head">
+            <h3 id="firma-aviso-title">Firma del cliente</h3>
+        </div>
+        <div class="firma-body">
+            <p class="firma-aviso-texto">Deberías poner Firma del cliente: Sí para poder firmar.</p>
+            <div class="firma-actions">
+                <button type="button" class="firma-btn aceptar" id="firma-aviso-ok">Entendido</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
+    // Firma digital opcional del cliente: mouse, trackpad, tactil o pluma.
+    (function () {
+        var modal = document.getElementById('firma-modal');
+        var avisoModal = document.getElementById('firma-aviso-modal');
+        var canvas = document.getElementById('firma-canvas');
+        var btnAbrir = document.getElementById('btn-abrir-firma');
+        var btnCancelar = document.getElementById('firma-cancelar');
+        var btnAceptar = document.getElementById('firma-aceptar');
+        var btnReintentar = document.getElementById('firma-reintentar');
+        var btnAvisoOk = document.getElementById('firma-aviso-ok');
+        var inputFirma = document.getElementById('id_firma_cliente_imagen');
+        var inputFirmaFlag = document.getElementById('id_firma_cliente_check');
+        var radiosFirma = Array.prototype.slice.call(document.querySelectorAll('input[name="ing-firma_cliente_opcion"]'));
+        var status = document.getElementById('firma-status');
+        var preview = document.getElementById('firma-preview');
+        var previewImg = document.getElementById('firma-preview-img');
+
+        if (!modal || !canvas || !inputFirma || !radiosFirma.length) return;
+
+        var ctx = canvas.getContext('2d');
+        var dibujando = false;
+        var tieneFirmaCanvas = false;
+        var ratio = 1;
+
+        function ajustarCanvas() {
+            var rect = canvas.getBoundingClientRect();
+            ratio = window.devicePixelRatio || 1;
+            canvas.width = Math.max(1, Math.floor(rect.width * ratio));
+            canvas.height = Math.max(1, Math.floor(rect.height * ratio));
+            ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, rect.width, rect.height);
+            ctx.strokeStyle = '#111827';
+            ctx.lineWidth = 2.4;
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            if (inputFirma.value) {
+                var img = new Image();
+                img.onload = function () {
+                    ctx.drawImage(img, 0, 0, rect.width, rect.height);
+                    marcarCanvasFirmado(true);
+                };
+                img.src = inputFirma.value;
+            } else {
+                marcarCanvasFirmado(false);
+            }
+        }
+
+        function posicion(event) {
+            var rect = canvas.getBoundingClientRect();
+            return {
+                x: event.clientX - rect.left,
+                y: event.clientY - rect.top
+            };
+        }
+
+        function marcarCanvasFirmado(valor) {
+            tieneFirmaCanvas = !!valor;
+            if (btnAceptar) btnAceptar.disabled = !tieneFirmaCanvas;
+            if (btnReintentar) btnReintentar.style.display = tieneFirmaCanvas ? 'inline-flex' : 'none';
+        }
+
+        function decisionFirma() {
+            for (var i = 0; i < radiosFirma.length; i += 1) {
+                if (radiosFirma[i].checked) return radiosFirma[i].value;
+            }
+            return '';
+        }
+
+        function marcarOpcionActiva() {
+            radiosFirma.forEach(function (radio) {
+                var label = radio.closest('.firma-opcion');
+                if (label) label.classList.toggle('is-active', radio.checked);
+            });
+        }
+
+        function setValidezFirma(mensaje) {
+            radiosFirma.forEach(function (radio) {
+                radio.setCustomValidity('');
+            });
+            if (mensaje && radiosFirma[0]) {
+                radiosFirma[0].setCustomValidity(mensaje);
+            }
+        }
+
+        function actualizarVistaFirma() {
+            var decision = decisionFirma();
+            var firmada = !!inputFirma.value;
+            if (inputFirmaFlag) inputFirmaFlag.value = firmada ? 'true' : 'false';
+            marcarOpcionActiva();
+
+            if (decision === 'no' && firmada) {
+                inputFirma.value = '';
+                firmada = false;
+                if (inputFirmaFlag) inputFirmaFlag.value = 'false';
+            }
+
+            if (btnAbrir) {
+                var puedeFirmar = decision === 'si';
+                btnAbrir.classList.toggle('firma-no-disponible', !puedeFirmar);
+                btnAbrir.classList.toggle('firma-lista', puedeFirmar);
+                btnAbrir.setAttribute('aria-disabled', puedeFirmar ? 'false' : 'true');
+            }
+
+            if (status) {
+                if (!decision) {
+                    status.textContent = 'Selecciona Sí o No para continuar.';
+                    setValidezFirma('');
+                } else if (decision === 'no') {
+                    status.textContent = 'No firma seleccionado. Se imprimirá la línea en blanco.';
+                    setValidezFirma('');
+                } else if (firmada) {
+                    status.textContent = 'Firma capturada. Se imprimirá en la hoja de ingreso.';
+                    setValidezFirma('');
+                } else {
+                    status.textContent = 'Firma Sí seleccionado. Pulsa Firmar ahora para capturarla.';
+                    setValidezFirma('Captura la firma del cliente o selecciona No firma.');
+                }
+            }
+            if (preview && previewImg) {
+                preview.style.display = firmada ? 'block' : 'none';
+                if (firmada) previewImg.src = inputFirma.value;
+                else previewImg.removeAttribute('src');
+            }
+            if (window.__checkRequired) window.__checkRequired();
+        }
+
+        function limpiarCanvas() {
+            inputFirma.value = '';
+            ajustarCanvas();
+            marcarCanvasFirmado(false);
+        }
+
+        function abrirModal() {
+            if (decisionFirma() !== 'si') {
+                abrirAvisoFirma();
+                return;
+            }
+            modal.classList.add('show');
+            modal.setAttribute('aria-hidden', 'false');
+            window.setTimeout(ajustarCanvas, 50);
+        }
+
+        function cerrarModal() {
+            modal.classList.remove('show');
+            modal.setAttribute('aria-hidden', 'true');
+            actualizarVistaFirma();
+        }
+
+        function abrirAvisoFirma() {
+            if (!avisoModal) return;
+            avisoModal.classList.add('show');
+            avisoModal.setAttribute('aria-hidden', 'false');
+        }
+
+        function cerrarAvisoFirma() {
+            if (!avisoModal) return;
+            avisoModal.classList.remove('show');
+            avisoModal.setAttribute('aria-hidden', 'true');
+        }
+
+        canvas.addEventListener('pointerdown', function (event) {
+            event.preventDefault();
+            canvas.setPointerCapture(event.pointerId);
+            dibujando = true;
+            var p = posicion(event);
+            ctx.beginPath();
+            ctx.moveTo(p.x, p.y);
+        });
+
+        canvas.addEventListener('pointermove', function (event) {
+            if (!dibujando) return;
+            event.preventDefault();
+            var p = posicion(event);
+            ctx.lineTo(p.x, p.y);
+            ctx.stroke();
+            marcarCanvasFirmado(true);
+        });
+
+        ['pointerup', 'pointercancel', 'pointerleave'].forEach(function (nombreEvento) {
+            canvas.addEventListener(nombreEvento, function (event) {
+                if (!dibujando) return;
+                event.preventDefault();
+                dibujando = false;
+            });
+        });
+
+        if (btnAbrir) btnAbrir.addEventListener('click', abrirModal);
+        if (btnCancelar) btnCancelar.addEventListener('click', cerrarModal);
+        if (btnReintentar) btnReintentar.addEventListener('click', limpiarCanvas);
+        if (btnAvisoOk) btnAvisoOk.addEventListener('click', cerrarAvisoFirma);
+        if (btnAceptar) {
+            btnAceptar.addEventListener('click', function () {
+                if (!tieneFirmaCanvas) return;
+                inputFirma.value = canvas.toDataURL('image/png');
+                actualizarVistaFirma();
+                cerrarModal();
+            });
+        }
+        radiosFirma.forEach(function (radio) {
+            radio.addEventListener('change', function () {
+                if (decisionFirma() === 'no') {
+                    inputFirma.value = '';
+                }
+                actualizarVistaFirma();
+            });
+        });
+        if (avisoModal) {
+            avisoModal.addEventListener('click', function (event) {
+                if (event.target === avisoModal) cerrarAvisoFirma();
+            });
+        }
+        modal.addEventListener('click', function (event) {
+            if (event.target === modal) cerrarModal();
+        });
+        document.addEventListener('keydown', function (event) {
+            if (event.key !== 'Escape') return;
+            cerrarAvisoFirma();
+            if (modal.classList.contains('show')) cerrarModal();
+        });
+        var formFirma = document.getElementById('ingreso-form');
+        if (formFirma) {
+            formFirma.addEventListener('submit', function () {
+                if (decisionFirma() === 'no') {
+                    inputFirma.value = '';
+                    actualizarVistaFirma();
+                }
+            });
+        }
+        window.addEventListener('resize', function () {
+            if (modal.classList.contains('show')) ajustarCanvas();
+        });
+
+        actualizarVistaFirma();
+    })();
+
     // Mostrar/ocultar los sub-estados + hint de salida automática
     (function () {
         var selEstado = document.querySelector('[name="ing-estado"]');

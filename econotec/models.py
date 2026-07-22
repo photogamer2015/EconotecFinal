@@ -11,6 +11,7 @@ Mapea fielmente la hoja "SOLICITUD DE INGRESO" de Econotec:
 from datetime import date
 from decimal import Decimal, ROUND_HALF_UP
 from django.db import models
+from django.utils import timezone
 
 
 # Helper común para normalizar Decimal a 2 decimales y evitar que se vea
@@ -220,6 +221,16 @@ class IngresoEquipo(models.Model):
     problema_reportado = models.TextField(
         verbose_name='Problema reportado',
         help_text='Lo que indica el cliente al recibir el equipo.'
+    )
+    firma_cliente = models.BooleanField(
+        default=False,
+        verbose_name='Firma del cliente',
+        help_text='Indica si el cliente firmó digitalmente la solicitud de ingreso.',
+    )
+    firma_cliente_imagen = models.TextField(
+        blank=True,
+        verbose_name='Imagen de firma del cliente',
+        help_text='Firma digital capturada en formato PNG/base64.',
     )
     reporte_tecnico = models.TextField(
         blank=True,
@@ -1634,6 +1645,84 @@ class UsuarioActividad(models.Model):
 
     def __str__(self):
         return f'Actividad de {self.user.username}'
+
+
+class BitacoraTecnico(models.Model):
+    """
+    Registro permanente de acciones hechas por cada usuario en el sistema.
+
+    La bitacora diaria se genera desde esta tabla para que no dependa de textos
+    editables en pantalla ni se pierda cuando se cierre el modal.
+    """
+    TIPO_ACCION = [
+        ('login', 'Inicio de sesión'),
+        ('logout', 'Cierre de sesión'),
+        ('ingreso', 'Ingreso de equipo'),
+        ('ingreso_editado', 'Edición de equipo'),
+        ('estado', 'Cambio de estado'),
+        ('reporte', 'Reporte técnico'),
+        ('valor_pendiente', 'Valor acordado pendiente'),
+        ('salida', 'Salida de equipo'),
+        ('salida_editada', 'Edición de salida'),
+        ('venta_producto', 'Venta de producto'),
+        ('venta_editada', 'Edición de venta'),
+        ('abono', 'Abono'),
+        ('abono_editado', 'Edición de abono'),
+        ('eliminacion', 'Eliminación'),
+        ('otro', 'Otra acción'),
+    ]
+
+    user = models.ForeignKey(
+        'auth.User',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='bitacora_tecnico',
+    )
+    usuario_nombre = models.CharField(max_length=150, blank=True)
+    momento = models.DateTimeField(default=timezone.now, db_index=True)
+    tipo = models.CharField(max_length=40, choices=TIPO_ACCION, default='otro')
+    texto = models.TextField()
+    codigo = models.CharField(max_length=30, blank=True)
+    ingreso = models.ForeignKey(
+        IngresoEquipo,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='eventos_bitacora',
+    )
+    salida = models.ForeignKey(
+        SalidaEquipo,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='eventos_bitacora',
+    )
+    abono = models.ForeignKey(
+        Abono,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='eventos_bitacora',
+    )
+    dedupe_key = models.CharField(max_length=200, unique=True, null=True, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+    creado = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'Bitácora de técnico'
+        verbose_name_plural = 'Bitácora de técnicos'
+        ordering = ['momento', 'pk']
+        indexes = [
+            models.Index(fields=['user', 'momento']),
+            models.Index(fields=['tipo', 'momento']),
+            models.Index(fields=['codigo']),
+        ]
+
+    def __str__(self):
+        usuario = self.usuario_nombre or (self.user.username if self.user_id else 'Usuario')
+        local = timezone.localtime(self.momento)
+        return f'{local.strftime("%d/%m/%Y %H:%M")} — {usuario}: {self.texto[:80]}'
 
 
 # ─────────────────────────────────────────────────────────

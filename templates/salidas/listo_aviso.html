@@ -132,7 +132,13 @@
 <div class="exito-wrap">
     <div class="exito-card">
         <div class="icono">✅</div>
-        <h2>¡Listo equipo reparado para su salida!</h2>
+        <h2>
+            {% if salida.estado_reparacion == 'retirado' or salida.cliente_ya_retiro %}
+                ¡Equipo retirado por el cliente!
+            {% else %}
+                ¡Listo equipo reparado para su salida!
+            {% endif %}
+        </h2>
         <p class="subt">Equipo {{ ingreso.codigo_equipo }}</p>
 
         <div class="resumen">
@@ -154,12 +160,21 @@
         {% if wa_link %}
             <div class="wa-card">
                 <h3>
-                    💬 Avísale al cliente que su equipo está listo
+                    {% if salida.estado_reparacion == 'retirado' or salida.cliente_ya_retiro %}
+                        💬 Enviar confirmación de retiro al cliente
+                    {% else %}
+                        💬 Avísale al cliente que su equipo está listo
+                    {% endif %}
                     <span class="tel-pill">📱 {{ ingreso.cliente.whatsapp }}</span>
                 </h3>
                 <p>
-                    Tenemos el WhatsApp del cliente registrado. Haz clic abajo para abrir WhatsApp
-                    con un mensaje profesional ya redactado, dirigido al número del cliente.
+                    {% if salida.estado_reparacion == 'retirado' or salida.cliente_ya_retiro %}
+                        Tenemos el WhatsApp del cliente registrado. Haz clic abajo para abrir WhatsApp
+                        con una confirmación profesional de entrega y agradecimiento.
+                    {% else %}
+                        Tenemos el WhatsApp del cliente registrado. Haz clic abajo para abrir WhatsApp
+                        con un mensaje profesional ya redactado, dirigido al número del cliente.
+                    {% endif %}
                 </p>
                 <a href="{{ wa_link }}" target="_blank" rel="noopener" class="btn-wa-grande">
                     💬 Enviar WhatsApp a {{ ingreso.cliente.nombres|truncatechars:25 }}

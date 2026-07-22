@@ -454,12 +454,71 @@
         .perfil-mobile-fill { width: 0; height: 100%; border-radius: 999px; background: var(--naranja); transition: width 0.35s ease; }
         .perfil-mobile-progress-text { margin-top: 7px; color: var(--muted); font-size: 12px; font-weight: 700; text-align: center; }
         .perfil-mobile-links { display: grid; gap: 8px; margin-top: 12px; }
-        .perfil-mobile-link {
-            display: flex; align-items: center; justify-content: space-between; gap: 10px;
-            text-decoration: none; color: var(--text); border: 1px solid var(--border);
-            border-radius: 12px; padding: 12px; font-size: 13px; font-weight: 800;
-        }
-        .perfil-mobile-state { padding: 18px; color: var(--muted); font-weight: 800; text-align: center; }
+	        .perfil-mobile-link {
+	            display: flex; align-items: center; justify-content: space-between; gap: 10px;
+	            text-decoration: none; color: var(--text); border: 1px solid var(--border);
+	            border-radius: 12px; padding: 12px; font-size: 13px; font-weight: 800;
+	        }
+	        .perfil-mobile-link-button {
+	            width: 100%;
+	            background: transparent;
+	            font-family: inherit;
+	            cursor: pointer;
+	        }
+	        .perfil-mobile-link.is-empty {
+	            color: var(--muted);
+	            background: rgba(107, 114, 128, 0.10);
+	        }
+	        .perfil-mobile-state { padding: 18px; color: var(--muted); font-weight: 800; text-align: center; }
+
+	        .bitacora-mobile-modal {
+	            position: fixed; inset: 0; z-index: 190; display: none;
+	            align-items: center; justify-content: center; padding: 14px;
+	            background: rgba(17, 24, 39, 0.62);
+	        }
+	        .bitacora-mobile-modal.show { display: flex; }
+	        .bitacora-mobile-card {
+	            width: 100%; max-width: 460px; background: var(--card);
+	            border-radius: 16px; border: 1px solid var(--border);
+	            box-shadow: 0 24px 70px rgba(0,0,0,0.30); overflow: hidden;
+	        }
+	        .bitacora-mobile-head {
+	            display: flex; align-items: center; justify-content: space-between;
+	            gap: 10px; padding: 14px 15px; color: #fff;
+	            background: linear-gradient(135deg, var(--naranja), #c75b12);
+	        }
+	        .bitacora-mobile-head h3 { margin: 0; font-size: 16px; font-weight: 900; }
+	        .bitacora-mobile-close {
+	            width: 32px; height: 32px; border: 0; border-radius: 50%;
+	            background: rgba(255,255,255,0.2); color: #fff; font-size: 22px;
+	        }
+	        .bitacora-mobile-body { padding: 14px; }
+	        .bitacora-mobile-help {
+	            margin: 0 0 10px; color: var(--muted); font-size: 12px; line-height: 1.45;
+	        }
+	        .bitacora-mobile-fixed-header {
+	            margin: 0; border: 1px solid var(--border); border-bottom: 0;
+	            border-radius: 12px 12px 0 0; background: rgba(249, 118, 24, 0.08);
+	            color: var(--text); padding: 12px;
+	            font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+	            font-size: 13px; line-height: 1.5; white-space: pre-wrap;
+	        }
+	        .bitacora-mobile-text {
+	            width: 100%; min-height: 220px; resize: vertical;
+	            border: 1px solid var(--border); border-radius: 0 0 12px 12px;
+	            background: var(--card); color: var(--text); padding: 12px;
+	            font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+	            font-size: 13px; line-height: 1.5;
+	        }
+	        .bitacora-mobile-actions {
+	            display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px;
+	        }
+	        .bitacora-mobile-btn {
+	            border: 0; border-radius: 10px; padding: 11px 10px;
+	            color: #fff; font-family: inherit; font-size: 13px; font-weight: 900;
+	        }
+	        .bitacora-mobile-btn.copy { background: #374151; }
+	        .bitacora-mobile-btn.wa { background: #16a34a; }
 
         .toast {
             position: fixed; top: 70px; left: 50%; transform: translateX(-50%);
@@ -649,15 +708,35 @@
                     <a href="{% url 'econotec:ingreso_lista' %}?tecnico={{ request.user.id }}" class="perfil-mobile-link">
                         <span>📥 Ver mis equipos recibidos</span><span>›</span>
                     </a>
-                    <a href="{% url 'econotec:salida_lista' %}?tecnico_salida={{ request.user.id }}" class="perfil-mobile-link">
-                        <span>🔧 Ver mis equipos reparados</span><span>›</span>
-                    </a>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-{% endif %}
+	                    <a href="{% url 'econotec:salida_lista' %}?tecnico_salida={{ request.user.id }}" class="perfil-mobile-link">
+	                        <span>🔧 Ver mis equipos reparados</span><span>›</span>
+	                    </a>
+	                    <button type="button" id="btn-bitacora-mobile" class="perfil-mobile-link perfil-mobile-link-button">
+	                        <span id="btn-bitacora-mobile-text">📝 Generar bitácora</span><span>›</span>
+	                    </button>
+	                </div>
+	            </div>
+	        </div>
+	    </div>
+	</div>
+	<div id="bitacora-mobile-modal" class="bitacora-mobile-modal" aria-hidden="true">
+	    <div class="bitacora-mobile-card" role="dialog" aria-modal="true" aria-labelledby="bitacora-mobile-title">
+	        <div class="bitacora-mobile-head">
+	            <h3 id="bitacora-mobile-title">Bitácora del día</h3>
+	            <button type="button" class="bitacora-mobile-close" id="bitacora-mobile-close" aria-label="Cerrar">×</button>
+	        </div>
+	        <div class="bitacora-mobile-body">
+	            <p class="bitacora-mobile-help">Puedes editar las líneas antes de copiarlo o enviarlo por WhatsApp.</p>
+	            <pre id="bitacora-mobile-encabezado" class="bitacora-mobile-fixed-header"></pre>
+	            <textarea id="bitacora-mobile-text" class="bitacora-mobile-text" spellcheck="true"></textarea>
+	            <div class="bitacora-mobile-actions">
+	                <button type="button" id="bitacora-mobile-copy" class="bitacora-mobile-btn copy">Copiar TXT</button>
+	                <button type="button" id="bitacora-mobile-wa" class="bitacora-mobile-btn wa">WhatsApp</button>
+	            </div>
+	        </div>
+	    </div>
+	</div>
+	{% endif %}
 
 
 
@@ -881,10 +960,18 @@
         const closeBtn = document.getElementById('perfil-mobile-close');
         const loading = document.getElementById('perfil-mobile-loading');
         const content = document.getElementById('perfil-mobile-content');
-        const head = document.getElementById('perfil-mobile-head');
-        const fill = document.getElementById('perfil-mobile-fill');
-        const progressText = document.getElementById('perfil-mobile-progress-text');
-        let cargado = false;
+	        const head = document.getElementById('perfil-mobile-head');
+	        const fill = document.getElementById('perfil-mobile-fill');
+	        const progressText = document.getElementById('perfil-mobile-progress-text');
+	        const bitacoraBtn = document.getElementById('btn-bitacora-mobile');
+	        const bitacoraBtnText = document.getElementById('btn-bitacora-mobile-text');
+	        const bitacoraModal = document.getElementById('bitacora-mobile-modal');
+	        const bitacoraEncabezado = document.getElementById('bitacora-mobile-encabezado');
+	        const bitacoraText = document.getElementById('bitacora-mobile-text');
+	        const bitacoraClose = document.getElementById('bitacora-mobile-close');
+	        const bitacoraCopy = document.getElementById('bitacora-mobile-copy');
+	        const bitacoraWa = document.getElementById('bitacora-mobile-wa');
+	        let cargado = false;
 
         if (!btn || !modal) return;
 
@@ -893,7 +980,7 @@
             modal.setAttribute('aria-hidden', abierto ? 'false' : 'true');
         }
 
-        function porcentajeProgreso(data) {
+	        function porcentajeProgreso(data) {
             if (!data.proximo) return 100;
             let previo = 0;
             if (data.total >= 4000) previo = 3999;
@@ -904,7 +991,50 @@
             const actual = data.total - previo;
             const necesario = data.proximo - previo;
             return Math.max(0, Math.min(100, (actual / necesario) * 100));
-        }
+	        }
+
+	        function mostrarAviso(texto, tipo) {
+	            const aviso = document.createElement('div');
+	            aviso.className = 'toast show ' + (tipo || 'info');
+	            aviso.textContent = texto;
+	            document.body.appendChild(aviso);
+	            setTimeout(function () {
+	                aviso.classList.remove('show');
+	                setTimeout(function () { aviso.remove(); }, 350);
+	            }, 3600);
+	        }
+
+	        function actualizarBotonBitacora(total) {
+	            if (!bitacoraBtn || !bitacoraBtnText) return;
+	            if (total > 0) {
+	                bitacoraBtn.classList.remove('is-empty');
+	                bitacoraBtnText.textContent = '📝 Generar bitácora (' + total + ')';
+	            } else {
+	                bitacoraBtn.classList.add('is-empty');
+	                bitacoraBtnText.textContent = 'No ha hecho nada aún';
+	            }
+	        }
+
+	        function setBitacoraModal(abierto) {
+	            if (!bitacoraModal) return;
+	            bitacoraModal.classList.toggle('show', abierto);
+	            bitacoraModal.setAttribute('aria-hidden', abierto ? 'false' : 'true');
+	        }
+
+	        function cargarTextoBitacora(data) {
+	            data = data || {};
+	            const encabezado = data.encabezado || '';
+	            const detalle = data.detalle || '';
+	            if (bitacoraEncabezado) bitacoraEncabezado.textContent = encabezado;
+	            if (bitacoraText) bitacoraText.value = detalle;
+	        }
+
+	        function textoBitacoraActual() {
+	            const encabezado = bitacoraEncabezado ? bitacoraEncabezado.textContent.trim() : '';
+	            const detalle = bitacoraText ? bitacoraText.value.trim() : '';
+	            if (encabezado && detalle) return encabezado + '\n\n' + detalle;
+	            return encabezado || detalle;
+	        }
 
         function cargarPerfil() {
             if (cargado) return;
@@ -925,14 +1055,15 @@
                         fill.style.width = porcentajeProgreso(data) + '%';
                         if (data.color) fill.style.background = data.color;
                     }
-                    if (progressText) {
-                        progressText.textContent = data.proximo
-                            ? data.total + ' / ' + data.proximo + ' para el siguiente nivel'
-                            : data.total + ' operaciones (Nivel máximo)';
-                    }
-                    if (loading) loading.style.display = 'none';
-                    if (content) content.style.display = '';
-                })
+	                    if (progressText) {
+	                        progressText.textContent = data.proximo
+	                            ? data.total + ' / ' + data.proximo + ' para el siguiente nivel'
+	                            : data.total + ' operaciones (Nivel máximo)';
+	                    }
+	                    actualizarBotonBitacora(data.bitacora_total || 0);
+	                    if (loading) loading.style.display = 'none';
+	                    if (content) content.style.display = '';
+	                })
                 .catch(function () {
                     if (loading) loading.textContent = 'No se pudo cargar el perfil. Intenta de nuevo.';
                 });
@@ -942,10 +1073,76 @@
             setModal(true);
             cargarPerfil();
         });
-        if (closeBtn) closeBtn.addEventListener('click', function () { setModal(false); });
-        modal.addEventListener('click', function (event) {
-            if (event.target === modal) setModal(false);
-        });
+	        if (closeBtn) closeBtn.addEventListener('click', function () { setModal(false); });
+	        if (bitacoraBtn) {
+	            bitacoraBtn.addEventListener('click', function () {
+	                bitacoraBtn.disabled = true;
+	                if (bitacoraBtnText) bitacoraBtnText.textContent = 'Generando bitácora...';
+	                fetch("{% url 'econotec:api_bitacora_hoy' %}", {
+	                    headers: { 'X-Requested-With': 'XMLHttpRequest' },
+	                    credentials: 'same-origin'
+	                })
+	                    .then(function (r) { return r.json(); })
+	                    .then(function (data) {
+	                        actualizarBotonBitacora(data.total || 0);
+	                        if (!data.tiene_datos) {
+	                            cargarTextoBitacora(data);
+	                            setBitacoraModal(true);
+	                            return;
+	                        }
+	                        cargarTextoBitacora(data);
+	                        setBitacoraModal(true);
+	                    })
+	                    .catch(function () {
+	                        mostrarAviso('No se pudo generar la bitácora.', 'error');
+	                    })
+	                    .finally(function () {
+	                        bitacoraBtn.disabled = false;
+	                    });
+	            });
+	        }
+	        if (bitacoraClose) bitacoraClose.addEventListener('click', function () { setBitacoraModal(false); });
+	        if (bitacoraModal) {
+	            bitacoraModal.addEventListener('click', function (event) {
+	                if (event.target === bitacoraModal) setBitacoraModal(false);
+	            });
+	        }
+	        if (bitacoraCopy) {
+	            bitacoraCopy.addEventListener('click', function () {
+	                const texto = textoBitacoraActual();
+	                if (!texto) {
+	                    mostrarAviso('No ha hecho nada aún. La bitácora está vacía.', 'info');
+	                    return;
+	                }
+	                const copiarManual = function () {
+	                    const valorOriginal = bitacoraText.value;
+	                    bitacoraText.value = texto;
+	                    bitacoraText.focus();
+	                    bitacoraText.select();
+	                    document.execCommand('copy');
+	                    bitacoraText.value = valorOriginal;
+	                };
+	                const promesa = navigator.clipboard
+	                    ? navigator.clipboard.writeText(texto)
+	                    : Promise.resolve().then(copiarManual);
+	                promesa.then(function () {
+	                    mostrarAviso('Bitácora copiada.', 'success');
+	                }).catch(copiarManual);
+	            });
+	        }
+	        if (bitacoraWa) {
+	            bitacoraWa.addEventListener('click', function () {
+	                const texto = textoBitacoraActual();
+	                if (!texto) {
+	                    mostrarAviso('No ha hecho nada aún. La bitácora está vacía.', 'info');
+	                    return;
+	                }
+	                window.open('https://api.whatsapp.com/send?text=' + encodeURIComponent(texto), '_blank', 'noopener');
+	            });
+	        }
+	        modal.addEventListener('click', function (event) {
+	            if (event.target === modal) setModal(false);
+	        });
         document.addEventListener('keydown', function (event) {
             if (event.key === 'Escape') setModal(false);
         });

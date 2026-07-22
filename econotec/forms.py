@@ -1,6 +1,9 @@
 """
 Formularios de Econotec.
 """
+import base64
+import binascii
+
 from django import forms
 from django.contrib.auth import get_user_model
 from django.db.models import Q
@@ -118,6 +121,18 @@ class IngresoEquipoForm(forms.ModelForm):
         ('no', 'No / pendiente de valor'),
     ]
 
+    FIRMA_CLIENTE_OPCIONES = [
+        ('si', 'Sí'),
+        ('no', 'No firma'),
+    ]
+
+    firma_cliente_opcion = forms.ChoiceField(
+        choices=FIRMA_CLIENTE_OPCIONES,
+        required=True,
+        widget=forms.RadioSelect(attrs={'class': 'firma-cliente-radio'}),
+        label='Firma del cliente'
+    )
+
     valor_acordado = forms.CharField(
         required=False,
         widget=forms.TextInput(attrs={
@@ -137,7 +152,7 @@ class IngresoEquipoForm(forms.ModelForm):
             'asesor_comercial', 'tecnico_encargado', 'fecha_ingreso',
             'tipo_equipo', 'tipo_equipo_otro',
             'marca', 'modelo_serie', 'serie', 'accesorios_entregados',
-            'problema_reportado',
+            'problema_reportado', 'firma_cliente', 'firma_cliente_imagen',
             'diagnostico_inmediato', 'valor_diagnostico',
             'valor_acordado', 'abono_anticipo',
             'diagnostico_metodo', 'diagnostico_banco', 'diagnostico_banco_otro',
@@ -177,6 +192,12 @@ class IngresoEquipoForm(forms.ModelForm):
             'problema_reportado': forms.Textarea(attrs={
                 'class': 'form-input', 'rows': 3,
                 'placeholder': 'Describa el problema reportado por el cliente...',
+            }),
+            'firma_cliente': forms.HiddenInput(attrs={
+                'id': 'id_firma_cliente_check',
+            }),
+            'firma_cliente_imagen': forms.HiddenInput(attrs={
+                'id': 'id_firma_cliente_imagen',
             }),
             'diagnostico_inmediato': forms.Select(attrs={'class': 'form-input'}),
             'valor_diagnostico': forms.NumberInput(attrs={
@@ -253,6 +274,9 @@ class IngresoEquipoForm(forms.ModelForm):
         self.fields['serie'].required = False
         self.fields['equipo_garantia'].required = False
         self.fields['equipo_garantia_manual'].required = False
+        self.fields['firma_cliente'].required = False
+        self.fields['firma_cliente_imagen'].required = False
+        self.fields['firma_cliente_opcion'].initial = self._firma_cliente_opcion_inicial()
         self.fields['valor_acordado_estado'] = forms.ChoiceField(
             choices=self.VALOR_ACORDADO_ESTADOS,
             required=False,
@@ -377,6 +401,19 @@ class IngresoEquipoForm(forms.ModelForm):
             return 'no'
         return 'si'
 
+    def _firma_cliente_opcion_inicial(self):
+        if self.is_bound:
+            return None
+
+        valor = self.initial.get('firma_cliente_opcion')
+        if valor in ('si', 'no'):
+            return valor
+
+        if self.instance and self.instance.pk:
+            return 'si' if self.instance.firma_cliente and self.instance.firma_cliente_imagen else 'no'
+
+        return None
+
     def clean_valor_acordado(self):
         if self.estado_bloqueado_por_salida:
             return self.instance.valor_acordado
@@ -404,6 +441,26 @@ class IngresoEquipoForm(forms.ModelForm):
         except InvalidOperation:
             raise forms.ValidationError("Ingrese un monto válido o marca No / Pendiente si aún no hay valor acordado.")
 
+    def clean_firma_cliente_imagen(self):
+        valor = (self.cleaned_data.get('firma_cliente_imagen') or '').strip()
+        if not valor:
+            return ''
+
+        prefijo = 'data:image/png;base64,'
+        if not valor.startswith(prefijo):
+            raise forms.ValidationError('La firma debe ser una imagen PNG válida.')
+
+        payload = valor[len(prefijo):]
+        if len(payload) > 700000:
+            raise forms.ValidationError('La firma es demasiado grande. Vuelve a firmar.')
+
+        try:
+            base64.b64decode(payload, validate=True)
+        except (binascii.Error, ValueError):
+            raise forms.ValidationError('La firma no se pudo leer. Vuelve a firmar.')
+
+        return valor
+
     def clean(self):
         """
         Limpia los sub-estados cuando no aplican según el estado padre.
@@ -412,6 +469,15 @@ class IngresoEquipoForm(forms.ModelForm):
         cleaned = super().clean()
         estado = cleaned.get('estado')
         valor_acordado_estado = cleaned.get('valor_acordado_estado')
+        firma_cliente_opcion = cleaned.get('firma_cliente_opcion')
+        firma_cliente_imagen = cleaned.get('firma_cliente_imagen')
+        if firma_cliente_opcion == 'si':
+            if not firma_cliente_imagen:
+                self.add_error('firma_cliente_opcion', 'Captura la firma del cliente o selecciona No firma.')
+            cleaned['firma_cliente'] = bool(firma_cliente_imagen)
+        elif firma_cliente_opcion == 'no':
+            cleaned['firma_cliente'] = False
+            cleaned['firma_cliente_imagen'] = ''
 
         if self.estado_bloqueado_por_salida:
             cleaned['valor_acordado'] = self.instance.valor_acordado

@@ -2,7 +2,7 @@
 Vistas principales de Econotec.
 Maneja: bienvenida, ayuda, ingresos de equipos, salidas y clientes.
 """
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal as D
 from io import BytesIO
 import json
@@ -31,8 +31,9 @@ from .busqueda import (
 )
 from .models import (
     Cliente, IngresoEquipo, SalidaEquipo, Abono, SEDES_EQUIPOS,
-    UsuarioActividad, NotificacionAsesora,
+    UsuarioActividad, NotificacionAsesora, BitacoraTecnico,
 )
+from .bitacora import registrar_bitacora, nombre_corto_usuario
 from .permisos import admin_requerido, tecnico_requerido, es_admin, es_asesor, es_tecnico
 from .gamificacion import (
     SALIDA_BUENA_ESTADOS,
@@ -645,6 +646,13 @@ def ingreso_registrar(request):
                     ingreso.sede = sede_actual           # ← sede de la sesión
                     ingreso.registrado_por = request.user
                     ingreso.save()
+                    registrar_bitacora(
+                        request.user,
+                        'ingreso',
+                        _texto_ingreso_bitacora(ingreso),
+                        ingreso=ingreso,
+                        dedupe_key=f'ingreso:{ingreso.pk}:creado',
+                    )
                     messages.success(
                         request,
                         f'Equipo {ingreso.codigo_equipo} ingresado para {cliente.nombres}.'
@@ -665,6 +673,13 @@ def ingreso_registrar(request):
                 ingreso.sede = sede_actual           # ← sede de la sesión
                 ingreso.registrado_por = request.user
                 ingreso.save()
+                registrar_bitacora(
+                    request.user,
+                    'ingreso',
+                    _texto_ingreso_bitacora(ingreso),
+                    ingreso=ingreso,
+                    dedupe_key=f'ingreso:{ingreso.pk}:creado',
+                )
                 messages.success(
                     request,
                     f'Equipo {ingreso.codigo_equipo} ingresado para {cliente.nombres}.'
@@ -817,8 +832,15 @@ def ingreso_editar(request, pk):
                     'confirmar_mismo_equipo_cliente': confirmar_mismo_equipo_cliente,
                 })
 
+            estado_original = ingreso.estado
+            subestado_reparacion_original = ingreso.subestado_reparacion
+            subestado_entregado_original = ingreso.subestado_entregado
+            reporte_original = (ingreso.reporte_tecnico or '').strip()
+            campos_ingreso_cambiados = set(ing_form.changed_data or [])
+            campos_cliente_cambiados = set(cli_form.changed_data or [])
+
             cliente_editado.save()
-            ing_form.save()
+            ingreso = ing_form.save()
 
             # ── Auto-crear Salida si estado=entregado + subestado definido ──
             subestado = ingreso.subestado_entregado
@@ -828,7 +850,7 @@ def ingreso_editar(request, pk):
                 if salida_existente is None:
                     # Calcular saldo pendiente para sugerir el valor final
                     saldo = ingreso.diferencia
-                    SalidaEquipo.objects.create(
+                    salida_auto = SalidaEquipo.objects.create(
                         ingreso=ingreso,
                         fecha_salida=date.today(),
                         estado_reparacion=datos_salida['estado_reparacion'],
@@ -836,6 +858,14 @@ def ingreso_editar(request, pk):
                         valor_final_cobrado=saldo if saldo > 0 else 0,
                         metodo_pago_final='efectivo' if saldo > 0 else 'sin_pago',
                         registrado_por=request.user,
+                    )
+                    registrar_bitacora(
+                        request.user,
+                        'salida',
+                        _texto_salida_bitacora(salida_auto),
+                        ingreso=ingreso,
+                        salida=salida_auto,
+                        dedupe_key=f'salida:{salida_auto.pk}:creada',
                     )
                     if subestado == 'con_solucion':
                         etiqueta = 'Con solución — cliente conforme'
@@ -855,6 +885,45 @@ def ingreso_editar(request, pk):
                     messages.success(request, f'Equipo {ingreso.codigo_equipo} actualizado.')
             else:
                 messages.success(request, f'Equipo {ingreso.codigo_equipo} actualizado.')
+
+            cambios_datos = (
+                campos_cliente_cambiados
+                or (campos_ingreso_cambiados - {
+                    'estado',
+                    'subestado_reparacion',
+                    'subestado_entregado',
+                    'reporte_tecnico',
+                })
+            )
+            if cambios_datos:
+                registrar_bitacora(
+                    request.user,
+                    'ingreso_editado',
+                    f'Datos actualizados en {_equipo_bitacora(ingreso)} #{ingreso.codigo_equipo} para {ingreso.cliente.nombres}.',
+                    ingreso=ingreso,
+                )
+
+            if (ingreso.reporte_tecnico or '').strip() != reporte_original:
+                reporte = _texto_limpio_bitacora(ingreso.reporte_tecnico)
+                if reporte:
+                    registrar_bitacora(
+                        request.user,
+                        'reporte',
+                        f'Actualización de reporte técnico en {_equipo_bitacora(ingreso)} #{ingreso.codigo_equipo}: {reporte}.',
+                        ingreso=ingreso,
+                    )
+
+            if (
+                ingreso.estado != estado_original
+                or ingreso.subestado_reparacion != subestado_reparacion_original
+                or ingreso.subestado_entregado != subestado_entregado_original
+            ):
+                registrar_bitacora(
+                    request.user,
+                    'estado',
+                    _texto_estado_ingreso_bitacora(ingreso),
+                    ingreso=ingreso,
+                )
 
             return redirect('econotec:ingreso_detalle', pk=ingreso.pk)
     else:
@@ -1033,6 +1102,15 @@ def ingreso_eliminar(request, pk):
             'Elimina primero la salida.'
         )
         return redirect('econotec:ingreso_detalle', pk=ingreso.pk)
+    codigo = ingreso.codigo_equipo
+    cliente = ingreso.cliente.nombres
+    registrar_bitacora(
+        request.user,
+        'eliminacion',
+        f'Equipo eliminado del sistema: #{codigo} de {cliente}.',
+        ingreso=ingreso,
+        codigo=codigo,
+    )
     ingreso.delete()
     messages.success(request, f'Equipo #{numero} eliminado.')
     return redirect('econotec:ingreso_lista')
@@ -1079,6 +1157,8 @@ def _preparar_post_venta(post_data):
         'ing-equipo_garantia': '',
         'ing-equipo_garantia_manual': '',
         'ing-motivo_garantia': '',
+        'ing-firma_cliente_opcion': 'no',
+        'ing-firma_cliente_imagen': '',
     }
     for campo, valor in defaults_si_falta.items():
         if not post_data.get(campo):
@@ -1152,6 +1232,13 @@ def venta_registrar(request):
             venta.estado = 'entregado'
             venta.subestado_entregado = 'con_solucion'
             venta.save()
+            registrar_bitacora(
+                request.user,
+                'venta_producto',
+                _texto_venta_bitacora(venta),
+                ingreso=venta,
+                dedupe_key=f'venta:{venta.pk}:creada',
+            )
 
             messages.success(request, f'Venta {venta.codigo_equipo} registrada para {cliente.nombres}.')
             return redirect('econotec:venta_lista')
@@ -1168,6 +1255,7 @@ def venta_registrar(request):
             'modelo_serie': 'N/A',
             'serie': '',
             'tipo_equipo': 'otro',
+            'firma_cliente_opcion': 'no',
         }
         if es_tecnico(request.user):
             initial['tecnico_encargado'] = request.user
@@ -1202,12 +1290,20 @@ def venta_editar(request, pk):
         _configurar_form_venta(ing_form)
         
         if cli_form.is_valid() and ing_form.is_valid():
+            campos_cambiados = set(cli_form.changed_data or []) | set(ing_form.changed_data or [])
             cli_form.save()
             venta = ing_form.save(commit=False)
             venta.sede = 'ventas'
             venta.estado = 'entregado'
             venta.subestado_entregado = 'con_solucion'
             venta.save()
+            if campos_cambiados:
+                registrar_bitacora(
+                    request.user,
+                    'venta_editada',
+                    f'Venta de producto actualizada: #{venta.codigo_equipo} para {venta.cliente.nombres}.',
+                    ingreso=venta,
+                )
             messages.success(request, f'Venta {venta.codigo_equipo} actualizada.')
             return redirect('econotec:venta_lista')
     else:
@@ -1230,6 +1326,16 @@ def venta_editar(request, pk):
 def venta_eliminar(request, pk):
     """Elimina una venta."""
     venta = get_object_or_404(IngresoEquipo, pk=pk, sede='ventas')
+    codigo = venta.codigo_equipo
+    cliente = venta.cliente.nombres
+    descripcion = _texto_limpio_bitacora(venta.problema_reportado, max_len=120)
+    registrar_bitacora(
+        request.user,
+        'eliminacion',
+        f'Venta de producto eliminada: {descripcion} #{codigo} de {cliente}.',
+        ingreso=venta,
+        codigo=codigo,
+    )
     venta.delete()
     messages.success(request, 'Venta eliminada correctamente.')
     return redirect('econotec:venta_lista')
@@ -1430,6 +1536,14 @@ def salida_registrar(request, ingreso_pk):
             salida.registrado_por = request.user
             salida.save()
             _sincronizar_notificacion_asesora(form, salida, request.user)
+            registrar_bitacora(
+                request.user,
+                'salida',
+                _texto_salida_bitacora(salida),
+                ingreso=ingreso,
+                salida=salida,
+                dedupe_key=f'salida:{salida.pk}:creada',
+            )
             messages.success(
                 request,
                 f'Salida del equipo {ingreso.codigo_equipo} registrada como '
@@ -1468,10 +1582,26 @@ def salida_editar(request, pk):
         pk=pk,
     )
     if request.method == 'POST':
+        estado_anterior = salida.estado_reparacion
+        tecnico_anterior = salida.tecnico_reparo_id
+        valor_anterior = salida.valor_final_cobrado
         form = SalidaEquipoForm(request.POST, instance=salida)
         if form.is_valid():
             salida = form.save()
             _sincronizar_notificacion_asesora(form, salida, request.user)
+            if (
+                salida.estado_reparacion != estado_anterior
+                or salida.tecnico_reparo_id != tecnico_anterior
+                or salida.valor_final_cobrado != valor_anterior
+                or form.changed_data
+            ):
+                registrar_bitacora(
+                    request.user,
+                    'salida_editada',
+                    f'Salida actualizada en #{salida.ingreso.codigo_equipo}: {salida.get_estado_reparacion_display()}.',
+                    ingreso=salida.ingreso,
+                    salida=salida,
+                )
             messages.success(request, 'Salida actualizada correctamente.')
             return redirect('econotec:salida_lista')
     else:
@@ -2285,6 +2415,247 @@ COLORES_PERFIL_ASESOR = {
 }
 
 
+def _hora_bitacora(dt):
+    local = timezone.localtime(dt)
+    hora = local.hour % 12 or 12
+    return f'{hora}:{local.minute:02d}'
+
+
+def _periodo_bitacora(dt):
+    return 'AM' if timezone.localtime(dt).hour < 12 else 'PM'
+
+
+def _texto_limpio_bitacora(texto, max_len=170):
+    texto = ' '.join((texto or '').split())
+    if len(texto) <= max_len:
+        return texto
+    return texto[:max_len - 1].rstrip() + '…'
+
+
+def _equipo_bitacora(ingreso):
+    partes = [
+        ingreso.tipo_equipo_display,
+        ingreso.marca,
+        ingreso.modelo_serie_detalle,
+    ]
+    return ' '.join(p for p in partes if p).strip()
+
+
+def _texto_ingreso_bitacora(ingreso):
+    equipo = _equipo_bitacora(ingreso)
+    return f'Ingreso de equipo registrado: {equipo} #{ingreso.codigo_equipo} para {ingreso.cliente.nombres}.'
+
+
+def _texto_venta_bitacora(venta):
+    descripcion = _texto_limpio_bitacora(venta.problema_reportado, max_len=120)
+    if not descripcion:
+        descripcion = _equipo_bitacora(venta) or 'producto'
+    valor = venta.valor_acordado or D('0.00')
+    return f'Venta de producto registrada: {descripcion} #{venta.codigo_equipo} para {venta.cliente.nombres} por ${valor:.2f}.'
+
+
+def _texto_estado_ingreso_bitacora(ingreso):
+    estado = ingreso.estado_visual_display
+    subestado = ingreso.subestado_visual_display
+    detalle = f'{estado} - {subestado}' if subestado and subestado != estado else estado
+    return f'Cambio de estado en {_equipo_bitacora(ingreso)} #{ingreso.codigo_equipo}: {detalle}.'
+
+
+def _texto_salida_bitacora(salida):
+    ingreso = salida.ingreso
+    equipo = _equipo_bitacora(ingreso)
+    reporte = _texto_limpio_bitacora(ingreso.reporte_tecnico)
+
+    if reporte:
+        base = reporte.rstrip('.')
+    else:
+        base = f'Trabajo registrado en {equipo}'.strip()
+
+    if salida.estado_reparacion in ('pendiente_retiro', 'retirado'):
+        return f'{base} #{ingreso.codigo_equipo} lista, cliente notificado.'
+    if salida.estado_reparacion in ('garantia', 'garantia_fallos_adicionales'):
+        return f'{base} #{ingreso.codigo_equipo} salida por garantía.'
+    if salida.estado_reparacion == 'cliente_no_acepta':
+        return f'{base} #{ingreso.codigo_equipo} cliente no quiso reparar.'
+    if salida.estado_reparacion == 'no_reparable':
+        return f'{base} #{ingreso.codigo_equipo} no se pudo reparar.'
+    return f'{base} #{ingreso.codigo_equipo} {salida.get_estado_reparacion_display()}.'
+
+
+def _eventos_bitacora_usuario(user, dia=None):
+    dia = dia or timezone.localdate()
+    eventos = []
+    eventos_guardados = (
+        BitacoraTecnico.objects
+        .select_related('ingreso', 'salida', 'abono')
+        .filter(user=user, momento__date=dia)
+        .order_by('momento', 'pk')
+    )
+    ingresos_con_evento_por_tipo = {}
+    salidas_con_evento = set()
+    abonos_con_evento = set()
+
+    for evento in eventos_guardados:
+        if evento.ingreso_id:
+            ingresos_con_evento_por_tipo.setdefault(evento.tipo, set()).add(evento.ingreso_id)
+        if evento.salida_id:
+            salidas_con_evento.add(evento.salida_id)
+        if evento.abono_id:
+            abonos_con_evento.add(evento.abono_id)
+
+        eventos.append({
+            'momento': evento.momento,
+            'texto': evento.texto,
+            'tipo': evento.tipo,
+            'codigo': evento.codigo,
+        })
+
+    ingresos_con_evento = set()
+    for tipos in ingresos_con_evento_por_tipo.values():
+        ingresos_con_evento.update(tipos)
+
+    salidas = (
+        SalidaEquipo.objects
+        .select_related('ingreso', 'ingreso__cliente', 'tecnico_reparo', 'registrado_por')
+        .filter(creado__date=dia)
+        .filter(Q(tecnico_reparo=user) | Q(registrado_por=user))
+        .exclude(pk__in=salidas_con_evento)
+        .order_by('creado', 'pk')
+    )
+    ingresos_con_salida = set()
+    for salida in salidas:
+        ingresos_con_salida.add(salida.ingreso_id)
+        eventos.append({
+            'momento': salida.creado,
+            'texto': _texto_salida_bitacora(salida),
+            'tipo': 'salida',
+            'codigo': salida.ingreso.codigo_equipo,
+        })
+
+    ingresos = (
+        IngresoEquipo.objects
+        .select_related('cliente', 'tecnico_encargado', 'registrado_por')
+        .filter(creado__date=dia)
+        .filter(Q(registrado_por=user) | Q(tecnico_encargado=user))
+        .exclude(pk__in=ingresos_con_salida)
+        .exclude(pk__in=ingresos_con_evento)
+        .order_by('creado', 'pk')
+    )
+    for ingreso in ingresos:
+        equipo = _equipo_bitacora(ingreso)
+        if ingreso.sede == 'ventas':
+            texto = f'Venta de producto registrada: {equipo} #{ingreso.codigo_equipo}.'
+        elif ingreso.registrado_por_id == user.id:
+            texto = f'Recepción y registro de {equipo} #{ingreso.codigo_equipo} para {ingreso.cliente.nombres}.'
+        else:
+            texto = f'Equipo asignado para revisión: {equipo} #{ingreso.codigo_equipo}.'
+        eventos.append({
+            'momento': ingreso.creado,
+            'texto': texto,
+            'tipo': 'ingreso',
+            'codigo': ingreso.codigo_equipo,
+        })
+
+    reportes = (
+        IngresoEquipo.objects
+        .select_related('cliente')
+        .filter(reporte_por=user, reporte_actualizado__date=dia)
+        .exclude(pk__in=ingresos_con_salida)
+        .exclude(pk__in=ingresos_con_evento_por_tipo.get('reporte', set()))
+        .order_by('reporte_actualizado', 'pk')
+    )
+    for ingreso in reportes:
+        reporte = _texto_limpio_bitacora(ingreso.reporte_tecnico)
+        if not reporte:
+            continue
+        eventos.append({
+            'momento': ingreso.reporte_actualizado,
+            'texto': f'Actualización de reporte técnico en {_equipo_bitacora(ingreso)} #{ingreso.codigo_equipo}: {reporte}.',
+            'tipo': 'reporte',
+            'codigo': ingreso.codigo_equipo,
+        })
+
+    reportes_valor = (
+        IngresoEquipo.objects
+        .select_related('cliente')
+        .filter(valor_pendiente_reporte_por=user, valor_pendiente_reporte_actualizado__date=dia)
+        .exclude(pk__in=ingresos_con_evento_por_tipo.get('valor_pendiente', set()))
+        .order_by('valor_pendiente_reporte_actualizado', 'pk')
+    )
+    for ingreso in reportes_valor:
+        motivo = _texto_limpio_bitacora(ingreso.valor_pendiente_reporte)
+        if not motivo:
+            continue
+        eventos.append({
+            'momento': ingreso.valor_pendiente_reporte_actualizado,
+            'texto': f'Reporte de valor acordado pendiente en #{ingreso.codigo_equipo}: {motivo}.',
+            'tipo': 'valor_pendiente',
+            'codigo': ingreso.codigo_equipo,
+        })
+
+    abonos = (
+        Abono.objects
+        .select_related('ingreso', 'ingreso__cliente')
+        .filter(registrado_por=user, creado__date=dia)
+        .exclude(pk__in=abonos_con_evento)
+        .order_by('creado', 'pk')
+    )
+    for abono in abonos:
+        eventos.append({
+            'momento': abono.creado,
+            'texto': f'Registro de abono {abono.numero_recibo} por ${abono.monto:.2f} en #{abono.ingreso.codigo_equipo}.',
+            'tipo': 'abono',
+            'codigo': abono.ingreso.codigo_equipo,
+        })
+
+    eventos.sort(key=lambda e: (e['momento'], e['texto']))
+    return eventos
+
+
+def _construir_bitacora_usuario(user, dia=None):
+    dia = dia or timezone.localdate()
+    eventos = _eventos_bitacora_usuario(user, dia=dia)
+    fecha_txt = dia.strftime('%d/%m/%Y')
+    nombre = nombre_corto_usuario(user)
+    encabezado = '\n'.join(['Reporte del día', f'Técnico: {nombre}', f'Fecha: {fecha_txt}'])
+
+    if not eventos:
+        return {
+            'fecha': fecha_txt,
+            'total': 0,
+            'tiene_datos': False,
+            'encabezado': encabezado,
+            'detalle': '',
+            'texto': encabezado,
+            'eventos': [],
+        }
+
+    lineas = []
+    eventos_json = []
+    for evento in eventos:
+        hora_inicio = _hora_bitacora(evento['momento'])
+        periodo_inicio = _periodo_bitacora(evento['momento'])
+        lineas.append(f'{hora_inicio} {periodo_inicio} - {evento["texto"]}')
+        eventos_json.append({
+            'hora_inicio': hora_inicio,
+            'periodo_inicio': periodo_inicio,
+            'texto': evento['texto'],
+            'tipo': evento['tipo'],
+            'codigo': evento['codigo'],
+        })
+
+    detalle = '\n'.join(lineas)
+    return {
+        'fecha': fecha_txt,
+        'total': len(eventos),
+        'tiene_datos': True,
+        'encabezado': encabezado,
+        'detalle': detalle,
+        'texto': f'{encabezado}\n\n{detalle}',
+        'eventos': eventos_json,
+    }
+
+
 @login_required
 def api_perfil(request):
     user = request.user
@@ -2310,6 +2681,7 @@ def api_perfil(request):
             'salidas_malas': 0,
             'total': 0,
             'proximo': None,
+            'bitacora_total': _construir_bitacora_usuario(user)['total'],
         })
     
     # Verificar si el usuario tiene una fecha de reinicio
@@ -2406,8 +2778,15 @@ def api_perfil(request):
         'total': total_operaciones,
         'nivel': nivel,
         'color': color,
-        'proximo': proximo
+        'proximo': proximo,
+        'bitacora_total': _construir_bitacora_usuario(user)['total'],
     })
+
+
+@login_required
+@require_GET
+def api_bitacora_hoy(request):
+    return JsonResponse(_construir_bitacora_usuario(request.user))
 
 
 @login_required

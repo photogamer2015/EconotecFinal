@@ -1,7 +1,7 @@
 from django.contrib import admin
 from .models import (
     Cliente, IngresoEquipo, Abono, SalidaEquipo,
-    CategoriaEgreso, Egreso,
+    CategoriaEgreso, Egreso, BitacoraTecnico,
 )
 
 
@@ -74,3 +74,24 @@ class EgresoAdmin(admin.ModelAdmin):
     list_filter = ('categoria', 'fecha')
     search_fields = ('concepto', 'notas')
     date_hierarchy = 'fecha'
+
+
+@admin.register(BitacoraTecnico)
+class BitacoraTecnicoAdmin(admin.ModelAdmin):
+    list_display = ('momento', 'usuario_nombre', 'tipo', 'codigo', 'texto')
+    list_filter = ('tipo', 'momento')
+    search_fields = ('usuario_nombre', 'codigo', 'texto')
+    readonly_fields = (
+        'user', 'usuario_nombre', 'momento', 'tipo', 'texto', 'codigo',
+        'ingreso', 'salida', 'abono', 'dedupe_key', 'metadata', 'creado',
+    )
+    date_hierarchy = 'momento'
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False

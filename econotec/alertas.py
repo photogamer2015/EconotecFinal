@@ -202,10 +202,13 @@ def whatsapp_link_demora(ingreso):
 
 def whatsapp_link_equipo_listo(salida):
     """
-    Mensaje al cliente cuando se acaba de registrar la salida:
-    "Su equipo ya está listo, puede pasar a retirarlo".
+    Mensaje al cliente cuando se registra una salida con aviso por WhatsApp.
 
-    Devuelve None si la salida NO está pendiente de retiro o si el cliente no tiene WhatsApp.
+    Para equipos aún en el local se informa que están listos para retiro.
+    Para equipos marcados como retirados se envía una confirmación de entrega
+    y agradecimiento, sin instrucciones de retiro ni política de bodegaje.
+
+    Devuelve None si la salida no corresponde a un aviso o si el cliente no tiene WhatsApp.
     """
     if not salida.pendiente_de_retiro_fisico:
         return None
@@ -245,16 +248,38 @@ def whatsapp_link_equipo_listo(salida):
     else:
         linea_garantia = ""
 
-    # Mensaje formal estilo correspondencia profesional
+    linea_equipo = f"• Equipo: {ingreso.tipo_equipo_display} {ingreso.marca}"
+    if ingreso.modelo_serie:
+        linea_equipo += f" — {ingreso.modelo_serie_detalle}"
+
+    if salida.estado_reparacion == 'retirado' or salida.cliente_ya_retiro:
+        fecha_retiro = salida.fecha_retiro_real or salida.fecha_salida
+        mensaje = (
+            f"Estimado(a) {nombre_cliente}, reciba un cordial saludo de parte de *Econotec — Reparación de Tecnología*.\n\n"
+            f"Queremos confirmarle que su equipo fue *entregado y retirado satisfactoriamente*.\n\n"
+            f"📋 *Detalle de entrega*\n"
+            f"• Código de equipo: *{ingreso.codigo_equipo}*\n"
+            f"{linea_equipo}\n"
+            f"• Estado del trabajo: {estado_label}\n"
+            f"• Fecha de retiro: {fecha_retiro.strftime('%d/%m/%Y')}\n"
+            f"• Técnico encargado: {nombre_tecnico}\n\n"
+            f"{linea_saldo}"
+            f"{linea_garantia}"
+            f"\nGracias por confiar su equipo a Econotec. "
+            f"Seguimos a su disposición para la revisión, mantenimiento o reparación de sus próximos equipos.\n\n"
+            f"Saludos cordiales,\n"
+            f"*Econotec — Reparación de Tecnología*"
+        )
+        return f"https://wa.me/{numero_limpio}?text={quote(mensaje)}"
+
+    # Mensaje formal estilo correspondencia profesional para equipos aún sin retirar
     mensaje = (
         f"Estimado(a) {nombre_cliente}, reciba un cordial saludo de parte de *Econotec — Reparación de Tecnología*.\n\n"
         f"Nos complace informarle que su equipo se encuentra *listo para retiro*:\n\n"
         f"📋 *Detalle de salida*\n"
         f"• Código de equipo: *{ingreso.codigo_equipo}*\n"
-        f"• Equipo: {ingreso.tipo_equipo_display} {ingreso.marca}"
+        f"{linea_equipo}"
     )
-    if ingreso.modelo_serie:
-        mensaje += f" — {ingreso.modelo_serie_detalle}"
     mensaje += (
         f"\n• Estado del trabajo: {estado_label}\n"
         f"• Fecha de salida: {salida.fecha_salida.strftime('%d/%m/%Y')}\n"

@@ -244,6 +244,20 @@
             gap: 16px;
             text-align: center;
         }
+        .signature-slot {
+            min-height: 54px;
+            display: flex;
+            align-items: flex-end;
+            justify-content: center;
+            position: relative;
+        }
+        .signature-img {
+            max-width: 92%;
+            max-height: 48px;
+            object-fit: contain;
+            display: block;
+            margin-bottom: -1px;
+        }
         .signatures .sig-line {
             border-top: 1px solid #555;
             padding-top: 4px;
@@ -391,9 +405,22 @@
 
     <!-- FIRMAS -->
     <div class="signatures">
-        <div class="sig-line">FIRMA DEL CLIENTE</div>
-        <div class="sig-line">FIRMA DEL TÉCNICO QUE RECIBE EL EQUIPO</div>
-        <div class="sig-line">FIRMA DEL TÉCNICO QUE REPARA EL EQUIPO</div>
+        <div>
+            <div class="signature-slot">
+                {% if ingreso.firma_cliente and ingreso.firma_cliente_imagen %}
+                    <img src="{{ ingreso.firma_cliente_imagen }}" alt="Firma del cliente" class="signature-img">
+                {% endif %}
+            </div>
+            <div class="sig-line">FIRMA DEL CLIENTE</div>
+        </div>
+        <div>
+            <div class="signature-slot"></div>
+            <div class="sig-line">FIRMA DEL TÉCNICO QUE RECIBE EL EQUIPO</div>
+        </div>
+        <div>
+            <div class="signature-slot"></div>
+            <div class="sig-line">FIRMA DEL TÉCNICO QUE REPARA EL EQUIPO</div>
+        </div>
     </div>
 
 </div>

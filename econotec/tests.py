@@ -1,17 +1,23 @@
 import re
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 from io import BytesIO
+from urllib.parse import parse_qs, urlparse
+from zoneinfo import ZoneInfo
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.core import mail
 from django.test import TestCase, override_settings
 from django.urls import reverse
+from django.utils import timezone
 
 from .forms import IngresoEquipoForm
-from .alertas import equipos_demorados_qs, salidas_bodegaje_qs
-from .models import Cliente, IngresoEquipo, NotificacionAsesora, SalidaEquipo, UsuarioActividad
+from .alertas import equipos_demorados_qs, salidas_bodegaje_qs, whatsapp_link_equipo_listo
+from .models import (
+    BitacoraTecnico, Cliente, IngresoEquipo, NotificacionAsesora,
+    SalidaEquipo, UsuarioActividad,
+)
 from .qr_utils import token_para_ingreso
 from .views_auth import CAPTCHA_SESSION_KEY, LOGIN_2FA_SESSION_KEY, LOGIN_EMAIL_SETUP_SESSION_KEY
 
@@ -199,6 +205,11 @@ class LoginCaptchaTests(TestCase):
 
 
 class VentasTests(TestCase):
+    FIRMA_PNG_DATA_URI = (
+        'data:image/png;base64,'
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgF/TV5CiwAAAABJRU5ErkJggg=='
+    )
+
     def setUp(self):
         User = get_user_model()
         asesores = Group.objects.create(name='Asesores')
@@ -238,6 +249,8 @@ class VentasTests(TestCase):
             'ing-tecnico_encargado': str(self.usuario.pk),
             'ing-problema_reportado': 'tinta',
             'ing-valor_acordado': '25',
+            'ing-firma_cliente_opcion': 'no',
+            'ing-firma_cliente_imagen': '',
             # Valores que el navegador puede enviar desde campos ocultos.
             # Se omite ing-diagnostico_metodo para cubrir el bug corregido.
             'ing-tipo_equipo': 'otro',
@@ -377,6 +390,8 @@ class VentasTests(TestCase):
             'ing-serie': ingreso.serie,
             'ing-accesorios_entregados': ingreso.accesorios_entregados,
             'ing-problema_reportado': ingreso.problema_reportado,
+            'ing-firma_cliente_opcion': 'si' if ingreso.firma_cliente and ingreso.firma_cliente_imagen else 'no',
+            'ing-firma_cliente_imagen': ingreso.firma_cliente_imagen,
             'ing-diagnostico_inmediato': ingreso.diagnostico_inmediato,
             'ing-valor_diagnostico': str(ingreso.valor_diagnostico),
             'ing-valor_acordado': str(ingreso.valor_acordado or ''),
@@ -432,6 +447,8 @@ class VentasTests(TestCase):
             'ing-serie': '',
             'ing-accesorios_entregados': 'Cargador',
             'ing-problema_reportado': 'No enciende',
+            'ing-firma_cliente_opcion': 'no',
+            'ing-firma_cliente_imagen': '',
             'ing-diagnostico_inmediato': 'no',
             'ing-valor_diagnostico': '0.00',
             'ing-valor_acordado': '25',
@@ -560,6 +577,81 @@ class VentasTests(TestCase):
         self.assertEqual(data['email'], 'yandri@example.com')
         self.assertEqual(data['salidas_producto'], 1)
         self.assertEqual(data['total'], 1)
+        self.assertGreaterEqual(data['bitacora_total'], 1)
+
+    def test_api_bitacora_hoy_sin_datos_devuelve_vacia(self):
+        response = self.client.get(reverse('econotec:api_bitacora_hoy'))
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertFalse(data['tiene_datos'])
+        self.assertEqual(data['total'], 0)
+        self.assertIn('Reporte del día', data['texto'])
+        self.assertIn('Técnico: Yandri', data['texto'])
+
+    def test_api_bitacora_hoy_genera_reporte_de_salida_del_tecnico(self):
+        ingreso = self.crear_ingreso_reparacion(
+            fecha_ingreso=timezone.localdate(),
+            reporte_tecnico='Instalación de cartuchos nuevos y mantenimiento a Canon PIXMA G3110',
+        )
+        SalidaEquipo.objects.create(
+            ingreso=ingreso,
+            fecha_salida=timezone.localdate(),
+            estado_reparacion='pendiente_retiro',
+            cliente_recibe_conforme='si',
+            valor_final_cobrado=Decimal('0.00'),
+            metodo_pago_final='sin_pago',
+            tecnico_reparo=self.usuario,
+            registrado_por=self.usuario,
+        )
+
+        response = self.client.get(reverse('econotec:api_bitacora_hoy'))
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertTrue(data['tiene_datos'])
+        self.assertEqual(data['total'], 1)
+        self.assertIn('Reporte del día', data['texto'])
+        self.assertIn('Técnico: Yandri', data['texto'])
+        self.assertIn('Instalación de cartuchos nuevos y mantenimiento a Canon PIXMA G3110', data['texto'])
+        self.assertIn(f'#{ingreso.codigo_equipo} lista, cliente notificado.', data['texto'])
+        self.assertRegex(data['texto'], r'\d{1,2}:\d{2} (AM|PM) - Instalación')
+        self.assertNotRegex(data['texto'], r'\d{1,2}:\d{2} - \d{1,2}:\d{2}')
+
+    def test_bitacora_se_reinicia_en_medianoche_local(self):
+        from .views import _construir_bitacora_usuario
+
+        zona_local = ZoneInfo('America/Guayaquil')
+        dia_anterior = date(2026, 7, 22)
+        dia_nuevo = date(2026, 7, 23)
+
+        BitacoraTecnico.objects.create(
+            user=self.usuario,
+            usuario_nombre='Yandri',
+            momento=datetime(2026, 7, 22, 23, 59, tzinfo=zona_local),
+            tipo='reporte',
+            texto='Acción antes de medianoche.',
+        )
+        BitacoraTecnico.objects.create(
+            user=self.usuario,
+            usuario_nombre='Yandri',
+            momento=datetime(2026, 7, 23, 0, 0, tzinfo=zona_local),
+            tipo='reporte',
+            texto='Acción justo a medianoche.',
+        )
+
+        reporte_anterior = _construir_bitacora_usuario(self.usuario, dia=dia_anterior)
+        reporte_nuevo = _construir_bitacora_usuario(self.usuario, dia=dia_nuevo)
+
+        self.assertEqual(reporte_anterior['fecha'], '22/07/2026')
+        self.assertEqual(reporte_anterior['total'], 1)
+        self.assertIn('Acción antes de medianoche.', reporte_anterior['texto'])
+        self.assertNotIn('Acción justo a medianoche.', reporte_anterior['texto'])
+
+        self.assertEqual(reporte_nuevo['fecha'], '23/07/2026')
+        self.assertEqual(reporte_nuevo['total'], 1)
+        self.assertIn('12:00 AM - Acción justo a medianoche.', reporte_nuevo['texto'])
+        self.assertNotIn('Acción antes de medianoche.', reporte_nuevo['texto'])
 
     def test_perfil_asesor_muestra_datos_basicos(self):
         self.client.force_login(self.vendedor)
@@ -718,6 +810,70 @@ class VentasTests(TestCase):
         self.assertContains(response, 'Modelo:', count=2)
         self.assertContains(response, 'Elitebook', count=2)
         self.assertNotContains(response, 'Serie:')
+
+    def test_firma_cliente_imagen_no_es_obligatoria_si_cliente_no_firma(self):
+        form = IngresoEquipoForm(data=self.ingreso_form_data(
+            firma_cliente_opcion='no',
+            firma_cliente_imagen='',
+        ))
+
+        self.assertTrue(form.is_valid(), form.errors.as_data())
+        self.assertFalse(form.cleaned_data['firma_cliente'])
+        self.assertEqual(form.cleaned_data['firma_cliente_imagen'], '')
+
+    def test_firma_cliente_exige_seleccionar_si_o_no(self):
+        data = self.ingreso_form_data()
+        data.pop('firma_cliente_opcion')
+
+        form = IngresoEquipoForm(data=data)
+
+        self.assertFalse(form.is_valid())
+        self.assertIn('firma_cliente_opcion', form.errors)
+
+    def test_firma_cliente_si_exige_imagen_capturada(self):
+        form = IngresoEquipoForm(data=self.ingreso_form_data(
+            firma_cliente_opcion='si',
+            firma_cliente_imagen='',
+        ))
+
+        self.assertFalse(form.is_valid())
+        self.assertIn('firma_cliente_opcion', form.errors)
+
+    def test_registrar_ingreso_guarda_firma_cliente_opcional(self):
+        self.activar_sede_guayaquil()
+
+        response = self.client.post(
+            reverse('econotec:ingreso_registrar'),
+            self.ingreso_registro_post_data(
+                **{
+                    'ing-firma_cliente_opcion': 'si',
+                    'ing-firma_cliente_imagen': self.FIRMA_PNG_DATA_URI,
+                }
+            ),
+        )
+
+        ingreso = IngresoEquipo.objects.get(cliente=self.cliente_existente)
+        self.assertRedirects(
+            response,
+            reverse('econotec:ingreso_detalle', kwargs={'pk': ingreso.pk}),
+        )
+        self.assertTrue(ingreso.firma_cliente)
+        self.assertEqual(ingreso.firma_cliente_imagen, self.FIRMA_PNG_DATA_URI)
+
+    def test_ingreso_imprimir_muestra_firma_cliente_si_existe(self):
+        ingreso = self.crear_ingreso_reparacion(
+            firma_cliente=True,
+            firma_cliente_imagen=self.FIRMA_PNG_DATA_URI,
+        )
+
+        response = self.client.get(reverse('econotec:ingreso_imprimir', kwargs={'pk': ingreso.pk}))
+
+        self.assertContains(response, 'alt="Firma del cliente"')
+        self.assertContains(response, self.FIRMA_PNG_DATA_URI)
+
+        pdf_response = self.client.get(reverse('econotec:ingreso_pdf', kwargs={'pk': ingreso.pk}))
+        self.assertEqual(pdf_response.status_code, 200)
+        self.assertEqual(pdf_response['Content-Type'], 'application/pdf')
 
     def test_alerta_bodegaje_usa_tecnico_de_salida_y_tiene_desplegable(self):
         User = get_user_model()
@@ -1502,6 +1658,8 @@ class VentasTests(TestCase):
             'serie': '',
             'accesorios_entregados': '',
             'problema_reportado': 'No enciende',
+            'firma_cliente_opcion': 'no',
+            'firma_cliente_imagen': '',
             'diagnostico_inmediato': 'no',
             'valor_diagnostico': '0.00',
             'valor_acordado': '25',
@@ -1815,6 +1973,33 @@ class VentasTests(TestCase):
         self.assertEqual(ingreso.diferencia, Decimal('0.00'))
         self.assertFalse(NotificacionAsesora.objects.filter(salida=salida).exists())
 
+    def test_whatsapp_retirado_usa_mensaje_de_cierre_sin_bodegaje(self):
+        ingreso = self.crear_ingreso_reparacion(
+            valor_acordado=Decimal('25.00'),
+            abono_anticipo=Decimal('25.00'),
+        )
+        salida = SalidaEquipo.objects.create(
+            ingreso=ingreso,
+            fecha_salida=date(2026, 7, 17),
+            fecha_retiro_real=date(2026, 7, 18),
+            estado_reparacion='retirado',
+            tecnico_reparo=self.usuario,
+            valor_final_cobrado=Decimal('0.00'),
+            metodo_pago_final='sin_pago',
+            registrado_por=self.usuario,
+        )
+
+        link = whatsapp_link_equipo_listo(salida)
+        texto = parse_qs(urlparse(link).query)['text'][0]
+
+        self.assertIn('entregado y retirado satisfactoriamente', texto)
+        self.assertIn('Gracias por confiar su equipo a Econotec', texto)
+        self.assertIn('reparación de sus próximos equipos', texto)
+        self.assertIn('Fecha de retiro: 18/07/2026', texto)
+        self.assertNotIn('listo para retiro', texto)
+        self.assertNotIn('coordine con nosotros', texto)
+        self.assertNotIn('Política de bodegaje', texto)
+
     def test_notificacion_asesora_se_puede_marcar_como_vista(self):
         ingreso = self.crear_ingreso_reparacion(
             estado='garantia',
@@ -2077,6 +2262,8 @@ class VentasTests(TestCase):
         self.assertContains(response, 'id="btn-perfil-movil"')
         self.assertContains(response, 'Ver perfil')
         self.assertContains(response, 'id="perfil-mobile-modal"')
+        self.assertContains(response, 'id="btn-bitacora-mobile"')
+        self.assertContains(response, 'id="bitacora-mobile-modal"')
 
     def test_hoja_tecnico_reporta_motivo_valor_acordado_pendiente(self):
         ingreso = self.crear_ingreso_reparacion(valor_acordado=None)

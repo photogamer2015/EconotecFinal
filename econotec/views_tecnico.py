@@ -28,6 +28,7 @@ from django.urls import reverse
 from django.views.decorators.http import require_http_methods
 
 from .models import IngresoEquipo, SalidaEquipo
+from .bitacora import registrar_bitacora
 from .permisos import puede_gestionar_equipos
 from .qr_utils import pk_desde_token, token_para_ingreso
 
@@ -50,6 +51,42 @@ OPCIONES_ESTADO_MOVIL = [
     (ESTADO_ENTREGADO_FAIL, 'Sin solución (Pendiente de retiro)'),
     (ESTADO_ENTREGADO_NO_QUISO, 'No quiso reparar (Pendiente de retiro)'),
 ]
+
+
+def _texto_limpio_bitacora(texto, max_len=170):
+    texto = ' '.join((texto or '').split())
+    if len(texto) <= max_len:
+        return texto
+    return texto[:max_len - 1].rstrip() + '…'
+
+
+def _equipo_bitacora(ingreso):
+    partes = [
+        ingreso.tipo_equipo_display,
+        ingreso.marca,
+        ingreso.modelo_serie_detalle,
+    ]
+    return ' '.join(p for p in partes if p).strip()
+
+
+def _texto_estado_bitacora(ingreso):
+    estado = ingreso.estado_visual_display
+    subestado = ingreso.subestado_visual_display
+    detalle = f'{estado} - {subestado}' if subestado and subestado != estado else estado
+    return f'Cambio de estado en {_equipo_bitacora(ingreso)} #{ingreso.codigo_equipo}: {detalle}.'
+
+
+def _texto_salida_bitacora(salida):
+    ingreso = salida.ingreso
+    reporte = _texto_limpio_bitacora(ingreso.reporte_tecnico)
+    base = reporte.rstrip('.') if reporte else f'Trabajo registrado en {_equipo_bitacora(ingreso)}'.strip()
+    if salida.estado_reparacion == 'pendiente_retiro':
+        return f'{base} #{ingreso.codigo_equipo} lista, cliente notificado.'
+    if salida.estado_reparacion == 'cliente_no_acepta':
+        return f'{base} #{ingreso.codigo_equipo} cliente no quiso reparar.'
+    if salida.estado_reparacion == 'no_reparable':
+        return f'{base} #{ingreso.codigo_equipo} no se pudo reparar.'
+    return f'{base} #{ingreso.codigo_equipo} {salida.get_estado_reparacion_display()}.'
 
 
 def _estado_movil_actual(ingreso):
@@ -157,6 +194,10 @@ def _procesar_actualizacion(request, ingreso, token):
     estado_movil = (request.POST.get('estado_movil') or '').strip()
     subestado_rep = (request.POST.get('subestado_reparacion') or '').strip()
     accion = (request.POST.get('accion') or 'guardar').strip()
+    reporte_original = (ingreso.reporte_tecnico or '').strip()
+    estado_original = ingreso.estado
+    subestado_reparacion_original = ingreso.subestado_reparacion
+    subestado_entregado_original = ingreso.subestado_entregado
 
     # 1) Reporte del técnico — siempre se guarda.
     #    Si el contenido cambió (o se escribió por primera vez), registramos
@@ -166,17 +207,32 @@ def _procesar_actualizacion(request, ingreso, token):
         ingreso.reporte_por = request.user
         ingreso.reporte_actualizado = timezone.now()
     ingreso.reporte_tecnico = reporte
+    reporte_registrado = False
+
+    def registrar_reporte_si_cambio():
+        nonlocal reporte_registrado
+        if reporte_registrado or reporte == reporte_original:
+            return
+        reporte_registrado = True
+        registrar_bitacora(
+            request.user,
+            'reporte',
+            f'Actualización de reporte técnico en {_equipo_bitacora(ingreso)} #{ingreso.codigo_equipo}: {_texto_limpio_bitacora(reporte)}.',
+            ingreso=ingreso,
+        )
 
     if accion == 'reportar_valor_pendiente':
         update_fields = ['reporte_tecnico', 'reporte_por', 'reporte_actualizado', 'actualizado']
 
         if ingreso.valor_acordado is not None:
             ingreso.save(update_fields=update_fields)
+            registrar_reporte_si_cambio()
             messages.info(request, 'Este equipo ya tiene valor acordado registrado.')
             return redirect('econotec:tecnico_hoja', token=token)
 
         if not valor_pendiente_reporte:
             ingreso.save(update_fields=update_fields)
+            registrar_reporte_si_cambio()
             messages.warning(request, 'Escribe el motivo por el que el valor acordado sigue pendiente.')
             return redirect('econotec:tecnico_hoja', token=token)
 
@@ -190,15 +246,23 @@ def _procesar_actualizacion(request, ingreso, token):
                 'valor_pendiente_reporte_actualizado',
             ])
             messages.success(request, 'Reporte de valor acordado pendiente guardado.')
+            registrar_bitacora(
+                request.user,
+                'valor_pendiente',
+                f'Reporte de valor acordado pendiente en #{ingreso.codigo_equipo}: {_texto_limpio_bitacora(valor_pendiente_reporte)}.',
+                ingreso=ingreso,
+            )
         else:
             messages.info(request, 'El reporte de valor pendiente no tuvo cambios.')
 
         ingreso.save(update_fields=update_fields)
+        registrar_reporte_si_cambio()
         return redirect('econotec:tecnico_hoja', token=token)
 
     if accion == 'actualizar_valor':
         ingreso.save(update_fields=['reporte_tecnico', 'reporte_por',
                                     'reporte_actualizado', 'actualizado'])
+        registrar_reporte_si_cambio()
         messages.info(request, 'El valor acordado se edita desde el sistema principal.')
         return redirect('econotec:tecnico_hoja', token=token)
 
@@ -212,6 +276,7 @@ def _procesar_actualizacion(request, ingreso, token):
     if solicita_salida and ingreso.valor_acordado is None:
         ingreso.save(update_fields=['reporte_tecnico', 'reporte_por',
                                     'reporte_actualizado', 'actualizado'])
+        registrar_reporte_si_cambio()
         messages.warning(
             request,
             'Por favor registra un valor acordado para registrar la salida.'
@@ -221,25 +286,48 @@ def _procesar_actualizacion(request, ingreso, token):
     if solicita_salida:
         ingreso.save(update_fields=['reporte_tecnico', 'reporte_por',
                                     'reporte_actualizado', 'actualizado'])
+        registrar_reporte_si_cambio()
         return redirect('econotec:salida_registrar', ingreso_pk=ingreso.pk)
 
     # 2) Aplicar el estado.
     if estado_movil == ESTADO_INGRESADO:
-        _quitar_salida_si_existe(ingreso)
+        _quitar_salida_si_existe(ingreso, request.user)
         ingreso.estado = 'ingresado'
         ingreso.subestado_reparacion = ''
         ingreso.subestado_entregado = ''
         ingreso.save()
+        if (
+            ingreso.estado != estado_original
+            or ingreso.subestado_reparacion != subestado_reparacion_original
+            or ingreso.subestado_entregado != subestado_entregado_original
+        ):
+            registrar_bitacora(
+                request.user,
+                'estado',
+                _texto_estado_bitacora(ingreso),
+                ingreso=ingreso,
+            )
         messages.success(request, f'Equipo {ingreso.codigo_equipo}: marcado como En diagnóstico.')
 
     elif estado_movil == ESTADO_EN_REPARACION:
-        _quitar_salida_si_existe(ingreso)
+        _quitar_salida_si_existe(ingreso, request.user)
         ingreso.estado = 'en_reparacion'
         # subestado opcional: espera de cliente / espera de repuesto
         validos = {c[0] for c in IngresoEquipo._meta.get_field('subestado_reparacion').choices}
         ingreso.subestado_reparacion = subestado_rep if subestado_rep in validos else ''
         ingreso.subestado_entregado = ''
         ingreso.save()
+        if (
+            ingreso.estado != estado_original
+            or ingreso.subestado_reparacion != subestado_reparacion_original
+            or ingreso.subestado_entregado != subestado_entregado_original
+        ):
+            registrar_bitacora(
+                request.user,
+                'estado',
+                _texto_estado_bitacora(ingreso),
+                ingreso=ingreso,
+            )
         messages.success(request, f'Equipo {ingreso.codigo_equipo}: marcado como En reparación.')
 
     elif estado_movil == ESTADO_ENTREGADO_OK:
@@ -269,16 +357,26 @@ def _procesar_actualizacion(request, ingreso, token):
                                     'reporte_actualizado', 'actualizado'])
         messages.warning(request, 'Estado no reconocido. Se guardó solo el reporte del técnico.')
 
+    registrar_reporte_si_cambio()
+
     return redirect('econotec:tecnico_hoja', token=token)
 
 
-def _quitar_salida_si_existe(ingreso):
+def _quitar_salida_si_existe(ingreso, user=None):
     """
     Si el equipo tenía una salida y el técnico lo regresa a reparación/diagnóstico,
     eliminamos la salida (el equipo vuelve al taller). Se conserva el resto.
     """
     salida = getattr(ingreso, 'salida', None)
     if salida is not None:
+        registrar_bitacora(
+            user,
+            'estado',
+            f'Se devolvió #{ingreso.codigo_equipo} a taller y se quitó la salida previa: {salida.get_estado_reparacion_display()}.',
+            ingreso=ingreso,
+            salida=salida,
+            codigo=ingreso.codigo_equipo,
+        )
         salida.delete()
 
 
@@ -306,18 +404,38 @@ def _crear_o_actualizar_salida(request, ingreso, estado_rep):
             # por eso él asume la responsabilidad y suma/resta puntos.
             tecnico_reparo=request.user,
         )
+        salida_nueva = True
     else:
+        estado_anterior = salida.estado_reparacion
         salida.estado_reparacion = estado_rep
         salida.cliente_recibe_conforme = 'si' if positiva else 'no'
         # Si aún no tenía técnico asignado, lo toma quien marca la salida.
         if salida.tecnico_reparo_id is None:
             salida.tecnico_reparo = request.user
+        salida_nueva = False
 
     # Guardamos primero el reporte en el ingreso…
     ingreso.save(update_fields=['reporte_tecnico', 'reporte_por',
                                 'reporte_actualizado', 'actualizado'])
     # …y luego la salida (su save() sincroniza ingreso.estado = 'entregado').
     salida.save()
+    if salida_nueva:
+        registrar_bitacora(
+            request.user,
+            'salida',
+            _texto_salida_bitacora(salida),
+            ingreso=ingreso,
+            salida=salida,
+            dedupe_key=f'salida:{salida.pk}:creada',
+        )
+    elif salida.estado_reparacion != estado_anterior:
+        registrar_bitacora(
+            request.user,
+            'salida_editada',
+            f'Salida actualizada en #{ingreso.codigo_equipo}: {salida.get_estado_reparacion_display()}.',
+            ingreso=ingreso,
+            salida=salida,
+        )
 
     # Reflejar el subestado "entregado" en el ingreso para que coincida
     # con lo que muestra el resto del sistema.

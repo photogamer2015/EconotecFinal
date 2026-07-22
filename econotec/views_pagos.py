@@ -13,6 +13,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 
 from .busqueda import filtrar_objetos_normalizado, texto_ingreso_busqueda
+from .bitacora import registrar_bitacora
 from .forms import AbonoForm
 from .models import Abono, IngresoEquipo
 from .permisos import tecnico_requerido, asesor_requerido
@@ -201,6 +202,14 @@ def abono_crear(request, ingreso_pk):
                         registrado_por=request.user
                     )
                     a1.save()
+                    registrar_bitacora(
+                        request.user,
+                        'abono',
+                        f'Registro de abono {a1.numero_recibo} por ${a1.monto:.2f} en #{ingreso.codigo_equipo}.',
+                        ingreso=ingreso,
+                        abono=a1,
+                        dedupe_key=f'abono:{a1.pk}:creado',
+                    )
                 
                 if monto_2 and Decimal(monto_2) > 0:
                     a2 = Abono(
@@ -212,6 +221,14 @@ def abono_crear(request, ingreso_pk):
                         registrado_por=request.user
                     )
                     a2.save()
+                    registrar_bitacora(
+                        request.user,
+                        'abono',
+                        f'Registro de abono {a2.numero_recibo} por ${a2.monto:.2f} en #{ingreso.codigo_equipo}.',
+                        ingreso=ingreso,
+                        abono=a2,
+                        dedupe_key=f'abono:{a2.pk}:creado',
+                    )
                     
                 messages.success(request, f'Abono mixto registrado exitosamente.')
                 return redirect('econotec:ingreso_abonos', pk=ingreso.pk)
@@ -219,6 +236,14 @@ def abono_crear(request, ingreso_pk):
                 abono.ingreso = ingreso
                 abono.registrado_por = request.user
                 abono.save()
+                registrar_bitacora(
+                    request.user,
+                    'abono',
+                    f'Registro de abono {abono.numero_recibo} por ${abono.monto:.2f} en #{ingreso.codigo_equipo}.',
+                    ingreso=ingreso,
+                    abono=abono,
+                    dedupe_key=f'abono:{abono.pk}:creado',
+                )
                 messages.success(
                     request,
                     f'Abono {abono.numero_recibo} registrado por ${abono.monto}.'
@@ -241,9 +266,18 @@ def abono_editar(request, ingreso_pk, abono_pk):
     abono = get_object_or_404(Abono, pk=abono_pk, ingreso=ingreso)
 
     if request.method == 'POST':
+        monto_anterior = abono.monto
         form = AbonoForm(request.POST, instance=abono, ingreso=ingreso)
         if form.is_valid():
             form.save()
+            abono.refresh_from_db()
+            registrar_bitacora(
+                request.user,
+                'abono_editado',
+                f'Abono {abono.numero_recibo} actualizado en #{ingreso.codigo_equipo}: ${monto_anterior:.2f} a ${abono.monto:.2f}.',
+                ingreso=ingreso,
+                abono=abono,
+            )
             messages.success(request, 'Abono actualizado.')
             return redirect('econotec:ingreso_abonos', pk=ingreso.pk)
     else:
@@ -264,6 +298,15 @@ def abono_eliminar(request, ingreso_pk, abono_pk):
     ingreso = get_object_or_404(IngresoEquipo, pk=ingreso_pk)
     abono = get_object_or_404(Abono, pk=abono_pk, ingreso=ingreso)
     numero = abono.numero_recibo
+    monto = abono.monto
+    registrar_bitacora(
+        request.user,
+        'eliminacion',
+        f'Abono {numero} eliminado en #{ingreso.codigo_equipo}: ${monto:.2f}.',
+        ingreso=ingreso,
+        abono=abono,
+        codigo=ingreso.codigo_equipo,
+    )
     abono.delete()
     messages.success(request, f'Abono {numero} eliminado.')
     return redirect('econotec:ingreso_abonos', pk=ingreso.pk)

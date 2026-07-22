@@ -587,11 +587,11 @@
             gap: 10px;
             margin-top: 20px;
         }
-        .perfil-action {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 12px;
+	        .perfil-action {
+	            display: flex;
+	            align-items: center;
+	            justify-content: space-between;
+	            gap: 12px;
             background: rgba(150,150,150,0.12);
             color: var(--text-color, #333);
             padding: 12px 14px;
@@ -599,12 +599,26 @@
             text-decoration: none;
             font-weight: 700;
             font-size: 14px;
-            transition: background 0.2s, transform 0.2s;
-        }
-        .perfil-action:hover {
-            background: rgba(249,118,24,0.14);
-            transform: translateY(-1px);
-        }
+	            transition: background 0.2s, transform 0.2s;
+	        }
+	        .perfil-action-button {
+	            width: 100%;
+	            border: 0;
+	            font-family: inherit;
+	            cursor: pointer;
+	            text-align: left;
+	        }
+	        .perfil-action:hover {
+	            background: rgba(249,118,24,0.14);
+	            transform: translateY(-1px);
+	        }
+	        .perfil-action.is-empty {
+	            background: rgba(120,120,120,0.18);
+	            color: var(--text-muted, #777);
+	        }
+	        .perfil-action.is-empty .perfil-action-arrow {
+	            color: #9ca3af;
+	        }
         .perfil-action-icon {
             font-size: 18px;
             width: 22px;
@@ -652,12 +666,85 @@
             transform: translateY(-1px) scale(1.04);
             box-shadow: 0 4px 10px rgba(0,0,0,0.22);
         }
-        .perfil-color-btn.is-selected {
-            outline: 3px solid var(--primary, #f97618);
-            outline-offset: 2px;
-        }
-        
-        #btn-perfil:hover { background: rgba(255,255,255,0.25) !important; transform: translateY(-1px); }
+	        .perfil-color-btn.is-selected {
+	            outline: 3px solid var(--primary, #f97618);
+	            outline-offset: 2px;
+	        }
+
+	        .bitacora-modal {
+	            position: fixed; inset: 0; z-index: 10020;
+	            display: flex; align-items: center; justify-content: center;
+	            padding: 18px; background: rgba(0,0,0,0.56);
+	        }
+	        .bitacora-card {
+	            width: min(560px, 94vw);
+	            background: var(--card-bg, #fff);
+	            color: var(--text-color, #333);
+	            border-radius: 14px;
+	            box-shadow: 0 20px 55px rgba(0,0,0,0.28);
+	            overflow: hidden;
+	            animation: popIn 0.2s ease-out;
+	        }
+	        .bitacora-head {
+	            display: flex; align-items: center; justify-content: space-between;
+	            gap: 12px; padding: 16px 18px;
+	            background: linear-gradient(135deg, #f97618, #c75b12);
+	            color: white;
+	        }
+	        .bitacora-head h3 { margin: 0; font-size: 17px; font-weight: 900; }
+	        .bitacora-close {
+	            width: 32px; height: 32px; border: 0; border-radius: 50%;
+	            background: rgba(255,255,255,0.2); color: white;
+	            font-size: 22px; cursor: pointer; line-height: 1;
+	        }
+	        .bitacora-body { padding: 16px 18px 18px; }
+	        .bitacora-help {
+	            margin: 0 0 10px;
+	            color: var(--text-muted, #666);
+	            font-size: 12px;
+	            line-height: 1.45;
+	        }
+	        .bitacora-fixed-header {
+	            margin: 0;
+	            border: 1px solid var(--border-color, #ddd);
+	            border-bottom: 0;
+	            border-radius: 10px 10px 0 0;
+	            background: rgba(249,118,24,0.07);
+	            color: var(--text-color, #222);
+	            padding: 12px;
+	            font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+	            font-size: 13px;
+	            line-height: 1.5;
+	            white-space: pre-wrap;
+	        }
+	        .bitacora-textarea {
+	            width: 100%;
+	            min-height: 220px;
+	            resize: vertical;
+	            border: 1px solid var(--border-color, #ddd);
+	            border-radius: 0 0 10px 10px;
+	            background: var(--bg-input, #fff);
+	            color: var(--text-color, #222);
+	            padding: 12px;
+	            font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+	            font-size: 13px;
+	            line-height: 1.5;
+	        }
+	        .bitacora-actions {
+	            display: flex; flex-wrap: wrap; gap: 10px; justify-content: flex-end;
+	            margin-top: 14px;
+	        }
+	        .bitacora-btn {
+	            border: 0; border-radius: 9px; padding: 10px 14px;
+	            font-family: inherit; font-size: 13px; font-weight: 800;
+	            cursor: pointer; text-decoration: none; display: inline-flex;
+	            align-items: center; gap: 7px;
+	        }
+	        .bitacora-btn.copy { background: #374151; color: white; }
+	        .bitacora-btn.wa { background: #16a34a; color: white; }
+	        .bitacora-btn.close { background: rgba(150,150,150,0.14); color: var(--text-color, #333); }
+
+	        #btn-perfil:hover { background: rgba(255,255,255,0.25) !important; transform: translateY(-1px); }
 
         .crumb { font-size: 13px; color: var(--text-muted); margin-bottom: 16px; }
         .crumb a { color: var(--primary); text-decoration: none; font-weight: 600; }
@@ -1871,13 +1958,18 @@
                         <span class="perfil-action-text">Ver mis equipos recibidos</span>
                         <span class="perfil-action-arrow">➔</span>
                     </a>
-                    <a href="{% url 'econotec:salida_lista' %}?tecnico_salida={{ request.user.id }}" class="perfil-action">
-                        <span class="perfil-action-icon">🔧</span>
-                        <span class="perfil-action-text">Ver mis equipos reparados</span>
-                        <span class="perfil-action-arrow">➔</span>
-                    </a>
-                </div>
-            </div>
+	                    <a href="{% url 'econotec:salida_lista' %}?tecnico_salida={{ request.user.id }}" class="perfil-action">
+	                        <span class="perfil-action-icon">🔧</span>
+	                        <span class="perfil-action-text">Ver mis equipos reparados</span>
+	                        <span class="perfil-action-arrow">➔</span>
+	                    </a>
+	                    <button type="button" id="btn-bitacora" class="perfil-action perfil-action-button">
+	                        <span class="perfil-action-icon">📝</span>
+	                        <span class="perfil-action-text" id="btn-bitacora-text">Generar bitácora</span>
+	                        <span class="perfil-action-arrow">➔</span>
+	                    </button>
+	                </div>
+	            </div>
             <div class="perfil-body" id="perfil-asesor-body" style="display: none;">
                 <div class="perfil-actions">
                     <a href="{% url 'econotec:ingreso_lista' %}?registrador={{ request.user.id }}&sede=todas" class="perfil-action">
@@ -1898,11 +1990,32 @@
                     </div>
                 </div>
             </div>
-        </div>
-    </div>
+	        </div>
+	    </div>
 
-    <script>
-        (function() {
+	    <div id="bitacora-modal" class="bitacora-modal" style="display: none;">
+	        <div class="bitacora-card" role="dialog" aria-modal="true" aria-labelledby="bitacora-title">
+	            <div class="bitacora-head">
+	                <h3 id="bitacora-title">Bitácora del día</h3>
+	                <button type="button" class="bitacora-close" id="bitacora-close" aria-label="Cerrar">×</button>
+	            </div>
+	            <div class="bitacora-body">
+	                <p class="bitacora-help">
+	                    Se genera con los registros guardados hoy en el sistema. Puedes editar las líneas antes de copiarlo o enviarlo.
+	                </p>
+	                <pre id="bitacora-encabezado" class="bitacora-fixed-header"></pre>
+	                <textarea id="bitacora-texto" class="bitacora-textarea" spellcheck="true"></textarea>
+	                <div class="bitacora-actions">
+	                    <button type="button" class="bitacora-btn close" id="bitacora-cerrar">Cerrar</button>
+	                    <button type="button" class="bitacora-btn copy" id="bitacora-copiar">Copiar TXT</button>
+	                    <button type="button" class="bitacora-btn wa" id="bitacora-whatsapp">Enviar por WhatsApp</button>
+	                </div>
+	            </div>
+	        </div>
+	    </div>
+
+	    <script>
+	        (function() {
             var overlay = document.getElementById('whatsapp-choice-overlay');
             if (!overlay) return;
 
@@ -2116,9 +2229,18 @@
         })();
 
         document.addEventListener('DOMContentLoaded', function() {
-            var btnPerfil = document.getElementById('btn-perfil');
-            var modalPerfil = document.getElementById('perfil-modal');
-            var perfilColorButtons = document.querySelectorAll('.perfil-color-btn');
+	            var btnPerfil = document.getElementById('btn-perfil');
+	            var modalPerfil = document.getElementById('perfil-modal');
+	            var perfilColorButtons = document.querySelectorAll('.perfil-color-btn');
+	            var btnBitacora = document.getElementById('btn-bitacora');
+	            var btnBitacoraText = document.getElementById('btn-bitacora-text');
+	            var bitacoraModal = document.getElementById('bitacora-modal');
+	            var bitacoraEncabezado = document.getElementById('bitacora-encabezado');
+	            var bitacoraTexto = document.getElementById('bitacora-texto');
+	            var bitacoraClose = document.getElementById('bitacora-close');
+	            var bitacoraCerrar = document.getElementById('bitacora-cerrar');
+	            var bitacoraCopiar = document.getElementById('bitacora-copiar');
+	            var bitacoraWhatsapp = document.getElementById('bitacora-whatsapp');
 
             function marcarColorPerfil(color) {
                 perfilColorButtons.forEach(function(btn) {
@@ -2126,13 +2248,148 @@
                 });
             }
 
-            function aplicarColorPerfil(color) {
-                document.getElementById('perfil-header').style.background = color;
-                marcarColorPerfil(color);
-            }
+	            function aplicarColorPerfil(color) {
+	                document.getElementById('perfil-header').style.background = color;
+	                marcarColorPerfil(color);
+	            }
 
-            perfilColorButtons.forEach(function(btn) {
-                btn.addEventListener('click', function() {
+	            function actualizarBotonBitacora(total) {
+	                if (!btnBitacora || !btnBitacoraText) return;
+	                if (total > 0) {
+	                    btnBitacora.classList.remove('is-empty');
+	                    btnBitacoraText.textContent = 'Generar bitácora (' + total + ')';
+	                } else {
+	                    btnBitacora.classList.add('is-empty');
+	                    btnBitacoraText.textContent = 'No ha hecho nada aún';
+	                }
+	            }
+
+	            function mostrarBitacoraVacia() {
+	                actualizarBotonBitacora(0);
+	                Swal.fire({
+	                    icon: 'info',
+	                    title: 'No ha hecho nada aún',
+	                    text: 'La bitácora de hoy está vacía. Se reinicia automáticamente después de las 12:00 AM.',
+	                    confirmButtonText: 'Cerrar',
+	                    confirmButtonColor: '#f97618',
+	                    timer: 4200,
+	                    timerProgressBar: true
+	                });
+	            }
+
+	            function abrirBitacora(data) {
+	                if (!bitacoraModal || !bitacoraTexto) return;
+	                data = data || {};
+	                if (typeof data === 'string') data = { texto: data };
+	                var encabezado = data.encabezado || '';
+	                var detalle = data.detalle || '';
+	                if (!encabezado && data.texto) {
+	                    var partes = String(data.texto).split(/\n\n/);
+	                    encabezado = partes.shift() || '';
+	                    detalle = partes.join('\n\n');
+	                }
+	                if (bitacoraEncabezado) bitacoraEncabezado.textContent = encabezado;
+	                bitacoraTexto.value = detalle || '';
+	                bitacoraModal.style.display = 'flex';
+	                window.setTimeout(function() { bitacoraTexto.focus(); }, 80);
+	            }
+
+	            function cerrarBitacora() {
+	                if (bitacoraModal) bitacoraModal.style.display = 'none';
+	            }
+
+	            function textoActualBitacora() {
+	                var encabezado = bitacoraEncabezado ? bitacoraEncabezado.textContent.trim() : '';
+	                var detalle = bitacoraTexto ? bitacoraTexto.value.trim() : '';
+	                if (encabezado && detalle) return encabezado + '\n\n' + detalle;
+	                return encabezado || detalle;
+	            }
+
+	            if (btnBitacora) {
+	                btnBitacora.addEventListener('click', function() {
+	                    btnBitacora.disabled = true;
+	                    if (btnBitacoraText) btnBitacoraText.textContent = 'Generando bitácora...';
+
+	                    fetch('{% url "econotec:api_bitacora_hoy" %}', {
+	                        headers: { 'X-Requested-With': 'XMLHttpRequest' },
+	                        credentials: 'same-origin'
+	                    })
+	                        .then(function(r) { return r.json(); })
+	                        .then(function(data) {
+	                            actualizarBotonBitacora(data.total || 0);
+	                            if (!data.tiene_datos) {
+	                                abrirBitacora(data);
+	                                return;
+	                            }
+	                            abrirBitacora(data);
+	                        })
+	                        .catch(function() {
+	                            Swal.fire({
+	                                icon: 'error',
+	                                title: 'No se pudo generar',
+	                                text: 'Intenta nuevamente en unos segundos.',
+	                                confirmButtonColor: '#f97618'
+	                            });
+	                        })
+	                        .finally(function() {
+	                            btnBitacora.disabled = false;
+	                        });
+	                });
+	            }
+
+	            [bitacoraClose, bitacoraCerrar].forEach(function(btn) {
+	                if (btn) btn.addEventListener('click', cerrarBitacora);
+	            });
+	            if (bitacoraModal) {
+	                bitacoraModal.addEventListener('click', function(event) {
+	                    if (event.target === bitacoraModal) cerrarBitacora();
+	                });
+	            }
+	            if (bitacoraCopiar) {
+	                bitacoraCopiar.addEventListener('click', function() {
+	                    var texto = textoActualBitacora();
+	                    if (!texto) {
+	                        mostrarBitacoraVacia();
+	                        return;
+	                    }
+	                    var fallbackCopy = function() {
+	                        var valorOriginal = bitacoraTexto.value;
+	                        bitacoraTexto.value = texto;
+	                        bitacoraTexto.focus();
+	                        bitacoraTexto.select();
+	                        document.execCommand('copy');
+	                        bitacoraTexto.value = valorOriginal;
+	                    };
+	                    var copyPromise = navigator.clipboard
+	                        ? navigator.clipboard.writeText(texto)
+	                        : Promise.resolve().then(fallbackCopy);
+	                    copyPromise.then(function() {
+	                        Swal.fire({
+	                            toast: true,
+	                            icon: 'success',
+	                            title: 'Bitácora copiada',
+	                            position: 'top-end',
+	                            showConfirmButton: false,
+	                            timer: 1800
+	                        });
+	                    }).catch(function() {
+	                        fallbackCopy();
+	                    });
+	                });
+	            }
+	            if (bitacoraWhatsapp) {
+	                bitacoraWhatsapp.addEventListener('click', function() {
+	                    var texto = textoActualBitacora();
+	                    if (!texto) {
+	                        mostrarBitacoraVacia();
+	                        return;
+	                    }
+	                    window.open('https://api.whatsapp.com/send?text=' + encodeURIComponent(texto), '_blank', 'noopener');
+	                });
+	            }
+
+	            perfilColorButtons.forEach(function(btn) {
+	                btn.addEventListener('click', function() {
                     var color = btn.dataset.color;
                     aplicarColorPerfil(color);
 
@@ -2178,9 +2435,10 @@
                             document.getElementById('perfil-nombre').textContent = data.nombre;
                             document.getElementById('perfil-email-texto').textContent = data.email || 'Correo no registrado';
                             document.getElementById('perfil-nivel-texto').textContent = 'NIVEL: ' + data.nivel;
-                            document.getElementById('perfil-header').style.background = data.color;
+	                            document.getElementById('perfil-header').style.background = data.color;
+	                            actualizarBotonBitacora(data.bitacora_total || 0);
 
-                            if (data.tipo_perfil === 'asesor') {
+	                            if (data.tipo_perfil === 'asesor') {
                                 document.getElementById('perfil-nivel-texto').textContent = 'ASESOR REGISTRADO';
                                 document.getElementById('perfil-header').style.backgroundSize = 'auto';
                                 document.getElementById('perfil-header').style.animation = 'none';

@@ -9,6 +9,8 @@ Estrategia:
 """
 from io import BytesIO
 from decimal import Decimal
+import base64
+import binascii
 
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, render
@@ -185,6 +187,28 @@ def _draw_label_value(c, x, y, label, value, label_w=140, font_size=9, line_w=30
     c.setFillColor(black)
     c.setFont('Helvetica', font_size)
     c.drawString(x + label_w + 4, y + 1, str(value or '—'))
+
+
+def _signature_image_reader(data_uri):
+    if not data_uri or not data_uri.startswith('data:image/png;base64,'):
+        return None
+    try:
+        raw = base64.b64decode(data_uri.split(',', 1)[1], validate=True)
+    except (binascii.Error, ValueError, IndexError):
+        return None
+
+    from reportlab.lib.utils import ImageReader
+    return ImageReader(BytesIO(raw))
+
+
+def _draw_signature_image(c, data_uri, x, y, w, h):
+    imagen = _signature_image_reader(data_uri)
+    if not imagen:
+        return
+    try:
+        c.drawImage(imagen, x, y, width=w, height=h, mask='auto', preserveAspectRatio=True, anchor='c')
+    except Exception:
+        return
 
 
 def _draw_box_field(c, x, y, w, h, label, value, fill_label_color=None):
@@ -418,6 +442,8 @@ def ingreso_pdf(request, pk):
 
         # ── Firmas ──
         c.setStrokeColor(Color(0.4, 0.4, 0.4))
+        if ingreso.firma_cliente and ingreso.firma_cliente_imagen:
+            _draw_signature_image(c, ingreso.firma_cliente_imagen, margen + 12, y + 3, 176, 44)
         c.line(margen, y, margen + 200, y)
         c.line(margen + 310, y, margen + 510, y)
 
@@ -564,6 +590,8 @@ def ingreso_pdf(request, pk):
 
         # ── Firmas ──
         c.setStrokeColor(Color(0.4, 0.4, 0.4))
+        if ingreso.firma_cliente and ingreso.firma_cliente_imagen:
+            _draw_signature_image(c, ingreso.firma_cliente_imagen, margen + 8, y + 3, 124, 44)
         c.line(margen, y, margen + 140, y)
         c.line(margen + 180, y, margen + 320, y)
         c.line(margen + 360, y, margen + 510, y)

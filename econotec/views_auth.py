@@ -26,6 +26,8 @@ from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_http_methods
 
+from .bitacora import registrar_bitacora
+
 
 SEDES_VALIDAS = {'guayaquil', 'quito'}
 CAPTCHA_SESSION_KEY = 'login_captcha_answer'
@@ -392,6 +394,12 @@ def login_con_sede(request):
 
 def logout_view(request):
     """Cierra la sesión y limpia la sede."""
+    if request.user.is_authenticated:
+        registrar_bitacora(
+            request.user,
+            'logout',
+            'Cierre de sesión en el sistema.',
+        )
     auth_logout(request)
     return redirect('login')
 
@@ -507,6 +515,11 @@ def registrar_correo_doble_factor(request):
                     auth_login(request, user, backend='django.contrib.auth.backends.ModelBackend')
                     request.session['sede_actual'] = sede
                     etiqueta = 'Guayaquil' if sede == 'guayaquil' else 'Quito'
+                    registrar_bitacora(
+                        user,
+                        'login',
+                        f'Inicio de sesión en el sistema ({etiqueta}).',
+                    )
                     messages.success(
                         request,
                         f'Correo registrado y sesión iniciada en sede {etiqueta}.'
@@ -605,6 +618,11 @@ def verificar_doble_factor(request):
                 auth_login(request, user, backend='django.contrib.auth.backends.ModelBackend')
                 request.session['sede_actual'] = sede
                 etiqueta = 'Guayaquil' if sede == 'guayaquil' else 'Quito'
+                registrar_bitacora(
+                    user,
+                    'login',
+                    f'Inicio de sesión en el sistema ({etiqueta}).',
+                )
                 messages.success(request, f'Sesión iniciada en sede {etiqueta}.')
                 return redirect(destino)
 

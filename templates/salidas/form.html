@@ -276,11 +276,22 @@
         {% endcomment %}
         {% if wa_link %}
             <div id="envio-pdf-card" class="envio-pdf-card">
-                <h3>📄 Enviar hoja de salida al cliente</h3>
+                <h3>
+                    {% if salida.estado_reparacion == 'retirado' or salida.cliente_ya_retiro %}
+                        💬 Enviar confirmación de retiro al cliente
+                    {% else %}
+                        📄 Enviar hoja de salida al cliente
+                    {% endif %}
+                </h3>
                 <p>
-                    El equipo está marcado como <strong>reparado / listo para entrega</strong>.
-                    Descarga la hoja de salida en PDF y envíasela al cliente por WhatsApp
-                    como respaldo de la entrega.
+                    {% if salida.estado_reparacion == 'retirado' or salida.cliente_ya_retiro %}
+                        El equipo está marcado como <strong>retirado por el cliente</strong>.
+                        Abre WhatsApp con un mensaje profesional de confirmación y agradecimiento.
+                    {% else %}
+                        El equipo está marcado como <strong>reparado / listo para entrega</strong>.
+                        Descarga la hoja de salida en PDF y envíasela al cliente por WhatsApp
+                        como respaldo de la entrega.
+                    {% endif %}
                 </p>
                 <div class="botones">
                     <a href="{% url 'econotec:salida_pdf' pk=salida.pk %}"

@@ -11,6 +11,7 @@ urlpatterns = [
     path('musica/', views.reproductor_musica, name='reproductor_musica'),
     path('api/perfil/', views.api_perfil, name='api_perfil'),
     path('api/perfil/color/', views.api_perfil_color, name='api_perfil_color'),
+    path('api/bitacora/hoy/', views.api_bitacora_hoy, name='api_bitacora_hoy'),
 
     # ── Alertas y Bot ──────────────────────────────────────────
     path('alertas/demoras/', views.alertas_demora, name='alertas_demora'),
