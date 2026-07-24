@@ -75,13 +75,14 @@
 <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:14px;">
     <div>
         <h2 class="page-title">Facturas <span class="accent">Realizadas</span></h2>
-        <p class="page-subtitle">Salidas con factura registrada — {{ mes_nombre }} {{ year }} — {{ total }} resultado{{ total|pluralize }}</p>
+        <p class="page-subtitle">Salidas con factura registrada — {{ periodo_label }} — {{ total }} resultado{{ total|pluralize }}</p>
     </div>
     <a href="{% url 'econotec:salida_menu' %}" class="btn btn-secondary">← Volver a Salidas</a>
 </div>
 
 <form method="get" class="toolbar" style="margin-top:18px;">
     <input type="text" name="q" value="{{ q }}" placeholder="Buscar cliente, equipo, RUC, correo…" class="form-input" style="min-width:260px;">
+    {% include 'includes/filtro_fecha_rango.html' %}
     <select name="ano" class="form-input" style="max-width:120px;">
         {% for a in anos_disp %}
             <option value="{{ a }}" {% if a == year %}selected{% endif %}>{{ a }}</option>

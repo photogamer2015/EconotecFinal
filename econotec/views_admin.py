@@ -26,6 +26,7 @@ from .gamificacion import (
 )
 from .busqueda import filtrar_objetos_normalizado, texto_salida_busqueda, total_resultados
 from .bitacora import construir_bitacora_usuario
+from .date_filters import aplicar_rango_fecha, contexto_rango_fecha, obtener_rango_fecha
 from .models import (
     IngresoEquipo, SalidaEquipo, Abono, Egreso, CategoriaEgreso, Cliente,
     AvisoPanel, SEDES_EQUIPOS, HorarioTecnico,
@@ -587,16 +588,29 @@ def salida_facturas_lista(request):
     mes_param = (request.GET.get('mes') or str(hoy.month)).strip().lower()
     month = None if mes_param == 'todos' else int(mes_param)
     q = (request.GET.get('q') or '').strip()
+    fecha_desde, fecha_hasta, fecha_preset = obtener_rango_fecha(request)
+    rango_activo = bool(fecha_desde or fecha_hasta)
 
     base_qs = (
         SalidaEquipo.objects
         .select_related('ingreso', 'ingreso__cliente', 'registrado_por', 'tecnico_reparo')
-        .filter(fecha_salida__year=year, factura_realizada='si')
+        .filter(factura_realizada='si')
         .order_by('-fecha_salida', '-creado')
     )
 
-    if month is not None:
-        base_qs = base_qs.filter(fecha_salida__month=month)
+    if rango_activo:
+        base_qs = aplicar_rango_fecha(base_qs, 'fecha_salida', fecha_desde, fecha_hasta)
+        periodo_label = contexto_rango_fecha(
+            fecha_desde,
+            fecha_hasta,
+            fecha_preset,
+            etiqueta='Fecha factura',
+        )['fecha_resumen'].replace('Fecha factura: ', '')
+    else:
+        base_qs = base_qs.filter(fecha_salida__year=year)
+        if month is not None:
+            base_qs = base_qs.filter(fecha_salida__month=month)
+        periodo_label = f'{MESES_ES[month] if month else "Todos los meses"} {year}'
 
     total_periodo = base_qs.count()
     qs = base_qs
@@ -608,18 +622,26 @@ def salida_facturas_lista(request):
     if not anos_disp:
         anos_disp = [hoy.year]
 
-    return render(request, 'admin_panel/facturas_salidas.html', {
+    context = {
         'year': year,
         'month': month,
         'mes_param': mes_param,
         'mes_nombre': MESES_ES[month] if month else 'Todos los meses',
+        'periodo_label': periodo_label,
         'meses_es': MESES_ES,
         'anos_disp': anos_disp,
         'q': q,
         'salidas': qs,
         'total': total_resultados(qs),
         'total_periodo': total_periodo,
-    })
+    }
+    context.update(contexto_rango_fecha(
+        fecha_desde,
+        fecha_hasta,
+        fecha_preset,
+        etiqueta='Fecha factura',
+    ))
+    return render(request, 'admin_panel/facturas_salidas.html', context)
 
 
 @admin_requerido

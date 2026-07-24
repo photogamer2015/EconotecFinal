@@ -90,6 +90,7 @@
 <div class="toolbar">
     <form method="get">
         <input type="text" name="q" value="{{ q }}" placeholder="Buscar por N° equipo, cliente, cédula, marca…" class="form-input">
+        {% include 'includes/filtro_fecha_rango.html' %}
         <select name="sede" class="form-input" style="max-width:180px;">
             <option value="todas" {% if sede_filtro == 'todas' or not sede_filtro %}selected{% endif %}>— Todas las sedes —</option>
             <option value="guayaquil" {% if sede_filtro == 'guayaquil' %}selected{% endif %}>Guayaquil</option>

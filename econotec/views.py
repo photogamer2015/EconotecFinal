@@ -34,6 +34,7 @@ from .models import (
     UsuarioActividad, NotificacionAsesora, BitacoraTecnico,
 )
 from .bitacora import registrar_bitacora, nombre_corto_usuario, construir_bitacora_usuario
+from .date_filters import aplicar_rango_fecha, contexto_rango_fecha, obtener_rango_fecha
 from .permisos import admin_requerido, tecnico_requerido, es_admin, es_asesor, es_tecnico
 from .gamificacion import (
     SALIDA_BUENA_ESTADOS,
@@ -966,6 +967,7 @@ def ingreso_lista(request):
     tipo = (request.GET.get('tipo') or '').strip()
     valor = (request.GET.get('valor') or '').strip()
     firma = (request.GET.get('firma') or '').strip()
+    fecha_desde, fecha_hasta, fecha_preset = obtener_rango_fecha(request)
 
     # Filtro por sede:
     # - Si el querystring trae explícitamente sede=todas → no filtrar
@@ -1027,6 +1029,8 @@ def ingreso_lista(request):
     elif firma == 'sin_firma':
         qs = qs.filter(Q(firma_cliente=False) | Q(firma_cliente_imagen=''))
 
+    qs = aplicar_rango_fecha(qs, 'fecha_ingreso', fecha_desde, fecha_hasta)
+
     tecnico_filtro = (request.GET.get('tecnico') or '').strip()
     registrador_filtro = (request.GET.get('registrador') or '').strip()
     asesor_filtro = (request.GET.get('asesor') or '').strip()
@@ -1064,7 +1068,7 @@ def ingreso_lista(request):
         ('salida_garantia', '   ↳ Salida por garantía'),
     ]
 
-    return render(request, 'ingresos/lista.html', {
+    context = {
         'ingresos': qs,
         'q': q,
         'estado_filtro': estado,
@@ -1081,7 +1085,14 @@ def ingreso_lista(request):
         'estados': estados_filtro,
         'tipos': IngresoEquipo._meta.get_field('tipo_equipo').choices,
         'total': total_resultados(qs),
-    })
+    }
+    context.update(contexto_rango_fecha(
+        fecha_desde,
+        fecha_hasta,
+        fecha_preset,
+        etiqueta='Fecha ingreso',
+    ))
+    return render(request, 'ingresos/lista.html', context)
 
 
 @tecnico_requerido
@@ -1553,6 +1564,7 @@ def salida_lista(request):
     sede_filtro = (request.GET.get('sede') or '').strip().lower()
     tecnico_registro_filtro = (request.GET.get('tecnico_registro') or '').strip()
     tecnico_salida_filtro = (request.GET.get('tecnico_salida') or '').strip()
+    fecha_desde, fecha_hasta, fecha_preset = obtener_rango_fecha(request)
 
     qs = (SalidaEquipo.objects
           .select_related('ingreso', 'ingreso__cliente', 'registrado_por', 'tecnico_reparo')
@@ -1567,6 +1579,8 @@ def salida_lista(request):
     if tecnico_salida_filtro:
         qs = qs.filter(tecnico_reparo_id=tecnico_salida_filtro)
 
+    qs = aplicar_rango_fecha(qs, 'fecha_salida', fecha_desde, fecha_hasta)
+
     qs = filtrar_objetos_normalizado(qs, q, texto_salida_busqueda)
 
     from django.contrib.auth import get_user_model
@@ -1578,7 +1592,7 @@ def salida_lista(request):
     # Excluir 'chatarrerizacion' del filtro de vistas públicas
     estados_filtro = [e for e in SalidaEquipo.ESTADO_REPARACION if e[0] != 'chatarrerizacion']
 
-    return render(request, 'salidas/lista.html', {
+    context = {
         'salidas': qs,
         'q': q,
         'estado_filtro': estado,
@@ -1589,7 +1603,14 @@ def salida_lista(request):
         'tecnicos_solo': tecnicos_solo,
         'estados': estados_filtro,
         'total': total_resultados(qs),
-    })
+    }
+    context.update(contexto_rango_fecha(
+        fecha_desde,
+        fecha_hasta,
+        fecha_preset,
+        etiqueta='Fecha salida',
+    ))
+    return render(request, 'salidas/lista.html', context)
 
 
 @tecnico_requerido

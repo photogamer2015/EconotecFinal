@@ -50,6 +50,7 @@
 <div class="toolbar">
     <form method="get" style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
         <input type="text" name="q" value="{{ q }}" placeholder="Buscar por N°, cliente, marca…" class="form-input">
+        {% include 'includes/filtro_fecha_rango.html' %}
         <select name="estado" class="form-input" style="max-width:220px;">
             <option value="">— Estado de reparación —</option>
             {% for value, label in estados %}

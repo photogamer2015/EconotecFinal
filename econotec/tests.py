@@ -1153,6 +1153,29 @@ class VentasTests(TestCase):
         self.assertNotContains(response_sin_firma, ingreso_con_firma.codigo_equipo)
         self.assertContains(response_sin_firma, 'value="sin_firma" selected')
 
+    def test_lista_equipos_filtra_por_rango_fecha_ingreso(self):
+        ingreso_julio = self.crear_ingreso_reparacion(
+            fecha_ingreso=date(2026, 7, 20),
+            marca='Epson',
+            modelo_serie='L3250 rango',
+        )
+        ingreso_junio = self.crear_ingreso_reparacion(
+            fecha_ingreso=date(2026, 6, 25),
+            marca='HP',
+            modelo_serie='Elitebook fuera rango',
+        )
+
+        response = self.client.get(reverse('econotec:ingreso_lista'), {
+            'fecha_desde': '2026-07-01',
+            'fecha_hasta': '2026-07-31',
+        })
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context['total'], 1)
+        self.assertContains(response, ingreso_julio.codigo_equipo)
+        self.assertNotContains(response, ingreso_junio.codigo_equipo)
+        self.assertContains(response, 'Fecha ingreso: 01/07/2026 - 31/07/2026')
+
     def test_busqueda_lista_salidas_ignora_tildes_y_mayusculas(self):
         self.cliente_existente.nombres = 'Yandri Guevará'
         self.cliente_existente.save(update_fields=['nombres'])
@@ -1173,6 +1196,39 @@ class VentasTests(TestCase):
         self.assertEqual(response.context['total'], 1)
         self.assertContains(response, ingreso.codigo_equipo)
         self.assertContains(response, 'Yandri Guevará')
+
+    def test_lista_salidas_filtra_por_rango_fecha_salida(self):
+        ingreso_julio = self.crear_ingreso_reparacion(estado='entregado')
+        ingreso_junio = self.crear_ingreso_reparacion(estado='entregado')
+        SalidaEquipo.objects.create(
+            ingreso=ingreso_julio,
+            fecha_salida=date(2026, 7, 20),
+            estado_reparacion='pendiente_retiro',
+            cliente_recibe_conforme='si',
+            valor_final_cobrado=Decimal('0.00'),
+            metodo_pago_final='sin_pago',
+            registrado_por=self.usuario,
+        )
+        SalidaEquipo.objects.create(
+            ingreso=ingreso_junio,
+            fecha_salida=date(2026, 6, 25),
+            estado_reparacion='pendiente_retiro',
+            cliente_recibe_conforme='si',
+            valor_final_cobrado=Decimal('0.00'),
+            metodo_pago_final='sin_pago',
+            registrado_por=self.usuario,
+        )
+
+        response = self.client.get(reverse('econotec:salida_lista'), {
+            'fecha_desde': '2026-07-01',
+            'fecha_hasta': '2026-07-31',
+        })
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context['total'], 1)
+        self.assertContains(response, ingreso_julio.codigo_equipo)
+        self.assertNotContains(response, ingreso_junio.codigo_equipo)
+        self.assertContains(response, 'Fecha salida: 01/07/2026 - 31/07/2026')
 
     def test_estado_visual_muestra_pendiente_retiro_si_salida_esta_pendiente(self):
         ingreso = self.crear_ingreso_reparacion(
@@ -1986,6 +2042,61 @@ class VentasTests(TestCase):
         self.assertNotContains(response, 'Factura realizada: No')
         self.assertNotContains(response, ingreso_sin_factura.codigo_equipo)
 
+    def test_salida_facturas_lista_filtra_por_rango_fecha_salida(self):
+        self.client.force_login(self.admin)
+        ingreso_julio = self.crear_ingreso_reparacion(
+            estado='entregado',
+            marca='Epson',
+            modelo_serie='L355 facturada',
+        )
+        ingreso_junio = self.crear_ingreso_reparacion(
+            estado='entregado',
+            marca='HP',
+            modelo_serie='415 facturada fuera',
+        )
+        SalidaEquipo.objects.create(
+            ingreso=ingreso_julio,
+            fecha_salida=date(2026, 7, 20),
+            estado_reparacion='retirado',
+            cliente_recibe_conforme='si',
+            valor_final_cobrado=Decimal('80.00'),
+            metodo_pago_final='efectivo',
+            factura_realizada='si',
+            factura_nombres='Yandri Guevara',
+            factura_cedula='1207342716',
+            factura_correo='julio@example.com',
+            registrado_por=self.admin,
+        )
+        SalidaEquipo.objects.create(
+            ingreso=ingreso_junio,
+            fecha_salida=date(2026, 6, 25),
+            estado_reparacion='retirado',
+            cliente_recibe_conforme='si',
+            valor_final_cobrado=Decimal('90.00'),
+            metodo_pago_final='efectivo',
+            factura_realizada='si',
+            factura_nombres='Yandri Guevara',
+            factura_cedula='1207342716',
+            factura_correo='junio@example.com',
+            registrado_por=self.admin,
+        )
+
+        response = self.client.get(reverse('econotec:salida_facturas_lista'), {
+            'ano': '2026',
+            'mes': 'todos',
+            'fecha_desde': '2026-07-01',
+            'fecha_hasta': '2026-07-31',
+        })
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context['total'], 1)
+        self.assertEqual(response.context['total_periodo'], 1)
+        self.assertContains(response, ingreso_julio.codigo_equipo)
+        self.assertContains(response, 'julio@example.com')
+        self.assertNotContains(response, ingreso_junio.codigo_equipo)
+        self.assertNotContains(response, 'junio@example.com')
+        self.assertContains(response, 'Fecha factura: 01/07/2026 - 31/07/2026')
+
     def test_salida_menu_muestra_acceso_a_facturas_realizadas(self):
         ingreso = self.crear_ingreso_reparacion(estado='entregado')
         SalidaEquipo.objects.create(
@@ -2007,6 +2118,8 @@ class VentasTests(TestCase):
         self.assertContains(response, 'Facturas Realizadas')
         self.assertContains(response, reverse('econotec:salida_facturas_lista'))
         self.assertContains(response, '1 salida con factura registrada.')
+        self.assertNotContains(response, 'Buscar salidas por fecha')
+        self.assertNotContains(response, 'Buscar facturas por fecha')
 
     def test_busqueda_pagos_ignora_tildes_y_mayusculas(self):
         self.cliente_existente.nombres = 'Yandri Guevará'
@@ -2771,6 +2884,8 @@ class VentasTests(TestCase):
         self.assertContains(response, 'Lista de equipos sin valor acordado.')
         self.assertContains(response, '?sede=todas&valor=pendiente')
         self.assertContains(response, '1 pendiente')
+        self.assertNotContains(response, 'Buscar equipos por fecha')
+        self.assertNotContains(response, 'Filtrar equipos')
 
     def test_lista_filtra_valor_acordado_pendiente(self):
         pendiente = self.crear_ingreso_reparacion(valor_acordado=None)

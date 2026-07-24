@@ -1,0 +1,344 @@
+<style>
+    .date-range-filter {
+        position: relative;
+        min-width: 260px;
+    }
+    .date-range-trigger {
+        align-items: center;
+        background: var(--card-bg);
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        color: var(--text-main);
+        cursor: pointer;
+        display: flex;
+        font: inherit;
+        font-weight: 800;
+        gap: 8px;
+        justify-content: space-between;
+        min-height: 42px;
+        padding: 10px 12px;
+        text-align: left;
+        width: 100%;
+    }
+    .date-range-trigger:focus,
+    .date-range-trigger.is-open {
+        border-color: var(--primary);
+        box-shadow: 0 0 0 3px rgba(249, 118, 24, 0.13);
+        outline: none;
+    }
+    .date-range-trigger-label {
+        flex: 1;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .date-range-panel {
+        background: var(--card-bg);
+        border: 1px solid var(--border-color);
+        border-radius: 12px;
+        box-shadow: 0 22px 55px rgba(15, 23, 42, 0.18);
+        display: grid;
+        gap: 14px;
+        left: 0;
+        min-width: min(560px, calc(100vw - 36px));
+        padding: 16px;
+        position: absolute;
+        top: calc(100% + 8px);
+        z-index: 80;
+    }
+    .date-range-panel[hidden] {
+        display: none !important;
+    }
+    .date-range-presets {
+        display: grid;
+        gap: 8px;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .date-range-preset {
+        align-items: center;
+        background: var(--bg);
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        color: var(--text-main);
+        cursor: pointer;
+        display: flex;
+        font: inherit;
+        font-size: 13px;
+        font-weight: 800;
+        gap: 8px;
+        min-height: 38px;
+        padding: 8px 10px;
+        text-align: left;
+    }
+    .date-range-preset::before {
+        border: 1px solid #b8c2d0;
+        border-radius: 50%;
+        content: "";
+        display: inline-block;
+        height: 14px;
+        width: 14px;
+    }
+    .date-range-preset.is-active {
+        background: #fff7ed;
+        border-color: var(--primary);
+        color: var(--primary-dark);
+    }
+    .date-range-preset.is-active::before {
+        background: var(--primary);
+        border-color: var(--primary);
+        box-shadow: inset 0 0 0 3px #fff;
+    }
+    .date-range-fields {
+        display: grid;
+        gap: 10px;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .date-range-field {
+        display: grid;
+        gap: 5px;
+    }
+    .date-range-field span {
+        color: var(--text-muted);
+        font-size: 12px;
+        font-weight: 900;
+        text-transform: uppercase;
+    }
+    .date-range-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        justify-content: flex-end;
+    }
+    [data-theme="dark"] .date-range-preset.is-active {
+        background: rgba(249, 118, 24, 0.18);
+        color: #ffb076;
+    }
+    @media (max-width: 700px) {
+        .date-range-filter {
+            width: 100%;
+        }
+        .date-range-panel {
+            left: 0;
+            min-width: 100%;
+            position: absolute;
+        }
+        .date-range-presets,
+        .date-range-fields {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
+
+<div class="date-range-filter" data-date-range-filter>
+    <button type="button" class="date-range-trigger" data-date-trigger>
+        <span>📅</span>
+        <span class="date-range-trigger-label" data-date-summary>{{ fecha_resumen }}</span>
+        <span>▾</span>
+    </button>
+    <input type="hidden" name="fecha_preset" value="{{ fecha_preset }}" data-date-preset>
+    <div class="date-range-panel" data-date-panel hidden>
+        <div class="date-range-presets">
+            <button type="button" class="date-range-preset" data-preset="">Sin filtro</button>
+            <button type="button" class="date-range-preset" data-preset="hoy">Hoy</button>
+            <button type="button" class="date-range-preset" data-preset="ayer">Ayer</button>
+            <button type="button" class="date-range-preset" data-preset="ultimos_7">Últimos 7 días</button>
+            <button type="button" class="date-range-preset" data-preset="ultimos_14">Últimos 14 días</button>
+            <button type="button" class="date-range-preset" data-preset="ultimos_30">Últimos 30 días</button>
+            <button type="button" class="date-range-preset" data-preset="esta_semana">Esta semana</button>
+            <button type="button" class="date-range-preset" data-preset="este_mes">Este mes</button>
+            <button type="button" class="date-range-preset" data-preset="mes_pasado">El mes pasado</button>
+        </div>
+        <div class="date-range-fields">
+            <label class="date-range-field">
+                <span>Desde</span>
+                <input type="date" name="fecha_desde" value="{{ fecha_desde }}" class="form-input" data-date-from>
+            </label>
+            <label class="date-range-field">
+                <span>Hasta</span>
+                <input type="date" name="fecha_hasta" value="{{ fecha_hasta }}" class="form-input" data-date-to>
+            </label>
+        </div>
+        <div class="date-range-actions">
+            <button type="button" class="btn btn-secondary" data-date-clear>Limpiar</button>
+            <button type="button" class="btn btn-secondary" data-date-close>Cancelar</button>
+            <button type="button" class="btn btn-primary" data-date-apply>Aceptar</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    (function() {
+        if (window.econotecDateRangeFilterReady) {
+            return;
+        }
+        window.econotecDateRangeFilterReady = true;
+
+        function localISO(date) {
+            var copy = new Date(date.getTime());
+            copy.setMinutes(copy.getMinutes() - copy.getTimezoneOffset());
+            return copy.toISOString().slice(0, 10);
+        }
+
+        function addDays(date, days) {
+            var copy = new Date(date.getTime());
+            copy.setDate(copy.getDate() + days);
+            return copy;
+        }
+
+        function monthBounds(date) {
+            var first = new Date(date.getFullYear(), date.getMonth(), 1);
+            var last = new Date(date.getFullYear(), date.getMonth() + 1, 0);
+            return [first, last];
+        }
+
+        function presetRange(preset) {
+            var today = new Date();
+            if (preset === 'hoy') return [today, today];
+            if (preset === 'ayer') {
+                var yesterday = addDays(today, -1);
+                return [yesterday, yesterday];
+            }
+            if (preset === 'ultimos_7') return [addDays(today, -6), today];
+            if (preset === 'ultimos_14') return [addDays(today, -13), today];
+            if (preset === 'ultimos_30') return [addDays(today, -29), today];
+            if (preset === 'esta_semana') {
+                var day = today.getDay() || 7;
+                return [addDays(today, 1 - day), today];
+            }
+            if (preset === 'este_mes') return [new Date(today.getFullYear(), today.getMonth(), 1), today];
+            if (preset === 'mes_pasado') return monthBounds(new Date(today.getFullYear(), today.getMonth() - 1, 1));
+            return ['', ''];
+        }
+
+        function formatDate(iso) {
+            if (!iso) return '';
+            var parts = iso.split('-');
+            if (parts.length !== 3) return iso;
+            return parts[2] + '/' + parts[1] + '/' + parts[0];
+        }
+
+        function submitForm(form) {
+            if (form.requestSubmit) {
+                form.requestSubmit();
+            } else {
+                form.submit();
+            }
+        }
+
+        function setupFilter(root) {
+            var trigger = root.querySelector('[data-date-trigger]');
+            var panel = root.querySelector('[data-date-panel]');
+            var presetInput = root.querySelector('[data-date-preset]');
+            var fromInput = root.querySelector('[data-date-from]');
+            var toInput = root.querySelector('[data-date-to]');
+            var summary = root.querySelector('[data-date-summary]');
+            var form = root.closest('form');
+
+            function closePanel() {
+                panel.hidden = true;
+                trigger.classList.remove('is-open');
+            }
+
+            function openPanel() {
+                document.querySelectorAll('[data-date-range-filter]').forEach(function(otherRoot) {
+                    if (otherRoot === root) {
+                        return;
+                    }
+                    var otherPanel = otherRoot.querySelector('[data-date-panel]');
+                    var otherTrigger = otherRoot.querySelector('[data-date-trigger]');
+                    if (otherPanel) otherPanel.hidden = true;
+                    if (otherTrigger) otherTrigger.classList.remove('is-open');
+                });
+                panel.hidden = false;
+                trigger.classList.add('is-open');
+                markActivePreset();
+            }
+
+            function markActivePreset() {
+                root.querySelectorAll('[data-preset]').forEach(function(button) {
+                    button.classList.toggle('is-active', button.dataset.preset === presetInput.value);
+                });
+            }
+
+            function updateSummary() {
+                var from = fromInput.value;
+                var to = toInput.value;
+                var label = (summary.textContent.split(':')[0] || 'Fecha').trim();
+                if (from && to) {
+                    summary.textContent = from === to
+                        ? label + ': ' + formatDate(from)
+                        : label + ': ' + formatDate(from) + ' - ' + formatDate(to);
+                } else if (from) {
+                    summary.textContent = label + ': desde ' + formatDate(from);
+                } else if (to) {
+                    summary.textContent = label + ': hasta ' + formatDate(to);
+                } else {
+                    summary.textContent = label + ': sin filtro';
+                }
+            }
+
+            trigger.addEventListener('click', function(event) {
+                event.stopPropagation();
+                if (panel.hidden) {
+                    openPanel();
+                } else {
+                    closePanel();
+                }
+            });
+
+            root.querySelectorAll('[data-preset]').forEach(function(button) {
+                button.addEventListener('click', function() {
+                    var preset = button.dataset.preset || '';
+                    presetInput.value = preset;
+                    var range = presetRange(preset);
+                    fromInput.value = range[0] ? localISO(range[0]) : '';
+                    toInput.value = range[1] ? localISO(range[1]) : '';
+                    markActivePreset();
+                    updateSummary();
+                });
+            });
+
+            [fromInput, toInput].forEach(function(input) {
+                input.addEventListener('change', function() {
+                    presetInput.value = '';
+                    markActivePreset();
+                    updateSummary();
+                });
+            });
+
+            root.querySelector('[data-date-clear]').addEventListener('click', function() {
+                presetInput.value = '';
+                fromInput.value = '';
+                toInput.value = '';
+                updateSummary();
+                closePanel();
+                submitForm(form);
+            });
+
+            root.querySelector('[data-date-close]').addEventListener('click', closePanel);
+            root.querySelector('[data-date-apply]').addEventListener('click', function() {
+                closePanel();
+                submitForm(form);
+            });
+
+            panel.addEventListener('click', function(event) {
+                event.stopPropagation();
+            });
+            markActivePreset();
+        }
+
+        document.addEventListener('click', function() {
+            document.querySelectorAll('[data-date-range-filter]').forEach(function(root) {
+                var panel = root.querySelector('[data-date-panel]');
+                var trigger = root.querySelector('[data-date-trigger]');
+                if (panel) panel.hidden = true;
+                if (trigger) trigger.classList.remove('is-open');
+            });
+        });
+
+        document.addEventListener('DOMContentLoaded', function() {
+            document.querySelectorAll('[data-date-range-filter]').forEach(setupFilter);
+        });
+    })();
+</script>
