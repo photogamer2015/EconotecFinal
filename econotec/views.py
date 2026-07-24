@@ -517,6 +517,12 @@ def reproductor_musica(request):
     return render(request, 'musica.html')
 
 
+@login_required
+def inventario_menu(request):
+    """Pantalla inicial del inventario por sede."""
+    return render(request, 'inventario/menu.html')
+
+
 # ═════════════════════════════════════════════════════════════════
 # Ingreso de Equipos
 # ═════════════════════════════════════════════════════════════════

@@ -1,0 +1,134 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Inventario — Econotec{% endblock %}
+
+{% block content %}
+<style>
+    .inventario-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 22px;
+        width: min(100%, 1040px);
+    }
+    .inventario-card {
+        position: relative;
+        min-height: 300px;
+        aspect-ratio: 1.55 / 1;
+        padding: 0;
+        border-left: 5px solid var(--primary);
+        overflow: hidden;
+        text-decoration: none;
+        color: inherit;
+    }
+    .inventario-card.quito {
+        border-left-color: #0d47a1;
+    }
+    .inventario-card::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background:
+            linear-gradient(180deg, rgba(7, 10, 18, 0.06) 0%, rgba(7, 10, 18, 0.28) 42%, rgba(7, 10, 18, 0.74) 100%);
+        z-index: 1;
+    }
+    .inventario-photo {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        object-position: center;
+    }
+    .inventario-card.quito .inventario-photo {
+        object-position: center;
+    }
+    .inventario-content {
+        position: absolute;
+        left: 24px;
+        right: 24px;
+        bottom: 22px;
+        z-index: 2;
+    }
+    .inventario-card h3 {
+        margin: 0 0 6px;
+        font-size: 30px;
+        line-height: 1.1;
+        color: #ffffff;
+        text-shadow: 0 2px 12px rgba(0, 0, 0, 0.42);
+    }
+    .inventario-card .subzona {
+        margin: 0;
+        display: inline-flex;
+        align-items: center;
+        min-height: 30px;
+        padding: 5px 12px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.92);
+        color: #1f2937;
+        font-size: 15px;
+        font-weight: 850;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+    }
+    @media (max-width: 760px) {
+        .inventario-grid {
+            grid-template-columns: 1fr;
+            max-width: none;
+        }
+        .inventario-card {
+            min-height: 270px;
+            aspect-ratio: 1.65 / 1;
+        }
+        .inventario-content {
+            left: 18px;
+            right: 18px;
+            bottom: 18px;
+        }
+        .inventario-card h3 {
+            font-size: 25px;
+        }
+    }
+    @media (max-width: 420px) {
+        .inventario-grid {
+            gap: 16px;
+        }
+        .inventario-card {
+            min-height: 232px;
+            aspect-ratio: 1.22 / 1;
+            border-left-width: 4px;
+        }
+        .inventario-card h3 {
+            font-size: 23px;
+        }
+        .inventario-card .subzona {
+            min-height: 28px;
+            padding: 4px 10px;
+            font-size: 13px;
+        }
+    }
+</style>
+
+<div class="crumb">
+    <a href="{% url 'econotec:bienvenida' %}">Inicio</a> / Inventario
+</div>
+
+<h2 class="page-title">Inventario</h2>
+<p class="page-subtitle">Selecciona la sede para empezar a organizar el inventario.</p>
+
+<div class="inventario-grid">
+    <div class="card-box inventario-card">
+        <img src="{% static 'inventario/guayaquil.jpg' %}" alt="Guayaquil" class="inventario-photo">
+        <div class="inventario-content">
+            <h3>Guayaquil</h3>
+            <p class="subzona">Norte - Centro</p>
+        </div>
+    </div>
+
+    <div class="card-box inventario-card quito">
+        <img src="{% static 'inventario/quito.jpg' %}" alt="Quito" class="inventario-photo">
+        <div class="inventario-content">
+            <h3>Quito</h3>
+        </div>
+    </div>
+</div>
+{% endblock %}

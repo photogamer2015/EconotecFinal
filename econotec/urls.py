@@ -9,6 +9,7 @@ urlpatterns = [
     path('dashboard-details/<str:tipo>/', views.dashboard_details, name='dashboard_details'),
     path('ayuda/', views.ayuda, name='ayuda'),
     path('musica/', views.reproductor_musica, name='reproductor_musica'),
+    path('inventario/', views.inventario_menu, name='inventario_menu'),
     path('api/perfil/', views.api_perfil, name='api_perfil'),
     path('api/perfil/color/', views.api_perfil_color, name='api_perfil_color'),
     path('api/bitacora/hoy/', views.api_bitacora_hoy, name='api_bitacora_hoy'),

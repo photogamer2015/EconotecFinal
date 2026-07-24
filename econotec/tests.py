@@ -43,6 +43,14 @@ class LoginCaptchaTests(TestCase):
         self.assertEqual(response.status_code, 200)
         return str(self.client.session[CAPTCHA_SESSION_KEY])
 
+    def test_login_modal_sede_usa_imagenes_de_sede(self):
+        response = self.client.get(reverse('login'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'id="sede-confirm-img"')
+        self.assertContains(response, 'inventario/guayaquil.jpg')
+        self.assertContains(response, 'inventario/quito.jpg')
+
     def test_login_rechaza_captcha_incorrecto(self):
         respuesta = self._captcha_answer()
 
@@ -733,12 +741,26 @@ class VentasTests(TestCase):
         response = self.client.get(reverse('econotec:bienvenida'))
 
         self.assertEqual(response.status_code, 200)
+        self.assertContains(response, '📦 Inventario')
+        self.assertContains(response, f'href="{reverse("econotec:inventario_menu")}"')
         self.assertContains(response, 'id="btn-perfil"')
         self.assertContains(response, 'Asesor')
         self.assertContains(response, 'Ver equipos que registré')
         self.assertContains(response, f'?registrador={self.vendedor.pk}&sede=todas')
         self.assertContains(response, 'Cambiar color del perfil')
         self.assertContains(response, 'data-color="#ec4899"')
+
+    def test_inventario_menu_muestra_sedes_iniciales(self):
+        response = self.client.get(reverse('econotec:inventario_menu'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Inventario')
+        self.assertContains(response, 'Guayaquil')
+        self.assertContains(response, 'Norte - Centro')
+        self.assertContains(response, 'Quito')
+        self.assertContains(response, 'inventario/guayaquil.jpg')
+        self.assertContains(response, 'inventario/quito.jpg')
+        self.assertNotContains(response, 'Venta de Producto')
 
     def test_detalle_muestra_asesor_que_registro_el_equipo(self):
         ingreso = self.crear_ingreso_reparacion(registrado_por=self.vendedor)
