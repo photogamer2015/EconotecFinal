@@ -319,6 +319,59 @@
         justify-content: center;
         width: 100%;
     }
+    .reparacion-check-wrap {
+        display: grid;
+        gap: 8px;
+        margin-top: 12px;
+    }
+    .reparacion-check-btn {
+        align-items: center;
+        background: #dcfce7;
+        border: 1px solid #86efac;
+        border-radius: 8px;
+        color: #166534;
+        cursor: pointer;
+        display: flex;
+        font-weight: 900;
+        gap: 9px;
+        justify-content: center;
+        line-height: 1.2;
+        min-height: 48px;
+        padding: 11px 12px;
+        transition: transform 0.16s ease, box-shadow 0.16s ease, background 0.16s ease;
+        width: 100%;
+    }
+    .reparacion-check-btn:hover {
+        box-shadow: 0 10px 22px rgba(34, 197, 94, 0.18);
+        transform: translateY(-1px);
+    }
+    .reparacion-check-btn:disabled {
+        cursor: wait;
+        opacity: 0.74;
+        transform: none;
+    }
+    .reparacion-check-btn.is-done {
+        background: #ecfdf5;
+        border-color: #22c55e;
+        color: #047857;
+    }
+    .reparacion-check-box {
+        align-items: center;
+        border: 2px solid currentColor;
+        border-radius: 5px;
+        display: inline-flex;
+        flex: 0 0 19px;
+        height: 19px;
+        justify-content: center;
+        width: 19px;
+    }
+    .reparacion-check-help {
+        color: var(--text-muted);
+        font-size: 12px;
+        font-weight: 700;
+        line-height: 1.35;
+        text-align: center;
+    }
     .pago-mixto-detalle {
         display: grid;
         gap: 8px;
@@ -525,6 +578,22 @@
                     <div class="estado-equipo-garantia-ref">🛡 Garantía de {{ ingreso.equipo_garantia_referencia }}</div>
                 {% endif %}
             </div>
+            {% if mostrar_check_reparacion %}
+            <div class="reparacion-check-wrap">
+                <button type="button"
+                        id="reparacion-check-btn"
+                        class="reparacion-check-btn {% if reparacion_check_hecho %}is-done{% endif %}"
+                        data-url="{% url 'econotec:ingreso_reparacion_check' pk=ingreso.pk %}"
+                        data-check-date="{{ reparacion_check_fecha }}"
+                        data-already="{% if reparacion_check_hecho %}1{% else %}0{% endif %}">
+                    <span class="reparacion-check-box">{% if reparacion_check_hecho %}✓{% endif %}</span>
+                    <span class="reparacion-check-text">
+                        {% if reparacion_check_hecho %}Check de reparación dado hoy{% else %}Aún sigue reparando este equipo{% endif %}
+                    </span>
+                </button>
+                <div class="reparacion-check-help">Se registra una sola vez al día en la bitácora de {{ reparacion_check_tecnico_nombre }}.</div>
+            </div>
+            {% endif %}
             <div class="estado-equipo-actions">
                 {% if ingreso.retirado_por_cliente %}
                 <button type="button" class="btn btn-secondary ingreso-edit-bloqueado" disabled title="Ya este equipo fue retirado por el cliente">
@@ -791,5 +860,113 @@
             alert(mensaje);
         }
     }
+
+    (function() {
+        var boton = document.getElementById('reparacion-check-btn');
+        if (!boton) {
+            return;
+        }
+
+        var caja = boton.querySelector('.reparacion-check-box');
+        var texto = boton.querySelector('.reparacion-check-text');
+
+        function mostrarAviso(icono, titulo, mensaje) {
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: icono,
+                    title: titulo,
+                    text: mensaje,
+                    confirmButtonText: 'Entendido',
+                    confirmButtonColor: '#f97618'
+                });
+                return;
+            }
+            alert(mensaje);
+        }
+
+        function fechaLocalISO() {
+            var ahora = new Date();
+            ahora.setMinutes(ahora.getMinutes() - ahora.getTimezoneOffset());
+            return ahora.toISOString().slice(0, 10);
+        }
+
+        function resetearSiCambioDia() {
+            var fechaBoton = boton.dataset.checkDate;
+            var fechaActual = fechaLocalISO();
+            if (!fechaBoton || fechaBoton === fechaActual) {
+                return;
+            }
+            boton.dataset.checkDate = fechaActual;
+            boton.dataset.already = '0';
+            boton.classList.remove('is-done');
+            if (caja) {
+                caja.textContent = '';
+            }
+            if (texto) {
+                texto.textContent = 'Aún sigue reparando este equipo';
+            }
+        }
+
+        function marcarHecho(fecha) {
+            boton.dataset.already = '1';
+            if (fecha) {
+                boton.dataset.checkDate = fecha;
+            }
+            boton.classList.add('is-done');
+            if (caja) {
+                caja.textContent = '✓';
+            }
+            if (texto) {
+                texto.textContent = 'Check de reparación dado hoy';
+            }
+        }
+
+        boton.addEventListener('click', function() {
+            resetearSiCambioDia();
+            if (boton.dataset.already === '1') {
+                mostrarAviso(
+                    'info',
+                    'Ya diste el check',
+                    'Ya registraste hoy que sigues reparando este equipo. Después de las 12:00 AM podrás marcarlo otra vez.'
+                );
+                return;
+            }
+
+            boton.disabled = true;
+            fetch(boton.dataset.url, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': '{{ csrf_token }}',
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                credentials: 'same-origin'
+            })
+            .then(function(response) {
+                return response.json().then(function(data) {
+                    return { ok: response.ok, data: data };
+                });
+            })
+            .then(function(result) {
+                if (!result.ok || !result.data.ok) {
+                    throw new Error(result.data.error || 'No se pudo registrar el check.');
+                }
+                marcarHecho(result.data.fecha);
+                if (result.data.already) {
+                    mostrarAviso('info', 'Ya diste el check', result.data.message || 'Ya diste el check de hoy para este equipo.');
+                } else {
+                    mostrarAviso('success', 'Check registrado', result.data.message || 'Se agregó a tu bitácora de hoy.');
+                }
+            })
+            .catch(function(error) {
+                mostrarAviso('error', 'No se pudo registrar', error.message || 'Intenta nuevamente.');
+            })
+            .finally(function() {
+                boton.disabled = false;
+            });
+        });
+
+        window.addEventListener('focus', resetearSiCambioDia);
+        setInterval(resetearSiCambioDia, 60000);
+    })();
 </script>
 {% endblock %}

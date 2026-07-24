@@ -211,6 +211,21 @@ def _draw_signature_image(c, data_uri, x, y, w, h):
         return
 
 
+def _draw_static_image(c, filename, x, y, w, h):
+    from django.conf import settings
+    from reportlab.lib.utils import ImageReader
+    import os
+
+    image_path = os.path.join(settings.BASE_DIR, 'static', filename)
+    if not os.path.exists(image_path):
+        return
+    try:
+        imagen = ImageReader(image_path)
+        c.drawImage(imagen, x, y, width=w, height=h, mask='auto')
+    except Exception:
+        return
+
+
 def _draw_box_field(c, x, y, w, h, label, value, fill_label_color=None):
     """Dibuja una caja con etiqueta arriba y valor adentro (estilo Equipo N°)."""
     from reportlab.lib.colors import Color, black
@@ -594,6 +609,7 @@ def ingreso_pdf(request, pk):
         c.setStrokeColor(Color(0.4, 0.4, 0.4))
         if ingreso.firma_cliente and ingreso.firma_cliente_imagen:
             _draw_signature_image(c, ingreso.firma_cliente_imagen, margen + 8, y + 1, 124, 28)
+        _draw_static_image(c, 'firma_tecnico_recibe.png', margen + 181, y + 1, 138, 26)
         c.line(margen, y, margen + 140, y)
         c.line(margen + 180, y, margen + 320, y)
         c.line(margen + 360, y, margen + 510, y)

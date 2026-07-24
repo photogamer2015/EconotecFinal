@@ -722,6 +722,106 @@ class VentasTests(TestCase):
         self.assertContains(response, 'Kimberly')
         self.assertContains(response, 'kimberly@example.com')
 
+    def test_detalle_muestra_check_reparacion_solo_en_subestado_reparacion(self):
+        ingreso = self.crear_ingreso_reparacion(subestado_reparacion='en_reparacion')
+        ingreso_cliente = self.crear_ingreso_reparacion(subestado_reparacion='espera_cliente')
+
+        response = self.client.get(reverse('econotec:ingreso_detalle', kwargs={'pk': ingreso.pk}))
+        response_cliente = self.client.get(
+            reverse('econotec:ingreso_detalle', kwargs={'pk': ingreso_cliente.pk})
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'id="reparacion-check-btn"')
+        self.assertContains(response, 'Aún sigue reparando este equipo')
+        self.assertEqual(response_cliente.status_code, 200)
+        self.assertNotContains(response_cliente, 'id="reparacion-check-btn"')
+
+    def test_check_reparacion_registra_bitacora_una_vez_por_dia(self):
+        ingreso = self.crear_ingreso_reparacion(
+            marca='Sony',
+            modelo_serie='Playstation 2',
+            serie='23311',
+            problema_reportado='No da video',
+            accesorios_entregados='Cable de poder',
+        )
+        url = reverse('econotec:ingreso_reparacion_check', kwargs={'pk': ingreso.pk})
+        zona_local = ZoneInfo('America/Guayaquil')
+
+        with patch('econotec.views.timezone.localdate', return_value=date(2026, 7, 23)), \
+             patch('econotec.bitacora.timezone.now', return_value=datetime(2026, 7, 23, 22, 15, tzinfo=zona_local)):
+            response = self.client.post(url, HTTP_X_REQUESTED_WITH='XMLHttpRequest')
+            response_repetido = self.client.post(url, HTTP_X_REQUESTED_WITH='XMLHttpRequest')
+
+        eventos = BitacoraTecnico.objects.filter(
+            user=self.usuario,
+            ingreso=ingreso,
+            metadata__accion='reparacion_check',
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json()['ok'])
+        self.assertFalse(response.json()['already'])
+        self.assertEqual(response_repetido.status_code, 200)
+        self.assertTrue(response_repetido.json()['already'])
+        self.assertEqual(eventos.count(), 1)
+        self.assertIn('aún sigue reparando este equipo', eventos.first().texto)
+        self.assertIn('Sony Playstation 2', eventos.first().texto)
+        self.assertEqual(eventos.first().codigo, ingreso.codigo_equipo)
+
+        from .bitacora import construir_bitacora_usuario
+        reporte = construir_bitacora_usuario(self.usuario, dia=date(2026, 7, 23))
+        self.assertIn('10:15 PM - El técnico Yandri aún sigue reparando este equipo', reporte['texto'])
+
+        with patch('econotec.views.timezone.localdate', return_value=date(2026, 7, 24)), \
+             patch('econotec.bitacora.timezone.now', return_value=datetime(2026, 7, 24, 0, 1, tzinfo=zona_local)):
+            response_dia_siguiente = self.client.post(url, HTTP_X_REQUESTED_WITH='XMLHttpRequest')
+
+        self.assertEqual(response_dia_siguiente.status_code, 200)
+        self.assertFalse(response_dia_siguiente.json()['already'])
+        self.assertEqual(eventos.count(), 2)
+
+    def test_check_reparacion_admin_lo_ve_y_registra_en_bitacora_del_tecnico(self):
+        ingreso = self.crear_ingreso_reparacion()
+        self.client.force_login(self.admin)
+
+        response = self.client.get(reverse('econotec:ingreso_detalle', kwargs={'pk': ingreso.pk}))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'id="reparacion-check-btn"')
+        self.assertContains(response, 'bitácora de Yandri')
+
+        url = reverse('econotec:ingreso_reparacion_check', kwargs={'pk': ingreso.pk})
+        with patch('econotec.views.timezone.localdate', return_value=date(2026, 7, 23)):
+            response_check = self.client.post(url, HTTP_X_REQUESTED_WITH='XMLHttpRequest')
+
+        self.assertEqual(response_check.status_code, 200)
+        self.assertTrue(response_check.json()['ok'])
+        self.assertEqual(
+            BitacoraTecnico.objects.filter(
+                user=self.usuario,
+                ingreso=ingreso,
+                metadata__accion='reparacion_check',
+            ).count(),
+            1,
+        )
+        self.assertFalse(
+            BitacoraTecnico.objects.filter(
+                user=self.admin,
+                ingreso=ingreso,
+                metadata__accion='reparacion_check',
+            ).exists()
+        )
+
+    def test_check_reparacion_rechaza_subestado_cliente(self):
+        ingreso = self.crear_ingreso_reparacion(subestado_reparacion='espera_cliente')
+
+        response = self.client.post(
+            reverse('econotec:ingreso_reparacion_check', kwargs={'pk': ingreso.pk}),
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest',
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(BitacoraTecnico.objects.filter(ingreso=ingreso).count(), 0)
+
     def test_perfil_suma_cuatro_puntos_por_salida_buena_positiva(self):
         ingreso = self.crear_ingreso_reparacion()
         SalidaEquipo.objects.create(
@@ -1228,6 +1328,52 @@ class VentasTests(TestCase):
         self.assertEqual(ingreso.diagnostico_metodo_2, 'efectivo')
         self.assertEqual(ingreso.modelo_serie, 'Elitebook actualizado')
 
+    def test_bitacora_edicion_ingreso_muestra_detalle_de_cambios(self):
+        ingreso = self.crear_ingreso_reparacion(
+            marca='Epson',
+            modelo_serie='WF-2750',
+            serie='23311',
+            valor_acordado=Decimal('50.00'),
+            estado='en_reparacion',
+            subestado_reparacion='en_reparacion',
+            subestado_entregado='',
+        )
+
+        response = self.client.post(
+            reverse('econotec:ingreso_editar', kwargs={'pk': ingreso.pk}),
+            self.ingreso_edit_post_data(
+                ingreso,
+                **{
+                    'ing-marca': 'HP',
+                    'ing-valor_acordado_estado': 'si',
+                    'ing-estado': 'garantia',
+                    'ing-subestado_reparacion': '',
+                    'ing-subestado_entregado': '',
+                    'ing-motivo_garantia': 'Retorno por falla adicional',
+                },
+            ),
+        )
+
+        self.assertRedirects(
+            response,
+            reverse('econotec:ingreso_detalle', kwargs={'pk': ingreso.pk}),
+        )
+        evento = BitacoraTecnico.objects.filter(
+            user=self.usuario,
+            ingreso=ingreso,
+            tipo='ingreso_editado',
+        ).latest('pk')
+
+        self.assertIn('Datos actualizados en Laptop HP WF-2750', evento.texto)
+        self.assertIn('Detalles:', evento.texto)
+        self.assertIn('Estado del equipo: En reparación -> Garantía', evento.texto)
+        self.assertIn('Detalle de reparación: En reparación -> —', evento.texto)
+        self.assertIn('Motivo de garantía: — -> Retorno por falla adicional', evento.texto)
+        self.assertIn('Marca: Epson -> HP', evento.texto)
+        self.assertIn('Valor acordado: $50.00 -> $0.00', evento.texto)
+        self.assertNotIn('Estado del valor acordado', evento.texto)
+        self.assertNotIn('Firma del cliente: — -> No firma', evento.texto)
+
     def test_dashboard_modal_total_equipos_muestra_pendiente_retiro_visual(self):
         ingreso = self.crear_ingreso_reparacion(
             estado='entregado',
@@ -1416,6 +1562,39 @@ class VentasTests(TestCase):
         self.assertEqual(len(resumen_agosto), 1)
         self.assertContains(response_agosto, ingreso_agosto.codigo_equipo)
         self.assertNotContains(response_agosto, ingreso_julio.codigo_equipo)
+
+    def test_admin_bitacoras_tecnicos_muestra_movimientos_por_tecnico(self):
+        self.client.force_login(self.admin)
+        zona_local = ZoneInfo('America/Guayaquil')
+        BitacoraTecnico.objects.create(
+            user=self.usuario,
+            usuario_nombre='Yandri',
+            momento=datetime(2026, 7, 10, 10, 15, tzinfo=zona_local),
+            tipo='reporte',
+            texto='Reporte técnico visible para admin.',
+            codigo='G777',
+        )
+        BitacoraTecnico.objects.create(
+            user=self.usuario,
+            usuario_nombre='Yandri',
+            momento=datetime(2026, 7, 11, 0, 0, tzinfo=zona_local),
+            tipo='reporte',
+            texto='Acción después de medianoche.',
+            codigo='G778',
+        )
+
+        response = self.client.get(
+            reverse('econotec:admin_bitacoras_tecnicos'),
+            {'fecha': '2026-07-10'},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Bitácoras de Técnicos')
+        self.assertContains(response, self.usuario.username)
+        self.assertContains(response, 'Reporte técnico visible para admin.')
+        self.assertContains(response, 'G777')
+        self.assertNotContains(response, 'Acción después de medianoche.')
+        self.assertNotContains(response, 'G778')
 
     def test_admin_exporta_y_borra_resumen_equipos_mes_con_password(self):
         from openpyxl import load_workbook

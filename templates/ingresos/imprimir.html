@@ -264,6 +264,14 @@
             display: block;
             margin-bottom: -4px;
         }
+        .signature-img-tecnico-recibe {
+            width: 98%;
+            max-width: 98%;
+            height: 32px;
+            max-height: 32px;
+            object-fit: fill;
+            margin-bottom: -4px;
+        }
         .signatures .sig-line {
             border-top: 1px solid #555;
             padding-top: 4px;
@@ -426,7 +434,9 @@
             <div class="sig-line">FIRMA DEL CLIENTE</div>
         </div>
         <div>
-            <div class="signature-slot"></div>
+            <div class="signature-slot">
+                <img src="{% static 'firma_tecnico_recibe.png' %}" alt="Firma del técnico que recibe" class="signature-img signature-img-tecnico-recibe">
+            </div>
             <div class="sig-line">FIRMA DEL TÉCNICO QUE RECIBE EL EQUIPO</div>
         </div>
         <div>

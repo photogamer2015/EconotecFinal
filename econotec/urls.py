@@ -39,6 +39,8 @@ urlpatterns = [
     path('ingresos/menu/', views.ingreso_menu, name='ingreso_menu'),
     path('ingresos/registrar/', views.ingreso_registrar, name='ingreso_registrar'),
     path('ingresos/<int:pk>/', views.ingreso_detalle, name='ingreso_detalle'),
+    path('ingresos/<int:pk>/reparacion-check/',
+         views.ingreso_reparacion_check, name='ingreso_reparacion_check'),
     path('ingresos/<int:pk>/editar/', views.ingreso_editar, name='ingreso_editar'),
     path('ingresos/<int:pk>/eliminar/', views.ingreso_eliminar, name='ingreso_eliminar'),
     path('ingresos/<int:pk>/imprimir/', views_print.ingreso_imprimir, name='ingreso_imprimir'),
@@ -101,6 +103,8 @@ urlpatterns = [
     # ── Registro Administrativo ────────────────────────────
     path('admin-panel/',
          views_admin.admin_dashboard, name='admin_dashboard'),
+    path('admin-panel/bitacoras-tecnicos/',
+         views_admin.admin_bitacoras_tecnicos, name='admin_bitacoras_tecnicos'),
     path('admin-panel/perfiles/reiniciar/',
          views_admin.admin_perfiles_reiniciar, name='admin_perfiles_reiniciar'),
     path('admin-panel/perfiles/exportar/<str:formato>/',

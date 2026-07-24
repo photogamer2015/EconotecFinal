@@ -1,0 +1,266 @@
+{% extends 'base.html' %}
+
+{% block title %}Bitácoras de Técnicos — Econotec{% endblock %}
+
+{% block content %}
+<style>
+    .bitacora-filter {
+        background: var(--card-bg);
+        padding: 16px 20px;
+        border-radius: 10px;
+        margin-bottom: 22px;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+        display: flex;
+        gap: 12px;
+        align-items: end;
+        flex-wrap: wrap;
+    }
+    .bitacora-admin-card {
+        background: var(--card-bg);
+        border-radius: 12px;
+        padding: 20px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+    }
+    .bitacora-admin-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 14px;
+        margin-bottom: 14px;
+        padding-bottom: 12px;
+        border-bottom: 2px solid rgba(13, 71, 161, 0.16);
+    }
+    .bitacora-admin-head h3 {
+        margin: 0;
+        color: var(--secondary);
+        font-size: 16px;
+        font-weight: 900;
+        text-transform: uppercase;
+    }
+    .bitacora-admin-head p {
+        margin: 4px 0 0;
+        color: var(--text-muted);
+        font-size: 13px;
+        font-weight: 700;
+    }
+    .bitacora-admin-total {
+        display: inline-flex;
+        align-items: center;
+        min-height: 32px;
+        padding: 7px 10px;
+        border-radius: 999px;
+        background: #eff6ff;
+        color: #1d4ed8;
+        border: 1px solid #bfdbfe;
+        font-size: 12px;
+        font-weight: 900;
+        white-space: nowrap;
+    }
+    .bitacora-admin-list {
+        display: grid;
+        gap: 10px;
+    }
+    .bitacora-admin-item {
+        border: 1px solid #dbeafe;
+        border-radius: 10px;
+        background: rgba(239, 246, 255, 0.58);
+        overflow: hidden;
+    }
+    .bitacora-admin-item summary {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 13px 14px;
+        cursor: pointer;
+        list-style: none;
+    }
+    .bitacora-admin-item summary::-webkit-details-marker {
+        display: none;
+    }
+    .bitacora-admin-name {
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+        min-width: 0;
+    }
+    .bitacora-admin-name strong {
+        color: var(--text-main);
+        font-size: 14px;
+        font-weight: 900;
+        word-break: break-word;
+    }
+    .bitacora-admin-name small {
+        color: var(--text-muted);
+        font-size: 12px;
+        font-weight: 700;
+    }
+    .bitacora-admin-count {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 112px;
+        padding: 6px 9px;
+        border-radius: 999px;
+        background: var(--secondary);
+        color: white;
+        font-size: 11px;
+        font-weight: 900;
+        white-space: nowrap;
+    }
+    .bitacora-admin-count.empty {
+        background: #9ca3af;
+    }
+    .bitacora-admin-events {
+        display: grid;
+        gap: 8px;
+        padding: 0 14px 14px;
+    }
+    .bitacora-admin-event {
+        display: grid;
+        grid-template-columns: 110px 130px minmax(0, 1fr) 86px;
+        gap: 10px;
+        align-items: start;
+        padding: 10px 0;
+        border-top: 1px dashed #bfdbfe;
+        font-size: 12px;
+    }
+    .bitacora-admin-event time {
+        color: var(--text-muted);
+        font-weight: 800;
+        white-space: nowrap;
+    }
+    .bitacora-admin-type {
+        display: inline-flex;
+        align-items: center;
+        width: fit-content;
+        padding: 4px 8px;
+        border-radius: 999px;
+        background: #dbeafe;
+        color: #1e40af;
+        font-size: 10px;
+        font-weight: 900;
+        text-transform: uppercase;
+    }
+    .bitacora-admin-text {
+        margin: 0;
+        color: var(--text-main);
+        font-weight: 700;
+        line-height: 1.4;
+        word-break: break-word;
+    }
+    .bitacora-admin-code {
+        color: var(--primary);
+        font-weight: 900;
+        text-align: right;
+        white-space: nowrap;
+    }
+    .bitacora-admin-empty {
+        padding: 14px;
+        border-top: 1px dashed #bfdbfe;
+        color: var(--text-muted);
+        font-size: 13px;
+        font-weight: 800;
+    }
+    [data-theme="dark"] .bitacora-admin-item {
+        background: var(--card-bg);
+        border-color: rgba(255,255,255,0.14);
+    }
+    [data-theme="dark"] .bitacora-admin-event,
+    [data-theme="dark"] .bitacora-admin-empty {
+        border-top-color: rgba(255,255,255,0.14);
+    }
+    @media (max-width: 760px) {
+        .bitacora-admin-card {
+            padding: 16px 14px;
+        }
+        .bitacora-admin-head {
+            display: grid;
+            grid-template-columns: 1fr;
+        }
+        .bitacora-admin-item summary {
+            align-items: flex-start;
+            flex-direction: column;
+        }
+        .bitacora-admin-count {
+            min-width: 0;
+        }
+        .bitacora-admin-event {
+            grid-template-columns: 1fr;
+            gap: 6px;
+        }
+        .bitacora-admin-code {
+            text-align: left;
+        }
+    }
+</style>
+
+<div class="crumb">
+    <a href="{% url 'econotec:bienvenida' %}">Inicio</a> /
+    <a href="{% url 'econotec:admin_dashboard' %}?ano={{ dashboard_year }}&mes={{ dashboard_month }}">Registro Administrativo</a> /
+    Bitácoras de Técnicos
+</div>
+
+<div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 14px;">
+    <div>
+        <h2 class="page-title">Bitácoras de <span class="accent">Técnicos</span></h2>
+        <p class="page-subtitle">
+            Movimientos registrados por técnico — {{ fecha_txt }}
+            {% if es_hoy %}· se reinicia automáticamente después de las 12:00 AM{% endif %}
+        </p>
+    </div>
+    <a href="{% url 'econotec:admin_dashboard' %}?ano={{ dashboard_year }}&mes={{ dashboard_month }}" class="btn btn-secondary">Volver al admin</a>
+</div>
+
+<form method="get" class="bitacora-filter">
+    <div>
+        <label class="form-label">Fecha</label>
+        <input type="date" name="fecha" value="{{ fecha_iso }}" class="form-input" style="min-width: 180px;">
+    </div>
+    <button type="submit" class="btn btn-primary">Ver bitácoras</button>
+    <a href="{% url 'econotec:admin_bitacoras_tecnicos' %}" class="btn btn-secondary">Ver hoy</a>
+</form>
+
+<div class="bitacora-admin-card">
+    <div class="bitacora-admin-head">
+        <div>
+            <h3>Bitácora por Técnico</h3>
+            <p>Se muestra cada acción con fecha, hora, tipo y código de equipo cuando aplica.</p>
+        </div>
+        <span class="bitacora-admin-total">{{ bitacoras_tecnicos_total }} movimientos</span>
+    </div>
+    {% if bitacoras_tecnicos %}
+    <div class="bitacora-admin-list">
+        {% for item in bitacoras_tecnicos %}
+        <details class="bitacora-admin-item" {% if item.abrir %}open{% endif %}>
+            <summary>
+                <span class="bitacora-admin-name">
+                    <strong>{{ item.nombre }}</strong>
+                    <small>{{ item.user.username }}</small>
+                </span>
+                <span class="bitacora-admin-count {% if not item.bitacora.tiene_datos %}empty{% endif %}">
+                    {{ item.bitacora.total }} movimientos
+                </span>
+            </summary>
+            {% if item.bitacora.eventos %}
+            <div class="bitacora-admin-events">
+                {% for evento in item.bitacora.eventos %}
+                <div class="bitacora-admin-event">
+                    <time>{{ evento.hora_inicio }} {{ evento.periodo_inicio }}</time>
+                    <span class="bitacora-admin-type">{{ evento.tipo_label }}</span>
+                    <p class="bitacora-admin-text">{{ evento.texto }}</p>
+                    <span class="bitacora-admin-code">{{ evento.codigo|default:"" }}</span>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="bitacora-admin-empty">Sin movimientos en esta fecha.</div>
+            {% endif %}
+        </details>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="bitacora-admin-empty">No hay técnicos activos para mostrar.</div>
+    {% endif %}
+</div>
+{% endblock %}

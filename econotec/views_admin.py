@@ -25,11 +25,12 @@ from .gamificacion import (
     calcular_puntaje_gamificacion,
 )
 from .busqueda import filtrar_objetos_normalizado, texto_salida_busqueda, total_resultados
+from .bitacora import construir_bitacora_usuario
 from .models import (
     IngresoEquipo, SalidaEquipo, Abono, Egreso, CategoriaEgreso, Cliente,
     AvisoPanel, SEDES_EQUIPOS, HorarioTecnico,
 )
-from .permisos import admin_requerido, tecnico_requerido
+from .permisos import GRUPOS_TECNICO, admin_requerido, tecnico_requerido
 
 
 MESES_ES = [
@@ -152,6 +153,31 @@ def _horarios_tecnicos_dashboard():
     avisos.sort(key=lambda aviso: aviso['momento'], reverse=True)
     avisos_fuera.sort(key=lambda aviso: aviso['momento'], reverse=True)
     return horarios, avisos, avisos_fuera
+
+
+def _bitacoras_tecnicos_admin(dia):
+    User = get_user_model()
+    tecnicos = (
+        User.objects
+        .filter(is_active=True, groups__name__in=GRUPOS_TECNICO)
+        .distinct()
+        .order_by('first_name', 'username')
+    )
+
+    bitacoras = []
+    primera_con_datos = False
+    for tecnico in tecnicos:
+        bitacora = construir_bitacora_usuario(tecnico, dia=dia)
+        abrir = bitacora['tiene_datos'] and not primera_con_datos
+        if abrir:
+            primera_con_datos = True
+        bitacoras.append({
+            'user': tecnico,
+            'nombre': _nombre_usuario(tecnico),
+            'bitacora': bitacora,
+            'abrir': abrir,
+        })
+    return bitacoras
 
 
 def _equipos_mes_resumen(year, month):
@@ -370,6 +396,30 @@ def admin_dashboard(request):
         'chart_tendencia_egresos': json.dumps(tendencia_egresos),
         'chart_egresos_cat_labels': json.dumps(column_egresos_labels),
         'chart_egresos_cat_data': json.dumps(column_egresos_data),
+    })
+
+
+@admin_requerido
+def admin_bitacoras_tecnicos(request):
+    hoy = timezone.localdate()
+    fecha_param = (request.GET.get('fecha') or '').strip()
+    try:
+        dia = date.fromisoformat(fecha_param) if fecha_param else hoy
+    except ValueError:
+        dia = hoy
+
+    bitacoras_tecnicos = _bitacoras_tecnicos_admin(dia)
+
+    return render(request, 'admin_panel/bitacoras_tecnicos.html', {
+        'dia': dia,
+        'hoy': hoy,
+        'fecha_iso': dia.isoformat(),
+        'fecha_txt': dia.strftime('%d/%m/%Y'),
+        'es_hoy': dia == hoy,
+        'dashboard_year': dia.year,
+        'dashboard_month': dia.month,
+        'bitacoras_tecnicos': bitacoras_tecnicos,
+        'bitacoras_tecnicos_total': sum(item['bitacora']['total'] for item in bitacoras_tecnicos),
     })
 
 

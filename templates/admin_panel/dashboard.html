@@ -501,6 +501,7 @@
     </div>
     <div style="display: flex; gap: 8px;">
         <a href="{% url 'econotec:admin_egresos_lista' %}" class="btn btn-secondary">Ver Egresos</a>
+        <a href="{% url 'econotec:admin_bitacoras_tecnicos' %}" class="btn btn-secondary">Bitácoras Técnicos</a>
         <a href="{% url 'econotec:salida_facturas_lista' %}?ano={{ year }}&mes={{ month }}" class="btn btn-secondary">Facturas Salidas</a>
         <a href="{% url 'econotec:admin_bodegajes' %}?ano={{ year }}&mes={{ month }}" class="btn btn-secondary">Historial Bodegajes</a>
         <a href="{% url 'econotec:admin_activos_bodegaje' %}" class="btn btn-success">Bodegajes Activos</a>

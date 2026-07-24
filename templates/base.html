@@ -2032,6 +2032,7 @@
             var lastFocus = null;
             var desktopTimer = null;
             var desktopHandled = false;
+            var webOpening = false;
             var visibilityHandler = null;
 
             function limpiarHref(href) {
@@ -2118,8 +2119,10 @@
                 message.textContent = 'Elige dónde preparar el mensaje del cliente: WhatsApp Web o WhatsApp Desktop.';
                 help.textContent = 'Web abre una pestaña nueva; Desktop intenta abrir la aplicación instalada.';
                 desktopHandled = false;
+                webOpening = false;
                 webBtn.disabled = false;
                 desktopBtn.disabled = false;
+                fallbackWebBtn.disabled = false;
             }
 
             function cerrarModal() {
@@ -2168,11 +2171,28 @@
                 cerrarModal();
             }
 
-            function abrirWhatsAppWeb() {
-                if (!current) return;
-                var tab = window.open(current.web, '_blank', 'noopener');
-                if (!tab) window.location.href = current.web;
-                cerrarModal();
+            function abrirWhatsAppWeb(event) {
+                if (event) event.preventDefault();
+                if (!current || webOpening) return;
+                webOpening = true;
+                webBtn.disabled = true;
+                fallbackWebBtn.disabled = true;
+
+                var url = current.web;
+                var tab = window.open(url, '_blank');
+                if (tab) {
+                    try { tab.opener = null; } catch (error) {}
+                    cerrarModal();
+                    return;
+                }
+
+                webOpening = false;
+                webBtn.disabled = false;
+                fallbackWebBtn.disabled = false;
+                box.classList.add('is-fallback');
+                title.textContent = 'WhatsApp Web fue bloqueado';
+                message.textContent = 'El navegador bloqueó la pestaña nueva. Permite ventanas emergentes para este sitio e inténtalo otra vez.';
+                help.textContent = 'No se abrió WhatsApp en esta pestaña para que no salgas del sistema.';
             }
 
             document.addEventListener('click', function(event) {

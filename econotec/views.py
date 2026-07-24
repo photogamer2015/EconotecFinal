@@ -33,7 +33,7 @@ from .models import (
     Cliente, IngresoEquipo, SalidaEquipo, Abono, SEDES_EQUIPOS,
     UsuarioActividad, NotificacionAsesora, BitacoraTecnico,
 )
-from .bitacora import registrar_bitacora, nombre_corto_usuario
+from .bitacora import registrar_bitacora, nombre_corto_usuario, construir_bitacora_usuario
 from .permisos import admin_requerido, tecnico_requerido, es_admin, es_asesor, es_tecnico
 from .gamificacion import (
     SALIDA_BUENA_ESTADOS,
@@ -781,6 +781,14 @@ def ingreso_editar(request, pk):
     if request.method == 'POST':
         cli_form = ClienteForm(request.POST, prefix='cli', instance=ingreso.cliente)
         ing_form = IngresoEquipoForm(request.POST, prefix='ing', instance=ingreso)
+        valores_cliente_antes = _snapshot_form_original(cli_form)
+        valores_ingreso_antes = _snapshot_form_original(ing_form)
+        campos_cliente_cambiados = set(cli_form.changed_data or [])
+        campos_ingreso_cambiados = set(ing_form.changed_data or [])
+        estado_original = ingreso.estado
+        subestado_reparacion_original = ingreso.subestado_reparacion
+        subestado_entregado_original = ingreso.subestado_entregado
+        reporte_original = (ingreso.reporte_tecnico or '').strip()
         if cli_form.is_valid() and ing_form.is_valid():
             cliente_editado = cli_form.save(commit=False)
             identidad_sin_cambios = (
@@ -832,13 +840,6 @@ def ingreso_editar(request, pk):
                     'confirmar_mismo_equipo_cliente': confirmar_mismo_equipo_cliente,
                 })
 
-            estado_original = ingreso.estado
-            subestado_reparacion_original = ingreso.subestado_reparacion
-            subestado_entregado_original = ingreso.subestado_entregado
-            reporte_original = (ingreso.reporte_tecnico or '').strip()
-            campos_ingreso_cambiados = set(ing_form.changed_data or [])
-            campos_cliente_cambiados = set(cli_form.changed_data or [])
-
             cliente_editado.save()
             ingreso = ing_form.save()
 
@@ -886,20 +887,21 @@ def ingreso_editar(request, pk):
             else:
                 messages.success(request, f'Equipo {ingreso.codigo_equipo} actualizado.')
 
-            cambios_datos = (
-                campos_cliente_cambiados
-                or (campos_ingreso_cambiados - {
-                    'estado',
-                    'subestado_reparacion',
-                    'subestado_entregado',
-                    'reporte_tecnico',
-                })
-            )
+            campos_ingreso_bitacora = campos_ingreso_cambiados - {'reporte_tecnico'}
+            cambios_datos = campos_cliente_cambiados or campos_ingreso_bitacora
             if cambios_datos:
                 registrar_bitacora(
                     request.user,
                     'ingreso_editado',
-                    f'Datos actualizados en {_equipo_bitacora(ingreso)} #{ingreso.codigo_equipo} para {ingreso.cliente.nombres}.',
+                    _texto_actualizacion_ingreso_bitacora(
+                        ingreso,
+                        cli_form,
+                        ing_form,
+                        campos_cliente_cambiados,
+                        campos_ingreso_bitacora,
+                        valores_cliente_antes,
+                        valores_ingreso_antes,
+                    ),
                     ingreso=ingreso,
                 )
 
@@ -914,14 +916,25 @@ def ingreso_editar(request, pk):
                     )
 
             if (
-                ingreso.estado != estado_original
-                or ingreso.subestado_reparacion != subestado_reparacion_original
-                or ingreso.subestado_entregado != subestado_entregado_original
+                not cambios_datos
+                and (
+                    ingreso.estado != estado_original
+                    or ingreso.subestado_reparacion != subestado_reparacion_original
+                    or ingreso.subestado_entregado != subestado_entregado_original
+                )
             ):
                 registrar_bitacora(
                     request.user,
                     'estado',
-                    _texto_estado_ingreso_bitacora(ingreso),
+                    _texto_actualizacion_ingreso_bitacora(
+                        ingreso,
+                        cli_form,
+                        ing_form,
+                        set(),
+                        {'estado', 'subestado_reparacion', 'subestado_entregado'},
+                        valores_cliente_antes,
+                        valores_ingreso_antes,
+                    ),
                     ingreso=ingreso,
                 )
 
@@ -1078,6 +1091,7 @@ def ingreso_detalle(request, pk):
         IngresoEquipo.objects.select_related(
             'cliente',
             'registrado_por',
+            'tecnico_encargado',
             'equipo_garantia',
             'valor_pendiente_reporte_por',
         ),
@@ -1085,6 +1099,16 @@ def ingreso_detalle(request, pk):
     )
     abonos = ingreso.abonos.all().order_by('-fecha', '-creado')
     salida = getattr(ingreso, 'salida', None)
+    reparacion_check_fecha = timezone.localdate()
+    usuario_bitacora_check = _usuario_reparacion_check_bitacora(request.user, ingreso)
+    mostrar_check_reparacion = _ingreso_es_reparacion_simple(ingreso) and usuario_bitacora_check is not None
+    reparacion_check_hecho = False
+    if mostrar_check_reparacion:
+        reparacion_check_hecho = _reparacion_check_ya_registrado(
+            usuario_bitacora_check,
+            ingreso,
+            reparacion_check_fecha,
+        )
     from .qr_utils import qr_data_uri_para_ingreso, url_hoja_movil
     return render(request, 'ingresos/detalle.html', {
         'ingreso': ingreso,
@@ -1093,6 +1117,60 @@ def ingreso_detalle(request, pk):
         'qr_data_uri': qr_data_uri_para_ingreso(request, ingreso, box_size=6),
         'qr_url': url_hoja_movil(request, ingreso),
         'wa_link': whatsapp_link_hoja_ingreso(request, ingreso),
+        'mostrar_check_reparacion': mostrar_check_reparacion,
+        'reparacion_check_hecho': reparacion_check_hecho,
+        'reparacion_check_fecha': reparacion_check_fecha.isoformat(),
+        'reparacion_check_tecnico_nombre': nombre_corto_usuario(usuario_bitacora_check),
+    })
+
+
+@tecnico_requerido
+@require_POST
+def ingreso_reparacion_check(request, pk):
+    """Marca una vez al día que el técnico sigue reparando el equipo."""
+    ingreso = get_object_or_404(
+        IngresoEquipo.objects.select_related('cliente', 'tecnico_encargado'),
+        pk=pk,
+    )
+    if not _ingreso_es_reparacion_simple(ingreso):
+        return JsonResponse({
+            'ok': False,
+            'error': 'Este check solo aplica cuando el equipo está en En reparación -> En reparación.',
+        }, status=400)
+
+    dia = timezone.localdate()
+    usuario_bitacora = _usuario_reparacion_check_bitacora(request.user, ingreso)
+    if usuario_bitacora is None:
+        return JsonResponse({
+            'ok': False,
+            'error': 'No hay un técnico asignado para registrar este check.',
+        }, status=400)
+
+    dedupe_key = _reparacion_check_dedupe_key(usuario_bitacora, ingreso, dia)
+    if _reparacion_check_ya_registrado(usuario_bitacora, ingreso, dia):
+        return JsonResponse({
+            'ok': True,
+            'already': True,
+            'message': 'Ya diste el check de hoy para este equipo.',
+            'fecha': dia.isoformat(),
+            'bitacora_total': construir_bitacora_usuario(usuario_bitacora)['total'],
+        })
+
+    evento = registrar_bitacora(
+        usuario_bitacora,
+        'estado',
+        _texto_reparacion_check_bitacora(ingreso, usuario_bitacora),
+        ingreso=ingreso,
+        dedupe_key=dedupe_key,
+        metadata={'accion': 'reparacion_check', 'dia': dia.isoformat()},
+    )
+    return JsonResponse({
+        'ok': True,
+        'already': False,
+        'message': 'Check registrado en la bitácora de hoy.',
+        'texto': evento.texto if evento else '',
+        'fecha': dia.isoformat(),
+        'bitacora_total': construir_bitacora_usuario(usuario_bitacora)['total'],
     })
 
 
@@ -2468,6 +2546,253 @@ def _texto_estado_ingreso_bitacora(ingreso):
     return f'Cambio de estado en {_equipo_bitacora(ingreso)} #{ingreso.codigo_equipo}: {detalle}.'
 
 
+_LABELS_CAMPOS_BITACORA = {
+    'cedula': 'Cédula / RUC',
+    'nombres': 'Cliente',
+    'whatsapp': 'WhatsApp',
+    'correo': 'Correo',
+    'sector': 'Sector',
+    'sector_otro': 'Sector otro',
+    'numero_factura': 'Factura N°',
+    'asesor_comercial': 'Asesora comercial',
+    'tecnico_encargado': 'Técnico recibido',
+    'fecha_ingreso': 'Fecha de ingreso',
+    'tipo_equipo': 'Tipo de equipo',
+    'tipo_equipo_otro': 'Tipo especificado',
+    'marca': 'Marca',
+    'modelo_serie': 'Modelo',
+    'serie': 'Serie',
+    'accesorios_entregados': 'Accesorios',
+    'problema_reportado': 'Problema reportado',
+    'firma_cliente': 'Firma del cliente',
+    'firma_cliente_opcion': 'Firma del cliente',
+    'firma_cliente_imagen': 'Imagen de firma',
+    'diagnostico_inmediato': 'Diagnóstico inmediato',
+    'valor_diagnostico': 'Valor diagnóstico',
+    'valor_acordado': 'Valor acordado',
+    'valor_acordado_estado': 'Estado del valor acordado',
+    'abono_anticipo': 'Anticipo',
+    'diagnostico_metodo': 'Método diagnóstico',
+    'diagnostico_banco': 'Banco diagnóstico',
+    'diagnostico_banco_otro': 'Banco diagnóstico otro',
+    'diagnostico_tarjeta_app': 'Tarjeta/App diagnóstico',
+    'diagnostico_comprobante_url': 'Comprobante diagnóstico',
+    'diagnostico_monto_1': 'Monto diagnóstico 1',
+    'diagnostico_metodo_1': 'Método diagnóstico 1',
+    'diagnostico_banco_1': 'Banco diagnóstico 1',
+    'diagnostico_monto_2': 'Monto diagnóstico 2',
+    'diagnostico_metodo_2': 'Método diagnóstico 2',
+    'diagnostico_banco_2': 'Banco diagnóstico 2',
+    'anticipo_metodo': 'Método anticipo',
+    'anticipo_banco': 'Banco anticipo',
+    'anticipo_banco_otro': 'Banco anticipo otro',
+    'anticipo_tarjeta_app': 'Tarjeta/App anticipo',
+    'anticipo_comprobante_url': 'Comprobante anticipo',
+    'anticipo_monto_1': 'Monto anticipo 1',
+    'anticipo_metodo_1': 'Método anticipo 1',
+    'anticipo_banco_1': 'Banco anticipo 1',
+    'anticipo_monto_2': 'Monto anticipo 2',
+    'anticipo_metodo_2': 'Método anticipo 2',
+    'anticipo_banco_2': 'Banco anticipo 2',
+    'estado': 'Estado del equipo',
+    'subestado_reparacion': 'Detalle de reparación',
+    'subestado_entregado': 'Detalle de entrega',
+    'equipo_garantia': 'Equipo de garantía',
+    'equipo_garantia_manual': 'Equipo garantía manual',
+    'motivo_garantia': 'Motivo de garantía',
+}
+
+_ORDEN_CAMPOS_BITACORA = [
+    'estado', 'subestado_reparacion', 'subestado_entregado',
+    'tipo_equipo', 'tipo_equipo_otro', 'marca', 'modelo_serie', 'serie',
+    'tecnico_encargado', 'asesor_comercial', 'fecha_ingreso', 'numero_factura',
+    'problema_reportado', 'accesorios_entregados',
+    'valor_acordado_estado', 'valor_acordado', 'diagnostico_inmediato',
+    'valor_diagnostico', 'abono_anticipo',
+    'diagnostico_metodo', 'diagnostico_banco', 'diagnostico_banco_otro',
+    'diagnostico_tarjeta_app', 'diagnostico_comprobante_url',
+    'diagnostico_monto_1', 'diagnostico_metodo_1', 'diagnostico_banco_1',
+    'diagnostico_monto_2', 'diagnostico_metodo_2', 'diagnostico_banco_2',
+    'anticipo_metodo', 'anticipo_banco', 'anticipo_banco_otro',
+    'anticipo_tarjeta_app', 'anticipo_comprobante_url',
+    'anticipo_monto_1', 'anticipo_metodo_1', 'anticipo_banco_1',
+    'anticipo_monto_2', 'anticipo_metodo_2', 'anticipo_banco_2',
+    'equipo_garantia', 'equipo_garantia_manual', 'motivo_garantia',
+    'firma_cliente', 'firma_cliente_opcion', 'firma_cliente_imagen',
+    'cedula', 'nombres', 'whatsapp', 'correo', 'sector', 'sector_otro',
+]
+
+_CAMPOS_DINERO_BITACORA = {
+    'valor_diagnostico', 'valor_acordado', 'abono_anticipo',
+    'diagnostico_monto_1', 'diagnostico_monto_2',
+    'anticipo_monto_1', 'anticipo_monto_2',
+}
+
+_CAMPOS_AUXILIARES_NO_BITACORA = {
+    'valor_acordado_estado',
+    'firma_cliente_opcion',
+}
+
+
+def _snapshot_form_original(form):
+    instancia = getattr(form, 'instance', None)
+    valores = {}
+    for campo in form.fields:
+        if instancia is not None and hasattr(instancia, campo):
+            valores[campo] = getattr(instancia, campo)
+        else:
+            valores[campo] = (getattr(form, 'initial', {}) or {}).get(campo)
+    return valores
+
+
+def _label_cambio_bitacora(form, campo):
+    if campo in _LABELS_CAMPOS_BITACORA:
+        return _LABELS_CAMPOS_BITACORA[campo]
+    field = form.fields.get(campo)
+    if field and field.label:
+        return str(field.label)
+    modelo = getattr(getattr(form, '_meta', None), 'model', None)
+    if modelo:
+        try:
+            return str(modelo._meta.get_field(campo).verbose_name).capitalize()
+        except Exception:
+            pass
+    return campo.replace('_', ' ').capitalize()
+
+
+def _display_cambio_bitacora(form, campo, valor):
+    if campo in ('tecnico_encargado',):
+        return nombre_corto_usuario(valor) if valor else '—'
+    if campo == 'equipo_garantia':
+        return valor.codigo_equipo if valor else '—'
+    if campo in ('firma_cliente',):
+        return 'Sí' if bool(valor) else 'No'
+    if campo in ('firma_cliente_imagen',):
+        return 'Guardada' if valor else 'Sin imagen'
+    if valor in (None, ''):
+        return '—'
+    if campo in _CAMPOS_DINERO_BITACORA:
+        try:
+            return f'${D(str(valor)):.2f}'
+        except Exception:
+            return str(valor)
+    if isinstance(valor, date):
+        return valor.strftime('%d/%m/%Y')
+
+    modelo = getattr(getattr(form, '_meta', None), 'model', None)
+    if modelo:
+        try:
+            model_field = modelo._meta.get_field(campo)
+            if model_field.choices:
+                choices = dict(model_field.flatchoices)
+                return str(choices.get(valor, choices.get(str(valor), valor)))
+        except Exception:
+            pass
+
+    field = form.fields.get(campo)
+    choices = getattr(field, 'choices', None)
+    if choices and campo != 'tecnico_encargado':
+        try:
+            choices_dict = dict(choices)
+            return str(choices_dict.get(valor, choices_dict.get(str(valor), valor)))
+        except Exception:
+            pass
+
+    return _texto_limpio_bitacora(str(valor), max_len=90)
+
+
+def _campos_ordenados_bitacora(campos):
+    orden = {campo: idx for idx, campo in enumerate(_ORDEN_CAMPOS_BITACORA)}
+    return sorted(campos, key=lambda campo: (orden.get(campo, 999), campo))
+
+
+def _detalles_cambios_form_bitacora(form, campos, valores_antes):
+    detalles = []
+    for campo in _campos_ordenados_bitacora(campos):
+        if campo in _CAMPOS_AUXILIARES_NO_BITACORA:
+            continue
+        if campo not in form.fields:
+            continue
+        antes = _display_cambio_bitacora(form, campo, valores_antes.get(campo))
+        despues = _display_cambio_bitacora(form, campo, form.cleaned_data.get(campo))
+        if antes == despues:
+            continue
+        detalles.append(f'{_label_cambio_bitacora(form, campo)}: {antes} -> {despues}')
+    return detalles
+
+
+def _texto_actualizacion_ingreso_bitacora(
+    ingreso,
+    cli_form,
+    ing_form,
+    campos_cliente,
+    campos_ingreso,
+    valores_cliente_antes,
+    valores_ingreso_antes,
+):
+    detalles = []
+    detalles.extend(_detalles_cambios_form_bitacora(
+        ing_form,
+        campos_ingreso,
+        valores_ingreso_antes,
+    ))
+    detalles.extend(_detalles_cambios_form_bitacora(
+        cli_form,
+        campos_cliente,
+        valores_cliente_antes,
+    ))
+
+    texto = f'Datos actualizados en {_equipo_bitacora(ingreso)} #{ingreso.codigo_equipo} para {ingreso.cliente.nombres}.'
+    if detalles:
+        texto += f' Detalles: {"; ".join(detalles)}.'
+    return texto
+
+
+def _ingreso_es_reparacion_simple(ingreso):
+    return (
+        ingreso.estado == 'en_reparacion'
+        and ingreso.subestado_reparacion == 'en_reparacion'
+    )
+
+
+def _usuario_reparacion_check_bitacora(user, ingreso):
+    if es_tecnico(user):
+        return user
+    if ingreso.tecnico_encargado_id:
+        return ingreso.tecnico_encargado
+    return None
+
+
+def _reparacion_check_dedupe_key(user, ingreso, dia):
+    return f'reparacion-check:{dia.isoformat()}:{user.pk}:{ingreso.pk}'
+
+
+def _reparacion_check_ya_registrado(user, ingreso, dia):
+    return BitacoraTecnico.objects.filter(
+        dedupe_key=_reparacion_check_dedupe_key(user, ingreso, dia)
+    ).exists()
+
+
+def _texto_reparacion_check_bitacora(ingreso, user):
+    tecnico = nombre_corto_usuario(user)
+    equipo = _equipo_bitacora(ingreso) or 'equipo'
+    problema = _texto_limpio_bitacora(ingreso.problema_reportado, max_len=150)
+    accesorios = _texto_limpio_bitacora(ingreso.accesorios_entregados, max_len=90)
+    cliente = _texto_limpio_bitacora(ingreso.cliente.nombres, max_len=80)
+
+    partes = [
+        f'El técnico {tecnico} aún sigue reparando este equipo: {equipo} #{ingreso.codigo_equipo}',
+    ]
+    if cliente:
+        partes.append(f'cliente {cliente}')
+    if problema:
+        partes.append(f'problema reportado: {problema}')
+    if accesorios:
+        partes.append(f'accesorios: {accesorios}')
+    partes.append('estado confirmado: En reparación -> En reparación')
+    return '. '.join(partes) + '.'
+
+
 def _texto_salida_bitacora(salida):
     ingreso = salida.ingreso
     equipo = _equipo_bitacora(ingreso)
@@ -2688,7 +3013,7 @@ def api_perfil(request):
             'salidas_malas': 0,
             'total': 0,
             'proximo': None,
-            'bitacora_total': _construir_bitacora_usuario(user)['total'],
+            'bitacora_total': construir_bitacora_usuario(user)['total'],
         })
     
     # Verificar si el usuario tiene una fecha de reinicio
@@ -2786,14 +3111,14 @@ def api_perfil(request):
         'nivel': nivel,
         'color': color,
         'proximo': proximo,
-        'bitacora_total': _construir_bitacora_usuario(user)['total'],
+        'bitacora_total': construir_bitacora_usuario(user)['total'],
     })
 
 
 @login_required
 @require_GET
 def api_bitacora_hoy(request):
-    return JsonResponse(_construir_bitacora_usuario(request.user))
+    return JsonResponse(construir_bitacora_usuario(request.user))
 
 
 @login_required
