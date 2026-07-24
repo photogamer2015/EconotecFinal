@@ -1,0 +1,304 @@
+{% extends 'base.html' %}
+
+{% block title %}Detalle {{ item.codigo }} — Inventario{% endblock %}
+
+{% block content %}
+<style>
+    .inventario-detalle-wrap {
+        width: min(100%, 980px);
+    }
+    .inventario-detalle-hero {
+        display: grid;
+        grid-template-columns: 260px 1fr;
+        gap: 24px;
+        align-items: center;
+        border-left: 5px solid var(--primary);
+    }
+    .inventario-detalle-qr {
+        width: 100%;
+        max-width: 250px;
+        border-radius: 16px;
+        border: 1px solid var(--border-color);
+        background: #ffffff;
+        padding: 12px;
+        justify-self: center;
+    }
+    .inventario-detalle-hero h2 {
+        margin: 0 0 8px;
+        color: var(--text-main);
+        font-size: 30px;
+        line-height: 1.1;
+        font-weight: 950;
+        overflow-wrap: anywhere;
+    }
+    .inventario-detalle-hero p {
+        margin: 0 0 7px;
+        color: var(--text-muted);
+        font-size: 15px;
+        font-weight: 750;
+        line-height: 1.35;
+    }
+    .inventario-detalle-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 18px;
+    }
+    .inventario-detalle-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px;
+        margin-top: 18px;
+    }
+    .inventario-detalle-row {
+        padding: 14px;
+        border-radius: 10px;
+        background: var(--hover-bg);
+        border: 1px solid var(--border-color);
+    }
+    .inventario-detalle-row span {
+        display: block;
+        margin-bottom: 4px;
+        color: var(--text-muted);
+        font-size: 12px;
+        font-weight: 900;
+        text-transform: uppercase;
+        letter-spacing: 0.3px;
+    }
+    .inventario-detalle-row strong {
+        color: var(--text-main);
+        font-size: 16px;
+        overflow-wrap: anywhere;
+    }
+    .inventario-cantidad-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 14px;
+    }
+    .inventario-cantidad-row > span {
+        margin-bottom: 0;
+    }
+    .inventario-cantidad-control {
+        display: grid;
+        grid-template-columns: 46px minmax(54px, auto) 46px auto;
+        align-items: center;
+        min-height: 46px;
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        overflow: hidden;
+        background: #ffffff;
+    }
+    .inventario-cantidad-btn {
+        width: 46px;
+        height: 46px;
+        border: 0;
+        border-radius: 0;
+        background: var(--primary);
+        color: #ffffff;
+        font: inherit;
+        font-size: 25px;
+        font-weight: 900;
+        line-height: 1;
+        cursor: pointer;
+        transition: filter 0.16s ease, transform 0.16s ease;
+    }
+    .inventario-cantidad-btn:hover {
+        filter: brightness(0.93);
+    }
+    .inventario-cantidad-btn:active {
+        transform: scale(0.94);
+    }
+    .inventario-cantidad-btn:focus-visible {
+        position: relative;
+        z-index: 1;
+        outline: 3px solid rgba(249, 118, 24, 0.28);
+        outline-offset: -3px;
+    }
+    .inventario-cantidad-btn:disabled {
+        background: #c9cdd2;
+        cursor: not-allowed;
+        filter: none;
+        transform: none;
+    }
+    .inventario-cantidad-valor {
+        min-width: 54px;
+        padding: 0 10px;
+        color: #1f2937;
+        font-size: 18px;
+        font-weight: 950;
+        text-align: center;
+        font-variant-numeric: tabular-nums;
+    }
+    .inventario-cantidad-save {
+        align-self: stretch;
+        min-height: 46px;
+        border: 0;
+        border-left: 1px solid rgba(31, 41, 55, 0.12);
+        border-radius: 0;
+        background: var(--secondary);
+        color: #ffffff;
+        padding: 0 16px;
+        font: inherit;
+        font-size: 13px;
+        font-weight: 900;
+        white-space: nowrap;
+    }
+    .inventario-cantidad-save:disabled {
+        background: #c9cdd2;
+        cursor: not-allowed;
+    }
+    @media (max-width: 720px) {
+        .inventario-detalle-wrap {
+            width: 100%;
+        }
+        .inventario-detalle-hero,
+        .inventario-detalle-grid {
+            grid-template-columns: 1fr;
+        }
+        .inventario-detalle-hero {
+            padding: 20px;
+        }
+        .inventario-detalle-qr {
+            max-width: 220px;
+        }
+        .inventario-detalle-hero h2 {
+            font-size: 24px;
+        }
+        .inventario-detalle-actions .btn {
+            width: 100%;
+            display: inline-flex;
+            justify-content: center;
+        }
+        .inventario-cantidad-row {
+            min-height: 78px;
+            align-items: stretch;
+            flex-direction: column;
+        }
+        .inventario-cantidad-control {
+            width: 100%;
+            grid-template-columns: 52px minmax(0, 1fr) 52px;
+        }
+        .inventario-cantidad-save {
+            grid-column: 1 / -1;
+            min-height: 44px;
+            border-left: 0;
+            border-top: 1px solid rgba(31, 41, 55, 0.12);
+        }
+    }
+    @media (max-width: 420px) {
+        .inventario-detalle-hero {
+            padding: 16px;
+        }
+        .inventario-detalle-qr {
+            max-width: 190px;
+            padding: 10px;
+        }
+        .inventario-detalle-hero h2 {
+            font-size: 20px;
+        }
+        .inventario-detalle-row {
+            padding: 12px;
+        }
+        .inventario-cantidad-control {
+            grid-template-columns: 50px minmax(0, 1fr) 50px;
+        }
+        .inventario-cantidad-btn {
+            width: 50px;
+        }
+    }
+</style>
+
+<div class="crumb">
+    <a href="{% url 'econotec:bienvenida' %}">Inicio</a> /
+    <a href="{% url 'econotec:inventario_menu' %}">Inventario</a> /
+    Detalle {{ item.codigo }}
+</div>
+
+<div class="inventario-detalle-wrap">
+    <div class="card-box inventario-detalle-hero">
+        <img src="{{ qr_data_uri }}" alt="QR {{ item.codigo }}" class="inventario-detalle-qr">
+        <div>
+            <h2>{{ item.codigo }}</h2>
+            <p>{{ item.producto }}</p>
+            <p>{{ categoria.nombre }} — {{ tipo.nombre }}</p>
+            <div class="inventario-detalle-actions">
+                <a href="{% url 'econotec:inventario_qr_imprimir' codigo=item.codigo %}" class="btn btn-primary" target="_blank" rel="noopener">Imprimir QR</a>
+                {% if puede_gestionar_inventario %}
+                    <a href="{% url 'econotec:inventario_editar' codigo=item.codigo %}" class="btn btn-secondary">Editar producto</a>
+                {% endif %}
+                <a href="{% url 'econotec:inventario_tabla' sede=item.sede categoria=item.categoria tipo=item.tipo %}" class="btn btn-secondary">Volver a tabla</a>
+            </div>
+        </div>
+    </div>
+
+    <div class="inventario-detalle-grid">
+        <div class="inventario-detalle-row"><span>Producto</span><strong>{{ item.producto }}</strong></div>
+        <div class="inventario-detalle-row"><span>Categoría</span><strong>{{ categoria.nombre }}</strong></div>
+        <div class="inventario-detalle-row"><span>Marca</span><strong>{{ item.marca }}</strong></div>
+        <div class="inventario-detalle-row"><span>Modelo</span><strong>{{ item.modelo }}</strong></div>
+        <div class="inventario-detalle-row"><span>Serie</span><strong>{{ item.serie|default:"—" }}</strong></div>
+        <div class="inventario-detalle-row"><span>Estado</span><strong>{{ item.get_estado_display }}</strong></div>
+        <div class="inventario-detalle-row inventario-cantidad-row">
+            <span>Cantidad</span>
+            {% if puede_gestionar_inventario %}
+                <form method="post"
+                      action="{% url 'econotec:inventario_actualizar_cantidad' codigo=item.codigo %}"
+                      class="inventario-cantidad-control"
+                      data-cantidad-form>
+                    {% csrf_token %}
+                    <button type="button"
+                            class="inventario-cantidad-btn"
+                            data-cantidad-delta="-1"
+                            aria-label="Restar una unidad"
+                            title="Restar una unidad"
+                            {% if item.cantidad == 0 %}disabled{% endif %}>−</button>
+                    <output class="inventario-cantidad-valor"
+                            aria-label="Cantidad actual"
+                            data-cantidad-valor>{{ item.cantidad }}</output>
+                    <input type="hidden" name="cantidad" value="{{ item.cantidad }}" data-cantidad-input>
+                    <button type="button"
+                            class="inventario-cantidad-btn"
+                            data-cantidad-delta="1"
+                            aria-label="Sumar una unidad"
+                            title="Sumar una unidad">+</button>
+                    <button type="submit" class="inventario-cantidad-save" data-cantidad-save disabled>Guardar cambios</button>
+                </form>
+            {% else %}
+                <strong>{{ item.cantidad }}</strong>
+            {% endif %}
+        </div>
+        <div class="inventario-detalle-row"><span>Ubicación</span><strong>{{ item.get_ubicacion_display }}</strong></div>
+    </div>
+</div>
+<script>
+    (function () {
+        var form = document.querySelector('[data-cantidad-form]');
+        if (!form) return;
+
+        var valueNode = form.querySelector('[data-cantidad-valor]');
+        var input = form.querySelector('[data-cantidad-input]');
+        var saveButton = form.querySelector('[data-cantidad-save]');
+        var initialValue = parseInt(input.value, 10) || 0;
+
+        function updateDisabled(value) {
+            var minus = form.querySelector('[data-cantidad-delta="-1"]');
+            if (minus) minus.disabled = value <= 0;
+            if (saveButton) saveButton.disabled = value === initialValue;
+        }
+
+        form.querySelectorAll('[data-cantidad-delta]').forEach(function (button) {
+            button.addEventListener('click', function () {
+                var delta = parseInt(button.getAttribute('data-cantidad-delta'), 10) || 0;
+                var current = parseInt(input.value, 10) || 0;
+                var next = Math.max(0, current + delta);
+                input.value = String(next);
+                valueNode.textContent = String(next);
+                updateDisabled(next);
+            });
+        });
+
+        updateDisabled(initialValue);
+    })();
+</script>
+{% endblock %}

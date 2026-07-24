@@ -1,0 +1,452 @@
+{% extends 'base.html' %}
+
+{% block title %}Inventario {{ tipo.nombre }} — Econotec{% endblock %}
+
+{% block content %}
+<style>
+    .inventario-tabla-wrap {
+        width: min(100%, 1180px);
+    }
+    .inventario-tabla-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-end;
+        gap: 16px;
+        margin-bottom: 18px;
+    }
+    .inventario-tags {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+    .inventario-tag {
+        display: inline-flex;
+        align-items: center;
+        min-height: 32px;
+        padding: 6px 12px;
+        border-radius: 999px;
+        background: var(--primary-light);
+        color: var(--primary-dark);
+        border: 1px solid rgba(249, 118, 24, 0.24);
+        font-size: 13px;
+        font-weight: 900;
+    }
+    .inventario-actions {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+        gap: 10px;
+        margin-bottom: 18px;
+    }
+    .inventario-actions .btn {
+        min-height: 42px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 850;
+    }
+    .inventario-table-card {
+        padding: 0;
+        overflow: hidden;
+    }
+    .inventario-table-card .table-wrap {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+    .inventario-table-card table {
+        min-width: 1060px;
+    }
+    .inventario-table-title {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 18px 20px;
+        border-bottom: 1px solid var(--border-color);
+        background: var(--hover-bg);
+    }
+    .inventario-table-title h3 {
+        margin: 0;
+        color: var(--text-main);
+        font-size: 18px;
+        line-height: 1.2;
+        font-weight: 900;
+    }
+    .inventario-table-title span {
+        color: var(--text-muted);
+        font-size: 13px;
+        font-weight: 800;
+    }
+    .inventario-empty-row {
+        text-align: center;
+        color: var(--text-muted);
+        padding: 34px 18px;
+        white-space: normal;
+        font-weight: 750;
+    }
+    .inventario-code-cell {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        min-width: 190px;
+    }
+    .inventario-qr-button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 66px;
+        height: 66px;
+        padding: 4px;
+        border-radius: 8px;
+        border: 1px solid var(--border-color);
+        background: #ffffff;
+        flex: 0 0 auto;
+    }
+    .inventario-qr-button:hover,
+    .inventario-qr-button:focus-visible {
+        border-color: var(--primary);
+        box-shadow: 0 0 0 3px rgba(249, 118, 24, 0.16);
+        outline: none;
+    }
+    .inventario-qr-button img {
+        width: 58px;
+        height: 58px;
+        border-radius: 8px;
+        background: #ffffff;
+    }
+    .inventario-code-cell strong {
+        display: block;
+        color: var(--text-main);
+        font-size: 13px;
+        line-height: 1.25;
+        white-space: normal;
+        overflow-wrap: anywhere;
+    }
+    .inventario-code-cell small {
+        display: block;
+        margin-top: 3px;
+        color: var(--text-muted);
+        font-size: 11px;
+        font-weight: 850;
+        line-height: 1.25;
+        overflow-wrap: anywhere;
+    }
+    .inventario-table-actions {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        min-width: 144px;
+    }
+    .inventario-table-actions .btn,
+    .inventario-table-actions button {
+        min-height: 34px;
+        padding: 7px 10px;
+        border-radius: 8px;
+        font-size: 12px;
+        font-family: inherit;
+        font-weight: 850;
+        white-space: nowrap;
+    }
+    .inventario-table-actions form {
+        margin: 0;
+    }
+    .inventario-qr-modal {
+        position: fixed;
+        inset: 0;
+        z-index: 5000;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        padding: 18px;
+        background: rgba(17, 24, 39, 0.62);
+    }
+    .inventario-qr-modal.show {
+        display: flex;
+    }
+    .inventario-qr-box {
+        width: min(100%, 440px);
+        max-height: calc(100dvh - 36px);
+        overflow: auto;
+        border-radius: 16px;
+        background: var(--card-bg);
+        box-shadow: 0 22px 70px rgba(0, 0, 0, 0.34);
+        padding: 24px;
+        text-align: center;
+        border-top: 5px solid var(--primary);
+    }
+    .inventario-qr-box img {
+        width: min(100%, 280px);
+        height: auto;
+        border-radius: 14px;
+        border: 1px solid var(--border-color);
+        background: #ffffff;
+        padding: 10px;
+        margin-bottom: 16px;
+    }
+    .inventario-qr-box h3 {
+        margin: 0 0 8px;
+        color: var(--text-main);
+        font-size: 22px;
+        line-height: 1.18;
+        font-weight: 900;
+    }
+    .inventario-qr-box p {
+        margin: 0 0 6px;
+        color: var(--text-muted);
+        font-size: 14px;
+        line-height: 1.35;
+        font-weight: 750;
+    }
+    .inventario-qr-actions {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+        margin-top: 18px;
+    }
+    .inventario-qr-actions .btn,
+    .inventario-qr-actions button {
+        min-height: 42px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-family: inherit;
+        font-weight: 850;
+    }
+    @media (max-width: 760px) {
+        .inventario-tabla-wrap {
+            width: 100%;
+        }
+        .inventario-tabla-head,
+        .inventario-table-title {
+            align-items: flex-start;
+            flex-direction: column;
+        }
+        .inventario-table-title {
+            padding: 16px;
+        }
+        .inventario-table-title h3,
+        .inventario-table-title span {
+            overflow-wrap: anywhere;
+        }
+        .inventario-table-card table {
+            min-width: 920px;
+        }
+        .inventario-actions {
+            display: grid;
+            grid-template-columns: 1fr;
+            justify-content: stretch;
+        }
+        .inventario-actions .btn {
+            width: 100%;
+        }
+        .inventario-code-cell {
+            min-width: 210px;
+        }
+        .inventario-table-actions {
+            align-items: stretch;
+            flex-direction: column;
+            min-width: 124px;
+        }
+        .inventario-table-actions .btn,
+        .inventario-table-actions button {
+            width: 100%;
+        }
+        .inventario-qr-actions {
+            grid-template-columns: 1fr;
+        }
+    }
+    @media (max-width: 420px) {
+        .inventario-tags {
+            width: 100%;
+        }
+        .inventario-tag {
+            max-width: 100%;
+            overflow-wrap: anywhere;
+        }
+        .inventario-qr-modal {
+            padding: 12px;
+        }
+        .inventario-qr-box {
+            padding: 18px;
+        }
+        .inventario-qr-box h3 {
+            font-size: 18px;
+            overflow-wrap: anywhere;
+        }
+        .inventario-qr-box img {
+            width: min(100%, 230px);
+        }
+    }
+</style>
+
+<div class="crumb">
+    <a href="{% url 'econotec:bienvenida' %}">Inicio</a> /
+    <a href="{% url 'econotec:inventario_menu' %}">Inventario</a> /
+    {{ sede_label }} / {{ categoria.nombre }} / {{ tipo.nombre }}
+</div>
+
+<div class="inventario-tabla-wrap">
+    <div class="inventario-tabla-head">
+        <div>
+            <h2 class="page-title">Inventario <span class="accent">{{ tipo.nombre }}</span></h2>
+            <p class="page-subtitle">Tabla base para organizar este inventario por sede.</p>
+        </div>
+        <div class="inventario-tags">
+            <span class="inventario-tag">{{ sede_label }}</span>
+            <span class="inventario-tag">{{ categoria.nombre }}</span>
+            <span class="inventario-tag">{{ tipo.nombre }}</span>
+        </div>
+    </div>
+
+    <div class="inventario-actions">
+        <a href="{% url 'econotec:inventario_registrar' sede=sede_slug categoria=categoria_slug tipo=tipo.slug %}" class="btn btn-primary">
+            + Ingresar equipo
+        </a>
+        {% if tiene_subtipos %}
+            <a href="{% url 'econotec:inventario_categoria' sede=sede_slug categoria=categoria_slug %}" class="btn btn-secondary">
+                Ver tipos
+            </a>
+        {% else %}
+            <a href="{% url 'econotec:inventario_menu' %}" class="btn btn-secondary">
+                Cambiar sede
+            </a>
+        {% endif %}
+    </div>
+
+    <div class="card-box inventario-table-card">
+        <div class="inventario-table-title">
+            <h3>Tabla de inventario</h3>
+            <span>{{ tipo.nombre }} — {{ sede_label }}</span>
+        </div>
+        <div class="table-wrap" style="box-shadow: none; border-radius: 0;">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Código</th>
+                        <th>Producto</th>
+                        <th>Marca</th>
+                        <th>Modelo</th>
+                        <th>Serie <small>(opcional)</small></th>
+                        <th>Estado</th>
+                        <th>Cantidad</th>
+                        <th>Ubicación</th>
+                        {% if puede_gestionar_inventario %}<th>Acción</th>{% endif %}
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in items %}
+                        <tr>
+                            <td>
+                                <div class="inventario-code-cell">
+                                    <button type="button"
+                                            class="inventario-qr-button"
+                                            data-qr="{{ item.qr_data_uri }}"
+                                            data-codigo="{{ item.codigo }}"
+                                            data-producto="{{ item.producto }}"
+                                            data-marca="{{ item.marca }}"
+                                            data-modelo="{{ item.modelo }}"
+                                            data-categoria="{{ categoria.nombre }}"
+                                            data-detalle="{{ item.detalle_url }}"
+                                            data-imprimir="{{ item.imprimir_qr_url }}"
+                                            title="Ver QR grande">
+                                        <img src="{{ item.qr_data_uri }}" alt="QR {{ item.codigo }}">
+                                    </button>
+                                    <a href="{{ item.detalle_url }}" style="text-decoration: none;">
+                                        <strong>{{ item.producto }}</strong>
+                                        <small>{{ item.codigo }}</small>
+                                    </a>
+                                </div>
+                            </td>
+                            <td>{{ item.producto }}</td>
+                            <td>{{ item.marca }}</td>
+                            <td>{{ item.modelo }}</td>
+                            <td>{{ item.serie|default:"—" }}</td>
+                            <td>{{ item.get_estado_display }}</td>
+                            <td>{{ item.cantidad }}</td>
+                            <td>{{ item.get_ubicacion_display }}</td>
+                            {% if puede_gestionar_inventario %}
+                                <td>
+                                    <div class="inventario-table-actions">
+                                        <a href="{% url 'econotec:inventario_editar' codigo=item.codigo %}" class="btn btn-secondary">Editar</a>
+                                        <form method="post"
+                                              action="{% url 'econotec:inventario_eliminar' codigo=item.codigo %}"
+                                              onsubmit="return confirm('¿Eliminar este producto del inventario? Esta acción no se puede deshacer.');">
+                                            {% csrf_token %}
+                                            <button type="submit" class="btn btn-danger">Eliminar</button>
+                                        </form>
+                                    </div>
+                                </td>
+                            {% endif %}
+                        </tr>
+                    {% empty %}
+                        <tr>
+                            <td colspan="{% if puede_gestionar_inventario %}9{% else %}8{% endif %}" class="inventario-empty-row">
+                                Sin registros todavía para {{ tipo.nombre }} en {{ sede_label }}.
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div class="inventario-qr-modal" id="inventarioQrModal" aria-hidden="true">
+    <div class="inventario-qr-box">
+        <img src="" alt="QR del producto" id="inventarioQrModalImg">
+        <h3 id="inventarioQrModalCodigo">—</h3>
+        <p id="inventarioQrModalProducto">—</p>
+        <p id="inventarioQrModalMeta">—</p>
+        <div class="inventario-qr-actions">
+            <a href="#" class="btn btn-primary" id="inventarioQrDetalle">Ver detalle</a>
+            <a href="#" class="btn btn-secondary" id="inventarioQrImprimir" target="_blank" rel="noopener">Imprimir QR</a>
+            <button type="button" class="btn btn-secondary" id="inventarioQrCerrar">Cerrar</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    (function () {
+        var modal = document.getElementById('inventarioQrModal');
+        var modalImg = document.getElementById('inventarioQrModalImg');
+        var modalCodigo = document.getElementById('inventarioQrModalCodigo');
+        var modalProducto = document.getElementById('inventarioQrModalProducto');
+        var modalMeta = document.getElementById('inventarioQrModalMeta');
+        var modalDetalle = document.getElementById('inventarioQrDetalle');
+        var modalImprimir = document.getElementById('inventarioQrImprimir');
+        var modalCerrar = document.getElementById('inventarioQrCerrar');
+
+        document.querySelectorAll('.inventario-qr-button').forEach(function (button) {
+            button.addEventListener('click', function () {
+                modalImg.src = button.getAttribute('data-qr') || '';
+                modalCodigo.textContent = button.getAttribute('data-codigo') || '';
+                modalProducto.textContent = button.getAttribute('data-producto') || '';
+                modalMeta.textContent = [
+                    button.getAttribute('data-categoria') || '',
+                    button.getAttribute('data-marca') || '',
+                    button.getAttribute('data-modelo') || ''
+                ].filter(Boolean).join(' — ');
+                modalDetalle.href = button.getAttribute('data-detalle') || '#';
+                modalImprimir.href = button.getAttribute('data-imprimir') || '#';
+                modal.classList.add('show');
+                modal.setAttribute('aria-hidden', 'false');
+            });
+        });
+
+        function cerrarModalQr() {
+            modal.classList.remove('show');
+            modal.setAttribute('aria-hidden', 'true');
+        }
+
+        modalCerrar.addEventListener('click', cerrarModalQr);
+        modal.addEventListener('click', function (event) {
+            if (event.target === modal) cerrarModalQr();
+        });
+        document.addEventListener('keydown', function (event) {
+            if (event.key === 'Escape' && modal.classList.contains('show')) {
+                cerrarModalQr();
+            }
+        });
+    })();
+</script>
+{% endblock %}

@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Imprimir QR {{ item.codigo }} - Econotec</title>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+        body {
+            margin: 0;
+            padding: 18px;
+            background: #f9fafb;
+            color: #1f2937;
+            font-family: Arial, sans-serif;
+        }
+        .print-btn {
+            display: block;
+            width: 210px;
+            margin: 0 auto 18px;
+            padding: 11px 14px;
+            border: 0;
+            border-radius: 8px;
+            background: #f97618;
+            color: #ffffff;
+            font-size: 16px;
+            font-weight: 900;
+            cursor: pointer;
+        }
+        .page {
+            width: min(100%, 297mm);
+            margin: 0 auto;
+            padding: 14mm;
+            background: #ffffff;
+            border: 1px solid #d1d5db;
+            box-shadow: 0 4px 12px rgba(17, 24, 39, 0.10);
+        }
+        .qr-sheet {
+            position: relative;
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 0 12mm;
+        }
+        .qr-sheet::before {
+            content: "";
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            left: 50%;
+            border-left: 1px dashed #9ca3af;
+            pointer-events: none;
+        }
+        .qr-card {
+            min-height: 166mm;
+            padding: 10mm 9mm;
+            border: 1.5px dashed #9ca3af;
+            border-radius: 4px;
+            background: #ffffff;
+            text-align: center;
+            break-inside: avoid;
+        }
+        .qr-product {
+            margin: 0 0 4px;
+            color: #1f2937;
+            font-size: 22px;
+            font-weight: 900;
+            line-height: 1.12;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .qr-subtitle {
+            margin: 0 0 8px;
+            color: #4b5563;
+            font-size: 15px;
+            font-weight: 800;
+            line-height: 1.2;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .qr-img {
+            display: block;
+            width: 70mm;
+            height: 70mm;
+            margin: 0 auto;
+        }
+        .qr-code {
+            margin-top: 11px;
+            color: #1f2937;
+            font-size: 30px;
+            font-weight: 950;
+            line-height: 1;
+            word-break: break-word;
+        }
+        .qr-type {
+            margin-top: 6px;
+            color: #f97618;
+            font-size: 20px;
+            font-weight: 950;
+            line-height: 1.08;
+            text-transform: uppercase;
+        }
+        @media screen and (max-width: 820px) {
+            body {
+                padding: 12px;
+            }
+            .print-btn {
+                width: min(100%, 280px);
+                min-height: 46px;
+                margin-bottom: 12px;
+            }
+            .page {
+                width: 100%;
+                padding: 12px;
+            }
+            .qr-sheet {
+                grid-template-columns: 1fr;
+                gap: 12px;
+            }
+            .qr-sheet::before {
+                display: none;
+            }
+            .qr-card {
+                min-height: auto;
+                padding: 20px 14px;
+            }
+            .qr-product {
+                font-size: 21px;
+            }
+            .qr-subtitle {
+                font-size: 14px;
+            }
+            .qr-img {
+                width: min(70vw, 230px);
+                height: min(70vw, 230px);
+            }
+            .qr-code {
+                font-size: 23px;
+                overflow-wrap: anywhere;
+            }
+            .qr-type {
+                font-size: 18px;
+            }
+        }
+        @media screen and (max-width: 420px) {
+            .qr-product {
+                font-size: 19px;
+            }
+            .qr-img {
+                width: min(76vw, 210px);
+                height: min(76vw, 210px);
+            }
+            .qr-code {
+                font-size: 20px;
+            }
+        }
+        @media print {
+            @page {
+                size: A4 landscape;
+                margin: 10mm;
+            }
+            body {
+                padding: 0;
+                background: #ffffff;
+            }
+            .print-btn {
+                display: none;
+            }
+            .page {
+                width: 100%;
+                max-width: none;
+                margin: 0;
+                padding: 0;
+                border: 0;
+                box-shadow: none;
+            }
+            .qr-card {
+                min-height: 190mm;
+                padding: 10mm 8mm;
+            }
+            .qr-product {
+                font-size: 22px;
+            }
+            .qr-subtitle {
+                font-size: 15px;
+            }
+            .qr-code {
+                font-size: 30px;
+            }
+            .qr-type {
+                font-size: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <button type="button" class="print-btn" onclick="window.print()">Imprimir ahora</button>
+
+    <div class="page">
+        <div class="qr-sheet">
+            {% for copia in "12" %}
+                <div class="qr-card">
+                    <h1 class="qr-product">{{ item.producto|truncatechars:32 }}</h1>
+                    <div class="qr-subtitle">{{ item.marca|truncatechars:28 }}{% if item.modelo %} - {{ item.modelo|truncatechars:28 }}{% endif %}</div>
+
+                    <img src="{{ qr_data_uri }}" alt="QR {{ item.codigo }}" class="qr-img">
+
+                    <div class="qr-code">{{ item.codigo }}</div>
+                    <div class="qr-type">{{ categoria.nombre }}</div>
+                </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <script>
+        window.onload = function () {
+            setTimeout(function () {
+                window.print();
+            }, 500);
+        };
+    </script>
+</body>
+</html>

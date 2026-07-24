@@ -10,7 +10,7 @@ from django.db.models import Q
 from decimal import Decimal, InvalidOperation
 from .models import (
     Cliente, IngresoEquipo, Abono, SalidaEquipo,
-    CategoriaEgreso, Egreso, AvisoPanel, NotificacionAsesora,
+    CategoriaEgreso, Egreso, AvisoPanel, NotificacionAsesora, InventarioItem,
 )
 from .permisos import GRUPOS_TECNICO, GRUPOS_ADMIN, GRUPOS_ASESOR_COMERCIAL
 
@@ -50,6 +50,66 @@ def _queryset_asesores():
         .distinct()
         .order_by('first_name', 'username')
     )
+
+
+# ─────────────────────────────────────────────────────────
+# Inventario
+# ─────────────────────────────────────────────────────────
+
+class InventarioItemForm(forms.ModelForm):
+    class Meta:
+        model = InventarioItem
+        fields = ['producto', 'marca', 'modelo', 'serie', 'estado', 'cantidad', 'ubicacion']
+        widgets = {
+            'producto': forms.TextInput(attrs={
+                'class': 'form-input',
+                'placeholder': 'Ej.: Tarjeta lógica, laptop, impresora completa',
+                'autocomplete': 'off',
+            }),
+            'marca': forms.TextInput(attrs={
+                'class': 'form-input',
+                'placeholder': 'Ej.: HP, Epson, Lenovo',
+                'autocomplete': 'off',
+            }),
+            'modelo': forms.TextInput(attrs={
+                'class': 'form-input',
+                'placeholder': 'Ej.: LaserJet Pro M404, ThinkPad T480',
+                'autocomplete': 'off',
+            }),
+            'serie': forms.TextInput(attrs={
+                'class': 'form-input',
+                'placeholder': 'Serie si aplica',
+                'autocomplete': 'off',
+            }),
+            'estado': forms.Select(attrs={'class': 'form-input'}),
+            'cantidad': forms.NumberInput(attrs={
+                'class': 'form-input',
+                'min': '0',
+                'inputmode': 'numeric',
+                'placeholder': '1',
+            }),
+            'ubicacion': forms.Select(attrs={'class': 'form-input'}),
+        }
+
+    def __init__(self, *args, sede_slug='', **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['serie'].required = False
+        if sede_slug == 'guayaquil':
+            self.fields['ubicacion'].choices = [
+                ('guayaquil_norte', 'Guayaquil Norte'),
+                ('guayaquil_centro', 'Guayaquil Centro'),
+            ]
+        elif sede_slug == 'quito':
+            self.fields['ubicacion'].choices = [
+                ('quito', 'Quito'),
+            ]
+            self.fields['ubicacion'].initial = 'quito'
+
+    def clean_cantidad(self):
+        cantidad = self.cleaned_data.get('cantidad') or 0
+        if cantidad < 0:
+            raise forms.ValidationError('La cantidad no puede ser negativa.')
+        return cantidad
 
 
 # ─────────────────────────────────────────────────────────

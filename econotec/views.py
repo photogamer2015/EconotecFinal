@@ -20,7 +20,7 @@ from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_GET, require_POST
 
 from .forms import (
-    ClienteForm, IngresoEquipoForm, SalidaEquipoForm,
+    ClienteForm, IngresoEquipoForm, SalidaEquipoForm, InventarioItemForm,
 )
 from .busqueda import (
     filtrar_objetos_normalizado,
@@ -31,7 +31,7 @@ from .busqueda import (
 )
 from .models import (
     Cliente, IngresoEquipo, SalidaEquipo, Abono, SEDES_EQUIPOS,
-    UsuarioActividad, NotificacionAsesora, BitacoraTecnico,
+    UsuarioActividad, NotificacionAsesora, BitacoraTecnico, InventarioItem,
 )
 from .bitacora import registrar_bitacora, nombre_corto_usuario, construir_bitacora_usuario
 from .date_filters import aplicar_rango_fecha, contexto_rango_fecha, obtener_rango_fecha
@@ -517,10 +517,331 @@ def reproductor_musica(request):
     return render(request, 'musica.html')
 
 
+INVENTARIO_SEDES = {
+    'guayaquil': 'Guayaquil',
+    'quito': 'Quito',
+}
+
+INVENTARIO_CATEGORIAS = {
+    'impresora': {
+        'nombre': 'Impresora',
+        'tipos': (
+            ('impresora-laser', 'Impresora Laser'),
+            ('impresora-inyeccion', 'Impresora Inyección'),
+        ),
+    },
+    'computadora': {
+        'nombre': 'Computadora',
+        'tipos': (
+            ('pc', 'PC'),
+            ('laptops', 'Laptops'),
+        ),
+    },
+    'consola': {
+        'nombre': 'Consola',
+        'tipos': (
+            ('consola-de-mesa', 'consola de mesa'),
+            ('portatil', 'Portatil'),
+        ),
+    },
+    'celular': {
+        'nombre': 'Celular',
+        'tipos': (
+            ('celular', 'Celular'),
+        ),
+    },
+    'tablet': {
+        'nombre': 'Tablet',
+        'tipos': (
+            ('tablet', 'Tablet'),
+        ),
+    },
+    'mando': {
+        'nombre': 'Mando',
+        'tipos': (
+            ('mando', 'Mando'),
+        ),
+    },
+}
+
+
+def _inventario_tipo_por_slug(categoria_info, tipo_slug):
+    for slug, nombre in categoria_info['tipos']:
+        if slug == tipo_slug:
+            return {'slug': slug, 'nombre': nombre}
+    return None
+
+
+def _puede_gestionar_inventario(user):
+    return es_admin(user) or es_tecnico(user)
+
+
+def _inventario_redirect_tabla(item):
+    return redirect(
+        'econotec:inventario_tabla',
+        sede=item.sede,
+        categoria=item.categoria,
+        tipo=item.tipo,
+    )
+
+
+def _inventario_contexto_base(sede_slug, categoria_slug, tipo_slug):
+    sede_label = INVENTARIO_SEDES.get(sede_slug)
+    categoria_info = INVENTARIO_CATEGORIAS.get(categoria_slug)
+    if not sede_label or not categoria_info:
+        return None, None, None
+    return sede_label, categoria_info, _inventario_tipo_por_slug(categoria_info, tipo_slug)
+
+
+def _inventario_item_contexto(request, item, box_size=8):
+    from .qr_utils import qr_data_uri
+
+    detalle_url = reverse('econotec:inventario_detalle_item', kwargs={'codigo': item.codigo})
+    qr_url = request.build_absolute_uri(detalle_url)
+    categoria_info = INVENTARIO_CATEGORIAS.get(item.categoria, {'nombre': item.categoria})
+    tipo_info = {'slug': item.tipo, 'nombre': item.tipo}
+    if 'tipos' in categoria_info:
+        tipo_info = _inventario_tipo_por_slug(categoria_info, item.tipo) or tipo_info
+    return {
+        'item': item,
+        'categoria': categoria_info,
+        'tipo': tipo_info,
+        'detalle_url': detalle_url,
+        'detalle_url_absoluta': qr_url,
+        'qr_data_uri': qr_data_uri(qr_url, box_size=box_size, border=2),
+        'puede_gestionar_inventario': _puede_gestionar_inventario(request.user),
+    }
+
+
 @login_required
 def inventario_menu(request):
     """Pantalla inicial del inventario por sede."""
     return render(request, 'inventario/menu.html')
+
+
+@login_required
+def inventario_categoria(request, sede, categoria):
+    sede_slug = (sede or '').strip().lower()
+    categoria_slug = (categoria or '').strip().lower()
+    sede_label = INVENTARIO_SEDES.get(sede_slug)
+    categoria_info = INVENTARIO_CATEGORIAS.get(categoria_slug)
+    if not sede_label or not categoria_info:
+        messages.error(request, 'Selecciona una sede y una categoría válida para inventario.')
+        return redirect('econotec:inventario_menu')
+
+    tipos = [
+        {'slug': slug, 'nombre': nombre}
+        for slug, nombre in categoria_info['tipos']
+    ]
+    if len(tipos) == 1:
+        return redirect(
+            'econotec:inventario_tabla',
+            sede=sede_slug,
+            categoria=categoria_slug,
+            tipo=tipos[0]['slug'],
+        )
+
+    return render(request, 'inventario/categoria.html', {
+        'sede_slug': sede_slug,
+        'sede_label': sede_label,
+        'categoria_slug': categoria_slug,
+        'categoria': categoria_info,
+        'tipos': tipos,
+    })
+
+
+@login_required
+def inventario_tabla(request, sede, categoria, tipo):
+    sede_slug = (sede or '').strip().lower()
+    categoria_slug = (categoria or '').strip().lower()
+    tipo_slug = (tipo or '').strip().lower()
+    sede_label = INVENTARIO_SEDES.get(sede_slug)
+    categoria_info = INVENTARIO_CATEGORIAS.get(categoria_slug)
+    if not sede_label or not categoria_info:
+        messages.error(request, 'Selecciona una sede y una categoría válida para inventario.')
+        return redirect('econotec:inventario_menu')
+
+    tipo_info = _inventario_tipo_por_slug(categoria_info, tipo_slug)
+    if not tipo_info:
+        messages.error(request, 'Selecciona un tipo válido para inventario.')
+        return redirect('econotec:inventario_categoria', sede=sede_slug, categoria=categoria_slug)
+
+    items = list(
+        InventarioItem.objects
+        .filter(sede=sede_slug, categoria=categoria_slug, tipo=tipo_slug)
+        .select_related('registrado_por')
+        .order_by('-creado')
+    )
+    for item in items:
+        detalle_url = reverse('econotec:inventario_detalle_item', kwargs={'codigo': item.codigo})
+        item.detalle_url = detalle_url
+        item.imprimir_qr_url = reverse('econotec:inventario_qr_imprimir', kwargs={'codigo': item.codigo})
+        item.qr_data_uri = _inventario_item_contexto(request, item, box_size=3)['qr_data_uri']
+
+    return render(request, 'inventario/tabla.html', {
+        'sede_slug': sede_slug,
+        'sede_label': sede_label,
+        'categoria_slug': categoria_slug,
+        'categoria': categoria_info,
+        'tipo': tipo_info,
+        'items': items,
+        'tiene_subtipos': len(categoria_info['tipos']) > 1,
+        'puede_gestionar_inventario': _puede_gestionar_inventario(request.user),
+    })
+
+
+@login_required
+def inventario_registrar(request, sede, categoria, tipo):
+    sede_slug = (sede or '').strip().lower()
+    categoria_slug = (categoria or '').strip().lower()
+    tipo_slug = (tipo or '').strip().lower()
+    sede_label = INVENTARIO_SEDES.get(sede_slug)
+    categoria_info = INVENTARIO_CATEGORIAS.get(categoria_slug)
+    if not sede_label or not categoria_info:
+        messages.error(request, 'Selecciona una sede y una categoría válida para inventario.')
+        return redirect('econotec:inventario_menu')
+
+    tipo_info = _inventario_tipo_por_slug(categoria_info, tipo_slug)
+    if not tipo_info:
+        messages.error(request, 'Selecciona un tipo válido para inventario.')
+        return redirect('econotec:inventario_categoria', sede=sede_slug, categoria=categoria_slug)
+
+    if request.method == 'POST':
+        form = InventarioItemForm(request.POST, sede_slug=sede_slug)
+        if form.is_valid():
+            item = form.save(commit=False)
+            item.sede = sede_slug
+            item.categoria = categoria_slug
+            item.tipo = tipo_slug
+            item.registrado_por = request.user
+            item.save()
+            messages.success(request, f'Inventario registrado con código {item.codigo}.')
+            return redirect(
+                'econotec:inventario_tabla',
+                sede=sede_slug,
+                categoria=categoria_slug,
+                tipo=tipo_slug,
+            )
+    else:
+        form = InventarioItemForm(sede_slug=sede_slug, initial={
+            'cantidad': 1,
+            'estado': 'disponible',
+        })
+
+    return render(request, 'inventario/form.html', {
+        'form': form,
+        'sede_slug': sede_slug,
+        'sede_label': sede_label,
+        'categoria_slug': categoria_slug,
+        'categoria': categoria_info,
+        'tipo': tipo_info,
+        'tiene_subtipos': len(categoria_info['tipos']) > 1,
+        'modo_formulario': 'crear',
+    })
+
+
+@login_required
+def inventario_editar(request, codigo):
+    if not _puede_gestionar_inventario(request.user):
+        messages.error(request, 'Solo admin y técnicos pueden editar inventario.')
+        return redirect('econotec:inventario_detalle_item', codigo=codigo)
+
+    item = get_object_or_404(InventarioItem, codigo=codigo)
+    sede_label, categoria_info, tipo_info = _inventario_contexto_base(
+        item.sede,
+        item.categoria,
+        item.tipo,
+    )
+    if not sede_label or not categoria_info or not tipo_info:
+        messages.error(request, 'Este producto tiene una categoría de inventario inválida.')
+        return redirect('econotec:inventario_menu')
+
+    if request.method == 'POST':
+        form = InventarioItemForm(request.POST, instance=item, sede_slug=item.sede)
+        if form.is_valid():
+            form.save()
+            messages.success(request, 'Producto de inventario actualizado.')
+            return redirect('econotec:inventario_detalle_item', codigo=item.codigo)
+    else:
+        form = InventarioItemForm(instance=item, sede_slug=item.sede)
+
+    return render(request, 'inventario/form.html', {
+        'form': form,
+        'item': item,
+        'sede_slug': item.sede,
+        'sede_label': sede_label,
+        'categoria_slug': item.categoria,
+        'categoria': categoria_info,
+        'tipo': tipo_info,
+        'tiene_subtipos': len(categoria_info['tipos']) > 1,
+        'modo_formulario': 'editar',
+    })
+
+
+def inventario_detalle_item(request, codigo):
+    item = get_object_or_404(InventarioItem, codigo=codigo)
+    return render(request, 'inventario/detalle.html', _inventario_item_contexto(request, item, box_size=6))
+
+
+@login_required
+@require_POST
+def inventario_actualizar_cantidad(request, codigo):
+    if not _puede_gestionar_inventario(request.user):
+        messages.error(request, 'Solo admin y técnicos pueden actualizar inventario.')
+        return redirect('econotec:inventario_detalle_item', codigo=codigo)
+
+    accion = (request.POST.get('accion') or '').strip().lower()
+    cantidad_final = (request.POST.get('cantidad') or '').strip()
+    if accion not in {'sumar', 'restar', ''}:
+        messages.error(request, 'No se pudo actualizar la cantidad.')
+        return redirect('econotec:inventario_detalle_item', codigo=codigo)
+
+    with transaction.atomic():
+        item = get_object_or_404(
+            InventarioItem.objects.select_for_update(),
+            codigo=codigo,
+        )
+        if cantidad_final:
+            try:
+                nueva_cantidad = int(cantidad_final)
+            except ValueError:
+                messages.error(request, 'La cantidad debe ser un número válido.')
+                return redirect('econotec:inventario_detalle_item', codigo=item.codigo)
+            item.cantidad = max(0, nueva_cantidad)
+        else:
+            if accion == 'restar':
+                item.cantidad = max(0, item.cantidad - 1)
+            elif accion == 'sumar':
+                item.cantidad += 1
+        item.save(update_fields=['cantidad', 'actualizado'])
+
+    messages.success(request, f'Cantidad actualizada a {item.cantidad}.')
+    return redirect('econotec:inventario_detalle_item', codigo=item.codigo)
+
+
+@login_required
+@require_POST
+def inventario_eliminar(request, codigo):
+    if not _puede_gestionar_inventario(request.user):
+        messages.error(request, 'Solo admin y técnicos pueden eliminar inventario.')
+        return redirect('econotec:inventario_detalle_item', codigo=codigo)
+
+    item = get_object_or_404(InventarioItem, codigo=codigo)
+    tabla_kwargs = {
+        'sede': item.sede,
+        'categoria': item.categoria,
+        'tipo': item.tipo,
+    }
+    producto = item.producto
+    codigo_item = item.codigo
+    item.delete()
+    messages.success(request, f'Producto eliminado: {producto} ({codigo_item}).')
+    return redirect('econotec:inventario_tabla', **tabla_kwargs)
+
+
+def inventario_qr_imprimir(request, codigo):
+    item = get_object_or_404(InventarioItem, codigo=codigo)
+    return render(request, 'inventario/imprimir_qr.html', _inventario_item_contexto(request, item, box_size=8))
 
 
 # ═════════════════════════════════════════════════════════════════

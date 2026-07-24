@@ -1,0 +1,208 @@
+{% extends 'base.html' %}
+
+{% block title %}{% if modo_formulario == 'editar' %}Editar inventario{% else %}Ingresar inventario{% endif %} — Econotec{% endblock %}
+
+{% block content %}
+<style>
+    .inventario-form-wrap {
+        width: min(100%, 920px);
+    }
+    .inventario-form-card {
+        border-left: 5px solid var(--primary);
+    }
+    .inventario-form-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 16px;
+        margin-bottom: 22px;
+    }
+    .inventario-form-tags {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        justify-content: flex-end;
+    }
+    .inventario-form-tags span {
+        display: inline-flex;
+        align-items: center;
+        min-height: 30px;
+        padding: 5px 11px;
+        border-radius: 999px;
+        background: var(--primary-light);
+        color: var(--primary-dark);
+        border: 1px solid rgba(249, 118, 24, 0.24);
+        font-size: 12px;
+        font-weight: 900;
+        overflow-wrap: anywhere;
+    }
+    .inventario-help {
+        margin: 0 0 20px;
+        padding: 12px 14px;
+        border-radius: 10px;
+        background: var(--hover-bg);
+        color: var(--text-muted);
+        border: 1px solid var(--border-color);
+        font-size: 13px;
+        line-height: 1.45;
+        font-weight: 750;
+    }
+    .inventario-form-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 16px;
+    }
+    .inventario-form-grid input,
+    .inventario-form-grid select,
+    .inventario-form-grid textarea {
+        width: 100%;
+        max-width: 100%;
+    }
+    .inventario-form-grid .full {
+        grid-column: 1 / -1;
+    }
+    .field-errors {
+        margin-top: 5px;
+        color: var(--danger);
+        font-size: 12px;
+        font-weight: 750;
+    }
+    .inventario-form-actions {
+        display: flex;
+        justify-content: flex-end;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 24px;
+    }
+    .inventario-form-actions .btn {
+        min-height: 44px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 850;
+    }
+    @media (max-width: 760px) {
+        .inventario-form-wrap {
+            width: 100%;
+        }
+        .inventario-form-head,
+        .inventario-form-actions {
+            align-items: stretch;
+            flex-direction: column;
+        }
+        .inventario-form-head .page-title,
+        .inventario-form-head .page-subtitle,
+        .inventario-help {
+            overflow-wrap: anywhere;
+        }
+        .inventario-form-tags {
+            justify-content: flex-start;
+        }
+        .inventario-form-grid {
+            grid-template-columns: 1fr;
+        }
+        .inventario-form-actions .btn {
+            width: 100%;
+        }
+        .inventario-form-card {
+            padding: 18px;
+        }
+    }
+    @media (max-width: 420px) {
+        .inventario-form-tags span {
+            max-width: 100%;
+        }
+        .inventario-form-card {
+            padding: 16px;
+        }
+    }
+</style>
+
+<div class="crumb">
+    <a href="{% url 'econotec:bienvenida' %}">Inicio</a> /
+    <a href="{% url 'econotec:inventario_menu' %}">Inventario</a> /
+    <a href="{% url 'econotec:inventario_tabla' sede=sede_slug categoria=categoria_slug tipo=tipo.slug %}">{{ tipo.nombre }}</a> /
+    {% if modo_formulario == 'editar' %}Editar {{ item.codigo }}{% else %}Ingresar{% endif %}
+</div>
+
+<div class="inventario-form-wrap">
+    <div class="inventario-form-head">
+        <div>
+            {% if modo_formulario == 'editar' %}
+                <h2 class="page-title">Editar <span class="accent">{{ item.producto }}</span></h2>
+                <p class="page-subtitle">Actualiza los datos del producto sin cambiar su código QR.</p>
+            {% else %}
+                <h2 class="page-title">Ingresar <span class="accent">{{ tipo.nombre }}</span></h2>
+                <p class="page-subtitle">Completa los datos para agregarlo a la tabla de inventario.</p>
+            {% endif %}
+        </div>
+        <div class="inventario-form-tags">
+            <span>{{ sede_label }}</span>
+            <span>{{ categoria.nombre }}</span>
+            <span>{{ tipo.nombre }}</span>
+        </div>
+    </div>
+
+    <form method="post" class="card-box inventario-form-card" novalidate>
+        {% csrf_token %}
+        <p class="inventario-help">
+            {% if modo_formulario == 'editar' %}
+                El código único {{ item.codigo }} y su QR se conservan. La ubicación queda limitada a la sede seleccionada.
+            {% else %}
+                El código único y el QR se generan automáticamente al guardar. La ubicación queda limitada a la sede seleccionada.
+            {% endif %}
+        </p>
+
+        {% if form.non_field_errors %}
+            <div class="flash flash-error">{{ form.non_field_errors }}</div>
+        {% endif %}
+
+        <div class="inventario-form-grid">
+            <div class="full">
+                <label class="form-label" for="{{ form.producto.id_for_label }}">Producto</label>
+                {{ form.producto }}
+                {% if form.producto.errors %}<div class="field-errors">{{ form.producto.errors }}</div>{% endif %}
+            </div>
+            <div>
+                <label class="form-label" for="{{ form.marca.id_for_label }}">Marca</label>
+                {{ form.marca }}
+                {% if form.marca.errors %}<div class="field-errors">{{ form.marca.errors }}</div>{% endif %}
+            </div>
+            <div>
+                <label class="form-label" for="{{ form.modelo.id_for_label }}">Modelo</label>
+                {{ form.modelo }}
+                {% if form.modelo.errors %}<div class="field-errors">{{ form.modelo.errors }}</div>{% endif %}
+            </div>
+            <div>
+                <label class="form-label" for="{{ form.serie.id_for_label }}">Serie <span style="font-weight: 750; color: var(--text-muted);">(opcional)</span></label>
+                {{ form.serie }}
+                {% if form.serie.errors %}<div class="field-errors">{{ form.serie.errors }}</div>{% endif %}
+            </div>
+            <div>
+                <label class="form-label" for="{{ form.estado.id_for_label }}">Estado</label>
+                {{ form.estado }}
+                {% if form.estado.errors %}<div class="field-errors">{{ form.estado.errors }}</div>{% endif %}
+            </div>
+            <div>
+                <label class="form-label" for="{{ form.cantidad.id_for_label }}">Cantidad</label>
+                {{ form.cantidad }}
+                {% if form.cantidad.errors %}<div class="field-errors">{{ form.cantidad.errors }}</div>{% endif %}
+            </div>
+            <div>
+                <label class="form-label" for="{{ form.ubicacion.id_for_label }}">Ubicación</label>
+                {{ form.ubicacion }}
+                {% if form.ubicacion.errors %}<div class="field-errors">{{ form.ubicacion.errors }}</div>{% endif %}
+            </div>
+        </div>
+
+        <div class="inventario-form-actions">
+            <a href="{% url 'econotec:inventario_tabla' sede=sede_slug categoria=categoria_slug tipo=tipo.slug %}" class="btn btn-secondary">
+                Cancelar
+            </a>
+            <button type="submit" class="btn btn-primary">
+                {% if modo_formulario == 'editar' %}Guardar cambios{% else %}Guardar equipo{% endif %}
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}

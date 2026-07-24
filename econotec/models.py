@@ -10,6 +10,8 @@ Mapea fielmente la hoja "SOLICITUD DE INGRESO" de Econotec:
 """
 from datetime import date, time
 from decimal import Decimal, ROUND_HALF_UP
+import uuid
+
 from django.db import models
 from django.utils import timezone
 
@@ -138,6 +140,76 @@ class Cliente(models.Model):
 
     def __str__(self):
         return f'{self.cedula} — {self.nombres}'
+
+
+# ─────────────────────────────────────────────────────────
+# Inventario
+# ─────────────────────────────────────────────────────────
+
+class InventarioItem(models.Model):
+    """Producto o pieza registrada dentro del inventario por sede y tipo."""
+
+    ESTADOS = [
+        ('disponible', 'Disponible'),
+        ('no_disponible', 'No disponible'),
+    ]
+
+    UBICACIONES = [
+        ('guayaquil_norte', 'Guayaquil Norte'),
+        ('guayaquil_centro', 'Guayaquil Centro'),
+        ('quito', 'Quito'),
+    ]
+
+    sede = models.CharField(max_length=20, choices=SEDES, verbose_name='Sede')
+    categoria = models.CharField(max_length=40, verbose_name='Categoría')
+    tipo = models.CharField(max_length=60, verbose_name='Tipo')
+    codigo = models.CharField(max_length=40, unique=True, editable=False, verbose_name='Código QR')
+    producto = models.CharField(max_length=160, verbose_name='Producto')
+    marca = models.CharField(max_length=100, verbose_name='Marca')
+    modelo = models.CharField(max_length=100, verbose_name='Modelo')
+    serie = models.CharField(max_length=120, blank=True, verbose_name='Serie')
+    estado = models.CharField(max_length=20, choices=ESTADOS, default='disponible', verbose_name='Estado')
+    cantidad = models.PositiveIntegerField(default=1, verbose_name='Cantidad')
+    ubicacion = models.CharField(max_length=30, choices=UBICACIONES, verbose_name='Ubicación')
+    registrado_por = models.ForeignKey(
+        'auth.User',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='inventario_registrado',
+        verbose_name='Registrado por',
+    )
+    creado = models.DateTimeField(auto_now_add=True)
+    actualizado = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'Item de inventario'
+        verbose_name_plural = 'Items de inventario'
+        ordering = ['-creado']
+        indexes = [
+            models.Index(fields=['sede', 'categoria', 'tipo']),
+            models.Index(fields=['codigo']),
+        ]
+
+    def _generar_codigo_unico(self):
+        sede_prefijo = {
+            'guayaquil': 'GYE',
+            'quito': 'UIO',
+        }.get(self.sede, 'INV')
+        tipo_prefijo = ''.join(ch for ch in (self.tipo or self.categoria or 'item').upper() if ch.isalnum())[:4]
+        for _ in range(20):
+            codigo = f'INV-{sede_prefijo}-{tipo_prefijo}-{uuid.uuid4().hex[:6].upper()}'
+            if not type(self).objects.filter(codigo=codigo).exists():
+                return codigo
+        return f'INV-{uuid.uuid4().hex[:12].upper()}'
+
+    def save(self, *args, **kwargs):
+        if not self.codigo:
+            self.codigo = self._generar_codigo_unico()
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f'{self.codigo} — {self.producto}'
 
 
 # ─────────────────────────────────────────────────────────

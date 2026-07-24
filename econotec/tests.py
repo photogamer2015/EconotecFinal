@@ -17,8 +17,8 @@ from .forms import IngresoEquipoForm
 from .alertas import equipos_demorados_qs, salidas_bodegaje_qs, whatsapp_link_equipo_listo
 from .horarios import registrar_entrada_laboral
 from .models import (
-    Abono, BitacoraTecnico, Cliente, HorarioTecnico, IngresoEquipo, NotificacionAsesora,
-    SalidaEquipo, UsuarioActividad,
+    Abono, BitacoraTecnico, Cliente, HorarioTecnico, IngresoEquipo, InventarioItem,
+    NotificacionAsesora, SalidaEquipo, UsuarioActividad,
 )
 from .qr_utils import token_para_ingreso
 from .views_auth import CAPTCHA_SESSION_KEY, LOGIN_2FA_SESSION_KEY, LOGIN_EMAIL_SETUP_SESSION_KEY
@@ -760,7 +760,347 @@ class VentasTests(TestCase):
         self.assertContains(response, 'Quito')
         self.assertContains(response, 'inventario/guayaquil.jpg')
         self.assertContains(response, 'inventario/quito.jpg')
+        self.assertContains(response, 'data-sede="guayaquil"')
+        self.assertContains(response, 'data-sede="quito"')
+        self.assertContains(response, 'Categorías de inventario')
+        self.assertContains(response, 'Impresora')
+        self.assertContains(response, 'Impresora Laser')
+        self.assertContains(response, 'Impresora Inyección')
+        self.assertContains(response, 'Computadora')
+        self.assertContains(response, 'PC')
+        self.assertContains(response, 'Laptops')
+        self.assertContains(response, 'Consola')
+        self.assertContains(response, 'consola de mesa')
+        self.assertContains(response, 'Portatil')
+        self.assertContains(response, 'Celular')
+        self.assertContains(response, 'Tablet')
+        self.assertContains(response, 'Mando')
         self.assertNotContains(response, 'Venta de Producto')
+
+    def test_inventario_categoria_con_subtipos_muestra_opciones(self):
+        response = self.client.get(reverse('econotec:inventario_categoria', kwargs={
+            'sede': 'guayaquil',
+            'categoria': 'impresora',
+        }))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Guayaquil')
+        self.assertContains(response, 'Impresora')
+        self.assertContains(response, 'Impresora Laser')
+        self.assertContains(response, 'Impresora Inyección')
+        self.assertContains(response, reverse('econotec:inventario_tabla', kwargs={
+            'sede': 'guayaquil',
+            'categoria': 'impresora',
+            'tipo': 'impresora-laser',
+        }))
+
+    def test_inventario_categoria_sin_subtipos_redirige_a_tabla(self):
+        response = self.client.get(reverse('econotec:inventario_categoria', kwargs={
+            'sede': 'quito',
+            'categoria': 'celular',
+        }))
+
+        self.assertRedirects(response, reverse('econotec:inventario_tabla', kwargs={
+            'sede': 'quito',
+            'categoria': 'celular',
+            'tipo': 'celular',
+        }))
+
+    def test_inventario_tabla_muestra_contexto_y_columnas(self):
+        response = self.client.get(reverse('econotec:inventario_tabla', kwargs={
+            'sede': 'guayaquil',
+            'categoria': 'computadora',
+            'tipo': 'pc',
+        }))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Inventario')
+        self.assertContains(response, 'Guayaquil')
+        self.assertContains(response, 'Computadora')
+        self.assertContains(response, 'PC')
+        self.assertContains(response, 'Código')
+        self.assertContains(response, 'Producto')
+        self.assertContains(response, 'Marca')
+        self.assertContains(response, 'Modelo')
+        self.assertContains(response, 'Serie')
+        self.assertContains(response, '(opcional)')
+        self.assertContains(response, 'Estado')
+        self.assertContains(response, 'Cantidad')
+        self.assertContains(response, 'Ubicación')
+        self.assertContains(response, 'Acción')
+        self.assertNotContains(response, 'Marca / Modelo')
+        self.assertNotContains(response, 'Observación')
+        self.assertContains(response, 'Sin registros todavía para PC en Guayaquil.')
+
+    def test_inventario_formulario_muestra_campos_y_ubicaciones_de_sede(self):
+        response = self.client.get(reverse('econotec:inventario_registrar', kwargs={
+            'sede': 'guayaquil',
+            'categoria': 'computadora',
+            'tipo': 'pc',
+        }))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Guardar equipo')
+        self.assertContains(response, 'Producto')
+        self.assertContains(response, 'Marca')
+        self.assertContains(response, 'Modelo')
+        self.assertContains(response, 'Serie')
+        self.assertContains(response, 'Estado')
+        self.assertContains(response, 'Disponible')
+        self.assertContains(response, 'No disponible')
+        self.assertNotContains(response, 'En uso')
+        self.assertNotContains(response, 'Reservado')
+        self.assertNotContains(response, 'Dañado')
+        self.assertNotContains(response, 'Vendido')
+        self.assertContains(response, 'Cantidad')
+        self.assertContains(response, 'Ubicación')
+        self.assertContains(response, 'Guayaquil Norte')
+        self.assertContains(response, 'Guayaquil Centro')
+
+    def test_inventario_registrar_crea_item_con_codigo_y_qr_en_tabla(self):
+        url = reverse('econotec:inventario_registrar', kwargs={
+            'sede': 'guayaquil',
+            'categoria': 'computadora',
+            'tipo': 'pc',
+        })
+
+        response = self.client.post(url, {
+            'producto': 'CPU completo',
+            'marca': 'HP',
+            'modelo': 'EliteDesk 800',
+            'serie': '',
+            'estado': 'disponible',
+            'cantidad': '2',
+            'ubicacion': 'guayaquil_norte',
+        })
+
+        item = InventarioItem.objects.get()
+        self.assertTrue(item.codigo.startswith('INV-GYE-PC-'))
+        self.assertEqual(item.producto, 'CPU completo')
+        self.assertEqual(item.marca, 'HP')
+        self.assertEqual(item.modelo, 'EliteDesk 800')
+        self.assertEqual(item.serie, '')
+        self.assertEqual(item.ubicacion, 'guayaquil_norte')
+        self.assertRedirects(response, reverse('econotec:inventario_tabla', kwargs={
+            'sede': 'guayaquil',
+            'categoria': 'computadora',
+            'tipo': 'pc',
+        }))
+
+        tabla = self.client.get(response.url)
+        self.assertContains(tabla, item.codigo)
+        self.assertContains(tabla, 'CPU completo')
+        self.assertContains(tabla, 'HP')
+        self.assertContains(tabla, 'EliteDesk 800')
+        self.assertContains(tabla, 'Guayaquil Norte')
+        self.assertContains(tabla, 'Editar')
+        self.assertContains(tabla, 'Eliminar')
+        self.assertContains(tabla, 'data:image/png;base64,')
+        self.assertContains(tabla, reverse('econotec:inventario_detalle_item', kwargs={'codigo': item.codigo}))
+        self.assertContains(tabla, reverse('econotec:inventario_qr_imprimir', kwargs={'codigo': item.codigo}))
+        self.assertContains(tabla, reverse('econotec:inventario_editar', kwargs={'codigo': item.codigo}))
+        self.assertContains(tabla, reverse('econotec:inventario_eliminar', kwargs={'codigo': item.codigo}))
+
+    def test_inventario_detalle_y_qr_imprimible_muestran_datos(self):
+        item = InventarioItem.objects.create(
+            sede='guayaquil',
+            categoria='computadora',
+            tipo='pc',
+            producto='CPU completo',
+            marca='HP',
+            modelo='EliteDesk 800',
+            serie='',
+            estado='disponible',
+            cantidad=2,
+            ubicacion='guayaquil_centro',
+            registrado_por=self.usuario,
+        )
+
+        detalle = self.client.get(reverse('econotec:inventario_detalle_item', kwargs={'codigo': item.codigo}))
+        self.assertEqual(detalle.status_code, 200)
+        self.assertContains(detalle, item.codigo)
+        self.assertContains(detalle, 'CPU completo')
+        self.assertContains(detalle, 'Computadora')
+        self.assertContains(detalle, 'HP')
+        self.assertContains(detalle, 'EliteDesk 800')
+        self.assertContains(detalle, 'Guayaquil Centro')
+        self.assertContains(detalle, 'data:image/png;base64,')
+        self.assertContains(detalle, 'Editar producto')
+        self.assertContains(detalle, 'Guardar cambios')
+        self.assertContains(detalle, 'target="_blank"')
+        self.assertContains(detalle, 'rel="noopener"')
+
+        imprimir = self.client.get(reverse('econotec:inventario_qr_imprimir', kwargs={'codigo': item.codigo}))
+        self.assertEqual(imprimir.status_code, 200)
+        self.assertContains(imprimir, 'CPU completo')
+        self.assertContains(imprimir, 'HP')
+        self.assertContains(imprimir, 'EliteDesk 800')
+        self.assertContains(imprimir, 'Computadora')
+        self.assertContains(imprimir, item.codigo)
+        self.assertNotContains(imprimir, 'Producto:')
+        self.assertNotContains(imprimir, 'Marca:')
+        self.assertNotContains(imprimir, 'Modelo:')
+        self.assertNotContains(imprimir, 'Categoría:')
+
+    def test_inventario_editar_actualiza_producto_sin_cambiar_codigo(self):
+        item = InventarioItem.objects.create(
+            sede='guayaquil',
+            categoria='computadora',
+            tipo='pc',
+            producto='CPU completo',
+            marca='HP',
+            modelo='EliteDesk 800',
+            estado='disponible',
+            cantidad=0,
+            ubicacion='guayaquil_norte',
+            registrado_por=self.usuario,
+        )
+        editar_url = reverse('econotec:inventario_editar', kwargs={'codigo': item.codigo})
+        codigo_original = item.codigo
+
+        response = self.client.post(editar_url, {
+            'producto': 'CPU oficina',
+            'marca': 'Dell',
+            'modelo': 'OptiPlex 7050',
+            'serie': '',
+            'estado': 'no_disponible',
+            'cantidad': '0',
+            'ubicacion': 'guayaquil_centro',
+        })
+
+        self.assertRedirects(response, reverse('econotec:inventario_detalle_item', kwargs={'codigo': item.codigo}))
+        item.refresh_from_db()
+        self.assertEqual(item.codigo, codigo_original)
+        self.assertEqual(item.producto, 'CPU oficina')
+        self.assertEqual(item.marca, 'Dell')
+        self.assertEqual(item.modelo, 'OptiPlex 7050')
+        self.assertEqual(item.estado, 'no_disponible')
+        self.assertEqual(item.cantidad, 0)
+        self.assertEqual(item.ubicacion, 'guayaquil_centro')
+
+    def test_inventario_eliminar_remueve_item_para_admin_y_tecnico(self):
+        item = InventarioItem.objects.create(
+            sede='guayaquil',
+            categoria='computadora',
+            tipo='pc',
+            producto='CPU completo',
+            marca='HP',
+            modelo='EliteDesk 800',
+            estado='disponible',
+            cantidad=2,
+            ubicacion='guayaquil_norte',
+            registrado_por=self.usuario,
+        )
+        eliminar_url = reverse('econotec:inventario_eliminar', kwargs={'codigo': item.codigo})
+
+        response = self.client.post(eliminar_url)
+
+        self.assertRedirects(response, reverse('econotec:inventario_tabla', kwargs={
+            'sede': 'guayaquil',
+            'categoria': 'computadora',
+            'tipo': 'pc',
+        }))
+        self.assertFalse(InventarioItem.objects.filter(pk=item.pk).exists())
+
+    def test_inventario_acciones_bloquean_asesor_comercial(self):
+        item = InventarioItem.objects.create(
+            sede='guayaquil',
+            categoria='computadora',
+            tipo='pc',
+            producto='CPU completo',
+            marca='HP',
+            modelo='EliteDesk 800',
+            estado='disponible',
+            cantidad=2,
+            ubicacion='guayaquil_norte',
+            registrado_por=self.usuario,
+        )
+        self.client.force_login(self.vendedor)
+
+        tabla = self.client.get(reverse('econotec:inventario_tabla', kwargs={
+            'sede': 'guayaquil',
+            'categoria': 'computadora',
+            'tipo': 'pc',
+        }))
+        self.assertNotContains(tabla, 'Acción')
+        self.assertNotContains(tabla, reverse('econotec:inventario_editar', kwargs={'codigo': item.codigo}))
+
+        edit_response = self.client.get(reverse('econotec:inventario_editar', kwargs={'codigo': item.codigo}))
+        self.assertRedirects(edit_response, reverse('econotec:inventario_detalle_item', kwargs={'codigo': item.codigo}))
+
+        delete_response = self.client.post(reverse('econotec:inventario_eliminar', kwargs={'codigo': item.codigo}))
+        self.assertRedirects(delete_response, reverse('econotec:inventario_detalle_item', kwargs={'codigo': item.codigo}))
+        self.assertTrue(InventarioItem.objects.filter(pk=item.pk).exists())
+
+    def test_inventario_detalle_permite_guardar_cantidad(self):
+        item = InventarioItem.objects.create(
+            sede='guayaquil',
+            categoria='computadora',
+            tipo='pc',
+            producto='CPU completo',
+            marca='HP',
+            modelo='EliteDesk 800',
+            estado='disponible',
+            cantidad=1,
+            ubicacion='guayaquil_norte',
+            registrado_por=self.usuario,
+        )
+        detalle_url = reverse(
+            'econotec:inventario_detalle_item',
+            kwargs={'codigo': item.codigo},
+        )
+        cantidad_url = reverse(
+            'econotec:inventario_actualizar_cantidad',
+            kwargs={'codigo': item.codigo},
+        )
+
+        detalle = self.client.get(detalle_url)
+        self.assertContains(detalle, 'aria-label="Restar una unidad"')
+        self.assertContains(detalle, 'aria-label="Sumar una unidad"')
+        self.assertContains(detalle, 'Guardar cambios')
+
+        response = self.client.post(cantidad_url, {'cantidad': '5'})
+        self.assertRedirects(response, detalle_url)
+        item.refresh_from_db()
+        self.assertEqual(item.cantidad, 5)
+
+        self.client.post(cantidad_url, {'cantidad': '-8'})
+        item.refresh_from_db()
+        self.assertEqual(item.cantidad, 0)
+
+    def test_inventario_cantidad_requiere_sesion_y_qr_publico_no_modifica(self):
+        item = InventarioItem.objects.create(
+            sede='quito',
+            categoria='tablet',
+            tipo='tablet',
+            producto='Tablet',
+            marca='Samsung',
+            modelo='A9',
+            estado='disponible',
+            cantidad=3,
+            ubicacion='quito',
+            registrado_por=self.usuario,
+        )
+        detalle_url = reverse(
+            'econotec:inventario_detalle_item',
+            kwargs={'codigo': item.codigo},
+        )
+        cantidad_url = reverse(
+            'econotec:inventario_actualizar_cantidad',
+            kwargs={'codigo': item.codigo},
+        )
+        self.client.logout()
+
+        detalle = self.client.get(detalle_url)
+        self.assertEqual(detalle.status_code, 200)
+        self.assertNotContains(detalle, 'aria-label="Restar una unidad"')
+        self.assertNotContains(detalle, 'aria-label="Sumar una unidad"')
+        self.assertNotContains(detalle, 'Guardar cambios')
+
+        response = self.client.post(cantidad_url, {'cantidad': '10'})
+        self.assertEqual(response.status_code, 302)
+        item.refresh_from_db()
+        self.assertEqual(item.cantidad, 3)
 
     def test_detalle_muestra_asesor_que_registro_el_equipo(self):
         ingreso = self.crear_ingreso_reparacion(registrado_por=self.vendedor)

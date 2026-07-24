@@ -16,10 +16,31 @@
         min-height: 300px;
         aspect-ratio: 1.55 / 1;
         padding: 0;
+        width: 100%;
+        border: 0;
         border-left: 5px solid var(--primary);
         overflow: hidden;
         text-decoration: none;
         color: inherit;
+        font-family: inherit;
+        text-align: left;
+        cursor: pointer;
+        appearance: none;
+        -webkit-appearance: none;
+        background: var(--card-bg);
+        transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+    }
+    .inventario-card:hover,
+    .inventario-card:focus-visible {
+        transform: translateY(-2px);
+        box-shadow: 0 14px 34px rgba(31, 41, 55, 0.15);
+        outline: none;
+    }
+    .inventario-card.is-selected {
+        box-shadow: 0 0 0 3px rgba(249, 118, 24, 0.22), 0 14px 34px rgba(31, 41, 55, 0.16);
+    }
+    .inventario-card.quito.is-selected {
+        box-shadow: 0 0 0 3px rgba(13, 71, 161, 0.22), 0 14px 34px rgba(31, 41, 55, 0.16);
     }
     .inventario-card.quito {
         border-left-color: #0d47a1;
@@ -70,6 +91,100 @@
         font-weight: 850;
         box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
     }
+    .inventario-categorias {
+        width: min(100%, 1040px);
+        margin-top: 30px;
+    }
+    .inventario-categorias[hidden] {
+        display: none;
+    }
+    .categoria-head {
+        display: flex;
+        align-items: flex-end;
+        justify-content: space-between;
+        gap: 14px;
+        margin-bottom: 16px;
+    }
+    .categoria-head h3 {
+        margin: 0;
+        color: var(--text-main);
+        font-size: 22px;
+        line-height: 1.15;
+        font-weight: 900;
+    }
+    .sede-seleccionada-pill {
+        display: inline-flex;
+        align-items: center;
+        min-height: 32px;
+        padding: 6px 12px;
+        border-radius: 999px;
+        background: var(--primary-light);
+        color: var(--primary-dark);
+        font-size: 13px;
+        font-weight: 900;
+        white-space: nowrap;
+    }
+    .categoria-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 16px;
+    }
+    .categoria-card {
+        min-height: 142px;
+        border-left: 5px solid var(--primary);
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        gap: 10px;
+        text-decoration: none;
+        color: inherit;
+    }
+    .categoria-card:hover,
+    .categoria-card:focus-visible {
+        transform: translateY(-2px);
+        box-shadow: 0 12px 28px rgba(31, 41, 55, 0.12);
+        outline: none;
+    }
+    .categoria-card h4 {
+        margin: 0;
+        color: var(--text-main);
+        font-size: 21px;
+        line-height: 1.15;
+        font-weight: 900;
+    }
+    .categoria-detalles {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin: 0;
+    }
+    .categoria-detalles span {
+        display: inline-flex;
+        align-items: center;
+        min-height: 28px;
+        padding: 5px 10px;
+        border-radius: 999px;
+        background: var(--hover-bg);
+        color: var(--text-muted);
+        border: 1px solid var(--border-color);
+        font-size: 13px;
+        font-weight: 800;
+    }
+    .categoria-card:nth-child(2) {
+        border-left-color: #0d47a1;
+    }
+    .categoria-card:nth-child(3) {
+        border-left-color: #2e7d32;
+    }
+    .categoria-card:nth-child(4) {
+        border-left-color: #c62828;
+    }
+    .categoria-card:nth-child(5) {
+        border-left-color: #6a1b9a;
+    }
+    .categoria-card:nth-child(6) {
+        border-left-color: #856404;
+    }
     @media (max-width: 760px) {
         .inventario-grid {
             grid-template-columns: 1fr;
@@ -86,6 +201,13 @@
         }
         .inventario-card h3 {
             font-size: 25px;
+        }
+        .categoria-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+        .categoria-head {
+            align-items: flex-start;
+            flex-direction: column;
         }
     }
     @media (max-width: 420px) {
@@ -105,6 +227,23 @@
             padding: 4px 10px;
             font-size: 13px;
         }
+        .inventario-categorias {
+            margin-top: 22px;
+        }
+        .categoria-grid {
+            grid-template-columns: 1fr;
+            gap: 13px;
+        }
+        .categoria-card {
+            min-height: 122px;
+            padding: 17px;
+        }
+        .categoria-card h4 {
+            font-size: 20px;
+        }
+        .categoria-detalles span {
+            font-size: 12px;
+        }
     }
 </style>
 
@@ -116,19 +255,93 @@
 <p class="page-subtitle">Selecciona la sede para empezar a organizar el inventario.</p>
 
 <div class="inventario-grid">
-    <div class="card-box inventario-card">
+    <button type="button" class="card-box inventario-card sede-inventario-btn" data-sede="guayaquil" data-sede-label="Guayaquil" aria-controls="inventario-categorias" aria-expanded="false">
         <img src="{% static 'inventario/guayaquil.jpg' %}" alt="Guayaquil" class="inventario-photo">
         <div class="inventario-content">
             <h3>Guayaquil</h3>
             <p class="subzona">Norte - Centro</p>
         </div>
-    </div>
+    </button>
 
-    <div class="card-box inventario-card quito">
+    <button type="button" class="card-box inventario-card sede-inventario-btn quito" data-sede="quito" data-sede-label="Quito" aria-controls="inventario-categorias" aria-expanded="false">
         <img src="{% static 'inventario/quito.jpg' %}" alt="Quito" class="inventario-photo">
         <div class="inventario-content">
             <h3>Quito</h3>
         </div>
-    </div>
+    </button>
 </div>
+
+<section class="inventario-categorias" id="inventario-categorias" hidden>
+    <div class="categoria-head">
+        <h3>Categorías de inventario</h3>
+        <span class="sede-seleccionada-pill">Sede: <span id="sede-inventario-text" style="margin-left: 5px;">—</span></span>
+    </div>
+
+    <div class="categoria-grid">
+        <a href="#" class="card-box categoria-card categoria-link" data-target-template="{% url 'econotec:inventario_categoria' sede='__sede__' categoria='impresora' %}">
+            <h4>Impresora</h4>
+            <p class="categoria-detalles">
+                <span>Impresora Laser</span>
+                <span>Impresora Inyección</span>
+            </p>
+        </a>
+
+        <a href="#" class="card-box categoria-card categoria-link" data-target-template="{% url 'econotec:inventario_categoria' sede='__sede__' categoria='computadora' %}">
+            <h4>Computadora</h4>
+            <p class="categoria-detalles">
+                <span>PC</span>
+                <span>Laptops</span>
+            </p>
+        </a>
+
+        <a href="#" class="card-box categoria-card categoria-link" data-target-template="{% url 'econotec:inventario_categoria' sede='__sede__' categoria='consola' %}">
+            <h4>Consola</h4>
+            <p class="categoria-detalles">
+                <span>consola de mesa</span>
+                <span>Portatil</span>
+            </p>
+        </a>
+
+        <a href="#" class="card-box categoria-card categoria-link" data-target-template="{% url 'econotec:inventario_categoria' sede='__sede__' categoria='celular' %}">
+            <h4>Celular</h4>
+        </a>
+
+        <a href="#" class="card-box categoria-card categoria-link" data-target-template="{% url 'econotec:inventario_categoria' sede='__sede__' categoria='tablet' %}">
+            <h4>Tablet</h4>
+        </a>
+
+        <a href="#" class="card-box categoria-card categoria-link" data-target-template="{% url 'econotec:inventario_categoria' sede='__sede__' categoria='mando' %}">
+            <h4>Mando</h4>
+        </a>
+    </div>
+</section>
+
+<script>
+    (function () {
+        var sedeButtons = document.querySelectorAll('.sede-inventario-btn');
+        var categoriaLinks = document.querySelectorAll('.categoria-link');
+        var categorias = document.getElementById('inventario-categorias');
+        var sedeText = document.getElementById('sede-inventario-text');
+
+        sedeButtons.forEach(function (button) {
+            button.addEventListener('click', function () {
+                var sede = button.getAttribute('data-sede') || '';
+                var label = button.getAttribute('data-sede-label') || '';
+                sedeButtons.forEach(function (item) {
+                    item.classList.remove('is-selected');
+                    item.setAttribute('aria-expanded', 'false');
+                });
+                button.classList.add('is-selected');
+                button.setAttribute('aria-expanded', 'true');
+                sedeText.textContent = label;
+                categoriaLinks.forEach(function (link) {
+                    var template = link.getAttribute('data-target-template') || '#';
+                    link.setAttribute('href', template.replace('__sede__', sede));
+                });
+                categorias.hidden = false;
+                categorias.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            });
+        });
+    })();
+</script>
 {% endblock %}
