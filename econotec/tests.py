@@ -617,7 +617,7 @@ class VentasTests(TestCase):
         self.assertIn('Técnico: Yandri', data['texto'])
         self.assertIn('Instalación de cartuchos nuevos y mantenimiento a Canon PIXMA G3110', data['texto'])
         self.assertIn(f'#{ingreso.codigo_equipo} lista, cliente notificado.', data['texto'])
-        self.assertRegex(data['texto'], r'\d{1,2}:\d{2} (AM|PM) - Instalación')
+        self.assertRegex(data['texto'], r'\*\d{1,2}:\d{2} (AM|PM)\* - Instalación')
         self.assertNotRegex(data['texto'], r'\d{1,2}:\d{2} - \d{1,2}:\d{2}')
 
     def test_bitacora_se_reinicia_en_medianoche_local(self):
@@ -652,8 +652,36 @@ class VentasTests(TestCase):
 
         self.assertEqual(reporte_nuevo['fecha'], '23/07/2026')
         self.assertEqual(reporte_nuevo['total'], 1)
-        self.assertIn('12:00 AM - Acción justo a medianoche.', reporte_nuevo['texto'])
+        self.assertIn('*12:00 AM* - Acción justo a medianoche.', reporte_nuevo['texto'])
         self.assertNotIn('Acción antes de medianoche.', reporte_nuevo['texto'])
+
+    def test_bitacora_formatea_hora_y_separa_movimientos_para_copiar(self):
+        from .bitacora import construir_bitacora_usuario
+
+        zona_local = ZoneInfo('America/Guayaquil')
+        dia = date(2026, 7, 24)
+        BitacoraTecnico.objects.create(
+            user=self.usuario,
+            usuario_nombre='Yandri',
+            momento=datetime(2026, 7, 24, 13, 32, tzinfo=zona_local),
+            tipo='reporte',
+            texto='Primera acción registrada.',
+        )
+        BitacoraTecnico.objects.create(
+            user=self.usuario,
+            usuario_nombre='Yandri',
+            momento=datetime(2026, 7, 24, 13, 33, tzinfo=zona_local),
+            tipo='estado',
+            texto=(
+                'Datos actualizados en Laptop HP Elitebook #G1000 para Yandri Guevara. '
+                'Detalles: Marca: Epson -> HP; Valor acordado: $50.00 -> $0.00.'
+            ),
+        )
+
+        reporte = construir_bitacora_usuario(self.usuario, dia=dia)
+
+        self.assertIn('*1:32 PM* - Primera acción registrada.\n\n*1:33 PM* - Datos actualizados', reporte['detalle'])
+        self.assertIn('Detalles:\n  - Marca: Epson -> HP.\n  - Valor acordado: $50.00 -> $0.00.', reporte['detalle'])
 
     def test_perfil_asesor_muestra_datos_basicos(self):
         self.client.force_login(self.vendedor)
@@ -722,13 +750,21 @@ class VentasTests(TestCase):
         self.assertContains(response, 'Kimberly')
         self.assertContains(response, 'kimberly@example.com')
 
-    def test_detalle_muestra_check_reparacion_solo_en_subestado_reparacion(self):
+    def test_detalle_muestra_check_reparacion_en_reparacion_y_garantia(self):
         ingreso = self.crear_ingreso_reparacion(subestado_reparacion='en_reparacion')
         ingreso_cliente = self.crear_ingreso_reparacion(subestado_reparacion='espera_cliente')
+        ingreso_garantia = self.crear_ingreso_reparacion(
+            estado='garantia',
+            subestado_reparacion='',
+            motivo_garantia='Garantía por retorno',
+        )
 
         response = self.client.get(reverse('econotec:ingreso_detalle', kwargs={'pk': ingreso.pk}))
         response_cliente = self.client.get(
             reverse('econotec:ingreso_detalle', kwargs={'pk': ingreso_cliente.pk})
+        )
+        response_garantia = self.client.get(
+            reverse('econotec:ingreso_detalle', kwargs={'pk': ingreso_garantia.pk})
         )
 
         self.assertEqual(response.status_code, 200)
@@ -736,6 +772,9 @@ class VentasTests(TestCase):
         self.assertContains(response, 'Aún sigue reparando este equipo')
         self.assertEqual(response_cliente.status_code, 200)
         self.assertNotContains(response_cliente, 'id="reparacion-check-btn"')
+        self.assertEqual(response_garantia.status_code, 200)
+        self.assertContains(response_garantia, 'Garantía')
+        self.assertContains(response_garantia, 'id="reparacion-check-btn"')
 
     def test_check_reparacion_registra_bitacora_una_vez_por_dia(self):
         ingreso = self.crear_ingreso_reparacion(
@@ -770,7 +809,7 @@ class VentasTests(TestCase):
 
         from .bitacora import construir_bitacora_usuario
         reporte = construir_bitacora_usuario(self.usuario, dia=date(2026, 7, 23))
-        self.assertIn('10:15 PM - El técnico Yandri aún sigue reparando este equipo', reporte['texto'])
+        self.assertIn('*10:15 PM* - El técnico Yandri aún sigue reparando este equipo', reporte['texto'])
 
         with patch('econotec.views.timezone.localdate', return_value=date(2026, 7, 24)), \
              patch('econotec.bitacora.timezone.now', return_value=datetime(2026, 7, 24, 0, 1, tzinfo=zona_local)):
@@ -779,6 +818,53 @@ class VentasTests(TestCase):
         self.assertEqual(response_dia_siguiente.status_code, 200)
         self.assertFalse(response_dia_siguiente.json()['already'])
         self.assertEqual(eventos.count(), 2)
+
+    def test_check_reparacion_omite_problema_reportado_no(self):
+        ingreso = self.crear_ingreso_reparacion(
+            problema_reportado='No.',
+            accesorios_entregados='Ninguno',
+        )
+
+        response = self.client.post(
+            reverse('econotec:ingreso_reparacion_check', kwargs={'pk': ingreso.pk}),
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest',
+        )
+
+        self.assertEqual(response.status_code, 200)
+        evento = BitacoraTecnico.objects.get(
+            user=self.usuario,
+            ingreso=ingreso,
+            metadata__accion='reparacion_check',
+        )
+        self.assertNotIn('problema reportado: No', evento.texto)
+        self.assertIn('accesorios: Ninguno', evento.texto)
+
+    def test_check_reparacion_permite_garantia(self):
+        ingreso = self.crear_ingreso_reparacion(
+            estado='garantia',
+            subestado_reparacion='',
+            motivo_garantia='Retorno por falla cubierta',
+            equipo_garantia_manual='G1000',
+            problema_reportado='No.',
+            accesorios_entregados='Cargador',
+        )
+
+        response = self.client.post(
+            reverse('econotec:ingreso_reparacion_check', kwargs={'pk': ingreso.pk}),
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest',
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json()['ok'])
+        evento = BitacoraTecnico.objects.get(
+            user=self.usuario,
+            ingreso=ingreso,
+            metadata__accion='reparacion_check',
+        )
+        self.assertNotIn('problema reportado: No', evento.texto)
+        self.assertIn('garantía de G1000', evento.texto)
+        self.assertIn('motivo de garantía: Retorno por falla cubierta', evento.texto)
+        self.assertIn('estado confirmado: Garantía', evento.texto)
 
     def test_check_reparacion_admin_lo_ve_y_registra_en_bitacora_del_tecnico(self):
         ingreso = self.crear_ingreso_reparacion()

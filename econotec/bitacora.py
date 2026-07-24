@@ -81,6 +81,33 @@ def _fecha_bitacora(dt):
     return timezone.localtime(dt).strftime('%d/%m/%Y')
 
 
+def _texto_evento_para_copiar(texto):
+    texto = (texto or '').strip()
+    marcador_detalles = '. Detalles: '
+    if marcador_detalles not in texto:
+        return texto
+
+    base, detalles_txt = texto.split(marcador_detalles, 1)
+    detalles = [
+        detalle.strip().rstrip('.')
+        for detalle in detalles_txt.rstrip('.').split(';')
+        if detalle.strip()
+    ]
+    if not detalles:
+        return texto
+
+    lineas_detalles = '\n'.join(f'  - {detalle}.' for detalle in detalles)
+    return f'{base.strip()}.\nDetalles:\n{lineas_detalles}'
+
+
+def _linea_bitacora_para_copiar(evento, incluir_fecha=False):
+    hora = f'{_hora_bitacora(evento["momento"])} {_periodo_bitacora(evento["momento"])}'
+    prefijo = f'*{hora}*'
+    if incluir_fecha:
+        prefijo = f'{_fecha_bitacora(evento["momento"])} - {prefijo}'
+    return f'{prefijo} - {_texto_evento_para_copiar(evento["texto"])}'
+
+
 def _texto_limpio_bitacora(texto, max_len=170):
     texto = ' '.join((texto or '').split())
     if len(texto) <= max_len:
@@ -303,11 +330,9 @@ def construir_bitacora_usuario(user, dia=None):
 
     lineas = []
     for evento in eventos:
-        hora_inicio = _hora_bitacora(evento['momento'])
-        periodo_inicio = _periodo_bitacora(evento['momento'])
-        lineas.append(f'{hora_inicio} {periodo_inicio} - {evento["texto"]}')
+        lineas.append(_linea_bitacora_para_copiar(evento))
 
-    detalle = '\n'.join(lineas)
+    detalle = '\n\n'.join(lineas)
     return {
         'fecha': fecha_txt,
         'total': len(eventos),
@@ -342,12 +367,9 @@ def construir_bitacora_usuario_rango(user, fecha_inicio, fecha_fin):
 
     lineas = []
     for evento in eventos:
-        fecha = _fecha_bitacora(evento['momento'])
-        hora_inicio = _hora_bitacora(evento['momento'])
-        periodo_inicio = _periodo_bitacora(evento['momento'])
-        lineas.append(f'{fecha} {hora_inicio} {periodo_inicio} - {evento["texto"]}')
+        lineas.append(_linea_bitacora_para_copiar(evento, incluir_fecha=True))
 
-    detalle = '\n'.join(lineas)
+    detalle = '\n\n'.join(lineas)
     return {
         'fecha': periodo_txt,
         'total': len(eventos),

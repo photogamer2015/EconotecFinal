@@ -1112,7 +1112,7 @@ def ingreso_detalle(request, pk):
     salida = getattr(ingreso, 'salida', None)
     reparacion_check_fecha = timezone.localdate()
     usuario_bitacora_check = _usuario_reparacion_check_bitacora(request.user, ingreso)
-    mostrar_check_reparacion = _ingreso_es_reparacion_simple(ingreso) and usuario_bitacora_check is not None
+    mostrar_check_reparacion = _ingreso_permite_reparacion_check(ingreso) and usuario_bitacora_check is not None
     reparacion_check_hecho = False
     if mostrar_check_reparacion:
         reparacion_check_hecho = _reparacion_check_ya_registrado(
@@ -1143,10 +1143,10 @@ def ingreso_reparacion_check(request, pk):
         IngresoEquipo.objects.select_related('cliente', 'tecnico_encargado'),
         pk=pk,
     )
-    if not _ingreso_es_reparacion_simple(ingreso):
+    if not _ingreso_permite_reparacion_check(ingreso):
         return JsonResponse({
             'ok': False,
-            'error': 'Este check solo aplica cuando el equipo está en En reparación -> En reparación.',
+            'error': 'Este check solo aplica cuando el equipo está en En reparación -> En reparación o Garantía.',
         }, status=400)
 
     dia = timezone.localdate()
@@ -2531,6 +2531,30 @@ def _periodo_bitacora(dt):
     return 'AM' if timezone.localtime(dt).hour < 12 else 'PM'
 
 
+def _texto_evento_bitacora_para_copiar(texto):
+    texto = (texto or '').strip()
+    marcador_detalles = '. Detalles: '
+    if marcador_detalles not in texto:
+        return texto
+
+    base, detalles_txt = texto.split(marcador_detalles, 1)
+    detalles = [
+        detalle.strip().rstrip('.')
+        for detalle in detalles_txt.rstrip('.').split(';')
+        if detalle.strip()
+    ]
+    if not detalles:
+        return texto
+
+    lineas_detalles = '\n'.join(f'  - {detalle}.' for detalle in detalles)
+    return f'{base.strip()}.\nDetalles:\n{lineas_detalles}'
+
+
+def _linea_bitacora_para_copiar(evento):
+    hora = f'{_hora_bitacora(evento["momento"])} {_periodo_bitacora(evento["momento"])}'
+    return f'*{hora}* - {_texto_evento_bitacora_para_copiar(evento["texto"])}'
+
+
 def _texto_limpio_bitacora(texto, max_len=170):
     texto = ' '.join((texto or '').split())
     if len(texto) <= max_len:
@@ -2769,10 +2793,13 @@ def _texto_actualizacion_ingreso_bitacora(
     return texto
 
 
-def _ingreso_es_reparacion_simple(ingreso):
+def _ingreso_permite_reparacion_check(ingreso):
     return (
-        ingreso.estado == 'en_reparacion'
-        and ingreso.subestado_reparacion == 'en_reparacion'
+        (
+            ingreso.estado == 'en_reparacion'
+            and ingreso.subestado_reparacion == 'en_reparacion'
+        )
+        or ingreso.estado == 'garantia'
     )
 
 
@@ -2800,17 +2827,26 @@ def _texto_reparacion_check_bitacora(ingreso, user):
     problema = _texto_limpio_bitacora(ingreso.problema_reportado, max_len=150)
     accesorios = _texto_limpio_bitacora(ingreso.accesorios_entregados, max_len=90)
     cliente = _texto_limpio_bitacora(ingreso.cliente.nombres, max_len=80)
+    garantia_ref = _texto_limpio_bitacora(ingreso.equipo_garantia_referencia, max_len=90)
+    motivo_garantia = _texto_limpio_bitacora(ingreso.motivo_garantia, max_len=150)
 
     partes = [
         f'El técnico {tecnico} aún sigue reparando este equipo: {equipo} #{ingreso.codigo_equipo}',
     ]
     if cliente:
         partes.append(f'cliente {cliente}')
-    if problema:
+    if problema and problema.strip(' .').lower() not in ('no', 'n/a', 'na', 'ninguno', 'ninguna', '-'):
         partes.append(f'problema reportado: {problema}')
     if accesorios:
         partes.append(f'accesorios: {accesorios}')
-    partes.append('estado confirmado: En reparación -> En reparación')
+    if ingreso.estado == 'garantia':
+        if garantia_ref:
+            partes.append(f'garantía de {garantia_ref}')
+        if motivo_garantia:
+            partes.append(f'motivo de garantía: {motivo_garantia}')
+        partes.append('estado confirmado: Garantía')
+    else:
+        partes.append('estado confirmado: En reparación -> En reparación')
     return '. '.join(partes) + '.'
 
 
@@ -2988,7 +3024,7 @@ def _construir_bitacora_usuario(user, dia=None):
     for evento in eventos:
         hora_inicio = _hora_bitacora(evento['momento'])
         periodo_inicio = _periodo_bitacora(evento['momento'])
-        lineas.append(f'{hora_inicio} {periodo_inicio} - {evento["texto"]}')
+        lineas.append(_linea_bitacora_para_copiar(evento))
         eventos_json.append({
             'hora_inicio': hora_inicio,
             'periodo_inicio': periodo_inicio,
@@ -2997,7 +3033,7 @@ def _construir_bitacora_usuario(user, dia=None):
             'codigo': evento['codigo'],
         })
 
-    detalle = '\n'.join(lineas)
+    detalle = '\n\n'.join(lineas)
     return {
         'fecha': fecha_txt,
         'total': len(eventos),
