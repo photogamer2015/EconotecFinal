@@ -114,6 +114,347 @@
         pointer-events: none;
         filter: grayscale(10%);
     }
+
+    .venta-inventario-panel {
+        margin-top: 14px;
+        padding: 18px;
+        border: 1px solid rgba(249, 118, 24, 0.24);
+        border-radius: 14px;
+        background: linear-gradient(135deg, rgba(255, 240, 230, .86), rgba(255, 248, 243, .98));
+    }
+    .venta-inventario-head,
+    .venta-inventario-card-head,
+    .venta-modal-title {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+    }
+    .venta-inventario-head h4 {
+        margin: 0;
+        color: var(--text-main);
+        font-size: 17px;
+    }
+    .venta-inventario-help {
+        margin: 5px 0 0;
+        color: var(--text-muted);
+        font-size: 12px;
+        line-height: 1.4;
+    }
+    .venta-sede-toolbar {
+        margin-top: 16px;
+        padding: 12px;
+        border: 1px solid rgba(249, 118, 24, .16);
+        border-radius: 10px;
+        background: rgba(255, 255, 255, .52);
+    }
+    .venta-sede-toolbar-label {
+        display: block;
+        margin-bottom: 8px;
+        color: var(--text-muted);
+        font-size: 12px;
+        font-weight: 850;
+        text-transform: uppercase;
+    }
+    .venta-sede-options,
+    .venta-flow-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 8px;
+    }
+    .venta-option-button {
+        width: 100%;
+        padding: 12px 13px;
+        border: 1px solid var(--border-color);
+        border-radius: 10px;
+        background: var(--card-bg);
+        color: var(--text-main);
+        text-align: left;
+        font: inherit;
+        font-size: 13px;
+        font-weight: 850;
+        transition: border-color .15s ease, background .15s ease, transform .15s ease;
+    }
+    .venta-option-button small {
+        display: block;
+        margin-top: 3px;
+        color: var(--text-muted);
+        font-size: 11px;
+        font-weight: 750;
+    }
+    .venta-option-button:hover,
+    .venta-option-button:focus-visible,
+    .venta-option-button.is-active {
+        border-color: var(--primary);
+        background: var(--hover-bg);
+        outline: none;
+    }
+    .venta-option-button:hover,
+    .venta-option-button:focus-visible {
+        transform: translateY(-1px);
+    }
+    .venta-inventario-selected {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        gap: 10px;
+        margin-top: 14px;
+    }
+    .venta-inventario-empty {
+        padding: 18px;
+        border: 1px dashed var(--border-color);
+        border-radius: 10px;
+        color: var(--text-muted);
+        font-size: 13px;
+        text-align: center;
+    }
+    .venta-inventario-card {
+        padding: 14px;
+        border: 1px solid var(--border-color);
+        border-left: 4px solid var(--primary);
+        border-radius: 11px;
+        background: var(--card-bg);
+        box-shadow: 0 3px 10px rgba(31, 41, 55, .05);
+    }
+    .venta-inventario-card h5 {
+        margin: 0;
+        color: var(--text-main);
+        font-size: 15px;
+    }
+    .venta-inventario-card p {
+        margin: 6px 0 0;
+        color: var(--text-muted);
+        font-size: 12px;
+        line-height: 1.35;
+    }
+    .venta-inventario-card-foot {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 8px;
+        margin-top: 10px;
+    }
+    .venta-inventario-qty {
+        display: inline-flex;
+        align-items: center;
+        padding: 5px 9px;
+        border-radius: 999px;
+        background: var(--primary-light);
+        color: var(--primary-dark);
+        font-size: 12px;
+        font-weight: 850;
+    }
+    .venta-inventario-remove {
+        border: 0;
+        border-radius: 7px;
+        padding: 7px 9px;
+        background: rgba(198, 40, 40, .10);
+        color: var(--danger);
+        font: inherit;
+        font-size: 11px;
+        font-weight: 850;
+    }
+    .venta-inventario-modal {
+        position: fixed;
+        inset: 0;
+        z-index: 10000;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+        background: rgba(17, 24, 39, .62);
+        backdrop-filter: blur(5px);
+    }
+    .venta-inventario-modal.is-open { display: flex; }
+    .venta-inventario-dialog {
+        width: min(100%, 880px);
+        max-height: min(760px, calc(100vh - 40px));
+        overflow: hidden;
+        border-radius: 18px;
+        background: var(--card-bg);
+        box-shadow: 0 25px 70px rgba(0, 0, 0, .28);
+    }
+    .venta-modal-top {
+        padding: 20px 22px 14px;
+        border-bottom: 1px solid var(--border-color);
+    }
+    .venta-modal-title h3 {
+        margin: 0;
+        color: var(--text-main);
+        font-size: 21px;
+    }
+    .venta-modal-close {
+        width: 34px;
+        height: 34px;
+        border: 0;
+        border-radius: 50%;
+        background: var(--hover-bg);
+        color: var(--text-main);
+        font-size: 20px;
+        font-weight: 850;
+    }
+    .venta-modal-body {
+        max-height: calc(100vh - 170px);
+        overflow: auto;
+        padding: 18px 22px 22px;
+    }
+    .venta-inventario-search { margin-bottom: 12px; }
+    .venta-flow-path {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-bottom: 14px;
+        color: var(--text-muted);
+        font-size: 12px;
+        font-weight: 800;
+    }
+    .venta-flow-path span {
+        padding: 5px 9px;
+        border-radius: 999px;
+        background: var(--hover-bg);
+    }
+    .venta-flow-title {
+        margin: 0 0 12px;
+        color: var(--text-main);
+        font-size: 16px;
+        font-weight: 850;
+    }
+    .venta-flow-actions {
+        display: flex;
+        justify-content: flex-start;
+        margin-bottom: 14px;
+    }
+    .venta-flow-actions .btn {
+        padding: 9px 14px;
+        font-size: 12px;
+    }
+    .venta-product-head {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        margin-bottom: 12px;
+    }
+    .venta-product-scope {
+        color: var(--text-muted);
+        font-size: 12px;
+        font-weight: 800;
+    }
+    .venta-catalogo-list { display: grid; gap: 8px; }
+    .venta-catalogo-row {
+        display: grid;
+        grid-template-columns: minmax(0, 1.4fr) minmax(130px, .8fr) auto;
+        align-items: center;
+        gap: 12px;
+        width: 100%;
+        padding: 13px;
+        border: 1px solid var(--border-color);
+        border-radius: 11px;
+        background: transparent;
+        color: var(--text-main);
+        text-align: left;
+        font: inherit;
+        transition: border-color .15s ease, background .15s ease, transform .15s ease;
+    }
+    .venta-catalogo-row:hover,
+    .venta-catalogo-row:focus-visible {
+        border-color: var(--primary);
+        background: var(--hover-bg);
+        transform: translateY(-1px);
+        outline: none;
+    }
+    .venta-catalogo-row.is-unavailable {
+        border-color: rgba(198, 40, 40, .42);
+        background: rgba(198, 40, 40, .07);
+    }
+    .venta-catalogo-row.is-unavailable:hover,
+    .venta-catalogo-row.is-unavailable:focus-visible {
+        border-color: var(--danger);
+        background: rgba(198, 40, 40, .11);
+        transform: none;
+    }
+    .venta-catalogo-row strong { display: block; font-size: 14px; }
+    .venta-catalogo-row small { display: block; margin-top: 3px; color: var(--text-muted); font-size: 11px; }
+    .venta-catalogo-stock { color: var(--success); font-size: 12px; font-weight: 850; }
+    .venta-catalogo-status-danger { color: var(--danger); font-size: 12px; font-weight: 900; }
+    .venta-catalogo-arrow { color: var(--primary); font-size: 20px; font-weight: 900; }
+    .venta-unavailable-card {
+        padding: 14px;
+        border: 1px solid rgba(198, 40, 40, .28);
+        border-radius: 10px;
+        background: rgba(198, 40, 40, .07);
+    }
+    .venta-unavailable-card strong {
+        display: block;
+        color: var(--text-main);
+        font-size: 16px;
+    }
+    .venta-unavailable-card span {
+        display: block;
+        margin-top: 5px;
+        color: var(--text-muted);
+        font-size: 12px;
+        font-weight: 750;
+    }
+    .venta-quantity-summary {
+        padding: 13px;
+        border: 1px solid rgba(249, 118, 24, .24);
+        border-radius: 10px;
+        background: var(--hover-bg);
+    }
+    .venta-quantity-summary strong { display: block; color: var(--text-main); font-size: 15px; }
+    .venta-quantity-summary small { display: block; margin-top: 4px; color: var(--text-muted); font-size: 12px; }
+    .venta-qty-stepper {
+        display: grid;
+        grid-template-columns: 48px minmax(90px, 1fr) 48px;
+        gap: 8px;
+        align-items: center;
+        margin-top: 14px;
+    }
+    .venta-qty-stepper button {
+        height: 46px;
+        border: 1px solid var(--border-color);
+        border-radius: 10px;
+        background: var(--hover-bg);
+        color: var(--text-main);
+        font-size: 24px;
+        font-weight: 900;
+    }
+    .venta-qty-stepper input {
+        height: 46px;
+        text-align: center;
+        font-size: 18px;
+        font-weight: 850;
+    }
+    .venta-final-question {
+        margin: 0 0 12px;
+        color: var(--text-main);
+        font-size: 16px;
+        font-weight: 850;
+        line-height: 1.35;
+    }
+    .venta-confirm-detail {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 9px;
+        margin: 16px 0;
+    }
+    .venta-confirm-detail div {
+        padding: 11px;
+        border-radius: 9px;
+        background: var(--hover-bg);
+    }
+    .venta-confirm-detail span { display: block; color: var(--text-muted); font-size: 11px; font-weight: 800; }
+    .venta-confirm-detail strong { display: block; margin-top: 3px; font-size: 14px; overflow-wrap: anywhere; }
+    .venta-modal-actions { display: flex; justify-content: flex-end; gap: 9px; margin-top: 18px; }
+    .venta-modal-note { color: var(--text-muted); font-size: 13px; line-height: 1.45; }
+    .venta-modal-error { display: none; margin-top: 10px; color: var(--danger); font-size: 12px; font-weight: 750; }
+    @media (max-width: 650px) {
+        .venta-catalogo-row { grid-template-columns: 1fr auto; }
+        .venta-catalogo-stock { grid-column: 1; }
+        .venta-confirm-detail { grid-template-columns: 1fr; }
+        .venta-modal-top, .venta-modal-body { padding-left: 16px; padding-right: 16px; }
+    }
 </style>
 
 <div class="crumb">
@@ -234,10 +575,20 @@
     <!-- Detalles del equipo -->
     <div class="form-section">
         <h3>Detalles del Producto Vendido</h3>
-        <div style="margin-top:14px;">
-            <label class="form-label">Descripción o Productos específicos (ej. tinta, cables, etc.) *</label>
-            {{ ing_form.problema_reportado }}
-            {{ ing_form.problema_reportado.errors }}
+        <div class="venta-inventario-panel">
+            <div class="venta-inventario-head">
+                <div>
+                    <h4>Productos seleccionados del inventario</h4>
+                    <p class="venta-inventario-help">Selecciona productos disponibles y confirma la cantidad exacta de la venta.</p>
+                </div>
+                <button type="button" class="btn btn-primary" id="btn-ver-inventario">+ Ver inventario</button>
+            </div>
+            <div class="venta-sede-toolbar">
+                <span class="venta-sede-toolbar-label">Sede de inventario</span>
+                <div class="venta-sede-options" id="venta-sede-options"></div>
+            </div>
+            <div class="venta-inventario-selected" id="venta-inventario-selected"></div>
+            <input type="hidden" name="inventario_seleccionado" id="inventario-seleccionado" value="[]">
         </div>
         <!-- Campos ocultos de marca, modelo, accesorios y reporte técnico -->
         <div style="display:none;">
@@ -247,6 +598,7 @@
             {{ ing_form.modelo_serie }}
             {{ ing_form.serie }}
             {{ ing_form.accesorios_entregados }}
+            {{ ing_form.problema_reportado }}
             {{ ing_form.reporte_tecnico }}
             {{ ing_form.diagnostico_inmediato }}
             {{ ing_form.valor_diagnostico }}
@@ -352,6 +704,631 @@
         </button>
     </div>
 </form>
+
+<div class="venta-inventario-modal" id="inventario-catalogo-modal" aria-hidden="true">
+    <div class="venta-inventario-dialog" role="dialog" aria-modal="true" aria-labelledby="inventario-catalogo-title">
+        <div class="venta-modal-top">
+            <div class="venta-modal-title">
+                <h3 id="inventario-catalogo-title">Seleccionar producto del inventario</h3>
+                <button type="button" class="venta-modal-close" data-close-inventario aria-label="Cerrar">×</button>
+            </div>
+            <p class="venta-modal-note" style="margin-top:7px;">Elige sede, categoría y tipo para ver los productos del inventario.</p>
+        </div>
+        <div class="venta-modal-body">
+            <div class="venta-flow-path" id="venta-flow-path"></div>
+            <div id="venta-flow-step">
+                <div class="venta-flow-actions" id="venta-flow-actions"></div>
+                <h4 class="venta-flow-title" id="venta-flow-title"></h4>
+                <div class="venta-flow-grid" id="venta-flow-grid"></div>
+            </div>
+            <div id="venta-product-step" style="display:none;">
+                <div class="venta-product-head">
+                    <button type="button" class="btn btn-secondary" id="btn-volver-tipos">Volver</button>
+                    <span class="venta-product-scope" id="venta-product-scope"></span>
+                </div>
+                <input type="search" class="form-input venta-inventario-search" id="inventario-busqueda" placeholder="Buscar por producto, código o marca..." autocomplete="off">
+                <div class="venta-catalogo-list" id="venta-catalogo-list"></div>
+                <p class="venta-modal-note" id="venta-catalogo-empty" style="display:none; text-align:center; padding:20px 0;">No hay productos con esa selección.</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="venta-inventario-modal" id="inventario-cantidad-modal" aria-hidden="true">
+    <div class="venta-inventario-dialog" role="dialog" aria-modal="true" aria-labelledby="inventario-cantidad-title" style="max-width:500px;">
+        <div class="venta-modal-top">
+            <div class="venta-modal-title">
+                <h3 id="inventario-cantidad-title">Cantidad a llevar</h3>
+                <button type="button" class="venta-modal-close" data-close-quantity aria-label="Cerrar">×</button>
+            </div>
+        </div>
+        <div class="venta-modal-body">
+            <div class="venta-quantity-summary" id="venta-cantidad-producto"></div>
+            <label class="form-label" for="venta-cantidad" style="margin-top:14px;">¿Cuántas unidades deseas llevar?</label>
+            <div class="venta-qty-stepper">
+                <button type="button" id="btn-restar-cantidad" aria-label="Restar una unidad">-</button>
+                <input type="number" class="form-input" id="venta-cantidad" min="1" inputmode="numeric">
+                <button type="button" id="btn-sumar-cantidad" aria-label="Sumar una unidad">+</button>
+            </div>
+            <p class="venta-modal-note" id="venta-cantidad-help" style="margin-top:8px;"></p>
+            <div class="venta-modal-error" id="venta-cantidad-error"></div>
+            <div class="venta-modal-actions">
+                <button type="button" class="btn btn-secondary" data-close-quantity>Cancelar</button>
+                <button type="button" class="btn btn-primary" id="btn-aceptar-cantidad">Aceptar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="venta-inventario-modal" id="inventario-no-disponible-modal" aria-hidden="true">
+    <div class="venta-inventario-dialog" role="dialog" aria-modal="true" aria-labelledby="inventario-no-disponible-title" style="max-width:500px;">
+        <div class="venta-modal-top">
+            <div class="venta-modal-title">
+                <h3 id="inventario-no-disponible-title">Producto no disponible</h3>
+                <button type="button" class="venta-modal-close" data-close-unavailable aria-label="Cerrar">×</button>
+            </div>
+        </div>
+        <div class="venta-modal-body">
+            <p class="venta-final-question">No está disponible este producto.</p>
+            <div class="venta-unavailable-card" id="venta-unavailable-detail"></div>
+            <div class="venta-modal-actions">
+                <button type="button" class="btn btn-secondary" data-close-unavailable>Entendido</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="venta-inventario-modal" id="inventario-confirm-modal" aria-hidden="true">
+    <div class="venta-inventario-dialog" role="dialog" aria-modal="true" aria-labelledby="inventario-confirm-title" style="max-width:540px;">
+        <div class="venta-modal-top">
+            <div class="venta-modal-title">
+                <h3 id="inventario-confirm-title">Confirmar selección</h3>
+                <button type="button" class="venta-modal-close" data-close-confirm aria-label="Cerrar">×</button>
+            </div>
+        </div>
+        <div class="venta-modal-body">
+            <p class="venta-final-question" id="venta-confirm-question"></p>
+            <div class="venta-confirm-detail" id="venta-confirm-detail"></div>
+            <div class="venta-modal-error" id="venta-confirm-error"></div>
+            <div class="venta-modal-actions">
+                <button type="button" class="btn btn-secondary" id="btn-volver-cantidad">No, cambiar</button>
+                <button type="button" class="btn btn-primary" id="btn-confirmar-producto">Sí, agregar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{{ inventario_seleccionados_json|json_script:"venta-inventario-inicial" }}
+{{ venta_inventario_sedes_json|json_script:"venta-inventario-sedes" }}
+{{ venta_inventario_categorias_json|json_script:"venta-inventario-categorias" }}
+
+<script>
+    (function () {
+        var isEdit = {% if venta %}true{% else %}false{% endif %};
+        var catalogUrl = "{% url 'econotec:venta_inventario_catalogo' %}";
+        var addUrl = {% if venta %}"{% url 'econotec:venta_inventario_agregar' pk=venta.pk %}"{% else %}null{% endif %};
+        var removeUrlBase = {% if venta %}"{% url 'econotec:venta_inventario_quitar' pk=venta.pk relacion_pk=0 %}"{% else %}null{% endif %};
+        var catalogModal = document.getElementById('inventario-catalogo-modal');
+        var quantityModal = document.getElementById('inventario-cantidad-modal');
+        var unavailableModal = document.getElementById('inventario-no-disponible-modal');
+        var confirmModal = document.getElementById('inventario-confirm-modal');
+        var sedeOptionsNode = document.getElementById('venta-sede-options');
+        var flowPathNode = document.getElementById('venta-flow-path');
+        var flowActionsNode = document.getElementById('venta-flow-actions');
+        var flowTitleNode = document.getElementById('venta-flow-title');
+        var flowGridNode = document.getElementById('venta-flow-grid');
+        var flowStepNode = document.getElementById('venta-flow-step');
+        var productStepNode = document.getElementById('venta-product-step');
+        var productScopeNode = document.getElementById('venta-product-scope');
+        var backTypesButton = document.getElementById('btn-volver-tipos');
+        var catalogList = document.getElementById('venta-catalogo-list');
+        var catalogEmpty = document.getElementById('venta-catalogo-empty');
+        var searchInput = document.getElementById('inventario-busqueda');
+        var selectedNode = document.getElementById('venta-inventario-selected');
+        var hiddenInput = document.getElementById('inventario-seleccionado');
+        var quantityProductNode = document.getElementById('venta-cantidad-producto');
+        var unavailableDetailNode = document.getElementById('venta-unavailable-detail');
+        var detailNode = document.getElementById('venta-confirm-detail');
+        var questionNode = document.getElementById('venta-confirm-question');
+        var quantityInput = document.getElementById('venta-cantidad');
+        var quantityHelp = document.getElementById('venta-cantidad-help');
+        var quantityErrorNode = document.getElementById('venta-cantidad-error');
+        var confirmErrorNode = document.getElementById('venta-confirm-error');
+        var minusButton = document.getElementById('btn-restar-cantidad');
+        var plusButton = document.getElementById('btn-sumar-cantidad');
+        var acceptQuantityButton = document.getElementById('btn-aceptar-cantidad');
+        var backToQuantityButton = document.getElementById('btn-volver-cantidad');
+        var confirmButton = document.getElementById('btn-confirmar-producto');
+        var descriptionInput = document.querySelector('[name="ing-problema_reportado"]');
+        var selected = [];
+        var candidate = null;
+        var pendingQuantity = 1;
+        var autoDescription = '';
+        var locationOptions = parseScriptJson('venta-inventario-sedes', []);
+        var categoryOptions = parseScriptJson('venta-inventario-categorias', []);
+        var flow = {
+            location: null,
+            category: null,
+            type: null
+        };
+
+        try {
+            selected = JSON.parse(document.getElementById('venta-inventario-inicial').textContent || '[]') || [];
+            if (typeof selected === 'string') {
+                selected = JSON.parse(selected || '[]') || [];
+            }
+        } catch (error) {
+            selected = [];
+        }
+        if (!Array.isArray(selected)) selected = [];
+
+        function parseScriptJson(id, fallback) {
+            var node = document.getElementById(id);
+            if (!node) return fallback;
+            try {
+                return JSON.parse(node.textContent || '[]') || fallback;
+            } catch (error) {
+                return fallback;
+            }
+        }
+
+        function csrfToken() {
+            var match = document.cookie.match(/(?:^|; )csrftoken=([^;]+)/);
+            return match ? decodeURIComponent(match[1]) : '';
+        }
+
+        function esc(value) {
+            return String(value == null ? '' : value).replace(/[&<>'"]/g, function (char) {
+                return {'&':'&amp;', '<':'&lt;', '>':'&gt;', "'":'&#39;', '"':'&quot;'}[char];
+            });
+        }
+
+        function openModal(modal) {
+            modal.classList.add('is-open');
+            modal.setAttribute('aria-hidden', 'false');
+        }
+
+        function closeModal(modal) {
+            modal.classList.remove('is-open');
+            modal.setAttribute('aria-hidden', 'true');
+        }
+
+        function labelFor(option) {
+            return option ? option.nombre : '';
+        }
+
+        function renderSedeOptions() {
+            sedeOptionsNode.innerHTML = locationOptions.map(function (location) {
+                var active = flow.location && flow.location.slug === location.slug;
+                return '<button type="button" class="venta-option-button' + (active ? ' is-active' : '') + '" data-sede-option="' + esc(location.slug) + '">'
+                    + esc(location.nombre)
+                    + '<small>Inventario disponible</small></button>';
+            }).join('');
+            sedeOptionsNode.querySelectorAll('[data-sede-option]').forEach(function (button) {
+                button.addEventListener('click', function () {
+                    var slug = button.getAttribute('data-sede-option');
+                    var location = locationOptions.find(function (entry) { return entry.slug === slug; });
+                    if (!location) return;
+                    flow.location = location;
+                    flow.category = null;
+                    flow.type = null;
+                    renderSedeOptions();
+                    if (catalogModal.classList.contains('is-open')) {
+                        renderCategoryStep();
+                    }
+                });
+            });
+        }
+
+        function resetCatalogFlow() {
+            flow.category = null;
+            flow.type = null;
+            searchInput.value = '';
+            if (flow.location) {
+                renderCategoryStep();
+            } else {
+                renderLocationStep();
+            }
+        }
+
+        function renderFlowPath() {
+            var parts = [];
+            if (flow.location) parts.push('Sede: ' + labelFor(flow.location));
+            if (flow.category) parts.push('Categoria: ' + labelFor(flow.category));
+            if (flow.type) parts.push('Tipo: ' + labelFor(flow.type));
+            flowPathNode.innerHTML = parts.length
+                ? parts.map(function (part) { return '<span>' + esc(part) + '</span>'; }).join('')
+                : '<span>Selecciona una sede para empezar</span>';
+        }
+
+        function showFlowStep(title) {
+            productStepNode.style.display = 'none';
+            flowStepNode.style.display = 'block';
+            flowActionsNode.innerHTML = '';
+            flowTitleNode.textContent = title;
+            renderFlowPath();
+        }
+
+        function renderLocationStep() {
+            showFlowStep('Selecciona la sede del inventario');
+            flowGridNode.innerHTML = locationOptions.map(function (location) {
+                return '<button type="button" class="venta-option-button" data-flow-location="' + esc(location.slug) + '">'
+                    + esc(location.nombre)
+                    + '<small>Entrar a categorias</small></button>';
+            }).join('');
+            flowGridNode.querySelectorAll('[data-flow-location]').forEach(function (button) {
+                button.addEventListener('click', function () {
+                    var slug = button.getAttribute('data-flow-location');
+                    var location = locationOptions.find(function (entry) { return entry.slug === slug; });
+                    if (!location) return;
+                    flow.location = location;
+                    flow.category = null;
+                    flow.type = null;
+                    renderSedeOptions();
+                    renderCategoryStep();
+                });
+            });
+        }
+
+        function renderCategoryStep() {
+            if (!flow.location) {
+                renderLocationStep();
+                return;
+            }
+            showFlowStep('Selecciona una categoria');
+            flowActionsNode.innerHTML = '<button type="button" class="btn btn-secondary" data-back-location>Cambiar sede</button>';
+            flowGridNode.innerHTML = categoryOptions.map(function (category) {
+                return '<button type="button" class="venta-option-button" data-flow-category="' + esc(category.slug) + '">'
+                    + esc(category.nombre) + '</button>';
+            }).join('');
+            var backLocationButton = flowActionsNode.querySelector('[data-back-location]');
+            if (backLocationButton) backLocationButton.addEventListener('click', renderLocationStep);
+            flowGridNode.querySelectorAll('[data-flow-category]').forEach(function (button) {
+                button.addEventListener('click', function () {
+                    var slug = button.getAttribute('data-flow-category');
+                    var category = categoryOptions.find(function (entry) { return entry.slug === slug; });
+                    if (!category) return;
+                    flow.category = category;
+                    flow.type = null;
+                    renderTypeStep();
+                });
+            });
+        }
+
+        function renderTypeStep() {
+            if (!flow.category) {
+                renderCategoryStep();
+                return;
+            }
+            showFlowStep('Selecciona el tipo');
+            flowActionsNode.innerHTML = '<button type="button" class="btn btn-secondary" data-back-category>Volver a categorias</button>';
+            flowGridNode.innerHTML = (flow.category.tipos || []).map(function (type) {
+                    return '<button type="button" class="venta-option-button" data-flow-type="' + esc(type.slug) + '">'
+                        + esc(type.nombre) + '</button>';
+                }).join('');
+            var backButton = flowActionsNode.querySelector('[data-back-category]');
+            if (backButton) backButton.addEventListener('click', renderCategoryStep);
+            flowGridNode.querySelectorAll('[data-flow-type]').forEach(function (button) {
+                button.addEventListener('click', function () {
+                    var slug = button.getAttribute('data-flow-type');
+                    var type = (flow.category.tipos || []).find(function (entry) { return entry.slug === slug; });
+                    if (!type) return;
+                    flow.type = type;
+                    renderProductStep();
+                });
+            });
+        }
+
+        function renderProductStep() {
+            if (!flow.location || !flow.category || !flow.type) {
+                resetCatalogFlow();
+                return;
+            }
+            flowStepNode.style.display = 'none';
+            productStepNode.style.display = 'block';
+            productScopeNode.textContent = labelFor(flow.location) + ' - ' + flow.category.nombre + ' - ' + flow.type.nombre;
+            renderFlowPath();
+            loadCatalog();
+            setTimeout(function () { searchInput.focus(); }, 50);
+        }
+
+        function selectedQuantityFor(itemId) {
+            return selected.reduce(function (total, item) {
+                return Number(item.item_id) === Number(itemId) ? total + Number(item.cantidad || 0) : total;
+            }, 0);
+        }
+
+        function availableFor(item) {
+            var available = Number(item.disponible != null ? item.disponible : item.cantidad) || 0;
+            if (!isEdit) available -= selectedQuantityFor(item.item_id);
+            return Math.max(available, 0);
+        }
+
+        function updateQuantityButtons() {
+            var value = Number(quantityInput.value) || 0;
+            var max = Number(quantityInput.max) || 1;
+            minusButton.disabled = value <= 1;
+            plusButton.disabled = value >= max;
+        }
+
+        function setQuantity(value) {
+            var max = Number(quantityInput.max) || 1;
+            var next = Math.min(Math.max(Number(value) || 1, 1), max);
+            quantityInput.value = next;
+            updateQuantityButtons();
+        }
+
+        function validQuantity() {
+            var cantidad = Number(quantityInput.value);
+            var max = Number(quantityInput.max) || 0;
+            if (!Number.isInteger(cantidad) || cantidad < 1 || cantidad > max) {
+                quantityErrorNode.textContent = 'Indica una cantidad entre 1 y ' + max + '.';
+                quantityErrorNode.style.display = 'block';
+                return null;
+            }
+            quantityErrorNode.style.display = 'none';
+            return cantidad;
+        }
+
+        function syncHidden() {
+            hiddenInput.value = JSON.stringify(selected.map(function (item) {
+                return {item_id: item.item_id, cantidad: item.cantidad};
+            }));
+        }
+
+        function syncDescription() {
+            if (!descriptionInput || isEdit) return;
+            var summary = selected.map(function (item) {
+                return item.cantidad + ' x ' + item.producto;
+            }).join(', ');
+            if (summary) {
+                if (!descriptionInput.value.trim() || descriptionInput.value === autoDescription || descriptionInput.value === summary) {
+                    descriptionInput.value = summary;
+                }
+                autoDescription = summary;
+            } else if (descriptionInput.value === autoDescription) {
+                descriptionInput.value = '';
+                autoDescription = '';
+            }
+        }
+
+        function renderSelected() {
+            syncHidden();
+            if (!selected.length) {
+                selectedNode.innerHTML = '<div class="venta-inventario-empty">Aún no has seleccionado productos. Usa el botón para consultar el inventario disponible.</div>';
+                syncDescription();
+                return;
+            }
+            selectedNode.innerHTML = selected.map(function (item, index) {
+                var disponible = item.disponible == null ? '' : ' · <strong>Disponible ahora:</strong> ' + esc(item.disponible);
+                return '<article class="venta-inventario-card">'
+                    + '<div class="venta-inventario-card-head"><h5>' + esc(item.producto) + '</h5><span class="venta-inventario-qty">' + esc(item.cantidad) + ' und.</span></div>'
+                    + '<p>' + esc(item.categoria) + ' · ' + esc(item.marca) + ' ' + esc(item.modelo) + '<br><strong>Código:</strong> ' + esc(item.codigo) + ' · <strong>Sede:</strong> ' + esc(item.sede) + '<br><strong>Ubicación:</strong> ' + esc(item.ubicacion) + (item.serie ? ' · <strong>Serie:</strong> ' + esc(item.serie) : '') + disponible + '</p>'
+                    + '<div class="venta-inventario-card-foot"><small style="color:var(--text-muted);">' + (isEdit ? 'Stock actualizado' : 'Se descontará al registrar') + '</small>'
+                    + '<button type="button" class="venta-inventario-remove" data-remove-index="' + index + '">Revertir y eliminar</button></div>'
+                    + '</article>';
+            }).join('');
+            syncDescription();
+        }
+
+        function showCatalog(items) {
+            catalogList.innerHTML = items.map(function (item) {
+                var available = availableFor(item);
+                var selectable = item.seleccionable !== false && available > 0;
+                var statusLabel = selectable ? available + ' disponibles' : (item.estado === 'no_disponible' ? 'No disponible' : 'Sin stock');
+                return '<button type="button" class="venta-catalogo-row' + (selectable ? '' : ' is-unavailable') + '" data-item-id="' + esc(item.item_id) + '">'
+                    + '<span><strong>' + esc(item.producto) + '</strong><small>' + esc(item.categoria) + ' / ' + esc(item.tipo) + ' · ' + esc(item.marca) + ' ' + esc(item.modelo) + '</small><small>' + esc(item.codigo) + ' · ' + esc(item.ubicacion) + '</small></span>'
+                    + '<span class="' + (selectable ? 'venta-catalogo-stock' : 'venta-catalogo-status-danger') + '">' + esc(statusLabel) + '</span>'
+                    + '<span class="venta-catalogo-arrow">›</span></button>';
+            }).join('');
+            catalogEmpty.style.display = items.length ? 'none' : 'block';
+            catalogList.querySelectorAll('[data-item-id]').forEach(function (button) {
+                button.addEventListener('click', function () {
+                    var id = Number(button.getAttribute('data-item-id'));
+                    candidate = items.find(function (item) { return Number(item.item_id) === id; });
+                    if (!candidate) return;
+                    if (candidate.seleccionable === false || availableFor(candidate) < 1) {
+                        openUnavailable(candidate);
+                    } else {
+                        openQuantity(candidate);
+                    }
+                });
+            });
+        }
+
+        function loadCatalog() {
+            catalogList.innerHTML = '<p class="venta-modal-note" style="padding:18px 0; text-align:center;">Cargando inventario…</p>';
+            catalogEmpty.style.display = 'none';
+            var params = new URLSearchParams();
+            params.set('ubicacion', flow.location.slug);
+            params.set('sede', flow.location.sede);
+            params.set('categoria', flow.category.slug);
+            params.set('tipo', flow.type.slug);
+            if (searchInput.value) params.set('q', searchInput.value);
+            fetch(catalogUrl + '?' + params.toString(), {credentials: 'same-origin'})
+                .then(function (response) { return response.json(); })
+                .then(function (data) { showCatalog(data.items || []); })
+                .catch(function () {
+                    catalogList.innerHTML = '<p class="venta-modal-note" style="color:var(--danger); padding:18px 0; text-align:center;">No se pudo cargar el inventario. Intenta nuevamente.</p>';
+                });
+        }
+
+        function openQuantity(item) {
+            closeModal(catalogModal);
+            var available = availableFor(item);
+            if (available < 1) {
+                openUnavailable(item);
+                return;
+            }
+            quantityProductNode.innerHTML = '<strong>' + esc(item.producto) + '</strong>'
+                + '<small>' + esc(item.categoria) + ' · ' + esc(item.marca) + ' ' + esc(item.modelo) + '</small>'
+                + '<small>' + esc(item.codigo) + ' · ' + esc(item.sede) + ' · ' + esc(item.ubicacion) + '</small>';
+            quantityErrorNode.style.display = 'none';
+            quantityInput.value = '1';
+            quantityInput.max = available;
+            quantityHelp.textContent = 'Disponible para esta venta: ' + available + ' unidad(es).';
+            updateQuantityButtons();
+            openModal(quantityModal);
+            setTimeout(function () { quantityInput.focus(); quantityInput.select(); }, 50);
+        }
+
+        function openUnavailable(item) {
+            unavailableDetailNode.innerHTML = '<strong>' + esc(item.producto) + '</strong>'
+                + '<span>' + esc(item.categoria) + ' / ' + esc(item.tipo) + ' · ' + esc(item.marca) + ' ' + esc(item.modelo) + '</span>'
+                + '<span>' + esc(item.codigo) + ' · ' + esc(item.ubicacion) + ' · Estado: ' + esc(item.estado_label || 'No disponible') + '</span>';
+            openModal(unavailableModal);
+        }
+
+        function openFinalConfirmation() {
+            var cantidad = validQuantity();
+            if (!candidate || !cantidad) return;
+            pendingQuantity = cantidad;
+            var available = availableFor(candidate);
+            questionNode.textContent = '¿Está seguro que desea llevar ' + cantidad + ' unidad(es) de ' + candidate.producto + '?';
+            detailNode.innerHTML = '<div><span>Producto</span><strong>' + esc(candidate.producto) + '</strong></div>'
+                + '<div><span>Categoría</span><strong>' + esc(candidate.categoria) + '</strong></div>'
+                + '<div><span>Cantidad</span><strong>' + esc(cantidad) + ' unidad(es)</strong></div>'
+                + '<div><span>Quedaría disponible</span><strong>' + esc(Math.max(available - cantidad, 0)) + ' unidad(es)</strong></div>';
+            confirmErrorNode.style.display = 'none';
+            confirmButton.disabled = false;
+            closeModal(quantityModal);
+            openModal(confirmModal);
+        }
+
+        function mergeLocalSelection(item, cantidad) {
+            var existing = selected.find(function (entry) { return Number(entry.item_id) === Number(item.item_id); });
+            if (existing) {
+                existing.cantidad = Number(existing.cantidad || 0) + cantidad;
+                existing.disponible = Number(item.disponible != null ? item.disponible : item.cantidad) - existing.cantidad;
+                return;
+            }
+            selected.push(Object.assign({}, item, {
+                cantidad: cantidad,
+                disponible: Number(item.disponible != null ? item.disponible : item.cantidad) - cantidad
+            }));
+        }
+
+        function addSelection() {
+            if (!candidate) return;
+            var cantidad = Number(pendingQuantity);
+            var available = availableFor(candidate);
+            if (!Number.isInteger(cantidad) || cantidad < 1 || cantidad > available) {
+                confirmErrorNode.textContent = 'Solo hay ' + available + ' unidad(es) disponibles.';
+                confirmErrorNode.style.display = 'block';
+                return;
+            }
+            confirmButton.disabled = true;
+            if (!isEdit) {
+                mergeLocalSelection(candidate, cantidad);
+                closeModal(confirmModal);
+                candidate = null;
+                renderSelected();
+                return;
+            }
+            var formData = new FormData();
+            formData.append('item_id', candidate.item_id);
+            formData.append('cantidad', cantidad);
+            fetch(addUrl, {method: 'POST', body: formData, credentials: 'same-origin', headers: {'X-CSRFToken': csrfToken(), 'X-Requested-With': 'XMLHttpRequest'}})
+                .then(function (response) { return response.json().then(function (data) { return {ok: response.ok, data: data}; }); })
+                .then(function (result) {
+                    if (!result.ok || !result.data.ok) throw new Error(result.data.error || 'No se pudo añadir el producto.');
+                    var added = result.data.producto;
+                    var existing = selected.find(function (entry) { return Number(entry.relacion_id) === Number(added.relacion_id); });
+                    if (existing) Object.assign(existing, added);
+                    else selected.push(added);
+                    closeModal(confirmModal);
+                    candidate = null;
+                    renderSelected();
+                })
+                .catch(function (error) {
+                    confirmErrorNode.textContent = error.message;
+                    confirmErrorNode.style.display = 'block';
+                    confirmButton.disabled = false;
+                });
+        }
+
+        document.getElementById('btn-ver-inventario').addEventListener('click', function () {
+            openModal(catalogModal);
+            resetCatalogFlow();
+        });
+        searchInput.addEventListener('input', function () {
+            if (productStepNode.style.display !== 'none') loadCatalog();
+        });
+        backTypesButton.addEventListener('click', function () {
+            flow.type = null;
+            searchInput.value = '';
+            renderTypeStep();
+        });
+        minusButton.addEventListener('click', function () { setQuantity(Number(quantityInput.value) - 1); });
+        plusButton.addEventListener('click', function () { setQuantity(Number(quantityInput.value) + 1); });
+        quantityInput.addEventListener('input', updateQuantityButtons);
+        quantityInput.addEventListener('keydown', function (event) {
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                openFinalConfirmation();
+            }
+        });
+        acceptQuantityButton.addEventListener('click', openFinalConfirmation);
+        backToQuantityButton.addEventListener('click', function () {
+            closeModal(confirmModal);
+            openModal(quantityModal);
+            setTimeout(function () { quantityInput.focus(); quantityInput.select(); }, 50);
+        });
+        confirmButton.addEventListener('click', addSelection);
+        document.querySelectorAll('[data-close-inventario]').forEach(function (button) {
+            button.addEventListener('click', function () { closeModal(catalogModal); });
+        });
+        document.querySelectorAll('[data-close-quantity]').forEach(function (button) {
+            button.addEventListener('click', function () { closeModal(quantityModal); candidate = null; });
+        });
+        document.querySelectorAll('[data-close-unavailable]').forEach(function (button) {
+            button.addEventListener('click', function () { closeModal(unavailableModal); candidate = null; });
+        });
+        document.querySelectorAll('[data-close-confirm]').forEach(function (button) {
+            button.addEventListener('click', function () { closeModal(confirmModal); candidate = null; });
+        });
+        [catalogModal, quantityModal, unavailableModal, confirmModal].forEach(function (modal) {
+            modal.addEventListener('click', function (event) {
+                if (event.target === modal) closeModal(modal);
+            });
+        });
+        document.addEventListener('keydown', function (event) {
+            if (event.key === 'Escape') {
+                closeModal(catalogModal);
+                closeModal(quantityModal);
+                closeModal(unavailableModal);
+                closeModal(confirmModal);
+            }
+        });
+        selectedNode.addEventListener('click', function (event) {
+            var button = event.target.closest('[data-remove-index]');
+            if (!button) return;
+            var index = Number(button.getAttribute('data-remove-index'));
+            var item = selected[index];
+            if (!item) return;
+            if (!isEdit) {
+                selected.splice(index, 1);
+                renderSelected();
+                return;
+            }
+            button.disabled = true;
+            var url = removeUrlBase.replace('/0/quitar/', '/' + item.relacion_id + '/quitar/');
+            fetch(url, {method: 'POST', credentials: 'same-origin', headers: {'X-CSRFToken': csrfToken(), 'X-Requested-With': 'XMLHttpRequest'}})
+                .then(function (response) { return response.json().then(function (data) { return {ok: response.ok, data: data}; }); })
+                .then(function (result) {
+                    if (!result.ok || !result.data.ok) throw new Error(result.data.error || 'No se pudo revertir el producto.');
+                    selected.splice(index, 1);
+                    renderSelected();
+                })
+                .catch(function (error) {
+                    button.disabled = false;
+                    window.alert(error.message);
+                });
+        });
+        renderSedeOptions();
+        renderSelected();
+    })();
+</script>
 
 <script>
     // Autocompletado de cliente por cédula

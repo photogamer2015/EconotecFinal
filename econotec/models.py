@@ -967,6 +967,44 @@ class IngresoEquipo(models.Model):
 
 
 # ─────────────────────────────────────────────────────────
+# Productos de inventario incluidos en una venta
+# ─────────────────────────────────────────────────────────
+
+class VentaInventarioItem(models.Model):
+    """Relación entre una venta y las unidades descontadas del inventario."""
+
+    venta = models.ForeignKey(
+        IngresoEquipo,
+        on_delete=models.CASCADE,
+        related_name='productos_inventario',
+        verbose_name='Venta',
+    )
+    inventario_item = models.ForeignKey(
+        InventarioItem,
+        on_delete=models.PROTECT,
+        related_name='ventas_asociadas',
+        verbose_name='Producto de inventario',
+    )
+    cantidad = models.PositiveIntegerField(verbose_name='Cantidad vendida')
+    creado = models.DateTimeField(auto_now_add=True)
+    actualizado = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'Producto de inventario vendido'
+        verbose_name_plural = 'Productos de inventario vendidos'
+        ordering = ['creado', 'pk']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['venta', 'inventario_item'],
+                name='uniq_producto_inventario_por_venta',
+            ),
+        ]
+
+    def __str__(self):
+        return f'{self.venta.codigo_equipo} — {self.inventario_item.producto} x {self.cantidad}'
+
+
+# ─────────────────────────────────────────────────────────
 # Abonos parciales (pagos por reparación)
 # ─────────────────────────────────────────────────────────
 

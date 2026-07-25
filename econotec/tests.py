@@ -1,3 +1,4 @@
+import json
 import re
 from datetime import date, datetime, time, timedelta
 from decimal import Decimal
@@ -18,7 +19,7 @@ from .alertas import equipos_demorados_qs, salidas_bodegaje_qs, whatsapp_link_eq
 from .horarios import registrar_entrada_laboral
 from .models import (
     Abono, BitacoraTecnico, Cliente, HorarioTecnico, IngresoEquipo, InventarioItem,
-    NotificacionAsesora, SalidaEquipo, UsuarioActividad,
+    NotificacionAsesora, SalidaEquipo, UsuarioActividad, VentaInventarioItem,
 )
 from .qr_utils import token_para_ingreso
 from .views_auth import CAPTCHA_SESSION_KEY, LOGIN_2FA_SESSION_KEY, LOGIN_EMAIL_SETUP_SESSION_KEY
@@ -245,7 +246,25 @@ class VentasTests(TestCase):
             sector='norte',
         )
 
+    def crear_producto_venta(self):
+        if hasattr(self, 'producto_venta'):
+            return self.producto_venta
+        self.producto_venta = InventarioItem.objects.create(
+            sede='guayaquil',
+            categoria='impresora',
+            tipo='impresora-laser',
+            producto='Tarjeta',
+            marca='Epson',
+            modelo='Laser-t32',
+            estado='disponible',
+            cantidad=10,
+            ubicacion='guayaquil_norte',
+            registrado_por=self.usuario,
+        )
+        return self.producto_venta
+
     def venta_post_data(self, **overrides):
+        producto_venta = self.crear_producto_venta()
         data = {
             'cli-cedula': self.cliente_existente.cedula,
             'cli-nombres': self.cliente_existente.nombres,
@@ -257,10 +276,13 @@ class VentasTests(TestCase):
             'ing-fecha_ingreso': '2026-07-09',
             'ing-numero_factura': '',
             'ing-tecnico_encargado': str(self.usuario.pk),
-            'ing-problema_reportado': 'tinta',
+            'ing-problema_reportado': '',
             'ing-valor_acordado': '25',
             'ing-firma_cliente_opcion': 'no',
             'ing-firma_cliente_imagen': '',
+            'inventario_seleccionado': json.dumps([
+                {'item_id': producto_venta.pk, 'cantidad': 2},
+            ]),
             # Valores que el navegador puede enviar desde campos ocultos.
             # Se omite ing-diagnostico_metodo para cubrir el bug corregido.
             'ing-tipo_equipo': 'otro',
@@ -509,6 +531,21 @@ class VentasTests(TestCase):
         session['sede_actual'] = 'guayaquil'
         session.save()
 
+    def test_formulario_venta_usa_selector_de_inventario(self):
+        response = self.client.get(reverse('econotec:venta_registrar'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, '+ Ver inventario')
+        self.assertContains(response, 'Sede de inventario')
+        self.assertContains(response, 'Guayaquil - Norte')
+        self.assertContains(response, 'Guayaquil - Centro')
+        self.assertContains(response, 'Quito')
+        self.assertContains(response, 'Selecciona una sede para empezar')
+        self.assertContains(response, 'Selecciona una categoria')
+        self.assertContains(response, 'Selecciona el tipo')
+        self.assertContains(response, 'Cantidad a llevar')
+        self.assertNotContains(response, 'Detalle adicional de la venta')
+
     def test_registrar_venta_no_requiere_campos_diagnostico_ocultos(self):
         response = self.client.post(
             reverse('econotec:venta_registrar'),
@@ -523,6 +560,26 @@ class VentasTests(TestCase):
         self.assertEqual(venta.diagnostico_metodo, 'efectivo')
         self.assertEqual(venta.tecnico_encargado, self.usuario)
         self.assertEqual(venta.valor_acordado, Decimal('25.00'))
+        self.assertEqual(venta.problema_reportado, '2 x Tarjeta')
+        self.producto_venta.refresh_from_db()
+        self.assertEqual(self.producto_venta.cantidad, 8)
+        self.assertTrue(VentaInventarioItem.objects.filter(
+            venta=venta,
+            inventario_item=self.producto_venta,
+            cantidad=2,
+        ).exists())
+
+    def test_registrar_venta_exige_producto_del_inventario(self):
+        response = self.client.post(
+            reverse('econotec:venta_registrar'),
+            self.venta_post_data(inventario_seleccionado='[]'),
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Selecciona al menos un producto del inventario')
+        self.assertFalse(IngresoEquipo.objects.filter(sede='ventas').exists())
+        self.producto_venta.refresh_from_db()
+        self.assertEqual(self.producto_venta.cantidad, 10)
 
     def test_registrar_venta_exige_tecnico_que_vendio(self):
         response = self.client.post(
@@ -533,6 +590,101 @@ class VentasTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertFalse(IngresoEquipo.objects.filter(sede='ventas').exists())
         self.assertIn('tecnico_encargado', response.context['ing_form'].errors)
+        self.producto_venta.refresh_from_db()
+        self.assertEqual(self.producto_venta.cantidad, 10)
+
+    def test_venta_inventario_catalogo_muestra_productos_disponibles(self):
+        producto = self.crear_producto_venta()
+        InventarioItem.objects.create(
+            sede='guayaquil',
+            categoria='impresora',
+            tipo='impresora-laser',
+            producto='Toner',
+            marca='Epson',
+            modelo='Centro',
+            estado='disponible',
+            cantidad=4,
+            ubicacion='guayaquil_centro',
+            registrado_por=self.usuario,
+        )
+        no_disponible = InventarioItem.objects.create(
+            sede='guayaquil',
+            categoria='impresora',
+            tipo='impresora-laser',
+            producto='Adaptador',
+            marca='Epson',
+            modelo='Bloqueado',
+            estado='no_disponible',
+            cantidad=2,
+            ubicacion='guayaquil_norte',
+            registrado_por=self.usuario,
+        )
+
+        response = self.client.get(reverse('econotec:venta_inventario_catalogo'), {
+            'ubicacion': 'guayaquil_norte',
+            'categoria': 'impresora',
+            'tipo': 'impresora-laser',
+        })
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        items = {item['item_id']: item for item in data['items']}
+        self.assertEqual(set(items), {producto.pk, no_disponible.pk})
+        self.assertEqual(items[producto.pk]['cantidad'], 10)
+        self.assertTrue(items[producto.pk]['seleccionable'])
+        self.assertEqual(items[producto.pk]['ubicacion'], 'Guayaquil - Norte')
+        self.assertEqual(items[no_disponible.pk]['estado'], 'no_disponible')
+        self.assertEqual(items[no_disponible.pk]['estado_label'], 'No disponible')
+        self.assertFalse(items[no_disponible.pk]['seleccionable'])
+
+    def test_venta_inventario_agregar_y_quitar_actualiza_stock(self):
+        producto = self.crear_producto_venta()
+        venta = IngresoEquipo.objects.create(
+            sede='ventas',
+            asesor_comercial='Kimberly',
+            fecha_ingreso=date(2026, 7, 8),
+            cliente=self.cliente_existente,
+            tipo_equipo='otro',
+            marca='N/A',
+            modelo_serie='N/A',
+            accesorios_entregados='Ninguno',
+            problema_reportado='Venta de producto',
+            valor_acordado=Decimal('10.00'),
+            tecnico_encargado=self.usuario,
+            estado='entregado',
+            subestado_entregado='con_solucion',
+        )
+
+        response = self.client.post(
+            reverse('econotec:venta_inventario_agregar', kwargs={'pk': venta.pk}),
+            {'item_id': producto.pk, 'cantidad': '3'},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        relacion = VentaInventarioItem.objects.get(venta=venta, inventario_item=producto)
+        producto.refresh_from_db()
+        self.assertEqual(relacion.cantidad, 3)
+        self.assertEqual(producto.cantidad, 7)
+
+        response = self.client.post(
+            reverse('econotec:venta_inventario_agregar', kwargs={'pk': venta.pk}),
+            {'item_id': producto.pk, 'cantidad': '2'},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        relacion.refresh_from_db()
+        producto.refresh_from_db()
+        self.assertEqual(relacion.cantidad, 5)
+        self.assertEqual(producto.cantidad, 5)
+
+        response = self.client.post(
+            reverse('econotec:venta_inventario_quitar', kwargs={'pk': venta.pk, 'relacion_pk': relacion.pk}),
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(VentaInventarioItem.objects.filter(pk=relacion.pk).exists())
+        producto.refresh_from_db()
+        self.assertEqual(producto.cantidad, 10)
 
     def test_editar_venta_conserva_estado_entregado(self):
         venta = IngresoEquipo.objects.create(

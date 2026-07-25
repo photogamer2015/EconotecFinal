@@ -12,6 +12,7 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.db import transaction
 from django.db.models import Count, Q, Sum
+from django.db.models.deletion import ProtectedError
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -32,6 +33,7 @@ from .busqueda import (
 from .models import (
     Cliente, IngresoEquipo, SalidaEquipo, Abono, SEDES_EQUIPOS,
     UsuarioActividad, NotificacionAsesora, BitacoraTecnico, InventarioItem,
+    VentaInventarioItem,
 )
 from .bitacora import registrar_bitacora, nombre_corto_usuario, construir_bitacora_usuario
 from .date_filters import aplicar_rango_fecha, contexto_rango_fecha, obtener_rango_fecha
@@ -834,7 +836,15 @@ def inventario_eliminar(request, codigo):
     }
     producto = item.producto
     codigo_item = item.codigo
-    item.delete()
+    try:
+        item.delete()
+    except ProtectedError:
+        messages.error(
+            request,
+            'No se puede eliminar este producto porque está asociado a una venta. '
+            'Primero revierte o elimina el producto desde la venta.',
+        )
+        return redirect('econotec:inventario_detalle_item', codigo=codigo_item)
     messages.success(request, f'Producto eliminado: {producto} ({codigo_item}).')
     return redirect('econotec:inventario_tabla', **tabla_kwargs)
 
@@ -1543,6 +1553,245 @@ def ingreso_eliminar(request, pk):
 # Ventas de Productos
 # ═════════════════════════════════════════════════════════════════
 
+VENTA_INVENTARIO_UBICACIONES = [
+    {'slug': 'guayaquil_norte', 'nombre': 'Guayaquil - Norte', 'sede': 'guayaquil'},
+    {'slug': 'guayaquil_centro', 'nombre': 'Guayaquil - Centro', 'sede': 'guayaquil'},
+    {'slug': 'quito', 'nombre': 'Quito', 'sede': 'quito'},
+]
+
+
+def _venta_inventario_ubicacion_nombre(slug, default):
+    for opcion in VENTA_INVENTARIO_UBICACIONES:
+        if opcion['slug'] == slug:
+            return opcion['nombre']
+    return default
+
+
+def _inventario_item_venta_json(item, cantidad=None, relacion_id=None):
+    categoria_info = INVENTARIO_CATEGORIAS.get(item.categoria, {})
+    categoria_nombre = categoria_info.get('nombre', item.categoria)
+    tipo_info = _inventario_tipo_por_slug(categoria_info, item.tipo) if categoria_info else None
+    seleccionable = item.estado == 'disponible' and item.cantidad > 0
+    return {
+        'relacion_id': relacion_id,
+        'item_id': item.pk,
+        'codigo': item.codigo,
+        'producto': item.producto,
+        'categoria': categoria_nombre,
+        'tipo': (tipo_info or {}).get('nombre', item.tipo),
+        'marca': item.marca,
+        'modelo': item.modelo,
+        'serie': item.serie,
+        'sede': item.get_sede_display(),
+        'ubicacion': _venta_inventario_ubicacion_nombre(item.ubicacion, item.get_ubicacion_display()),
+        'cantidad': item.cantidad if cantidad is None else cantidad,
+        'disponible': item.cantidad,
+        'estado': item.estado,
+        'estado_label': item.get_estado_display(),
+        'seleccionable': seleccionable,
+    }
+
+
+def _venta_inventario_item_json(relacion):
+    return _inventario_item_venta_json(
+        relacion.inventario_item,
+        cantidad=relacion.cantidad,
+        relacion_id=relacion.pk,
+    )
+
+
+def _venta_inventario_categorias_json():
+    return [
+        {
+            'slug': slug,
+            'nombre': info['nombre'],
+            'tipos': [
+                {'slug': tipo_slug, 'nombre': tipo_nombre}
+                for tipo_slug, tipo_nombre in info['tipos']
+            ],
+        }
+        for slug, info in INVENTARIO_CATEGORIAS.items()
+    ]
+
+
+def _venta_inventario_selecciones(post_data):
+    """Lee la selección temporal del formulario de nueva venta."""
+    raw = (post_data.get('inventario_seleccionado') or '').strip()
+    if not raw:
+        return []
+    try:
+        datos = json.loads(raw)
+    except (TypeError, ValueError):
+        raise ValueError('La selección de inventario no es válida. Vuelve a intentarlo.')
+    if not isinstance(datos, list):
+        raise ValueError('La selección de inventario no es válida. Vuelve a intentarlo.')
+
+    resultado = []
+    vistos = set()
+    for dato in datos:
+        if not isinstance(dato, dict):
+            raise ValueError('La selección de inventario no es válida. Vuelve a intentarlo.')
+        try:
+            item_id = int(dato.get('item_id'))
+            cantidad = int(dato.get('cantidad'))
+        except (TypeError, ValueError):
+            raise ValueError('La cantidad seleccionada no es válida.')
+        if item_id in vistos or cantidad < 1:
+            raise ValueError('No se puede repetir un producto ni seleccionar una cantidad inválida.')
+        vistos.add(item_id)
+        resultado.append((item_id, cantidad))
+    return resultado
+
+
+def _venta_inventario_contexto_desde_post(post_data):
+    """Reconstruye la seleccion visible si el formulario vuelve con errores."""
+    try:
+        selecciones = _venta_inventario_selecciones(post_data)
+    except ValueError:
+        return []
+    if not selecciones:
+        return []
+    items = InventarioItem.objects.in_bulk([item_id for item_id, _cantidad in selecciones])
+    contexto = []
+    for item_id, cantidad in selecciones:
+        item = items.get(item_id)
+        if item:
+            contexto.append(_inventario_item_venta_json(item, cantidad=cantidad))
+    return contexto
+
+
+def _resumen_venta_inventario(venta):
+    relaciones = venta.productos_inventario.select_related('inventario_item').all()
+    return ', '.join(
+        f'{relacion.cantidad} x {relacion.inventario_item.producto}'
+        for relacion in relaciones
+    )
+
+
+def _aplicar_inventario_a_venta(venta, selecciones):
+    """Descuenta stock y crea las relaciones dentro de la transacción de venta."""
+    for item_id, cantidad in selecciones:
+        item = InventarioItem.objects.select_for_update().filter(pk=item_id).first()
+        if not item:
+            raise ValueError('Uno de los productos seleccionados ya no existe en inventario.')
+        if item.estado != 'disponible' or item.cantidad < cantidad:
+            raise ValueError(
+                f'No hay suficiente disponibilidad para «{item.producto}». '
+                f'Solo quedan {item.cantidad} unidad(es).'
+            )
+        item.cantidad -= cantidad
+        item.save(update_fields=['cantidad', 'actualizado'])
+        VentaInventarioItem.objects.create(
+            venta=venta,
+            inventario_item=item,
+            cantidad=cantidad,
+        )
+
+
+def _devolver_inventario_de_venta(venta, relacion_ids=None):
+    """Devuelve al inventario las unidades de una relación o de toda la venta."""
+    relaciones = VentaInventarioItem.objects.select_for_update().select_related('inventario_item').filter(
+        venta=venta,
+    )
+    if relacion_ids is not None:
+        relaciones = relaciones.filter(pk__in=relacion_ids)
+    for relacion in relaciones:
+        item = InventarioItem.objects.select_for_update().get(pk=relacion.inventario_item_id)
+        item.cantidad += relacion.cantidad
+        item.save(update_fields=['cantidad', 'actualizado'])
+        relacion.delete()
+
+
+@tecnico_requerido
+@require_GET
+def venta_inventario_catalogo(request):
+    """Catálogo compacto para el selector de inventario de ventas."""
+    q = ' '.join((request.GET.get('q') or '').strip().split())
+    ubicacion = (request.GET.get('ubicacion') or '').strip()
+    sede = (request.GET.get('sede') or '').strip()
+    categoria = (request.GET.get('categoria') or '').strip()
+    tipo = (request.GET.get('tipo') or '').strip()
+    items = InventarioItem.objects.filter(
+        sede__in=['guayaquil', 'quito'],
+    ).order_by('producto', 'marca', 'modelo')
+    ubicaciones_validas = {opcion['slug'] for opcion in VENTA_INVENTARIO_UBICACIONES}
+    if ubicacion in ubicaciones_validas:
+        items = items.filter(ubicacion=ubicacion)
+    elif sede in INVENTARIO_SEDES:
+        items = items.filter(sede=sede)
+    if categoria in INVENTARIO_CATEGORIAS:
+        items = items.filter(categoria=categoria)
+    if tipo:
+        items = items.filter(tipo=tipo)
+    if q:
+        items = items.filter(
+            Q(producto__icontains=q)
+            | Q(codigo__icontains=q)
+            | Q(categoria__icontains=q)
+            | Q(tipo__icontains=q)
+            | Q(marca__icontains=q)
+            | Q(modelo__icontains=q)
+        )
+    datos = [_inventario_item_venta_json(item) for item in items[:200]]
+    return JsonResponse({'items': datos})
+
+
+@tecnico_requerido
+@require_POST
+@transaction.atomic
+def venta_inventario_agregar(request, pk):
+    """Añade un producto a una venta ya creada y descuenta sus unidades."""
+    venta = get_object_or_404(IngresoEquipo, pk=pk, sede='ventas')
+    try:
+        item_id = int(request.POST.get('item_id'))
+        cantidad = int(request.POST.get('cantidad'))
+    except (TypeError, ValueError):
+        return JsonResponse({'ok': False, 'error': 'Selecciona una cantidad válida.'}, status=400)
+    if cantidad < 1:
+        return JsonResponse({'ok': False, 'error': 'La cantidad debe ser mayor que cero.'}, status=400)
+
+    item = get_object_or_404(InventarioItem.objects.select_for_update(), pk=item_id)
+    if item.estado != 'disponible' or item.cantidad < cantidad:
+        return JsonResponse({
+            'ok': False,
+            'error': f'Solo quedan {item.cantidad} unidad(es) disponibles de «{item.producto}».',
+        }, status=409)
+
+    relacion, creada = VentaInventarioItem.objects.select_for_update().get_or_create(
+        venta=venta,
+        inventario_item=item,
+        defaults={'cantidad': cantidad},
+    )
+    if not creada:
+        relacion.cantidad += cantidad
+        relacion.save(update_fields=['cantidad', 'actualizado'])
+    item.cantidad -= cantidad
+    item.save(update_fields=['cantidad', 'actualizado'])
+    return JsonResponse({
+        'ok': True,
+        'producto': _venta_inventario_item_json(relacion),
+        'disponible': item.cantidad,
+    })
+
+
+@tecnico_requerido
+@require_POST
+@transaction.atomic
+def venta_inventario_quitar(request, pk, relacion_pk):
+    """Quita un producto de una venta y devuelve sus unidades al inventario."""
+    venta = get_object_or_404(IngresoEquipo, pk=pk, sede='ventas')
+    relacion = get_object_or_404(
+        VentaInventarioItem.objects.select_for_update(),
+        pk=relacion_pk,
+        venta=venta,
+    )
+    cantidad_devuelta = relacion.cantidad
+    item = InventarioItem.objects.select_for_update().get(pk=relacion.inventario_item_id)
+    item.cantidad += cantidad_devuelta
+    item.save(update_fields=['cantidad', 'actualizado'])
+    relacion.delete()
+    return JsonResponse({'ok': True, 'cantidad_devuelta': cantidad_devuelta})
+
 @tecnico_requerido
 def venta_menu(request):
     """Menú de ventas: registrar nueva / ver lista."""
@@ -1615,6 +1864,9 @@ def _configurar_form_venta(ing_form):
     ing_form.fields['tecnico_encargado'].empty_label = '— Selecciona el técnico que vendió —'
     if 'equipo_garantia' in ing_form.fields:
         ing_form.fields['equipo_garantia'].required = False
+    # En ventas el detalle se genera desde los productos elegidos en inventario.
+    # El campo queda oculto para conservar listados, exportes y bitacora.
+    ing_form.fields['problema_reportado'].required = False
     ing_form.fields['problema_reportado'].widget.attrs['placeholder'] = 'Ej.: 1 Tinta Epson Negra, 2 Cables USB'
 
 
@@ -1638,33 +1890,43 @@ def venta_registrar(request):
 
         if cliente_existente:
             cli_form_existente = ClienteForm(post_data, prefix='cli', instance=cliente_existente)
-            if ing_form.is_valid() and cli_form_existente.is_valid():
-                cliente = cli_form_existente.save()
-                venta = ing_form.save(commit=False)
-            else:
-                cli_form = cli_form_existente # Pass the instance form so it doesn't show "Cedula exists" error
+            cli_form = cli_form_existente
         else:
-            if cli_form.is_valid() and ing_form.is_valid():
-                cliente = cli_form.save()
-                venta = ing_form.save(commit=False)
+            cli_form_existente = cli_form
 
-        if cliente and venta:
-            venta.cliente = cliente
-            venta.sede = 'ventas'
-            venta.registrado_por = request.user
-            venta.estado = 'entregado'
-            venta.subestado_entregado = 'con_solucion'
-            venta.save()
-            registrar_bitacora(
-                request.user,
-                'venta_producto',
-                _texto_venta_bitacora(venta),
-                ingreso=venta,
-                dedupe_key=f'venta:{venta.pk}:creada',
-            )
+        if cli_form_existente.is_valid() and ing_form.is_valid():
+            try:
+                selecciones = _venta_inventario_selecciones(post_data)
+                if not selecciones:
+                    raise ValueError('Selecciona al menos un producto del inventario para registrar la venta.')
+                with transaction.atomic():
+                    cliente = cli_form_existente.save()
+                    venta = ing_form.save(commit=False)
+                    venta.cliente = cliente
+                    venta.sede = 'ventas'
+                    venta.registrado_por = request.user
+                    venta.estado = 'entregado'
+                    venta.subestado_entregado = 'con_solucion'
+                    venta.save()
+                    _aplicar_inventario_a_venta(venta, selecciones)
+                    if selecciones and not (venta.problema_reportado or '').strip():
+                        venta.problema_reportado = _resumen_venta_inventario(venta)
+                        venta.save(update_fields=['problema_reportado', 'actualizado'])
+            except ValueError as exc:
+                ing_form.add_error(None, str(exc))
+                cliente = None
+                venta = None
+            else:
+                registrar_bitacora(
+                    request.user,
+                    'venta_producto',
+                    _texto_venta_bitacora(venta),
+                    ingreso=venta,
+                    dedupe_key=f'venta:{venta.pk}:creada',
+                )
 
-            messages.success(request, f'Venta {venta.codigo_equipo} registrada para {cliente.nombres}.')
-            return redirect('econotec:venta_lista')
+                messages.success(request, f'Venta {venta.codigo_equipo} registrada para {cliente.nombres}.')
+                return redirect('econotec:venta_lista')
             
     else:
         cli_form = ClienteForm(prefix='cli')
@@ -1688,10 +1950,18 @@ def venta_registrar(request):
     from .models import SEDE_PREFIJOS
     siguiente_numero = IngresoEquipo.siguiente_numero_equipo('ventas')
     siguiente_codigo = f"{siguiente_numero:03d}"
+    inventario_seleccionados_json = (
+        _venta_inventario_contexto_desde_post(request.POST)
+        if request.method == 'POST' else []
+    )
 
     return render(request, 'ventas/form.html', {
         'cli_form': cli_form,
         'ing_form': ing_form,
+        'venta': None,
+        'inventario_seleccionados_json': inventario_seleccionados_json,
+        'venta_inventario_sedes_json': VENTA_INVENTARIO_UBICACIONES,
+        'venta_inventario_categorias_json': _venta_inventario_categorias_json(),
         'modo': 'registrar',
         'titulo': 'Nueva Venta de Producto',
         'siguiente_numero': siguiente_numero,
@@ -1735,9 +2005,17 @@ def venta_editar(request, pk):
         
     _configurar_form_venta(ing_form)
 
+    relaciones_inventario = venta.productos_inventario.select_related('inventario_item').all()
+
     return render(request, 'ventas/form.html', {
         'cli_form': cli_form,
         'ing_form': ing_form,
+        'venta': venta,
+        'inventario_seleccionados_json': [
+            _venta_inventario_item_json(relacion) for relacion in relaciones_inventario
+        ],
+        'venta_inventario_sedes_json': VENTA_INVENTARIO_UBICACIONES,
+        'venta_inventario_categorias_json': _venta_inventario_categorias_json(),
         'modo': 'editar',
         'titulo': f'Editar Venta {venta.codigo_equipo}',
         'siguiente_numero': venta.numero_equipo,
@@ -1759,7 +2037,9 @@ def venta_eliminar(request, pk):
         ingreso=venta,
         codigo=codigo,
     )
-    venta.delete()
+    with transaction.atomic():
+        _devolver_inventario_de_venta(venta)
+        venta.delete()
     messages.success(request, 'Venta eliminada correctamente.')
     return redirect('econotec:venta_lista')
 
