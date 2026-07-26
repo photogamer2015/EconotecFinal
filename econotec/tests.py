@@ -1081,7 +1081,7 @@ class VentasTests(TestCase):
         self.assertContains(response, 'PC')
         self.assertContains(response, 'Laptops')
         self.assertContains(response, 'Consola')
-        self.assertContains(response, 'consola de mesa')
+        self.assertIn('consola de mesa', response.content.decode().lower())
         self.assertContains(response, 'Portatil')
         self.assertContains(response, 'Celular')
         self.assertContains(response, 'Tablet')
@@ -1216,7 +1216,7 @@ class VentasTests(TestCase):
         self.assertContains(por_texto_ubicacion, 'Cabezal Centro')
         self.assertNotContains(por_texto_ubicacion, 'Tarjeta Epson')
 
-    def test_inventario_tabla_paginala_a_diez_y_muestra_estado_siempre(self):
+    def test_inventario_tabla_paginala_a_cinco_y_muestra_estado_siempre(self):
         url = reverse('econotec:inventario_tabla', kwargs={
             'sede': 'guayaquil',
             'categoria': 'impresora',
@@ -1240,9 +1240,9 @@ class VentasTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.context['page_obj'].paginator.count, 12)
-        self.assertEqual(len(response.context['items']), 10)
-        self.assertContains(response, 'Página 1 de 2')
-        self.assertContains(response, 'Mostrando máximo 10 por página')
+        self.assertEqual(len(response.context['items']), 5)
+        self.assertContains(response, 'Página 1 de 3')
+        self.assertContains(response, 'Mostrando máximo 5 por página')
         html = response.content.decode()
         self.assertRegex(html, r'q=Producto(?:\+|%20)paginado(?:&amp;|&)pagina=2')
 
@@ -1250,7 +1250,7 @@ class VentasTests(TestCase):
         self.assertEqual(response_sin_resultados.status_code, 200)
         self.assertEqual(response_sin_resultados.context['page_obj'].paginator.count, 0)
         self.assertContains(response_sin_resultados, 'Página 1 de 1')
-        self.assertContains(response_sin_resultados, 'Mostrando máximo 10 por página')
+        self.assertContains(response_sin_resultados, 'Mostrando máximo 5 por página')
         self.assertContains(response_sin_resultados, 'list-pagination-disabled')
 
     def test_inventario_exporta_excel_con_filtros_actuales(self):
@@ -2195,7 +2195,7 @@ class VentasTests(TestCase):
         self.assertContains(response, ingreso.codigo_equipo)
         self.assertContains(response, 'Yandri Guevará')
 
-    def test_lista_equipos_paginala_a_diez_y_conserva_filtros(self):
+    def test_lista_equipos_paginala_a_cinco_y_conserva_filtros(self):
         self.activar_sede_guayaquil()
         for n in range(12):
             self.crear_ingreso_reparacion(
@@ -2208,10 +2208,10 @@ class VentasTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.context['total'], 12)
-        self.assertEqual(len(ingresos), 10)
-        self.assertEqual(response.context['page_obj'].paginator.per_page, 10)
-        self.assertContains(response, 'Página 1 de 2')
-        self.assertContains(response, 'Mostrando máximo 10 por página')
+        self.assertEqual(len(ingresos), 5)
+        self.assertEqual(response.context['page_obj'].paginator.per_page, 5)
+        self.assertContains(response, 'Página 1 de 3')
+        self.assertContains(response, 'Mostrando máximo 5 por página')
         self.assertContains(response, 'sede=todas&pagina=2')
 
         response = self.client.get(
@@ -2220,10 +2220,10 @@ class VentasTests(TestCase):
         )
 
         self.assertEqual(response.context['total'], 12)
-        self.assertEqual(len(response.context['ingresos']), 2)
-        self.assertContains(response, 'Página 2 de 2')
+        self.assertEqual(len(response.context['ingresos']), 5)
+        self.assertContains(response, 'Página 2 de 3')
 
-    def test_listados_ventas_y_pagos_paginalan_a_diez(self):
+    def test_listados_ventas_y_pagos_paginalan_a_cinco(self):
         for n in range(12):
             self.crear_venta_producto(
                 problema_reportado=f'Venta completa {n}',
@@ -2254,12 +2254,12 @@ class VentasTests(TestCase):
 
                 self.assertEqual(response.status_code, 200)
                 self.assertEqual(response.context[total_key], total_esperado)
-                self.assertEqual(len(response.context['ingresos']), 10)
-                self.assertEqual(response.context['page_obj'].paginator.per_page, 10)
-                self.assertContains(response, 'Página 1 de 2')
-                self.assertContains(response, 'Mostrando máximo 10 por página')
+                self.assertEqual(len(response.context['ingresos']), 5)
+                self.assertEqual(response.context['page_obj'].paginator.per_page, 5)
+                self.assertContains(response, 'Página 1 de 3')
+                self.assertContains(response, 'Mostrando máximo 5 por página')
 
-    def test_listados_salidas_clientes_facturas_y_auditoria_paginalan_a_diez(self):
+    def test_listados_salidas_clientes_facturas_y_auditoria_paginalan_a_cinco(self):
         for n in range(12):
             Cliente.objects.create(
                 cedula=f'09{n:08d}',
@@ -2313,9 +2313,9 @@ class VentasTests(TestCase):
         response_salidas = self.client.get(reverse('econotec:salida_lista'))
         self.assertEqual(response_salidas.status_code, 200)
         self.assertEqual(response_salidas.context['total'], 24)
-        self.assertEqual(len(response_salidas.context['salidas']), 10)
-        self.assertEqual(response_salidas.context['page_obj'].paginator.per_page, 10)
-        self.assertContains(response_salidas, 'Página 1 de 3')
+        self.assertEqual(len(response_salidas.context['salidas']), 5)
+        self.assertEqual(response_salidas.context['page_obj'].paginator.per_page, 5)
+        self.assertContains(response_salidas, 'Página 1 de 5')
 
         response_clientes = self.client.get(
             reverse('econotec:cliente_lista'),
@@ -2323,7 +2323,7 @@ class VentasTests(TestCase):
         )
         self.assertEqual(response_clientes.status_code, 200)
         self.assertEqual(response_clientes.context['total'], 12)
-        self.assertEqual(len(response_clientes.context['clientes']), 10)
+        self.assertEqual(len(response_clientes.context['clientes']), 5)
         self.assertContains(response_clientes, 'q=Cliente+paginado&pagina=2')
 
         self.client.force_login(self.admin)
@@ -2333,19 +2333,19 @@ class VentasTests(TestCase):
         )
         self.assertEqual(response_facturas.status_code, 200)
         self.assertEqual(response_facturas.context['total'], 12)
-        self.assertEqual(len(response_facturas.context['salidas']), 10)
-        self.assertContains(response_facturas, 'Página 1 de 2')
+        self.assertEqual(len(response_facturas.context['salidas']), 5)
+        self.assertContains(response_facturas, 'Página 1 de 3')
 
         response_auditoria = self.client.get(reverse('econotec:control_registro'))
         self.assertEqual(response_auditoria.status_code, 200)
-        self.assertEqual(len(response_auditoria.context['equipos']), 10)
-        self.assertEqual(len(response_auditoria.context['abonos']), 10)
-        self.assertEqual(response_auditoria.context['equipos_page_obj'].paginator.per_page, 10)
-        self.assertEqual(response_auditoria.context['abonos_page_obj'].paginator.per_page, 10)
+        self.assertEqual(len(response_auditoria.context['equipos']), 5)
+        self.assertEqual(len(response_auditoria.context['abonos']), 5)
+        self.assertEqual(response_auditoria.context['equipos_page_obj'].paginator.per_page, 5)
+        self.assertEqual(response_auditoria.context['abonos_page_obj'].paginator.per_page, 5)
         self.assertContains(response_auditoria, 'pagina_equipos=2#panel-equipos')
         self.assertContains(response_auditoria, 'pagina_pagos=2#panel-pagos')
 
-    def test_paginacion_se_muestra_con_menos_de_diez_y_sin_resultados(self):
+    def test_paginacion_se_muestra_con_menos_de_cinco_y_sin_resultados(self):
         ingreso = self.crear_ingreso_reparacion(estado='entregado')
         SalidaEquipo.objects.create(
             ingreso=ingreso,
@@ -2363,7 +2363,7 @@ class VentasTests(TestCase):
         self.assertEqual(response_salidas.status_code, 200)
         self.assertEqual(len(response_salidas.context['salidas']), 1)
         self.assertContains(response_salidas, 'Página 1 de 1')
-        self.assertContains(response_salidas, 'Mostrando máximo 10 por página')
+        self.assertContains(response_salidas, 'Mostrando máximo 5 por página')
         self.assertContains(response_salidas, 'list-pagination-disabled')
         self.assertNotContains(response_salidas, 'pagina=2')
 
@@ -2377,10 +2377,10 @@ class VentasTests(TestCase):
         self.assertEqual(response_facturas.context['total'], 0)
         self.assertContains(response_facturas, 'No hay facturas realizadas para este filtro')
         self.assertContains(response_facturas, 'Página 1 de 1')
-        self.assertContains(response_facturas, 'Mostrando máximo 10 por página')
+        self.assertContains(response_facturas, 'Mostrando máximo 5 por página')
         self.assertContains(response_facturas, 'list-pagination-disabled')
 
-    def test_admin_ventas_inventario_tabs_paginalan_a_diez(self):
+    def test_admin_ventas_inventario_tabs_paginalan_a_cinco(self):
         self.client.force_login(self.admin)
         producto_base = InventarioItem.objects.create(
             sede='guayaquil',
@@ -2442,9 +2442,9 @@ class VentasTests(TestCase):
                 )
 
                 self.assertEqual(response.status_code, 200)
-                self.assertEqual(len(response.context['page_obj'].object_list), 10)
-                self.assertEqual(response.context['page_obj'].paginator.per_page, 10)
-                self.assertContains(response, 'Mostrando máximo 10 por página')
+                self.assertEqual(len(response.context['page_obj'].object_list), 5)
+                self.assertEqual(response.context['page_obj'].paginator.per_page, 5)
+                self.assertContains(response, 'Mostrando máximo 5 por página')
 
     def test_lista_equipos_filtra_por_firma_cliente(self):
         self.activar_sede_guayaquil()

@@ -9,7 +9,7 @@
     {% endif %}
     <span class="current">
         Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}
-        <span class="list-pagination-count">Mostrando máximo {{ per_page|default:10 }} por página</span>
+        <span class="list-pagination-count">Mostrando máximo {{ per_page|default:5 }} por página</span>
     </span>
     {% if page_obj.has_next %}
         <a class="btn btn-sm btn-secondary" href="?{% if querystring %}{{ querystring }}&{% endif %}{{ page_param|default:'pagina' }}={{ page_obj.next_page_number }}{% if anchor %}#{{ anchor }}{% endif %}">Siguiente</a>

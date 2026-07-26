@@ -3,7 +3,7 @@
 from django.core.paginator import Paginator
 
 
-ITEMS_PER_PAGE = 10
+ITEMS_PER_PAGE = 5
 
 
 def paginar_resultados(request, resultados, page_param='pagina', per_page=ITEMS_PER_PAGE):
