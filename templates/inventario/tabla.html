@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load econotec_extras %}
 
 {% block title %}Inventario {{ tipo.nombre }} — Econotec{% endblock %}
 
@@ -186,7 +187,7 @@
         -webkit-overflow-scrolling: touch;
     }
     .inventario-table-card table {
-        min-width: 1060px;
+        min-width: 1140px;
     }
     .inventario-table-title {
         display: flex;
@@ -304,6 +305,11 @@
         font-weight: 950;
         white-space: nowrap;
     }
+    .inventario-cost-cell {
+        color: #0f766e;
+        font-weight: 900;
+        white-space: nowrap;
+    }
     .inventario-qr-modal {
         position: fixed;
         inset: 0;
@@ -383,7 +389,7 @@
             overflow-wrap: anywhere;
         }
         .inventario-table-card table {
-            min-width: 920px;
+            min-width: 1000px;
         }
         .inventario-actions {
             display: grid;
@@ -583,6 +589,7 @@
                         <th>Serie <small>(opcional)</small></th>
                         <th>Estado</th>
                         <th>Cantidad</th>
+                        <th>Costo</th>
                         <th>Ubicación</th>
                         {% if puede_gestionar_inventario %}<th>Acción</th>{% endif %}
                     </tr>
@@ -627,6 +634,7 @@
                                     <span class="inventario-low-stock-pill">Solo queda 1</span>
                                 {% endif %}
                             </td>
+                            <td><span class="inventario-cost-cell">{{ item.costo|dinero_signo }}</span></td>
                             <td>{{ item.get_ubicacion_display }}</td>
                             {% if puede_gestionar_inventario %}
                                 <td>
@@ -644,7 +652,7 @@
                         </tr>
                     {% empty %}
                         <tr>
-                            <td colspan="{% if puede_gestionar_inventario %}9{% else %}8{% endif %}" class="inventario-empty-row">
+                            <td colspan="{% if puede_gestionar_inventario %}10{% else %}9{% endif %}" class="inventario-empty-row">
                                 {% if filtros_activos %}
                                     No hay productos con esos filtros en {{ tipo.nombre }} — {{ sede_label }}.
                                 {% else %}

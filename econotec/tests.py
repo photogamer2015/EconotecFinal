@@ -1137,6 +1137,7 @@ class VentasTests(TestCase):
         self.assertContains(response, '(opcional)')
         self.assertContains(response, 'Estado')
         self.assertContains(response, 'Cantidad')
+        self.assertContains(response, 'Costo')
         self.assertContains(response, 'Ubicación')
         self.assertContains(response, 'Acción')
         self.assertNotContains(response, 'Marca / Modelo')
@@ -1153,6 +1154,7 @@ class VentasTests(TestCase):
             modelo='Laser-t32',
             estado='disponible',
             cantidad=35,
+            costo=Decimal('12.50'),
             ubicacion='guayaquil_norte',
             registrado_por=self.usuario,
         )
@@ -1193,6 +1195,7 @@ class VentasTests(TestCase):
         self.assertContains(response, 'Guayaquil - Centro')
         self.assertNotContains(response, 'value="quito"')
         self.assertContains(response, 'Tarjeta Epson')
+        self.assertContains(response, '$12,50')
         self.assertContains(response, 'Cabezal Centro')
         self.assertContains(response, 'Causa: Agotado')
         self.assertNotContains(response, 'Producto Quito')
