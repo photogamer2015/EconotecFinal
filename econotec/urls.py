@@ -16,9 +16,13 @@ urlpatterns = [
     path('inventario/item/<str:codigo>/qr/', views.inventario_qr_imprimir, name='inventario_qr_imprimir'),
     path('inventario/item/<str:codigo>/cantidad/',
          views.inventario_actualizar_cantidad, name='inventario_actualizar_cantidad'),
+    path('inventario/item/<str:codigo>/notificar-admin/',
+         views.inventario_notificar_admin, name='inventario_notificar_admin'),
     path('inventario/<str:sede>/<str:categoria>/', views.inventario_categoria, name='inventario_categoria'),
     path('inventario/<str:sede>/<str:categoria>/<str:tipo>/registrar/',
          views.inventario_registrar, name='inventario_registrar'),
+    path('inventario/<str:sede>/<str:categoria>/<str:tipo>/exportar/',
+         views.inventario_export, name='inventario_export'),
     path('inventario/<str:sede>/<str:categoria>/<str:tipo>/', views.inventario_tabla, name='inventario_tabla'),
     path('api/perfil/', views.api_perfil, name='api_perfil'),
     path('api/perfil/color/', views.api_perfil_color, name='api_perfil_color'),
@@ -44,6 +48,8 @@ urlpatterns = [
          views.notificacion_asesora_marcar_vista, name='notificacion_asesora_marcar_vista'),
     path('notificaciones/asesoras/limpiar/',
          views.notificacion_asesora_limpiar_bandeja, name='notificacion_asesora_limpiar_bandeja'),
+    path('notificaciones/inventario/<int:pk>/ver/',
+         views.notificacion_inventario_admin_ver, name='notificacion_inventario_admin_ver'),
 
     # ── Ingreso de equipos (la "Solicitud de Ingreso") ────
     path('ingresos/', views.ingreso_lista, name='ingreso_lista'),
@@ -64,10 +70,12 @@ urlpatterns = [
 
     # ── Ventas de Productos ────────────────────────────────
     path('ventas/', views.venta_lista, name='venta_lista'),
+    path('ventas/parciales/', views.venta_lista_parciales, name='venta_lista_parciales'),
     path('ventas/menu/', views.venta_menu, name='venta_menu'),
     path('ventas/registrar/', views.venta_registrar, name='venta_registrar'),
     path('ventas/inventario/catalogo/', views.venta_inventario_catalogo, name='venta_inventario_catalogo'),
     path('ventas/<int:pk>/inventario/agregar/', views.venta_inventario_agregar, name='venta_inventario_agregar'),
+    path('ventas/<int:pk>/inventario/<int:relacion_pk>/cantidad/', views.venta_inventario_actualizar_cantidad, name='venta_inventario_actualizar_cantidad'),
     path('ventas/<int:pk>/inventario/<int:relacion_pk>/quitar/', views.venta_inventario_quitar, name='venta_inventario_quitar'),
     path('ventas/<int:pk>/editar/', views.venta_editar, name='venta_editar'),
     path('ventas/<int:pk>/eliminar/', views.venta_eliminar, name='venta_eliminar'),
@@ -96,6 +104,9 @@ urlpatterns = [
 
     # ── Pagos / Abonos ─────────────────────────────────────
     path('pagos/', views_pagos.pagos_lista, name='pagos_lista'),
+    path('pagos/ventas/menu/', views_pagos.pagos_ventas_menu, name='pagos_ventas_menu'),
+    path('pagos/ventas/completos/', views_pagos.pagos_ventas_completos, name='pagos_ventas_completos'),
+    path('pagos/ventas/parciales/', views_pagos.pagos_ventas_parciales, name='pagos_ventas_parciales'),
     path('pagos/ventas/', views_pagos.pagos_ventas_lista, name='pagos_ventas_lista'),
     path('pagos/exportar/', views_pagos.pagos_export, name='pagos_export'),
     path('ingresos/<int:pk>/abonos/',
@@ -119,6 +130,8 @@ urlpatterns = [
          views_admin.admin_dashboard, name='admin_dashboard'),
     path('admin-panel/bitacoras-tecnicos/',
          views_admin.admin_bitacoras_tecnicos, name='admin_bitacoras_tecnicos'),
+    path('admin-panel/ventas-inventario/',
+         views_admin.admin_ventas_inventario, name='admin_ventas_inventario'),
     path('admin-panel/perfiles/reiniciar/',
          views_admin.admin_perfiles_reiniciar, name='admin_perfiles_reiniciar'),
     path('admin-panel/perfiles/exportar/<str:formato>/',

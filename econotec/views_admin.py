@@ -10,7 +10,11 @@ import json
 from django.contrib import messages
 from django.contrib.auth import get_user_model
 from django.db import transaction
-from django.db.models import Count, Q, Sum
+from django.db.models import (
+    Count, DecimalField, ExpressionWrapper, F, OuterRef, Prefetch, Q,
+    Subquery, Sum, Value,
+)
+from django.db.models.functions import Coalesce
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -29,8 +33,10 @@ from .bitacora import construir_bitacora_usuario
 from .date_filters import aplicar_rango_fecha, contexto_rango_fecha, obtener_rango_fecha
 from .models import (
     IngresoEquipo, SalidaEquipo, Abono, Egreso, CategoriaEgreso, Cliente,
-    AvisoPanel, SEDES_EQUIPOS, HorarioTecnico,
+    AvisoPanel, BitacoraTecnico, HorarioTecnico, InventarioItem,
+    SEDES_EQUIPOS, VentaInventarioItem,
 )
+from .pagination import paginar_resultados
 from .permisos import GRUPOS_TECNICO, admin_requerido, tecnico_requerido
 
 
@@ -424,6 +430,420 @@ def admin_bitacoras_tecnicos(request):
     })
 
 
+def _periodo_ventas_inventario(request):
+    hoy = timezone.localdate()
+    try:
+        year = int(request.GET.get('ano') or hoy.year)
+    except (TypeError, ValueError):
+        year = hoy.year
+    try:
+        month = int(request.GET.get('mes') or hoy.month)
+    except (TypeError, ValueError):
+        month = hoy.month
+    return year, min(max(month, 1), 12)
+
+
+def _ventas_admin_con_totales(queryset):
+    decimal_field = DecimalField(max_digits=14, decimal_places=2)
+    abonos_total = (
+        Abono.objects
+        .filter(ingreso_id=OuterRef('pk'))
+        .values('ingreso_id')
+        .annotate(total=Sum('monto'))
+        .values('total')[:1]
+    )
+    return (
+        queryset
+        .annotate(
+            abonos_posteriores_admin=Coalesce(
+                Subquery(abonos_total, output_field=decimal_field),
+                Value(Decimal('0.00')),
+                output_field=decimal_field,
+            ),
+        )
+        .annotate(
+            total_pagado_admin_db=ExpressionWrapper(
+                Coalesce(
+                    F('abono_anticipo'),
+                    Value(Decimal('0.00')),
+                    output_field=decimal_field,
+                ) + F('abonos_posteriores_admin'),
+                output_field=decimal_field,
+            ),
+        )
+    )
+
+
+def _preparar_venta_admin(venta):
+    total = venta.valor_acordado or Decimal('0.00')
+    pagado = (
+        (venta.abono_anticipo or Decimal('0.00'))
+        + (venta.abonos_posteriores_admin or Decimal('0.00'))
+    )
+    saldo = max(total - pagado, Decimal('0.00'))
+    if total <= pagado:
+        estado = 'Pagado'
+        estado_clase = 'pagado'
+    elif pagado > 0:
+        estado = 'Parcial'
+        estado_clase = 'parcial'
+    else:
+        estado = 'Pendiente'
+        estado_clase = 'pendiente'
+
+    productos = list(venta.productos_inventario.all())
+    venta.total_admin = total
+    venta.pagado_admin = pagado
+    venta.saldo_admin = saldo
+    venta.estado_pago_admin = estado
+    venta.estado_pago_clase_admin = estado_clase
+    venta.unidades_admin = sum(producto.cantidad for producto in productos)
+    venta.productos_admin = productos
+    venta.productos_resumen_admin = ', '.join(
+        f'{producto.cantidad} x {producto.inventario_item.producto}'
+        for producto in productos
+    ) or venta.problema_reportado or 'Venta de producto'
+    venta.metodos_pago_admin = venta.resumen_metodos_pago or 'Sin pago registrado'
+    return venta
+
+
+@admin_requerido
+def admin_ventas_inventario(request):
+    """Centro administrativo de ventas de producto e inventario."""
+    year, month = _periodo_ventas_inventario(request)
+    tab = (request.GET.get('tab') or 'ventas').strip().lower()
+    if tab not in {'ventas', 'actividad', 'movimientos', 'inventario'}:
+        tab = 'ventas'
+
+    q = (request.GET.get('q') or '').strip()
+    estado_pago = (request.GET.get('estado_pago') or '').strip().lower()
+    tecnico_id = (request.GET.get('tecnico') or '').strip()
+    registrador_id = (request.GET.get('registrador') or '').strip()
+    actividad_usuario_id = (request.GET.get('actividad_usuario') or '').strip()
+    inventario_sede = (request.GET.get('inventario_sede') or '').strip()
+    inventario_ubicacion = (request.GET.get('inventario_ubicacion') or '').strip()
+    inventario_estado = (request.GET.get('inventario_estado') or '').strip()
+    inventario_categoria = (request.GET.get('inventario_categoria') or '').strip()
+    inventario_stock = (request.GET.get('inventario_stock') or '').strip()
+
+    ventas_periodo = IngresoEquipo.objects.filter(
+        sede='ventas',
+        fecha_ingreso__year=year,
+        fecha_ingreso__month=month,
+    )
+    ventas_metricas = list(
+        _ventas_admin_con_totales(ventas_periodo)
+        .values('valor_acordado', 'abono_anticipo', 'abonos_posteriores_admin')
+    )
+    total_facturado = sum(
+        (venta['valor_acordado'] or Decimal('0.00'))
+        for venta in ventas_metricas
+    )
+    total_cobrado = sum(
+        (venta['abono_anticipo'] or Decimal('0.00'))
+        + (venta['abonos_posteriores_admin'] or Decimal('0.00'))
+        for venta in ventas_metricas
+    )
+    total_saldo = Decimal('0.00')
+    ventas_pagadas = 0
+    ventas_parciales = 0
+    ventas_pendientes = 0
+    for venta in ventas_metricas:
+        total = venta['valor_acordado'] or Decimal('0.00')
+        pagado = (
+            (venta['abono_anticipo'] or Decimal('0.00'))
+            + (venta['abonos_posteriores_admin'] or Decimal('0.00'))
+        )
+        total_saldo += max(total - pagado, Decimal('0.00'))
+        if total <= pagado:
+            ventas_pagadas += 1
+        elif pagado > 0:
+            ventas_parciales += 1
+        else:
+            ventas_pendientes += 1
+
+    unidades_vendidas = (
+        VentaInventarioItem.objects
+        .filter(
+            venta__sede='ventas',
+            venta__fecha_ingreso__year=year,
+            venta__fecha_ingreso__month=month,
+        )
+        .aggregate(total=Sum('cantidad'))['total']
+        or 0
+    )
+
+    inventario_valores = list(
+        InventarioItem.objects.values('cantidad', 'costo', 'estado')
+    )
+    inventario_unidades = sum(item['cantidad'] for item in inventario_valores)
+    inventario_valor = sum(
+        Decimal(item['cantidad']) * (item['costo'] or Decimal('0.00'))
+        for item in inventario_valores
+    )
+    inventario_agotado = sum(
+        1 for item in inventario_valores if item['cantidad'] == 0
+    )
+    inventario_bajo = sum(
+        1 for item in inventario_valores if 0 < item['cantidad'] <= 5
+    )
+    inventario_no_disponible = sum(
+        1 for item in inventario_valores if item['estado'] == 'no_disponible'
+    )
+
+    anos_disp = list(
+        IngresoEquipo.objects
+        .filter(sede='ventas')
+        .dates('fecha_ingreso', 'year')
+        .values_list('fecha_ingreso__year', flat=True)
+    )
+    anos_disp = sorted(set(anos_disp + [year]), reverse=True)
+
+    User = get_user_model()
+    personal_ids = set(
+        ventas_periodo.exclude(tecnico_encargado_id=None)
+        .values_list('tecnico_encargado_id', flat=True)
+    )
+    registradores_ids = set(
+        ventas_periodo.exclude(registrado_por_id=None)
+        .values_list('registrado_por_id', flat=True)
+    )
+    personal_ventas = User.objects.filter(
+        pk__in=personal_ids | registradores_ids
+    ).order_by('first_name', 'last_name', 'username')
+
+    categorias_inventario = list(
+        InventarioItem.objects
+        .exclude(categoria='')
+        .order_by('categoria')
+        .values_list('categoria', flat=True)
+        .distinct()
+    )
+
+    page_obj = None
+    querystring = ''
+    if tab == 'ventas':
+        ventas_qs = ventas_periodo
+        if q:
+            filtro_q = (
+                Q(cliente__nombres__icontains=q)
+                | Q(cliente__cedula__icontains=q)
+                | Q(cliente__whatsapp__icontains=q)
+                | Q(problema_reportado__icontains=q)
+                | Q(productos_inventario__inventario_item__producto__icontains=q)
+                | Q(productos_inventario__inventario_item__codigo__icontains=q)
+                | Q(productos_inventario__inventario_item__marca__icontains=q)
+                | Q(productos_inventario__inventario_item__modelo__icontains=q)
+            )
+            codigo_q = q.upper()
+            if codigo_q.startswith('P'):
+                codigo_q = codigo_q[1:]
+            if codigo_q.isdigit():
+                filtro_q |= Q(numero_equipo=int(codigo_q))
+            ventas_qs = ventas_qs.filter(filtro_q).distinct()
+        if tecnico_id.isdigit():
+            ventas_qs = ventas_qs.filter(tecnico_encargado_id=int(tecnico_id))
+        if registrador_id.isdigit():
+            ventas_qs = ventas_qs.filter(registrado_por_id=int(registrador_id))
+
+        ventas_qs = _ventas_admin_con_totales(ventas_qs)
+        if estado_pago == 'pagado':
+            ventas_qs = ventas_qs.filter(
+                valor_acordado__isnull=False,
+                total_pagado_admin_db__gte=F('valor_acordado'),
+            )
+        elif estado_pago == 'parcial':
+            ventas_qs = ventas_qs.filter(
+                valor_acordado__isnull=False,
+                total_pagado_admin_db__gt=0,
+                total_pagado_admin_db__lt=F('valor_acordado'),
+            )
+        elif estado_pago == 'pendiente':
+            ventas_qs = ventas_qs.filter(
+                Q(valor_acordado__isnull=True)
+                | Q(total_pagado_admin_db__lte=0)
+            )
+
+        ventas_qs = (
+            ventas_qs
+            .select_related('cliente', 'tecnico_encargado', 'registrado_por')
+            .prefetch_related(
+                Prefetch(
+                    'productos_inventario',
+                    queryset=VentaInventarioItem.objects.select_related('inventario_item'),
+                ),
+                Prefetch('abonos', queryset=Abono.objects.order_by('fecha', 'creado')),
+            )
+            .order_by('-fecha_ingreso', '-numero_equipo')
+        )
+        page_obj, querystring = paginar_resultados(request, ventas_qs)
+        for venta in page_obj.object_list:
+            _preparar_venta_admin(venta)
+
+    elif tab == 'actividad':
+        actividad_qs = (
+            BitacoraTecnico.objects
+            .select_related('user', 'ingreso', 'ingreso__cliente', 'abono')
+            .filter(
+                momento__year=year,
+                momento__month=month,
+            )
+            .filter(
+                Q(tipo__in=['venta_producto', 'venta_editada'])
+                | Q(ingreso__sede='ventas')
+                | Q(abono__ingreso__sede='ventas')
+            )
+        )
+        if q:
+            actividad_qs = actividad_qs.filter(
+                Q(texto__icontains=q)
+                | Q(codigo__icontains=q)
+                | Q(usuario_nombre__icontains=q)
+                | Q(ingreso__cliente__nombres__icontains=q)
+                | Q(ingreso__cliente__cedula__icontains=q)
+            )
+        if actividad_usuario_id.isdigit():
+            actividad_qs = actividad_qs.filter(user_id=int(actividad_usuario_id))
+        page_obj, querystring = paginar_resultados(
+            request,
+            actividad_qs.order_by('-momento', '-pk'),
+        )
+
+    elif tab == 'movimientos':
+        movimientos_qs = (
+            VentaInventarioItem.objects
+            .select_related(
+                'venta',
+                'venta__cliente',
+                'venta__tecnico_encargado',
+                'venta__registrado_por',
+                'inventario_item',
+            )
+            .filter(
+                venta__sede='ventas',
+                venta__fecha_ingreso__year=year,
+                venta__fecha_ingreso__month=month,
+            )
+        )
+        if q:
+            movimientos_qs = movimientos_qs.filter(
+                Q(venta__cliente__nombres__icontains=q)
+                | Q(venta__cliente__cedula__icontains=q)
+                | Q(inventario_item__producto__icontains=q)
+                | Q(inventario_item__codigo__icontains=q)
+                | Q(inventario_item__marca__icontains=q)
+                | Q(inventario_item__modelo__icontains=q)
+            )
+        if inventario_sede in {'guayaquil', 'quito'}:
+            movimientos_qs = movimientos_qs.filter(
+                inventario_item__sede=inventario_sede
+            )
+        if inventario_ubicacion in dict(InventarioItem.UBICACIONES):
+            if (
+                inventario_sede == 'guayaquil'
+                and inventario_ubicacion not in {'guayaquil_norte', 'guayaquil_centro'}
+            ):
+                inventario_ubicacion = ''
+            elif inventario_sede == 'quito' and inventario_ubicacion != 'quito':
+                inventario_ubicacion = ''
+            else:
+                movimientos_qs = movimientos_qs.filter(
+                    inventario_item__ubicacion=inventario_ubicacion
+                )
+        page_obj, querystring = paginar_resultados(
+            request,
+            movimientos_qs.order_by('-venta__fecha_ingreso', '-creado', '-pk'),
+        )
+
+    else:
+        inventario_qs = InventarioItem.objects.select_related('registrado_por')
+        if q:
+            inventario_qs = inventario_qs.filter(
+                Q(producto__icontains=q)
+                | Q(codigo__icontains=q)
+                | Q(marca__icontains=q)
+                | Q(modelo__icontains=q)
+                | Q(serie__icontains=q)
+                | Q(causa_no_disponible__icontains=q)
+            )
+        if inventario_sede in {'guayaquil', 'quito'}:
+            inventario_qs = inventario_qs.filter(sede=inventario_sede)
+        ubicaciones_validas = dict(InventarioItem.UBICACIONES)
+        if inventario_ubicacion in ubicaciones_validas:
+            if (
+                inventario_sede == 'guayaquil'
+                and inventario_ubicacion not in {'guayaquil_norte', 'guayaquil_centro'}
+            ):
+                inventario_ubicacion = ''
+            elif inventario_sede == 'quito' and inventario_ubicacion != 'quito':
+                inventario_ubicacion = ''
+            else:
+                inventario_qs = inventario_qs.filter(
+                    ubicacion=inventario_ubicacion
+                )
+        if inventario_estado in dict(InventarioItem.ESTADOS):
+            inventario_qs = inventario_qs.filter(estado=inventario_estado)
+        if inventario_categoria in categorias_inventario:
+            inventario_qs = inventario_qs.filter(categoria=inventario_categoria)
+        if inventario_stock == 'agotado':
+            inventario_qs = inventario_qs.filter(cantidad=0)
+        elif inventario_stock == 'bajo':
+            inventario_qs = inventario_qs.filter(cantidad__gt=0, cantidad__lte=5)
+        elif inventario_stock == 'disponible':
+            inventario_qs = inventario_qs.filter(
+                cantidad__gt=5,
+                estado='disponible',
+            )
+
+        page_obj, querystring = paginar_resultados(
+            request,
+            inventario_qs.order_by('producto', 'codigo'),
+        )
+        for item in page_obj.object_list:
+            item.valor_stock_admin = (
+                Decimal(item.cantidad) * (item.costo or Decimal('0.00'))
+            )
+
+    return render(request, 'admin_panel/ventas_inventario.html', {
+        'tab': tab,
+        'year': year,
+        'month': month,
+        'mes_nombre': MESES_ES[month],
+        'meses_es': MESES_ES,
+        'anos_disp': anos_disp,
+        'q': q,
+        'estado_pago': estado_pago,
+        'tecnico_id': tecnico_id,
+        'registrador_id': registrador_id,
+        'actividad_usuario_id': actividad_usuario_id,
+        'inventario_sede': inventario_sede,
+        'inventario_ubicacion': inventario_ubicacion,
+        'inventario_estado': inventario_estado,
+        'inventario_categoria': inventario_categoria,
+        'inventario_stock': inventario_stock,
+        'personal_ventas': personal_ventas,
+        'categorias_inventario': categorias_inventario,
+        'ubicaciones_inventario': InventarioItem.UBICACIONES,
+        'estados_inventario': InventarioItem.ESTADOS,
+        'page_obj': page_obj,
+        'querystring': querystring,
+        'total_ventas': len(ventas_metricas),
+        'total_facturado': total_facturado,
+        'total_cobrado': total_cobrado,
+        'total_saldo': total_saldo,
+        'ventas_pagadas': ventas_pagadas,
+        'ventas_parciales': ventas_parciales,
+        'ventas_pendientes': ventas_pendientes,
+        'unidades_vendidas': unidades_vendidas,
+        'inventario_productos': len(inventario_valores),
+        'inventario_unidades': inventario_unidades,
+        'inventario_valor': inventario_valor,
+        'inventario_agotado': inventario_agotado,
+        'inventario_bajo': inventario_bajo,
+        'inventario_no_disponible': inventario_no_disponible,
+    })
+
+
 @admin_requerido
 def admin_equipos_mes_exportar(request):
     year, month = _periodo_admin_request(request)
@@ -615,6 +1035,8 @@ def salida_facturas_lista(request):
     total_periodo = base_qs.count()
     qs = base_qs
     qs = filtrar_objetos_normalizado(qs, q, texto_salida_busqueda)
+    total = total_resultados(qs)
+    page_obj, querystring = paginar_resultados(request, qs)
 
     anos_disp = sorted(set(
         list(SalidaEquipo.objects.dates('fecha_salida', 'year').values_list('fecha_salida__year', flat=True))
@@ -631,8 +1053,10 @@ def salida_facturas_lista(request):
         'meses_es': MESES_ES,
         'anos_disp': anos_disp,
         'q': q,
-        'salidas': qs,
-        'total': total_resultados(qs),
+        'salidas': page_obj.object_list,
+        'page_obj': page_obj,
+        'querystring': querystring,
+        'total': total,
         'total_periodo': total_periodo,
     }
     context.update(contexto_rango_fecha(
@@ -1310,22 +1734,34 @@ def control_registro(request):
     sistema, con fecha/hora, quién los registró (asesor) y el cliente.
     Solo visible para administradores.
     """
-    LIMITE = 100
-
-    equipos = (
+    equipos_qs = (
         IngresoEquipo.objects
         .select_related('cliente', 'registrado_por', 'tecnico_encargado')
-        .order_by('-creado')[:LIMITE]
+        .order_by('-creado')
     )
 
-    abonos = (
+    abonos_qs = (
         Abono.objects
         .select_related('ingreso', 'ingreso__cliente', 'registrado_por')
-        .order_by('-creado')[:LIMITE]
+        .order_by('-creado')
+    )
+    equipos_page_obj, equipos_querystring = paginar_resultados(
+        request,
+        equipos_qs,
+        page_param='pagina_equipos',
+    )
+    abonos_page_obj, abonos_querystring = paginar_resultados(
+        request,
+        abonos_qs,
+        page_param='pagina_pagos',
     )
 
     return render(request, 'admin_panel/control_registro.html', {
-        'equipos': equipos,
-        'abonos': abonos,
-        'limite': LIMITE,
+        'equipos': equipos_page_obj.object_list,
+        'abonos': abonos_page_obj.object_list,
+        'equipos_page_obj': equipos_page_obj,
+        'abonos_page_obj': abonos_page_obj,
+        'equipos_querystring': equipos_querystring,
+        'abonos_querystring': abonos_querystring,
+        'limite': 10,
     })

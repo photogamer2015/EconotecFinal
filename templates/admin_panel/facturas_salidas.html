@@ -154,14 +154,15 @@
             </tr>
         {% endfor %}
         </tbody>
-    </table>
-</div>
-{% else %}
-<div class="empty-state">
+	    </table>
+	</div>
+	{% else %}
+	<div class="empty-state">
     <div class="icon">🧾</div>
     <h3>No hay facturas realizadas para este filtro</h3>
-    <p>Cambia el mes, año o término de búsqueda.</p>
-</div>
-{% endif %}
+	    <p>Cambia el mes, año o término de búsqueda.</p>
+	</div>
+	{% endif %}
+    {% include 'includes/paginacion.html' with page_obj=page_obj querystring=querystring page_param='pagina' aria_label='Paginación de facturas realizadas' %}
 
 {% endblock %}

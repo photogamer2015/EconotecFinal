@@ -16,6 +16,7 @@ from .busqueda import filtrar_objetos_normalizado, texto_ingreso_busqueda
 from .bitacora import registrar_bitacora
 from .forms import AbonoForm
 from .models import Abono, IngresoEquipo
+from .pagination import paginar_resultados
 from .permisos import tecnico_requerido, asesor_requerido
 
 
@@ -23,6 +24,19 @@ MESES_ES = [
     '', 'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
     'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre',
 ]
+
+
+def _venta_tiene_historial_abonos(ingreso):
+    """
+    Una venta entra al flujo de abonos si nació con pago parcial o si ya tiene
+    abonos registrados. Así el historial se conserva aunque luego quede pagada.
+    """
+    if ingreso.sede != 'ventas':
+        return False
+    valor = ingreso.valor_efectivo_a_cobrar or Decimal('0.00')
+    anticipo = ingreso.abono_anticipo or Decimal('0.00')
+    return ingreso.abonos.exists() or (valor > Decimal('0.00') and anticipo < valor)
+
 
 @asesor_requerido
 def pagos_lista(request):
@@ -43,13 +57,53 @@ def pagos_ventas_lista(request):
     Control de Pagos exclusivo de VENTAS DE PRODUCTO (sede='ventas').
     Mismo formato que Pagos, pero solo con las ventas de producto.
     """
+    return _render_pagos_ventas_lista(request, filtro_ventas_pago='')
+
+
+@asesor_requerido
+def pagos_ventas_menu(request):
+    """Menú previo para organizar pagos de ventas completos y parciales."""
+    ventas = list(
+        IngresoEquipo.objects
+        .filter(sede='ventas')
+        .prefetch_related('abonos')
+        .order_by('-fecha_ingreso', '-pk')
+    )
+    ventas_parciales = [venta for venta in ventas if _venta_tiene_historial_abonos(venta)]
+    ventas_completas = [venta for venta in ventas if not _venta_tiene_historial_abonos(venta)]
+    return render(request, 'pagos/ventas_menu.html', {
+        'total_ventas': len(ventas),
+        'total_completas': len(ventas_completas),
+        'total_parciales': len(ventas_parciales),
+        'saldo_parcial': sum((venta.diferencia for venta in ventas_parciales), Decimal('0.00')),
+        'cobrado_completo': sum((venta.total_abonado for venta in ventas_completas), Decimal('0.00')),
+    })
+
+
+@asesor_requerido
+def pagos_ventas_completos(request):
+    """Control de pagos de ventas registradas como pago directo/completo."""
+    return _render_pagos_ventas_lista(request, filtro_ventas_pago='completo')
+
+
+@asesor_requerido
+def pagos_ventas_parciales(request):
+    """Control de pagos de ventas registradas con abonos parciales."""
+    return _render_pagos_ventas_lista(request, filtro_ventas_pago='parcial')
+
+
+def _render_pagos_ventas_lista(request, filtro_ventas_pago=''):
     base_qs = IngresoEquipo.objects.filter(sede='ventas')
-    context = _construir_contexto_pagos(request, base_qs)
+    context = _construir_contexto_pagos(
+        request,
+        base_qs,
+        filtro_ventas_pago=filtro_ventas_pago,
+    )
     context['modo'] = 'ventas'
     return render(request, 'pagos/lista.html', context)
 
 
-def _construir_contexto_pagos(request, base_qs):
+def _construir_contexto_pagos(request, base_qs, filtro_ventas_pago=''):
     """
     Construye el contexto de la lista de pagos a partir de un queryset base
     (reparaciones o ventas). Aplica los filtros de búsqueda / estado / sede.
@@ -72,23 +126,36 @@ def _construir_contexto_pagos(request, base_qs):
     if estado_pago:
         ingresos = [i for i in ingresos if i.estado_pago.lower() == estado_pago.lower()]
 
+    for ingreso in ingresos:
+        ingreso.venta_con_historial_abonos = _venta_tiene_historial_abonos(ingreso)
+
+    if filtro_ventas_pago == 'completo':
+        ingresos = [i for i in ingresos if not i.venta_con_historial_abonos]
+    elif filtro_ventas_pago == 'parcial':
+        ingresos = [i for i in ingresos if i.venta_con_historial_abonos]
+
     total_acordado = sum((i.valor_efectivo_a_cobrar for i in ingresos), Decimal('0.00'))
     total_pagado = sum((i.total_abonado for i in ingresos), Decimal('0.00'))
     total_pendiente = total_acordado - total_pagado
     total_bodegaje = sum((i.bodegaje_pendiente for i in ingresos), Decimal('0.00'))
     total_diagnostico = sum(((i.valor_diagnostico or Decimal('0.00')) for i in ingresos if i.diagnostico_inmediato == 'si'), Decimal('0.00'))
+    total_count = len(ingresos)
+    page_obj, querystring = paginar_resultados(request, ingresos)
 
     return {
         'q': q,
         'estado_pago': estado_pago,
         'sede_pago': sede_pago,
-        'ingresos': ingresos,
+        'ingresos': page_obj.object_list,
+        'page_obj': page_obj,
+        'querystring': querystring,
         'total_acordado': total_acordado,
         'total_pagado': total_pagado,
         'total_pendiente': total_pendiente,
         'total_bodegaje': total_bodegaje,
         'total_diagnostico': total_diagnostico,
-        'total_count': len(ingresos),
+        'total_count': total_count,
+        'filtro_ventas_pago': filtro_ventas_pago,
     }
 
 
@@ -163,10 +230,15 @@ def ingreso_abonos(request, pk):
     )
     abonos = ingreso.abonos.select_related('registrado_por').order_by('-fecha', '-creado')
     salida = getattr(ingreso, 'salida', None)
+    venta_con_historial_abonos = _venta_tiene_historial_abonos(ingreso)
     return render(request, 'pagos/ingreso_abonos.html', {
         'ingreso': ingreso,
         'abonos': abonos,
         'salida': salida,
+        'venta_con_historial_abonos': venta_con_historial_abonos,
+        'puede_registrar_abono': ingreso.sede != 'ventas' or (
+            venta_con_historial_abonos and ingreso.diferencia > Decimal('0.00')
+        ),
     })
 
 
@@ -174,6 +246,20 @@ def ingreso_abonos(request, pk):
 def abono_crear(request, ingreso_pk):
     """Registrar un nuevo abono para un ingreso."""
     ingreso = get_object_or_404(IngresoEquipo, pk=ingreso_pk)
+
+    if ingreso.sede == 'ventas':
+        if not _venta_tiene_historial_abonos(ingreso):
+            messages.info(
+                request,
+                'Esta venta fue registrada como pago directo. Usa Ver pago para revisar el pago registrado.',
+            )
+            return redirect('econotec:ingreso_abonos', pk=ingreso.pk)
+        if ingreso.diferencia <= Decimal('0.00'):
+            messages.info(
+                request,
+                'Esta venta con abono ya no tiene saldo pendiente. Puedes revisar el historial de pagos.',
+            )
+            return redirect('econotec:ingreso_abonos', pk=ingreso.pk)
 
     if request.method == 'POST':
         form = AbonoForm(request.POST, ingreso=ingreso)
@@ -189,7 +275,6 @@ def abono_crear(request, ingreso_pk):
                 metodo_2 = request.POST.get('abono_metodo_2')
                 banco_2 = request.POST.get('abono_banco_2')
                 
-                from decimal import Decimal
                 obs_base = abono.observaciones or ''
                 
                 if monto_1 and Decimal(monto_1) > 0:
@@ -256,7 +341,11 @@ def abono_crear(request, ingreso_pk):
         'form': form,
         'ingreso': ingreso,
         'modo': 'crear',
-        'titulo': f'Nuevo Abono — Equipo {ingreso.codigo_equipo}',
+        'titulo': (
+            f'Nuevo Abono — Venta {ingreso.codigo_equipo}'
+            if ingreso.sede == 'ventas'
+            else f'Nuevo Abono — Equipo {ingreso.codigo_equipo}'
+        ),
     })
 
 

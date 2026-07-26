@@ -55,6 +55,8 @@ def roles(request):
             'notificaciones_asesora_preview': [],
             'notificaciones_asesora_admin_count': 0,
             'notificaciones_asesora_admin_total': 0,
+            'notificaciones_inventario_admin_count': 0,
+            'notificaciones_inventario_admin_preview': [],
         }
 
     es_a = _es_admin(user)
@@ -103,8 +105,10 @@ def roles(request):
     notificaciones_asesora_preview = []
     notificaciones_asesora_admin_count = 0
     notificaciones_asesora_admin_total = 0
+    notificaciones_inventario_admin_count = 0
+    notificaciones_inventario_admin_preview = []
     try:
-        from .models import NotificacionAsesora
+        from .models import NotificacionAsesora, NotificacionInventarioAdmin
         if es_as:
             qs_notificaciones = (
                 NotificacionAsesora.objects
@@ -117,6 +121,13 @@ def roles(request):
             qs_notificaciones_admin = NotificacionAsesora.objects.all()
             notificaciones_asesora_admin_count = qs_notificaciones_admin.filter(leida=False).count()
             notificaciones_asesora_admin_total = qs_notificaciones_admin.count()
+            qs_notificaciones_inventario = (
+                NotificacionInventarioAdmin.objects
+                .select_related('inventario_item', 'creado_por')
+                .filter(leida=False)
+            )
+            notificaciones_inventario_admin_count = qs_notificaciones_inventario.count()
+            notificaciones_inventario_admin_preview = list(qs_notificaciones_inventario[:4])
     except Exception:
         pass
 
@@ -141,4 +152,6 @@ def roles(request):
         'notificaciones_asesora_preview': notificaciones_asesora_preview,
         'notificaciones_asesora_admin_count': notificaciones_asesora_admin_count,
         'notificaciones_asesora_admin_total': notificaciones_asesora_admin_total,
+        'notificaciones_inventario_admin_count': notificaciones_inventario_admin_count,
+        'notificaciones_inventario_admin_preview': notificaciones_inventario_admin_preview,
     }

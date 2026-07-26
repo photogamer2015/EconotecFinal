@@ -1,0 +1,22 @@
+{% if page_obj.paginator %}
+<nav class="list-pagination" aria-label="{{ aria_label|default:'Paginación' }}">
+    {% if page_obj.has_previous %}
+        <a class="btn btn-sm btn-secondary" href="?{% if querystring %}{{ querystring }}&{% endif %}{{ page_param|default:'pagina' }}=1{% if anchor %}#{{ anchor }}{% endif %}">Primera</a>
+        <a class="btn btn-sm btn-secondary" href="?{% if querystring %}{{ querystring }}&{% endif %}{{ page_param|default:'pagina' }}={{ page_obj.previous_page_number }}{% if anchor %}#{{ anchor }}{% endif %}">Anterior</a>
+    {% else %}
+        <span class="btn btn-sm btn-secondary list-pagination-disabled" aria-disabled="true">Primera</span>
+        <span class="btn btn-sm btn-secondary list-pagination-disabled" aria-disabled="true">Anterior</span>
+    {% endif %}
+    <span class="current">
+        Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}
+        <span class="list-pagination-count">Mostrando máximo {{ per_page|default:10 }} por página</span>
+    </span>
+    {% if page_obj.has_next %}
+        <a class="btn btn-sm btn-secondary" href="?{% if querystring %}{{ querystring }}&{% endif %}{{ page_param|default:'pagina' }}={{ page_obj.next_page_number }}{% if anchor %}#{{ anchor }}{% endif %}">Siguiente</a>
+        <a class="btn btn-sm btn-secondary" href="?{% if querystring %}{{ querystring }}&{% endif %}{{ page_param|default:'pagina' }}={{ page_obj.paginator.num_pages }}{% if anchor %}#{{ anchor }}{% endif %}">Última</a>
+    {% else %}
+        <span class="btn btn-sm btn-secondary list-pagination-disabled" aria-disabled="true">Siguiente</span>
+        <span class="btn btn-sm btn-secondary list-pagination-disabled" aria-disabled="true">Última</span>
+    {% endif %}
+</nav>
+{% endif %}

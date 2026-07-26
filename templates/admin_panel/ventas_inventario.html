@@ -1,0 +1,962 @@
+{% extends 'base.html' %}
+{% load econotec_extras %}
+
+{% block title %}Administración de Ventas e Inventario — Econotec{% endblock %}
+
+{% block content %}
+<style>
+    .avi-header {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 18px;
+        flex-wrap: wrap;
+        margin-bottom: 20px;
+    }
+    .avi-header-actions {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        flex-wrap: wrap;
+    }
+    .avi-period {
+        display: grid;
+        grid-template-columns: minmax(110px, 0.7fr) minmax(150px, 1fr) auto;
+        gap: 10px;
+        align-items: end;
+        padding: 14px;
+        margin-bottom: 20px;
+        background: var(--card-bg);
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        box-shadow: 0 8px 22px rgba(29, 35, 48, 0.05);
+    }
+    .avi-period .form-label,
+    .avi-filter .form-label {
+        display: block;
+        margin-bottom: 6px;
+        color: var(--text-muted);
+        font-size: 11px;
+        font-weight: 900;
+        letter-spacing: .04em;
+        text-transform: uppercase;
+    }
+    .avi-summary-title {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin: 4px 0 12px;
+    }
+    .avi-summary-title h3 {
+        margin: 0;
+        color: var(--secondary);
+        font-size: 16px;
+        font-weight: 900;
+    }
+    .avi-summary-title span {
+        color: var(--text-muted);
+        font-size: 12px;
+        font-weight: 700;
+    }
+    .avi-kpis {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(180px, 1fr));
+        gap: 12px;
+        margin-bottom: 22px;
+    }
+    .avi-kpi {
+        position: relative;
+        min-height: 118px;
+        padding: 17px 18px 15px;
+        overflow: hidden;
+        background: var(--card-bg);
+        border: 1px solid var(--border);
+        border-left: 5px solid var(--primary);
+        border-radius: 14px;
+        box-shadow: 0 8px 22px rgba(29, 35, 48, 0.055);
+    }
+    .avi-kpi::after {
+        position: absolute;
+        right: -16px;
+        top: -24px;
+        width: 86px;
+        height: 86px;
+        border-radius: 50%;
+        background: color-mix(in srgb, var(--primary) 9%, transparent);
+        content: "";
+    }
+    .avi-kpi.green { border-left-color: #15803d; }
+    .avi-kpi.blue { border-left-color: #0369a1; }
+    .avi-kpi.red { border-left-color: #c62828; }
+    .avi-kpi.gold { border-left-color: #d97706; }
+    .avi-kpi.purple { border-left-color: #7e22ce; }
+    .avi-kpi .label {
+        position: relative;
+        z-index: 1;
+        color: var(--text-muted);
+        font-size: 11px;
+        font-weight: 900;
+        letter-spacing: .04em;
+        text-transform: uppercase;
+    }
+    .avi-kpi .value {
+        position: relative;
+        z-index: 1;
+        margin-top: 8px;
+        color: var(--secondary);
+        font-size: 25px;
+        line-height: 1;
+        font-weight: 900;
+    }
+    .avi-kpi.green .value { color: #15803d; }
+    .avi-kpi.blue .value { color: #0369a1; }
+    .avi-kpi.red .value { color: #c62828; }
+    .avi-kpi.gold .value { color: #b45309; }
+    .avi-kpi.purple .value { color: #7e22ce; }
+    .avi-kpi .detail {
+        position: relative;
+        z-index: 1;
+        margin-top: 8px;
+        color: var(--text-muted);
+        font-size: 11px;
+        font-weight: 700;
+        line-height: 1.35;
+    }
+    .avi-module {
+        overflow: hidden;
+        background: var(--card-bg);
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        box-shadow: 0 12px 30px rgba(29, 35, 48, 0.07);
+    }
+    .avi-tabs {
+        display: flex;
+        gap: 4px;
+        padding: 10px 12px 0;
+        overflow-x: auto;
+        border-bottom: 1px solid var(--border);
+        scrollbar-width: thin;
+    }
+    .avi-tab {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        min-height: 45px;
+        padding: 10px 14px;
+        color: var(--text-muted);
+        text-decoration: none;
+        white-space: nowrap;
+        border-bottom: 3px solid transparent;
+        font-size: 12px;
+        font-weight: 900;
+    }
+    .avi-tab:hover {
+        color: var(--primary);
+    }
+    .avi-tab.active {
+        color: var(--primary);
+        border-bottom-color: var(--primary);
+    }
+    .avi-filter {
+        display: grid;
+        grid-template-columns: minmax(250px, 2fr) repeat(3, minmax(150px, 1fr)) auto;
+        gap: 10px;
+        align-items: end;
+        padding: 15px;
+        background: color-mix(in srgb, var(--card-bg) 92%, var(--primary) 8%);
+        border-bottom: 1px solid var(--border);
+    }
+    .avi-filter.avi-filter-short {
+        grid-template-columns: minmax(260px, 2fr) repeat(2, minmax(170px, 1fr)) auto;
+    }
+    .avi-filter .form-input {
+        width: 100%;
+        min-width: 0;
+    }
+    .avi-filter-actions {
+        display: flex;
+        gap: 7px;
+        align-items: center;
+    }
+    .avi-table-wrap {
+        width: 100%;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+    .avi-table {
+        width: 100%;
+        min-width: 1180px;
+        border-collapse: collapse;
+    }
+    .avi-table.compact { min-width: 1020px; }
+    .avi-table th {
+        padding: 12px 11px;
+        color: #fff;
+        background: var(--primary);
+        text-align: left;
+        white-space: nowrap;
+        font-size: 11px;
+        font-weight: 900;
+        letter-spacing: .025em;
+        text-transform: uppercase;
+    }
+    .avi-table td {
+        padding: 13px 11px;
+        color: var(--secondary);
+        border-bottom: 1px solid var(--border);
+        vertical-align: top;
+        font-size: 12px;
+    }
+    .avi-table tbody tr:last-child td { border-bottom: 0; }
+    .avi-table tbody tr:hover {
+        background: color-mix(in srgb, var(--card-bg) 92%, var(--primary) 8%);
+    }
+    .avi-table strong { font-weight: 900; }
+    .avi-table small {
+        display: block;
+        margin-top: 3px;
+        color: var(--text-muted);
+        font-size: 10px;
+        line-height: 1.35;
+        font-weight: 700;
+    }
+    .avi-code {
+        color: var(--primary);
+        font-weight: 900;
+        white-space: nowrap;
+    }
+    .avi-products {
+        max-width: 290px;
+        line-height: 1.45;
+    }
+    .avi-money { font-weight: 900; white-space: nowrap; }
+    .avi-money.green { color: #15803d; }
+    .avi-money.red { color: #c62828; }
+    .avi-badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 25px;
+        padding: 5px 9px;
+        border-radius: 999px;
+        background: #eef2f7;
+        color: #475569;
+        font-size: 10px;
+        line-height: 1;
+        font-weight: 900;
+        text-transform: uppercase;
+        white-space: nowrap;
+    }
+    .avi-badge.pagado,
+    .avi-badge.disponible {
+        color: #166534;
+        background: #dcfce7;
+    }
+    .avi-badge.parcial,
+    .avi-badge.bajo {
+        color: #92400e;
+        background: #fef3c7;
+    }
+    .avi-badge.pendiente,
+    .avi-badge.agotado,
+    .avi-badge.no_disponible {
+        color: #991b1b;
+        background: #fee2e2;
+    }
+    .avi-actions {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        flex-wrap: wrap;
+        min-width: 155px;
+    }
+    .avi-actions .btn {
+        min-height: 32px;
+        padding: 7px 9px;
+        font-size: 10px;
+    }
+    .avi-empty {
+        padding: 46px 20px;
+        text-align: center;
+        color: var(--text-muted);
+    }
+    .avi-empty .icon { font-size: 36px; }
+    .avi-empty h3 {
+        margin: 10px 0 5px;
+        color: var(--secondary);
+        font-size: 17px;
+    }
+    .avi-empty p {
+        margin: 0;
+        font-size: 12px;
+    }
+    .avi-pagination {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        flex-wrap: wrap;
+        padding: 15px;
+        border-top: 1px solid var(--border);
+    }
+    .avi-pagination .current {
+        color: var(--text-muted);
+        font-size: 11px;
+        font-weight: 800;
+    }
+    .avi-activity-text {
+        min-width: 380px;
+        max-width: 620px;
+        line-height: 1.5;
+    }
+    .avi-stock {
+        font-size: 16px;
+        font-weight: 900;
+    }
+    .avi-stock.ok { color: #15803d; }
+    .avi-stock.low { color: #b45309; }
+    .avi-stock.none { color: #c62828; }
+    [data-theme="dark"] .avi-badge {
+        filter: saturate(.9) brightness(.9);
+    }
+    @media (max-width: 1220px) {
+        .avi-kpis { grid-template-columns: repeat(2, minmax(180px, 1fr)); }
+        .avi-filter,
+        .avi-filter.avi-filter-short {
+            grid-template-columns: repeat(2, minmax(190px, 1fr));
+        }
+        .avi-filter .avi-search { grid-column: 1 / -1; }
+    }
+    @media (max-width: 720px) {
+        .avi-header-actions,
+        .avi-header-actions .btn {
+            width: 100%;
+        }
+        .avi-period {
+            grid-template-columns: 1fr;
+        }
+        .avi-kpis {
+            grid-template-columns: 1fr;
+        }
+        .avi-kpi { min-height: 105px; }
+        .avi-filter,
+        .avi-filter.avi-filter-short {
+            grid-template-columns: 1fr;
+        }
+        .avi-filter .avi-search { grid-column: auto; }
+        .avi-filter-actions,
+        .avi-filter-actions .btn {
+            width: 100%;
+        }
+        .avi-tabs { padding-left: 6px; padding-right: 6px; }
+    }
+</style>
+
+<div class="crumb">
+    <a href="{% url 'econotec:bienvenida' %}">Inicio</a> /
+    <a href="{% url 'econotec:admin_dashboard' %}?ano={{ year }}&mes={{ month }}">Registro Administrativo</a> /
+    Ventas e Inventario
+</div>
+
+<div class="avi-header">
+    <div>
+        <h2 class="page-title">Administración de <span class="accent">Ventas e Inventario</span></h2>
+        <p class="page-subtitle">
+            Centro exclusivo del administrador para auditar ventas de producto, pagos y existencias.
+        </p>
+    </div>
+    <div class="avi-header-actions">
+        <a href="{% url 'econotec:venta_registrar' %}" class="btn btn-primary">+ Nueva venta</a>
+        <a href="{% url 'econotec:inventario_menu' %}" class="btn btn-secondary">Abrir inventario</a>
+        <a href="{% url 'econotec:admin_dashboard' %}?ano={{ year }}&mes={{ month }}" class="btn btn-secondary">← Registro administrativo</a>
+    </div>
+</div>
+
+<form method="get" class="avi-period">
+    <input type="hidden" name="tab" value="{{ tab }}">
+    <div>
+        <label class="form-label" for="avi-ano">Año administrativo</label>
+        <select class="form-input" id="avi-ano" name="ano">
+            {% for ano in anos_disp %}
+                <option value="{{ ano }}" {% if ano == year %}selected{% endif %}>{{ ano }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div>
+        <label class="form-label" for="avi-mes">Mes administrativo</label>
+        <select class="form-input" id="avi-mes" name="mes">
+            <option value="1" {% if month == 1 %}selected{% endif %}>Enero</option>
+            <option value="2" {% if month == 2 %}selected{% endif %}>Febrero</option>
+            <option value="3" {% if month == 3 %}selected{% endif %}>Marzo</option>
+            <option value="4" {% if month == 4 %}selected{% endif %}>Abril</option>
+            <option value="5" {% if month == 5 %}selected{% endif %}>Mayo</option>
+            <option value="6" {% if month == 6 %}selected{% endif %}>Junio</option>
+            <option value="7" {% if month == 7 %}selected{% endif %}>Julio</option>
+            <option value="8" {% if month == 8 %}selected{% endif %}>Agosto</option>
+            <option value="9" {% if month == 9 %}selected{% endif %}>Septiembre</option>
+            <option value="10" {% if month == 10 %}selected{% endif %}>Octubre</option>
+            <option value="11" {% if month == 11 %}selected{% endif %}>Noviembre</option>
+            <option value="12" {% if month == 12 %}selected{% endif %}>Diciembre</option>
+        </select>
+    </div>
+    <button type="submit" class="btn btn-primary">Actualizar período</button>
+</form>
+
+<div class="avi-summary-title">
+    <h3>Resumen de ventas · {{ mes_nombre }} {{ year }}</h3>
+    <span>Los saldos consideran todos los abonos vinculados a las ventas de este período.</span>
+</div>
+<div class="avi-kpis">
+    <div class="avi-kpi blue">
+        <div class="label">Ventas registradas</div>
+        <div class="value">{{ total_ventas }}</div>
+        <div class="detail">{{ unidades_vendidas }} unidades descontadas del inventario</div>
+    </div>
+    <div class="avi-kpi">
+        <div class="label">Valor vendido</div>
+        <div class="value">{{ total_facturado|dinero_signo }}</div>
+        <div class="detail">Valor total acordado con clientes</div>
+    </div>
+    <div class="avi-kpi green">
+        <div class="label">Total cobrado</div>
+        <div class="value">{{ total_cobrado|dinero_signo }}</div>
+        <div class="detail">{{ ventas_pagadas }} ventas pagadas completamente</div>
+    </div>
+    <div class="avi-kpi red">
+        <div class="label">Saldo por cobrar</div>
+        <div class="value">{{ total_saldo|dinero_signo }}</div>
+        <div class="detail">{{ ventas_parciales }} parciales · {{ ventas_pendientes }} pendientes</div>
+    </div>
+</div>
+
+<div class="avi-summary-title">
+    <h3>Estado consolidado del inventario</h3>
+    <span>Existencia actual de Guayaquil Norte, Guayaquil Centro y Quito.</span>
+</div>
+<div class="avi-kpis">
+    <div class="avi-kpi purple">
+        <div class="label">Productos registrados</div>
+        <div class="value">{{ inventario_productos }}</div>
+        <div class="detail">{{ inventario_unidades }} unidades disponibles en el sistema</div>
+    </div>
+    <div class="avi-kpi green">
+        <div class="label">Valor del inventario</div>
+        <div class="value">{{ inventario_valor|dinero_signo }}</div>
+        <div class="detail">Calculado con costo × cantidad actual</div>
+    </div>
+    <div class="avi-kpi gold">
+        <div class="label">Stock bajo</div>
+        <div class="value">{{ inventario_bajo }}</div>
+        <div class="detail">Productos con 1 a 5 unidades</div>
+    </div>
+    <div class="avi-kpi red">
+        <div class="label">Atención requerida</div>
+        <div class="value">{{ inventario_agotado }}</div>
+        <div class="detail">{{ inventario_no_disponible }} marcados como no disponibles</div>
+    </div>
+</div>
+
+<section class="avi-module">
+    <nav class="avi-tabs" aria-label="Secciones de ventas e inventario">
+        <a href="?tab=ventas&ano={{ year }}&mes={{ month }}" class="avi-tab {% if tab == 'ventas' %}active{% endif %}">
+            🧾 Registro de ventas
+        </a>
+        <a href="?tab=actividad&ano={{ year }}&mes={{ month }}" class="avi-tab {% if tab == 'actividad' %}active{% endif %}">
+            🕘 Actividad y auditoría
+        </a>
+        <a href="?tab=movimientos&ano={{ year }}&mes={{ month }}" class="avi-tab {% if tab == 'movimientos' %}active{% endif %}">
+            📦 Salidas de inventario
+        </a>
+        <a href="?tab=inventario&ano={{ year }}&mes={{ month }}" class="avi-tab {% if tab == 'inventario' %}active{% endif %}">
+            🗂 Inventario general
+        </a>
+    </nav>
+
+    {% if tab == 'ventas' %}
+        <form method="get" class="avi-filter">
+            <input type="hidden" name="tab" value="ventas">
+            <input type="hidden" name="ano" value="{{ year }}">
+            <input type="hidden" name="mes" value="{{ month }}">
+            <div class="avi-search">
+                <label class="form-label" for="avi-q-ventas">Buscar venta</label>
+                <input class="form-input" id="avi-q-ventas" name="q" value="{{ q }}" placeholder="Código P, cliente, cédula, producto, marca o modelo">
+            </div>
+            <div>
+                <label class="form-label" for="avi-estado-pago">Estado del pago</label>
+                <select class="form-input" id="avi-estado-pago" name="estado_pago">
+                    <option value="">Todos los estados</option>
+                    <option value="pagado" {% if estado_pago == 'pagado' %}selected{% endif %}>Pagado</option>
+                    <option value="parcial" {% if estado_pago == 'parcial' %}selected{% endif %}>Parcial</option>
+                    <option value="pendiente" {% if estado_pago == 'pendiente' %}selected{% endif %}>Pendiente</option>
+                </select>
+            </div>
+            <div>
+                <label class="form-label" for="avi-tecnico">Técnico que vendió</label>
+                <select class="form-input" id="avi-tecnico" name="tecnico">
+                    <option value="">Todos</option>
+                    {% for persona in personal_ventas %}
+                        <option value="{{ persona.pk }}" {% if tecnico_id == persona.pk|stringformat:"s" %}selected{% endif %}>
+                            {{ persona.get_full_name|default:persona.username }}
+                        </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label class="form-label" for="avi-registrador">Registrado por</label>
+                <select class="form-input" id="avi-registrador" name="registrador">
+                    <option value="">Todos</option>
+                    {% for persona in personal_ventas %}
+                        <option value="{{ persona.pk }}" {% if registrador_id == persona.pk|stringformat:"s" %}selected{% endif %}>
+                            {{ persona.get_full_name|default:persona.username }}
+                        </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="avi-filter-actions">
+                <button type="submit" class="btn btn-primary">Filtrar</button>
+                <a href="?tab=ventas&ano={{ year }}&mes={{ month }}" class="btn btn-secondary">Limpiar</a>
+            </div>
+        </form>
+
+        {% if page_obj.object_list %}
+            <div class="avi-table-wrap">
+                <table class="avi-table">
+                    <thead>
+                        <tr>
+                            <th>Venta / Fecha</th>
+                            <th>Cliente</th>
+                            <th>Productos</th>
+                            <th>Técnico / Registro</th>
+                            <th>Valor</th>
+                            <th>Cobrado</th>
+                            <th>Saldo</th>
+                            <th>Pago</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for venta in page_obj %}
+                            <tr>
+                                <td>
+                                    <span class="avi-code">{{ venta.codigo_equipo }}</span>
+                                    <small>{{ venta.fecha_ingreso|date:"d/m/Y" }}</small>
+                                    <small>Registrada {{ venta.creado|date:"d/m/Y H:i" }}</small>
+                                </td>
+                                <td>
+                                    <strong>{{ venta.cliente.nombres }}</strong>
+                                    <small>{{ venta.cliente.cedula }}</small>
+                                    <small>{{ venta.cliente.whatsapp|default:"Sin WhatsApp" }}</small>
+                                </td>
+                                <td class="avi-products">
+                                    <strong>{{ venta.productos_resumen_admin }}</strong>
+                                    <small>{{ venta.unidades_admin }} unidades en total</small>
+                                </td>
+                                <td>
+                                    <strong>🔧 {{ venta.tecnico_encargado_nombre|default:"—" }}</strong>
+                                    <small>
+                                        Registró:
+                                        {% if venta.registrado_por %}
+                                            {{ venta.registrado_por.get_full_name|default:venta.registrado_por.username }}
+                                        {% else %}
+                                            —
+                                        {% endif %}
+                                    </small>
+                                </td>
+                                <td><span class="avi-money">{{ venta.total_admin|dinero_signo }}</span></td>
+                                <td>
+                                    <span class="avi-money green">{{ venta.pagado_admin|dinero_signo }}</span>
+                                    <small>{{ venta.metodos_pago_admin }}</small>
+                                </td>
+                                <td>
+                                    <span class="avi-money {% if venta.saldo_admin > 0 %}red{% endif %}">
+                                        {{ venta.saldo_admin|dinero_signo }}
+                                    </span>
+                                </td>
+                                <td>
+                                    <span class="avi-badge {{ venta.estado_pago_clase_admin }}">{{ venta.estado_pago_admin }}</span>
+                                    {% if venta.factura_realizada == 'si' %}
+                                        <small>Factura con datos</small>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <div class="avi-actions">
+                                        <a href="{% url 'econotec:ingreso_abonos' pk=venta.pk %}" class="btn btn-sm btn-primary">Ver pago</a>
+                                        <a href="{% url 'econotec:ingreso_pdf' pk=venta.pk %}" class="btn btn-sm btn-secondary">PDF</a>
+                                        <a href="{% url 'econotec:venta_editar' pk=venta.pk %}" class="btn btn-sm btn-warning">Editar</a>
+                                    </div>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <div class="avi-empty">
+                <div class="icon">🧾</div>
+                <h3>No se encontraron ventas</h3>
+                <p>Prueba otro criterio o cambia el período administrativo.</p>
+            </div>
+        {% endif %}
+
+    {% elif tab == 'actividad' %}
+        <form method="get" class="avi-filter avi-filter-short">
+            <input type="hidden" name="tab" value="actividad">
+            <input type="hidden" name="ano" value="{{ year }}">
+            <input type="hidden" name="mes" value="{{ month }}">
+            <div class="avi-search">
+                <label class="form-label" for="avi-q-actividad">Buscar actividad</label>
+                <input class="form-input" id="avi-q-actividad" name="q" value="{{ q }}" placeholder="Acción, código, cliente o usuario">
+            </div>
+            <div>
+                <label class="form-label" for="avi-actividad-usuario">Realizada por</label>
+                <select class="form-input" id="avi-actividad-usuario" name="actividad_usuario">
+                    <option value="">Todos los usuarios</option>
+                    {% for persona in personal_ventas %}
+                        <option value="{{ persona.pk }}" {% if actividad_usuario_id == persona.pk|stringformat:"s" %}selected{% endif %}>
+                            {{ persona.get_full_name|default:persona.username }}
+                        </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="avi-filter-actions">
+                <button type="submit" class="btn btn-primary">Filtrar</button>
+                <a href="?tab=actividad&ano={{ year }}&mes={{ month }}" class="btn btn-secondary">Limpiar</a>
+            </div>
+        </form>
+
+        {% if page_obj.object_list %}
+            <div class="avi-table-wrap">
+                <table class="avi-table compact">
+                    <thead>
+                        <tr>
+                            <th>Fecha y hora</th>
+                            <th>Usuario</th>
+                            <th>Tipo</th>
+                            <th>Código</th>
+                            <th>Actividad registrada</th>
+                            <th>Acción</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for evento in page_obj %}
+                            <tr>
+                                <td>
+                                    <strong>{{ evento.momento|date:"d/m/Y" }}</strong>
+                                    <small>{{ evento.momento|date:"H:i:s" }}</small>
+                                </td>
+                                <td>
+                                    <strong>
+                                        {% if evento.user %}
+                                            {{ evento.user.get_full_name|default:evento.user.username }}
+                                        {% else %}
+                                            {{ evento.usuario_nombre|default:"Usuario eliminado" }}
+                                        {% endif %}
+                                    </strong>
+                                </td>
+                                <td><span class="avi-badge">{{ evento.get_tipo_display }}</span></td>
+                                <td><span class="avi-code">{{ evento.codigo|default:"—" }}</span></td>
+                                <td class="avi-activity-text">{{ evento.texto }}</td>
+                                <td>
+                                    {% if evento.ingreso_id %}
+                                        <a href="{% url 'econotec:ingreso_abonos' pk=evento.ingreso_id %}" class="btn btn-sm btn-secondary">Ver venta</a>
+                                    {% else %}
+                                        <span style="color:var(--text-muted);">—</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <div class="avi-empty">
+                <div class="icon">🕘</div>
+                <h3>Sin actividad de ventas en este período</h3>
+                <p>Las nuevas ventas, ediciones y abonos aparecerán aquí.</p>
+            </div>
+        {% endif %}
+
+    {% elif tab == 'movimientos' %}
+        <form method="get" class="avi-filter avi-filter-short">
+            <input type="hidden" name="tab" value="movimientos">
+            <input type="hidden" name="ano" value="{{ year }}">
+            <input type="hidden" name="mes" value="{{ month }}">
+            <div class="avi-search">
+                <label class="form-label" for="avi-q-movimientos">Buscar salida de inventario</label>
+                <input class="form-input" id="avi-q-movimientos" name="q" value="{{ q }}" placeholder="Producto, código QR, marca, modelo o cliente">
+            </div>
+            <div>
+                <label class="form-label" for="avi-mov-sede">Sede</label>
+                <select class="form-input js-inventario-sede" id="avi-mov-sede" name="inventario_sede">
+                    <option value="">Todas las sedes</option>
+                    <option value="guayaquil" {% if inventario_sede == 'guayaquil' %}selected{% endif %}>Guayaquil</option>
+                    <option value="quito" {% if inventario_sede == 'quito' %}selected{% endif %}>Quito</option>
+                </select>
+            </div>
+            <div>
+                <label class="form-label" for="avi-mov-ubicacion">Ubicación</label>
+                <select class="form-input js-inventario-ubicacion" id="avi-mov-ubicacion" name="inventario_ubicacion">
+                    <option value="">Todas las ubicaciones</option>
+                    {% for valor, etiqueta in ubicaciones_inventario %}
+                        <option value="{{ valor }}" data-sede="{% if valor == 'quito' %}quito{% else %}guayaquil{% endif %}" {% if inventario_ubicacion == valor %}selected{% endif %}>{{ etiqueta }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="avi-filter-actions">
+                <button type="submit" class="btn btn-primary">Filtrar</button>
+                <a href="?tab=movimientos&ano={{ year }}&mes={{ month }}" class="btn btn-secondary">Limpiar</a>
+            </div>
+        </form>
+
+        {% if page_obj.object_list %}
+            <div class="avi-table-wrap">
+                <table class="avi-table compact">
+                    <thead>
+                        <tr>
+                            <th>Venta / Fecha</th>
+                            <th>Cliente</th>
+                            <th>Producto descontado</th>
+                            <th>Categoría / Tipo</th>
+                            <th>Ubicación</th>
+                            <th>Cantidad vendida</th>
+                            <th>Existencia actual</th>
+                            <th>Responsables</th>
+                            <th>Acción</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for movimiento in page_obj %}
+                            <tr>
+                                <td>
+                                    <span class="avi-code">{{ movimiento.venta.codigo_equipo }}</span>
+                                    <small>{{ movimiento.venta.fecha_ingreso|date:"d/m/Y" }}</small>
+                                    <small>{{ movimiento.creado|date:"H:i" }}</small>
+                                </td>
+                                <td>
+                                    <strong>{{ movimiento.venta.cliente.nombres }}</strong>
+                                    <small>{{ movimiento.venta.cliente.cedula }}</small>
+                                </td>
+                                <td>
+                                    <strong>{{ movimiento.inventario_item.producto }}</strong>
+                                    <small>{{ movimiento.inventario_item.codigo }}</small>
+                                    <small>{{ movimiento.inventario_item.marca }} {{ movimiento.inventario_item.modelo }}</small>
+                                </td>
+                                <td>
+                                    <strong>{{ movimiento.inventario_item.categoria|title }}</strong>
+                                    <small>{{ movimiento.inventario_item.tipo|title }}</small>
+                                </td>
+                                <td>
+                                    <strong>{{ movimiento.inventario_item.get_ubicacion_display }}</strong>
+                                    <small>{{ movimiento.inventario_item.get_sede_display }}</small>
+                                </td>
+                                <td><span class="avi-money">{{ movimiento.cantidad }} und.</span></td>
+                                <td>
+                                    <span class="avi-stock {% if movimiento.inventario_item.cantidad == 0 %}none{% elif movimiento.inventario_item.cantidad <= 5 %}low{% else %}ok{% endif %}">
+                                        {{ movimiento.inventario_item.cantidad }}
+                                    </span>
+                                    <small>{{ movimiento.inventario_item.get_estado_display }}</small>
+                                </td>
+                                <td>
+                                    <strong>🔧 {{ movimiento.venta.tecnico_encargado_nombre|default:"—" }}</strong>
+                                    <small>
+                                        Registró:
+                                        {% if movimiento.venta.registrado_por %}
+                                            {{ movimiento.venta.registrado_por.get_full_name|default:movimiento.venta.registrado_por.username }}
+                                        {% else %}
+                                            —
+                                        {% endif %}
+                                    </small>
+                                </td>
+                                <td>
+                                    <a href="{% url 'econotec:ingreso_abonos' pk=movimiento.venta_id %}" class="btn btn-sm btn-secondary">Ver venta</a>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <div class="avi-empty">
+                <div class="icon">📦</div>
+                <h3>No hay salidas de inventario con esos criterios</h3>
+                <p>Cada producto seleccionado en una venta quedará reflejado aquí.</p>
+            </div>
+        {% endif %}
+
+    {% else %}
+        <form method="get" class="avi-filter">
+            <input type="hidden" name="tab" value="inventario">
+            <input type="hidden" name="ano" value="{{ year }}">
+            <input type="hidden" name="mes" value="{{ month }}">
+            <div class="avi-search">
+                <label class="form-label" for="avi-q-inventario">Buscar inventario</label>
+                <input class="form-input" id="avi-q-inventario" name="q" value="{{ q }}" placeholder="Nombre, código, marca, modelo o serie">
+            </div>
+            <div>
+                <label class="form-label" for="avi-inv-sede">Sede</label>
+                <select class="form-input js-inventario-sede" id="avi-inv-sede" name="inventario_sede">
+                    <option value="">Todas las sedes</option>
+                    <option value="guayaquil" {% if inventario_sede == 'guayaquil' %}selected{% endif %}>Guayaquil</option>
+                    <option value="quito" {% if inventario_sede == 'quito' %}selected{% endif %}>Quito</option>
+                </select>
+            </div>
+            <div>
+                <label class="form-label" for="avi-inv-ubicacion">Ubicación</label>
+                <select class="form-input js-inventario-ubicacion" id="avi-inv-ubicacion" name="inventario_ubicacion">
+                    <option value="">Todas las ubicaciones</option>
+                    {% for valor, etiqueta in ubicaciones_inventario %}
+                        <option value="{{ valor }}" data-sede="{% if valor == 'quito' %}quito{% else %}guayaquil{% endif %}" {% if inventario_ubicacion == valor %}selected{% endif %}>{{ etiqueta }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label class="form-label" for="avi-inv-estado">Estado</label>
+                <select class="form-input" id="avi-inv-estado" name="inventario_estado">
+                    <option value="">Todos los estados</option>
+                    {% for valor, etiqueta in estados_inventario %}
+                        <option value="{{ valor }}" {% if inventario_estado == valor %}selected{% endif %}>{{ etiqueta }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label class="form-label" for="avi-inv-categoria">Categoría</label>
+                <select class="form-input" id="avi-inv-categoria" name="inventario_categoria">
+                    <option value="">Todas las categorías</option>
+                    {% for categoria in categorias_inventario %}
+                        <option value="{{ categoria }}" {% if inventario_categoria == categoria %}selected{% endif %}>{{ categoria|title }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label class="form-label" for="avi-inv-stock">Nivel de stock</label>
+                <select class="form-input" id="avi-inv-stock" name="inventario_stock">
+                    <option value="">Todos</option>
+                    <option value="agotado" {% if inventario_stock == 'agotado' %}selected{% endif %}>Agotado</option>
+                    <option value="bajo" {% if inventario_stock == 'bajo' %}selected{% endif %}>Stock bajo (1–5)</option>
+                    <option value="disponible" {% if inventario_stock == 'disponible' %}selected{% endif %}>Stock suficiente</option>
+                </select>
+            </div>
+            <div class="avi-filter-actions">
+                <button type="submit" class="btn btn-primary">Filtrar</button>
+                <a href="?tab=inventario&ano={{ year }}&mes={{ month }}" class="btn btn-secondary">Limpiar</a>
+            </div>
+        </form>
+
+        {% if page_obj.object_list %}
+            <div class="avi-table-wrap">
+                <table class="avi-table">
+                    <thead>
+                        <tr>
+                            <th>Código</th>
+                            <th>Producto</th>
+                            <th>Categoría / Tipo</th>
+                            <th>Marca / Modelo</th>
+                            <th>Estado</th>
+                            <th>Existencia</th>
+                            <th>Costo unitario</th>
+                            <th>Valor en stock</th>
+                            <th>Ubicación</th>
+                            <th>Registro</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in page_obj %}
+                            <tr>
+                                <td><span class="avi-code">{{ item.codigo }}</span></td>
+                                <td>
+                                    <strong>{{ item.producto }}</strong>
+                                    {% if item.serie %}<small>Serie: {{ item.serie }}</small>{% endif %}
+                                </td>
+                                <td>
+                                    <strong>{{ item.categoria|title }}</strong>
+                                    <small>{{ item.tipo|title }}</small>
+                                </td>
+                                <td>
+                                    <strong>{{ item.marca }}</strong>
+                                    <small>{{ item.modelo }}</small>
+                                </td>
+	                                <td>
+	                                    <span class="avi-badge {{ item.estado }}">{{ item.get_estado_display }}</span>
+	                                    {% if item.estado == 'no_disponible' and item.causa_no_disponible %}
+	                                        <small>Causa: {{ item.get_causa_no_disponible_display }}</small>
+	                                    {% endif %}
+	                                </td>
+                                <td>
+                                    <span class="avi-stock {% if item.cantidad == 0 %}none{% elif item.cantidad <= 5 %}low{% else %}ok{% endif %}">
+                                        {{ item.cantidad }}
+                                    </span>
+                                    {% if item.cantidad == 0 %}
+                                        <small><span class="avi-badge agotado">Agotado</span></small>
+                                    {% elif item.cantidad <= 5 %}
+                                        <small><span class="avi-badge bajo">Stock bajo</span></small>
+                                    {% endif %}
+                                </td>
+                                <td><span class="avi-money">{{ item.costo|dinero_signo }}</span></td>
+                                <td><span class="avi-money green">{{ item.valor_stock_admin|dinero_signo }}</span></td>
+                                <td>
+                                    <strong>{{ item.get_ubicacion_display }}</strong>
+                                    <small>{{ item.get_sede_display }}</small>
+                                </td>
+                                <td>
+                                    {% if item.registrado_por %}
+                                        <strong>{{ item.registrado_por.get_full_name|default:item.registrado_por.username }}</strong>
+                                    {% else %}
+                                        <strong>—</strong>
+                                    {% endif %}
+                                    <small>Actualizado {{ item.actualizado|date:"d/m/Y H:i" }}</small>
+                                </td>
+                                <td>
+                                    <div class="avi-actions">
+                                        <a href="{% url 'econotec:inventario_detalle_item' codigo=item.codigo %}" class="btn btn-sm btn-secondary">Ver</a>
+                                        <a href="{% url 'econotec:inventario_editar' codigo=item.codigo %}" class="btn btn-sm btn-warning">Editar</a>
+                                    </div>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <div class="avi-empty">
+                <div class="icon">🗂</div>
+                <h3>No se encontraron productos</h3>
+                <p>La combinación de filtros no tiene coincidencias en el inventario.</p>
+            </div>
+        {% endif %}
+    {% endif %}
+
+    {% include 'includes/paginacion.html' with page_obj=page_obj querystring=querystring page_param='pagina' aria_label='Paginación de administración de ventas e inventario' %}
+</section>
+
+<script>
+    (function () {
+        document.querySelectorAll('.js-inventario-sede').forEach(function (sedeSelect) {
+            var form = sedeSelect.closest('form');
+            var ubicacionSelect = form ? form.querySelector('.js-inventario-ubicacion') : null;
+            if (!ubicacionSelect) return;
+
+            function actualizarUbicaciones() {
+                var sede = sedeSelect.value;
+                var seleccionValida = true;
+                Array.from(ubicacionSelect.options).forEach(function (option) {
+                    if (!option.value) {
+                        option.hidden = false;
+                        option.disabled = false;
+                        return;
+                    }
+                    var visible = !sede || option.dataset.sede === sede;
+                    option.hidden = !visible;
+                    option.disabled = !visible;
+                    if (option.selected && !visible) seleccionValida = false;
+                });
+                if (!seleccionValida) ubicacionSelect.value = '';
+            }
+
+            sedeSelect.addEventListener('change', actualizarUbicaciones);
+            actualizarUbicaciones();
+        });
+    })();
+</script>
+{% endblock %}

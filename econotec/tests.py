@@ -3,7 +3,7 @@ import re
 from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 from io import BytesIO
-from unittest.mock import patch
+from unittest.mock import ANY, patch
 from urllib.parse import parse_qs, urlparse
 from zoneinfo import ZoneInfo
 
@@ -15,11 +15,18 @@ from django.urls import reverse
 from django.utils import timezone
 
 from .forms import IngresoEquipoForm
-from .alertas import equipos_demorados_qs, salidas_bodegaje_qs, whatsapp_link_equipo_listo
+from . import views_print
+from .alertas import (
+    equipos_demorados_qs,
+    salidas_bodegaje_qs,
+    whatsapp_link_equipo_listo,
+    whatsapp_link_venta_producto,
+)
 from .horarios import registrar_entrada_laboral
 from .models import (
     Abono, BitacoraTecnico, Cliente, HorarioTecnico, IngresoEquipo, InventarioItem,
-    NotificacionAsesora, SalidaEquipo, UsuarioActividad, VentaInventarioItem,
+    NotificacionAsesora, NotificacionInventarioAdmin, SalidaEquipo, UsuarioActividad,
+    VentaInventarioItem,
 )
 from .qr_utils import token_para_ingreso
 from .views_auth import CAPTCHA_SESSION_KEY, LOGIN_2FA_SESSION_KEY, LOGIN_EMAIL_SETUP_SESSION_KEY
@@ -544,6 +551,16 @@ class VentasTests(TestCase):
         self.assertContains(response, 'Selecciona una categoria')
         self.assertContains(response, 'Selecciona el tipo')
         self.assertContains(response, 'Cantidad a llevar')
+        self.assertContains(response, 'Valor / valores del producto')
+        self.assertContains(response, 'Método de pago')
+        self.assertContains(response, '¿Factura con datos?')
+        self.assertContains(response, 'Si los datos del cliente ya están capturados')
+        self.assertContains(response, '__syncFacturaVentaCliente')
+        self.assertContains(response, 'Firma del Cliente')
+        self.assertContains(response, 'Firmar ahora')
+        self.assertContains(response, 'id_firma_cliente_imagen')
+        self.assertContains(response, 'Valor desde inventario')
+        self.assertContains(response, 'id_venta_valor_desde_inventario')
         self.assertNotContains(response, 'Detalle adicional de la venta')
 
     def test_registrar_venta_no_requiere_campos_diagnostico_ocultos(self):
@@ -560,6 +577,9 @@ class VentasTests(TestCase):
         self.assertEqual(venta.diagnostico_metodo, 'efectivo')
         self.assertEqual(venta.tecnico_encargado, self.usuario)
         self.assertEqual(venta.valor_acordado, Decimal('25.00'))
+        self.assertEqual(venta.abono_anticipo, Decimal('25.00'))
+        self.assertEqual(venta.diferencia, Decimal('0.00'))
+        self.assertEqual(venta.estado_pago, 'Pagado')
         self.assertEqual(venta.problema_reportado, '2 x Tarjeta')
         self.producto_venta.refresh_from_db()
         self.assertEqual(self.producto_venta.cantidad, 8)
@@ -569,6 +589,49 @@ class VentasTests(TestCase):
             cantidad=2,
         ).exists())
 
+    def test_registrar_venta_guarda_firma_cliente_y_pdf_usa_firma_tecnico(self):
+        response = self.client.post(
+            reverse('econotec:venta_registrar'),
+            self.venta_post_data(
+                **{
+                    'ing-firma_cliente_opcion': 'si',
+                    'ing-firma_cliente_imagen': self.FIRMA_PNG_DATA_URI,
+                }
+            ),
+        )
+
+        self.assertRedirects(response, reverse('econotec:venta_lista'))
+        venta = IngresoEquipo.objects.get(sede='ventas')
+        self.assertTrue(venta.firma_cliente)
+        self.assertEqual(venta.firma_cliente_imagen, self.FIRMA_PNG_DATA_URI)
+        productos_pdf = views_print._venta_productos_pdf_items(venta)
+        self.assertEqual(productos_pdf[0]['titulo'], '2 x Tarjeta')
+        detalles_pdf = ' · '.join(productos_pdf[0]['detalles'])
+        self.assertIn('Categoría: Impresora', detalles_pdf)
+        self.assertIn('Tipo: Impresora Laser', detalles_pdf)
+        self.assertIn('Marca: Epson', detalles_pdf)
+        self.assertIn('Modelo: Laser-t32', detalles_pdf)
+        self.assertNotIn('Sede', detalles_pdf)
+        self.assertNotIn('stock', detalles_pdf.lower())
+        self.assertEqual(views_print._venta_metodo_pago_pdf(venta), 'Efectivo')
+
+        with (
+            patch('econotec.views_print._draw_label_value', wraps=views_print._draw_label_value) as draw_label,
+            patch('econotec.views_print._draw_signature_image') as draw_signature,
+            patch('econotec.views_print._draw_static_image') as draw_static,
+        ):
+            pdf_response = self.client.get(reverse('econotec:ingreso_pdf', kwargs={'pk': venta.pk}))
+
+        self.assertEqual(pdf_response.status_code, 200)
+        self.assertEqual(pdf_response['Content-Type'], 'application/pdf')
+        draw_signature.assert_any_call(ANY, self.FIRMA_PNG_DATA_URI, ANY, ANY, ANY, ANY)
+        self.assertTrue(
+            any(call.args[1] == 'firma_tecnico_recibe.png' for call in draw_static.call_args_list)
+        )
+        etiquetas_pdf = [call.args[3] for call in draw_label.call_args_list if len(call.args) > 3]
+        self.assertIn('Técnico vendió:', etiquetas_pdf)
+        self.assertNotIn('Categoría del producto:', etiquetas_pdf)
+
     def test_registrar_venta_exige_producto_del_inventario(self):
         response = self.client.post(
             reverse('econotec:venta_registrar'),
@@ -577,6 +640,71 @@ class VentasTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Selecciona al menos un producto del inventario')
+        self.assertFalse(IngresoEquipo.objects.filter(sede='ventas').exists())
+        self.producto_venta.refresh_from_db()
+        self.assertEqual(self.producto_venta.cantidad, 10)
+
+    def test_registrar_venta_guarda_pago_y_factura(self):
+        response = self.client.post(
+            reverse('econotec:venta_registrar'),
+            self.venta_post_data(
+                **{
+                    'ing-anticipo_metodo': 'transferencia',
+                    'ing-anticipo_banco': 'guayaquil',
+                    'venta_factura_realizada': 'si',
+                    'venta_factura_nombres': 'Yandri Guevara',
+                    'venta_factura_cedula': '1207342716',
+                    'venta_factura_correo': 'factura@example.com',
+                }
+            ),
+        )
+
+        self.assertRedirects(response, reverse('econotec:venta_lista'))
+        venta = IngresoEquipo.objects.get(sede='ventas')
+        self.assertEqual(venta.valor_acordado, Decimal('25.00'))
+        self.assertEqual(venta.abono_anticipo, Decimal('25.00'))
+        self.assertEqual(venta.anticipo_metodo, 'transferencia')
+        self.assertEqual(venta.anticipo_banco, 'guayaquil')
+        self.assertEqual(venta.factura_realizada, 'si')
+        self.assertEqual(venta.factura_nombres, 'Yandri Guevara')
+        self.assertEqual(venta.factura_cedula, '1207342716')
+        self.assertEqual(venta.factura_correo, 'factura@example.com')
+        self.assertEqual(venta.diferencia, Decimal('0.00'))
+
+    def test_registrar_venta_puede_usar_valor_desde_inventario(self):
+        producto = self.crear_producto_venta()
+        producto.costo = Decimal('12.50')
+        producto.save(update_fields=['costo'])
+
+        response = self.client.post(
+            reverse('econotec:venta_registrar'),
+            self.venta_post_data(
+                **{
+                    'ing-valor_acordado': '1.00',
+                    'venta_valor_desde_inventario': 'si',
+                }
+            ),
+        )
+
+        self.assertRedirects(response, reverse('econotec:venta_lista'))
+        venta = IngresoEquipo.objects.get(sede='ventas')
+        self.assertEqual(venta.valor_acordado, Decimal('25.00'))
+        self.assertEqual(venta.abono_anticipo, Decimal('25.00'))
+        self.assertEqual(venta.diferencia, Decimal('0.00'))
+
+    def test_registrar_venta_valida_campos_de_pago(self):
+        response = self.client.post(
+            reverse('econotec:venta_registrar'),
+            self.venta_post_data(
+                **{
+                    'ing-anticipo_metodo': 'transferencia',
+                    'ing-anticipo_banco': '',
+                }
+            ),
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Indica el banco usado para la transferencia')
         self.assertFalse(IngresoEquipo.objects.filter(sede='ventas').exists())
         self.producto_venta.refresh_from_db()
         self.assertEqual(self.producto_venta.cantidad, 10)
@@ -615,6 +743,7 @@ class VentasTests(TestCase):
             marca='Epson',
             modelo='Bloqueado',
             estado='no_disponible',
+            causa_no_disponible='defectuoso',
             cantidad=2,
             ubicacion='guayaquil_norte',
             registrado_por=self.usuario,
@@ -633,8 +762,12 @@ class VentasTests(TestCase):
         self.assertEqual(items[producto.pk]['cantidad'], 10)
         self.assertTrue(items[producto.pk]['seleccionable'])
         self.assertEqual(items[producto.pk]['ubicacion'], 'Guayaquil - Norte')
+        self.assertEqual(items[producto.pk]['costo'], '0.00')
+        self.assertNotIn('precio_venta', items[producto.pk])
         self.assertEqual(items[no_disponible.pk]['estado'], 'no_disponible')
         self.assertEqual(items[no_disponible.pk]['estado_label'], 'No disponible')
+        self.assertEqual(items[no_disponible.pk]['causa_no_disponible'], 'defectuoso')
+        self.assertEqual(items[no_disponible.pk]['causa_no_disponible_label'], 'Defectuoso')
         self.assertFalse(items[no_disponible.pk]['seleccionable'])
 
     def test_venta_inventario_agregar_y_quitar_actualiza_stock(self):
@@ -676,6 +809,32 @@ class VentasTests(TestCase):
         producto.refresh_from_db()
         self.assertEqual(relacion.cantidad, 5)
         self.assertEqual(producto.cantidad, 5)
+
+        response = self.client.get(reverse('econotec:venta_editar', kwargs={'pk': venta.pk}))
+        self.assertContains(response, 'Editar cantidad')
+        self.assertContains(response, 'Revertir y eliminar')
+
+        response = self.client.post(
+            reverse('econotec:venta_inventario_actualizar_cantidad', kwargs={'pk': venta.pk, 'relacion_pk': relacion.pk}),
+            {'cantidad': '3'},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        relacion.refresh_from_db()
+        producto.refresh_from_db()
+        self.assertEqual(relacion.cantidad, 3)
+        self.assertEqual(producto.cantidad, 7)
+
+        response = self.client.post(
+            reverse('econotec:venta_inventario_actualizar_cantidad', kwargs={'pk': venta.pk, 'relacion_pk': relacion.pk}),
+            {'cantidad': '11'},
+        )
+
+        self.assertEqual(response.status_code, 409)
+        relacion.refresh_from_db()
+        producto.refresh_from_db()
+        self.assertEqual(relacion.cantidad, 3)
+        self.assertEqual(producto.cantidad, 7)
 
         response = self.client.post(
             reverse('econotec:venta_inventario_quitar', kwargs={'pk': venta.pk, 'relacion_pk': relacion.pk}),
@@ -984,6 +1143,267 @@ class VentasTests(TestCase):
         self.assertNotContains(response, 'Observación')
         self.assertContains(response, 'Sin registros todavía para PC en Guayaquil.')
 
+    def test_inventario_tabla_filtra_por_texto_estado_y_ubicacion(self):
+        item_norte = InventarioItem.objects.create(
+            sede='guayaquil',
+            categoria='impresora',
+            tipo='impresora-laser',
+            producto='Tarjeta Epson',
+            marca='Epson',
+            modelo='Laser-t32',
+            estado='disponible',
+            cantidad=35,
+            ubicacion='guayaquil_norte',
+            registrado_por=self.usuario,
+        )
+        item_centro = InventarioItem.objects.create(
+            sede='guayaquil',
+            categoria='impresora',
+            tipo='impresora-laser',
+            producto='Cabezal Centro',
+            marca='HP',
+            modelo='Ink 900',
+            estado='no_disponible',
+            causa_no_disponible='agotado',
+            cantidad=0,
+            ubicacion='guayaquil_centro',
+            registrado_por=self.usuario,
+        )
+        InventarioItem.objects.create(
+            sede='quito',
+            categoria='impresora',
+            tipo='impresora-laser',
+            producto='Producto Quito',
+            marca='Canon',
+            modelo='Q1',
+            estado='disponible',
+            cantidad=3,
+            ubicacion='quito',
+            registrado_por=self.usuario,
+        )
+        url = reverse('econotec:inventario_tabla', kwargs={
+            'sede': 'guayaquil',
+            'categoria': 'impresora',
+            'tipo': 'impresora-laser',
+        })
+
+        response = self.client.get(url)
+        self.assertContains(response, 'Filtro de búsqueda')
+        self.assertContains(response, 'Guayaquil - Norte')
+        self.assertContains(response, 'Guayaquil - Centro')
+        self.assertNotContains(response, 'value="quito"')
+        self.assertContains(response, 'Tarjeta Epson')
+        self.assertContains(response, 'Cabezal Centro')
+        self.assertContains(response, 'Causa: Agotado')
+        self.assertNotContains(response, 'Producto Quito')
+
+        por_codigo = self.client.get(url, {'q': item_norte.codigo.lower()})
+        self.assertContains(por_codigo, 'Tarjeta Epson')
+        self.assertNotContains(por_codigo, 'Cabezal Centro')
+        self.assertContains(por_codigo, 'Mostrando 1 de 2')
+
+        por_estado = self.client.get(url, {'estado': 'no_disponible'})
+        self.assertContains(por_estado, 'Cabezal Centro')
+        self.assertNotContains(por_estado, 'Tarjeta Epson')
+        self.assertContains(por_estado, 'selected>No disponible</option>')
+
+        por_ubicacion = self.client.get(url, {'ubicacion': item_centro.ubicacion})
+        self.assertContains(por_ubicacion, 'Cabezal Centro')
+        self.assertNotContains(por_ubicacion, 'Tarjeta Epson')
+        self.assertContains(por_ubicacion, 'selected>Guayaquil - Centro</option>')
+
+        por_texto_ubicacion = self.client.get(url, {'q': 'guayaquil centro'})
+        self.assertContains(por_texto_ubicacion, 'Cabezal Centro')
+        self.assertNotContains(por_texto_ubicacion, 'Tarjeta Epson')
+
+    def test_inventario_tabla_paginala_a_diez_y_muestra_estado_siempre(self):
+        url = reverse('econotec:inventario_tabla', kwargs={
+            'sede': 'guayaquil',
+            'categoria': 'impresora',
+            'tipo': 'impresora-laser',
+        })
+        for numero in range(12):
+            InventarioItem.objects.create(
+                sede='guayaquil',
+                categoria='impresora',
+                tipo='impresora-laser',
+                producto=f'Producto paginado {numero}',
+                marca='Epson',
+                modelo=f'M{numero}',
+                estado='disponible',
+                cantidad=2,
+                ubicacion='guayaquil_norte',
+                registrado_por=self.usuario,
+            )
+
+        response = self.client.get(url, {'q': 'Producto paginado'})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context['page_obj'].paginator.count, 12)
+        self.assertEqual(len(response.context['items']), 10)
+        self.assertContains(response, 'Página 1 de 2')
+        self.assertContains(response, 'Mostrando máximo 10 por página')
+        html = response.content.decode()
+        self.assertRegex(html, r'q=Producto(?:\+|%20)paginado(?:&amp;|&)pagina=2')
+
+        response_sin_resultados = self.client.get(url, {'q': 'sin coincidencias'})
+        self.assertEqual(response_sin_resultados.status_code, 200)
+        self.assertEqual(response_sin_resultados.context['page_obj'].paginator.count, 0)
+        self.assertContains(response_sin_resultados, 'Página 1 de 1')
+        self.assertContains(response_sin_resultados, 'Mostrando máximo 10 por página')
+        self.assertContains(response_sin_resultados, 'list-pagination-disabled')
+
+    def test_inventario_exporta_excel_con_filtros_actuales(self):
+        item_filtrado = InventarioItem.objects.create(
+            sede='guayaquil',
+            categoria='impresora',
+            tipo='impresora-laser',
+            producto='Tarjeta Epson',
+            marca='Epson',
+            modelo='Laser-t32',
+            estado='disponible',
+            cantidad=1,
+            costo=Decimal('10.50'),
+            ubicacion='guayaquil_norte',
+            registrado_por=self.usuario,
+        )
+        InventarioItem.objects.create(
+            sede='guayaquil',
+            categoria='impresora',
+            tipo='impresora-laser',
+            producto='Cabezal Centro',
+            marca='HP',
+            modelo='Ink 900',
+            estado='disponible',
+            cantidad=4,
+            ubicacion='guayaquil_centro',
+            registrado_por=self.usuario,
+        )
+
+        response = self.client.get(reverse('econotec:inventario_export', kwargs={
+            'sede': 'guayaquil',
+            'categoria': 'impresora',
+            'tipo': 'impresora-laser',
+        }), {
+            'q': item_filtrado.codigo.lower(),
+            'ubicacion': 'guayaquil_norte',
+        })
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response['Content-Type'],
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        )
+        self.assertIn('inventario_guayaquil_impresora_impresora-laser.xlsx', response['Content-Disposition'])
+        from openpyxl import load_workbook
+        wb = load_workbook(BytesIO(response.content))
+        ws = wb.active
+        self.assertEqual(ws['A1'].value, 'Código')
+        self.assertEqual(ws['A2'].value, item_filtrado.codigo)
+        self.assertEqual(ws['B2'].value, 'Tarjeta Epson')
+        self.assertEqual(ws['H2'].value, 1)
+        self.assertEqual(ws.max_row, 2)
+
+    def test_inventario_stock_uno_muestra_alerta_y_notifica_admin(self):
+        item = InventarioItem.objects.create(
+            sede='guayaquil',
+            categoria='impresora',
+            tipo='impresora-laser',
+            producto='KSKL',
+            marca='Ep-Hp',
+            modelo='dd',
+            estado='disponible',
+            cantidad=1,
+            ubicacion='guayaquil_norte',
+            registrado_por=self.usuario,
+        )
+        url = reverse('econotec:inventario_tabla', kwargs={
+            'sede': 'guayaquil',
+            'categoria': 'impresora',
+            'tipo': 'impresora-laser',
+        })
+
+        response = self.client.get(url)
+        self.assertContains(response, 'solo queda 1 unidad de KSKL')
+        self.assertContains(response, 'Solo queda 1')
+        self.assertContains(response, 'Notificar al admin')
+
+        response_post = self.client.post(
+            reverse('econotec:inventario_notificar_admin', kwargs={'codigo': item.codigo}),
+            {'next': url},
+        )
+        self.assertRedirects(response_post, url)
+        notificacion = NotificacionInventarioAdmin.objects.get(inventario_item=item)
+        self.assertEqual(notificacion.creado_por, self.usuario)
+        self.assertFalse(notificacion.leida)
+
+        response_pendiente = self.client.get(url)
+        self.assertContains(response_pendiente, 'Admin notificado')
+
+        self.client.force_login(self.admin)
+        admin_response = self.client.get(reverse('econotec:bienvenida'))
+        self.assertContains(admin_response, 'Inventario bajo')
+        self.assertContains(admin_response, item.codigo)
+        self.assertContains(admin_response, reverse('econotec:notificacion_inventario_admin_ver', kwargs={'pk': notificacion.pk}))
+
+        ver_response = self.client.get(reverse('econotec:notificacion_inventario_admin_ver', kwargs={'pk': notificacion.pk}))
+        self.assertRedirects(ver_response, reverse('econotec:inventario_detalle_item', kwargs={'codigo': item.codigo}))
+        notificacion.refresh_from_db()
+        self.assertTrue(notificacion.leida)
+
+    def test_asesora_puede_notificar_stock_uno_al_admin(self):
+        item = InventarioItem.objects.create(
+            sede='quito',
+            categoria='computadora',
+            tipo='pc',
+            producto='Tarjeta gráfica',
+            marca='Nvidia',
+            modelo='LGT30292',
+            estado='disponible',
+            cantidad=1,
+            ubicacion='quito',
+            registrado_por=self.usuario,
+        )
+        self.client.force_login(self.vendedor)
+
+        response = self.client.post(
+            reverse('econotec:inventario_notificar_admin', kwargs={'codigo': item.codigo}),
+            {'next': reverse('econotec:inventario_tabla', kwargs={
+                'sede': 'quito',
+                'categoria': 'computadora',
+                'tipo': 'pc',
+            })},
+        )
+
+        self.assertEqual(response.status_code, 302)
+        notificacion = NotificacionInventarioAdmin.objects.get(inventario_item=item)
+        self.assertEqual(notificacion.creado_por, self.vendedor)
+
+    def test_inventario_filtro_ubicacion_respeta_sede_actual(self):
+        InventarioItem.objects.create(
+            sede='quito',
+            categoria='tablet',
+            tipo='tablet',
+            producto='Tablet Quito',
+            marca='Samsung',
+            modelo='A9',
+            estado='disponible',
+            cantidad=3,
+            ubicacion='quito',
+            registrado_por=self.usuario,
+        )
+
+        response = self.client.get(reverse('econotec:inventario_tabla', kwargs={
+            'sede': 'quito',
+            'categoria': 'tablet',
+            'tipo': 'tablet',
+        }))
+
+        self.assertContains(response, 'value="quito"')
+        self.assertContains(response, 'Tablet Quito')
+        self.assertNotContains(response, 'Guayaquil - Norte')
+        self.assertNotContains(response, 'Guayaquil - Centro')
+
     def test_inventario_formulario_muestra_campos_y_ubicaciones_de_sede(self):
         response = self.client.get(reverse('econotec:inventario_registrar', kwargs={
             'sede': 'guayaquil',
@@ -1005,6 +1425,9 @@ class VentasTests(TestCase):
         self.assertNotContains(response, 'Dañado')
         self.assertNotContains(response, 'Vendido')
         self.assertContains(response, 'Cantidad')
+        self.assertContains(response, 'Costo (USD)')
+        self.assertNotContains(response, 'Precio de venta (USD)')
+        self.assertContains(response, 'Causa de no disponibilidad')
         self.assertContains(response, 'Ubicación')
         self.assertContains(response, 'Guayaquil Norte')
         self.assertContains(response, 'Guayaquil Centro')
@@ -1022,7 +1445,9 @@ class VentasTests(TestCase):
             'modelo': 'EliteDesk 800',
             'serie': '',
             'estado': 'disponible',
+            'causa_no_disponible': '',
             'cantidad': '2',
+            'costo': '8.75',
             'ubicacion': 'guayaquil_norte',
         })
 
@@ -1032,6 +1457,8 @@ class VentasTests(TestCase):
         self.assertEqual(item.marca, 'HP')
         self.assertEqual(item.modelo, 'EliteDesk 800')
         self.assertEqual(item.serie, '')
+        self.assertEqual(item.causa_no_disponible, '')
+        self.assertEqual(item.costo, Decimal('8.75'))
         self.assertEqual(item.ubicacion, 'guayaquil_norte')
         self.assertRedirects(response, reverse('econotec:inventario_tabla', kwargs={
             'sede': 'guayaquil',
@@ -1116,7 +1543,9 @@ class VentasTests(TestCase):
             'modelo': 'OptiPlex 7050',
             'serie': '',
             'estado': 'no_disponible',
+            'causa_no_disponible': 'bajo_pedido',
             'cantidad': '0',
+            'costo': '0.00',
             'ubicacion': 'guayaquil_centro',
         })
 
@@ -1127,8 +1556,53 @@ class VentasTests(TestCase):
         self.assertEqual(item.marca, 'Dell')
         self.assertEqual(item.modelo, 'OptiPlex 7050')
         self.assertEqual(item.estado, 'no_disponible')
+        self.assertEqual(item.causa_no_disponible, 'bajo_pedido')
         self.assertEqual(item.cantidad, 0)
         self.assertEqual(item.ubicacion, 'guayaquil_centro')
+
+    def test_inventario_formulario_exige_causa_si_no_disponible(self):
+        url = reverse('econotec:inventario_registrar', kwargs={
+            'sede': 'guayaquil',
+            'categoria': 'computadora',
+            'tipo': 'pc',
+        })
+
+        response = self.client.post(url, {
+            'producto': 'CPU completo',
+            'marca': 'HP',
+            'modelo': 'EliteDesk 800',
+            'serie': '',
+            'estado': 'no_disponible',
+            'causa_no_disponible': '',
+            'cantidad': '0',
+            'costo': '8.75',
+            'ubicacion': 'guayaquil_norte',
+        })
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('causa_no_disponible', response.context['form'].errors)
+        self.assertFalse(InventarioItem.objects.exists())
+
+        response = self.client.post(url, {
+            'producto': 'CPU completo',
+            'marca': 'HP',
+            'modelo': 'EliteDesk 800',
+            'serie': '',
+            'estado': 'no_disponible',
+            'causa_no_disponible': 'obsoleto',
+            'cantidad': '0',
+            'costo': '8.75',
+            'ubicacion': 'guayaquil_norte',
+        })
+
+        item = InventarioItem.objects.get()
+        self.assertRedirects(response, reverse('econotec:inventario_tabla', kwargs={
+            'sede': 'guayaquil',
+            'categoria': 'computadora',
+            'tipo': 'pc',
+        }))
+        self.assertEqual(item.estado, 'no_disponible')
+        self.assertEqual(item.causa_no_disponible, 'obsoleto')
 
     def test_inventario_eliminar_remueve_item_para_admin_y_tecnico(self):
         item = InventarioItem.objects.create(
@@ -1467,7 +1941,9 @@ class VentasTests(TestCase):
         response = self.client.get(reverse('econotec:venta_menu'))
 
         self.assertContains(response, 'Control de Pago de Ventas')
-        self.assertContains(response, reverse('econotec:pagos_ventas_lista'))
+        self.assertContains(response, 'Lista de Ventas con Pago Parcial')
+        self.assertContains(response, reverse('econotec:venta_lista_parciales'))
+        self.assertContains(response, reverse('econotec:pagos_ventas_menu'))
 
     def test_hoja_qr_muestra_categoria_marca_modelo_serie_y_problema(self):
         ingreso = self.crear_ingreso_reparacion(
@@ -1718,6 +2194,257 @@ class VentasTests(TestCase):
         self.assertEqual(response.context['total'], 1)
         self.assertContains(response, ingreso.codigo_equipo)
         self.assertContains(response, 'Yandri Guevará')
+
+    def test_lista_equipos_paginala_a_diez_y_conserva_filtros(self):
+        self.activar_sede_guayaquil()
+        for n in range(12):
+            self.crear_ingreso_reparacion(
+                marca=f'Marca {n}',
+                modelo_serie=f'Modelo paginado {n}',
+            )
+
+        response = self.client.get(reverse('econotec:ingreso_lista'), {'sede': 'todas'})
+        ingresos = list(response.context['ingresos'])
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context['total'], 12)
+        self.assertEqual(len(ingresos), 10)
+        self.assertEqual(response.context['page_obj'].paginator.per_page, 10)
+        self.assertContains(response, 'Página 1 de 2')
+        self.assertContains(response, 'Mostrando máximo 10 por página')
+        self.assertContains(response, 'sede=todas&pagina=2')
+
+        response = self.client.get(
+            reverse('econotec:ingreso_lista'),
+            {'sede': 'todas', 'pagina': 2},
+        )
+
+        self.assertEqual(response.context['total'], 12)
+        self.assertEqual(len(response.context['ingresos']), 2)
+        self.assertContains(response, 'Página 2 de 2')
+
+    def test_listados_ventas_y_pagos_paginalan_a_diez(self):
+        for n in range(12):
+            self.crear_venta_producto(
+                problema_reportado=f'Venta completa {n}',
+                valor_acordado=Decimal('20.00'),
+                abono_anticipo=Decimal('20.00'),
+                anticipo_metodo='efectivo',
+            )
+            self.crear_venta_producto(
+                problema_reportado=f'Venta parcial {n}',
+                valor_acordado=Decimal('50.00'),
+                abono_anticipo=Decimal('10.00'),
+                anticipo_metodo='efectivo',
+            )
+            self.crear_ingreso_reparacion(
+                modelo_serie=f'Reparación pago {n}',
+            )
+
+        escenarios = [
+            (reverse('econotec:venta_lista'), 'total', 12),
+            (reverse('econotec:venta_lista_parciales'), 'total', 12),
+            (reverse('econotec:pagos_lista'), 'total_count', 12),
+            (reverse('econotec:pagos_ventas_completos'), 'total_count', 12),
+            (reverse('econotec:pagos_ventas_parciales'), 'total_count', 12),
+        ]
+        for url, total_key, total_esperado in escenarios:
+            with self.subTest(url=url):
+                response = self.client.get(url)
+
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(response.context[total_key], total_esperado)
+                self.assertEqual(len(response.context['ingresos']), 10)
+                self.assertEqual(response.context['page_obj'].paginator.per_page, 10)
+                self.assertContains(response, 'Página 1 de 2')
+                self.assertContains(response, 'Mostrando máximo 10 por página')
+
+    def test_listados_salidas_clientes_facturas_y_auditoria_paginalan_a_diez(self):
+        for n in range(12):
+            Cliente.objects.create(
+                cedula=f'09{n:08d}',
+                nombres=f'Cliente paginado {n}',
+                whatsapp=f'099000{n:04d}',
+                correo=f'cliente{n}@example.com',
+                sector='norte',
+            )
+            ingreso_salida = self.crear_ingreso_reparacion(
+                estado='entregado',
+                modelo_serie=f'Salida paginada {n}',
+            )
+            SalidaEquipo.objects.create(
+                ingreso=ingreso_salida,
+                fecha_salida=date(2026, 7, 9),
+                estado_reparacion='retirado',
+                cliente_recibe_conforme='si',
+                valor_final_cobrado=Decimal('25.00'),
+                metodo_pago_final='efectivo',
+                factura_realizada='no',
+                registrado_por=self.usuario,
+            )
+            ingreso_factura = self.crear_ingreso_reparacion(
+                estado='entregado',
+                modelo_serie=f'Factura paginada {n}',
+            )
+            SalidaEquipo.objects.create(
+                ingreso=ingreso_factura,
+                fecha_salida=date(2026, 7, 10),
+                estado_reparacion='retirado',
+                cliente_recibe_conforme='si',
+                valor_final_cobrado=Decimal('30.00'),
+                metodo_pago_final='efectivo',
+                factura_realizada='si',
+                factura_nombres=f'Cliente facturado {n}',
+                factura_cedula=f'10{n:08d}',
+                factura_correo=f'factura{n}@example.com',
+                registrado_por=self.usuario,
+            )
+            ingreso_pago = self.crear_ingreso_reparacion(
+                modelo_serie=f'Pago auditoría {n}',
+            )
+            Abono.objects.create(
+                ingreso=ingreso_pago,
+                fecha=date(2026, 7, 11),
+                monto=Decimal('5.00'),
+                metodo='efectivo',
+                registrado_por=self.usuario,
+            )
+
+        response_salidas = self.client.get(reverse('econotec:salida_lista'))
+        self.assertEqual(response_salidas.status_code, 200)
+        self.assertEqual(response_salidas.context['total'], 24)
+        self.assertEqual(len(response_salidas.context['salidas']), 10)
+        self.assertEqual(response_salidas.context['page_obj'].paginator.per_page, 10)
+        self.assertContains(response_salidas, 'Página 1 de 3')
+
+        response_clientes = self.client.get(
+            reverse('econotec:cliente_lista'),
+            {'q': 'Cliente paginado'},
+        )
+        self.assertEqual(response_clientes.status_code, 200)
+        self.assertEqual(response_clientes.context['total'], 12)
+        self.assertEqual(len(response_clientes.context['clientes']), 10)
+        self.assertContains(response_clientes, 'q=Cliente+paginado&pagina=2')
+
+        self.client.force_login(self.admin)
+        response_facturas = self.client.get(
+            reverse('econotec:salida_facturas_lista'),
+            {'ano': '2026', 'mes': '7'},
+        )
+        self.assertEqual(response_facturas.status_code, 200)
+        self.assertEqual(response_facturas.context['total'], 12)
+        self.assertEqual(len(response_facturas.context['salidas']), 10)
+        self.assertContains(response_facturas, 'Página 1 de 2')
+
+        response_auditoria = self.client.get(reverse('econotec:control_registro'))
+        self.assertEqual(response_auditoria.status_code, 200)
+        self.assertEqual(len(response_auditoria.context['equipos']), 10)
+        self.assertEqual(len(response_auditoria.context['abonos']), 10)
+        self.assertEqual(response_auditoria.context['equipos_page_obj'].paginator.per_page, 10)
+        self.assertEqual(response_auditoria.context['abonos_page_obj'].paginator.per_page, 10)
+        self.assertContains(response_auditoria, 'pagina_equipos=2#panel-equipos')
+        self.assertContains(response_auditoria, 'pagina_pagos=2#panel-pagos')
+
+    def test_paginacion_se_muestra_con_menos_de_diez_y_sin_resultados(self):
+        ingreso = self.crear_ingreso_reparacion(estado='entregado')
+        SalidaEquipo.objects.create(
+            ingreso=ingreso,
+            fecha_salida=date(2026, 7, 9),
+            estado_reparacion='retirado',
+            cliente_recibe_conforme='si',
+            valor_final_cobrado=Decimal('25.00'),
+            metodo_pago_final='efectivo',
+            factura_realizada='no',
+            registrado_por=self.usuario,
+        )
+
+        response_salidas = self.client.get(reverse('econotec:salida_lista'))
+
+        self.assertEqual(response_salidas.status_code, 200)
+        self.assertEqual(len(response_salidas.context['salidas']), 1)
+        self.assertContains(response_salidas, 'Página 1 de 1')
+        self.assertContains(response_salidas, 'Mostrando máximo 10 por página')
+        self.assertContains(response_salidas, 'list-pagination-disabled')
+        self.assertNotContains(response_salidas, 'pagina=2')
+
+        self.client.force_login(self.admin)
+        response_facturas = self.client.get(
+            reverse('econotec:salida_facturas_lista'),
+            {'ano': '2026', 'mes': '7', 'q': 'sin coincidencias'},
+        )
+
+        self.assertEqual(response_facturas.status_code, 200)
+        self.assertEqual(response_facturas.context['total'], 0)
+        self.assertContains(response_facturas, 'No hay facturas realizadas para este filtro')
+        self.assertContains(response_facturas, 'Página 1 de 1')
+        self.assertContains(response_facturas, 'Mostrando máximo 10 por página')
+        self.assertContains(response_facturas, 'list-pagination-disabled')
+
+    def test_admin_ventas_inventario_tabs_paginalan_a_diez(self):
+        self.client.force_login(self.admin)
+        producto_base = InventarioItem.objects.create(
+            sede='guayaquil',
+            categoria='impresora',
+            tipo='impresora-laser',
+            producto='Producto base admin',
+            marca='Epson',
+            modelo='Base',
+            estado='disponible',
+            cantidad=20,
+            costo=Decimal('5.00'),
+            ubicacion='guayaquil_norte',
+            registrado_por=self.usuario,
+        )
+        for n in range(12):
+            venta = self.crear_venta_producto(
+                fecha_ingreso=date(2026, 7, 25),
+                problema_reportado=f'Venta admin paginada {n}',
+                valor_acordado=Decimal('20.00'),
+                abono_anticipo=Decimal('20.00'),
+                anticipo_metodo='efectivo',
+            )
+            VentaInventarioItem.objects.create(
+                venta=venta,
+                inventario_item=producto_base,
+                cantidad=1,
+            )
+            BitacoraTecnico.objects.create(
+                user=self.usuario,
+                usuario_nombre='Yandri',
+                momento=datetime(
+                    2026, 7, 25, 10, n,
+                    tzinfo=ZoneInfo('America/Guayaquil'),
+                ),
+                tipo='venta_producto',
+                texto=f'Venta admin paginada {n}',
+                codigo=venta.codigo_equipo,
+                ingreso=venta,
+            )
+            InventarioItem.objects.create(
+                sede='guayaquil',
+                categoria='computadora',
+                tipo='pc',
+                producto=f'Inventario admin paginado {n}',
+                marca='Dell',
+                modelo=f'M{n}',
+                estado='disponible',
+                cantidad=3,
+                costo=Decimal('10.00'),
+                ubicacion='guayaquil_norte',
+                registrado_por=self.usuario,
+            )
+
+        for tab in ('ventas', 'actividad', 'movimientos', 'inventario'):
+            with self.subTest(tab=tab):
+                response = self.client.get(
+                    reverse('econotec:admin_ventas_inventario'),
+                    {'ano': '2026', 'mes': '7', 'tab': tab},
+                )
+
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(len(response.context['page_obj'].object_list), 10)
+                self.assertEqual(response.context['page_obj'].paginator.per_page, 10)
+                self.assertContains(response, 'Mostrando máximo 10 por página')
 
     def test_lista_equipos_filtra_por_firma_cliente(self):
         self.activar_sede_guayaquil()
@@ -2252,6 +2979,141 @@ class VentasTests(TestCase):
         self.assertNotContains(response, 'Acción después de medianoche.')
         self.assertNotContains(response, 'G778')
 
+    def test_admin_ventas_inventario_es_exclusivo_y_resume_operacion(self):
+        producto = InventarioItem.objects.create(
+            sede='guayaquil',
+            categoria='computadora',
+            tipo='pc',
+            producto='Monitor administrativo',
+            marca='Dell',
+            modelo='P2422H',
+            estado='disponible',
+            cantidad=8,
+            costo=Decimal('75.00'),
+            ubicacion='guayaquil_norte',
+            registrado_por=self.usuario,
+        )
+        venta = self.crear_venta_producto(
+            fecha_ingreso=date(2026, 7, 25),
+            problema_reportado='2 x Monitor administrativo',
+            valor_acordado=Decimal('200.00'),
+            abono_anticipo=Decimal('100.00'),
+            anticipo_metodo='efectivo',
+        )
+        VentaInventarioItem.objects.create(
+            venta=venta,
+            inventario_item=producto,
+            cantidad=2,
+        )
+        Abono.objects.create(
+            ingreso=venta,
+            fecha=date(2026, 7, 25),
+            monto=Decimal('50.00'),
+            metodo='transferencia',
+            banco='pichincha',
+            registrado_por=self.usuario,
+        )
+        BitacoraTecnico.objects.create(
+            user=self.usuario,
+            usuario_nombre='Yandri',
+            momento=datetime(
+                2026, 7, 25, 14, 30,
+                tzinfo=ZoneInfo('America/Guayaquil'),
+            ),
+            tipo='venta_producto',
+            texto='Venta administrativa registrada para auditoría.',
+            codigo=venta.codigo_equipo,
+            ingreso=venta,
+        )
+
+        response = self.client.get(
+            reverse('econotec:admin_ventas_inventario'),
+            {'ano': '2026', 'mes': '7'},
+        )
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, reverse('econotec:bienvenida'))
+
+        self.client.force_login(self.admin)
+        response = self.client.get(
+            reverse('econotec:admin_ventas_inventario'),
+            {'ano': '2026', 'mes': '7'},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context['total_ventas'], 1)
+        self.assertEqual(response.context['total_facturado'], Decimal('200.00'))
+        self.assertEqual(response.context['total_cobrado'], Decimal('150.00'))
+        self.assertEqual(response.context['total_saldo'], Decimal('50.00'))
+        self.assertEqual(response.context['ventas_parciales'], 1)
+        self.assertEqual(response.context['unidades_vendidas'], 2)
+        self.assertEqual(response.context['inventario_valor'], Decimal('600.00'))
+        self.assertContains(response, 'Administración de')
+        self.assertContains(response, 'Ventas e Inventario')
+        self.assertContains(response, venta.codigo_equipo)
+        self.assertContains(response, 'Monitor administrativo')
+
+        response_actividad = self.client.get(
+            reverse('econotec:admin_ventas_inventario'),
+            {'ano': '2026', 'mes': '7', 'tab': 'actividad'},
+        )
+        self.assertEqual(response_actividad.status_code, 200)
+        self.assertContains(response_actividad, 'Venta administrativa registrada para auditoría.')
+
+        response_movimientos = self.client.get(
+            reverse('econotec:admin_ventas_inventario'),
+            {'ano': '2026', 'mes': '7', 'tab': 'movimientos'},
+        )
+        self.assertEqual(response_movimientos.status_code, 200)
+        self.assertContains(response_movimientos, 'Salidas de inventario')
+        self.assertContains(response_movimientos, 'Monitor administrativo')
+
+    def test_admin_ventas_inventario_filtra_ubicacion_segun_sede(self):
+        norte = InventarioItem.objects.create(
+            sede='guayaquil',
+            categoria='computadora',
+            tipo='pc',
+            producto='Monitor Norte',
+            marca='Dell',
+            modelo='N24',
+            estado='disponible',
+            cantidad=4,
+            costo=Decimal('80.00'),
+            ubicacion='guayaquil_norte',
+            registrado_por=self.usuario,
+        )
+        quito = InventarioItem.objects.create(
+            sede='quito',
+            categoria='computadora',
+            tipo='pc',
+            producto='Monitor Quito',
+            marca='Dell',
+            modelo='Q24',
+            estado='disponible',
+            cantidad=7,
+            costo=Decimal('85.00'),
+            ubicacion='quito',
+            registrado_por=self.usuario,
+        )
+        self.client.force_login(self.admin)
+
+        response = self.client.get(
+            reverse('econotec:admin_ventas_inventario'),
+            {
+                'tab': 'inventario',
+                'ano': '2026',
+                'mes': '7',
+                'inventario_sede': 'guayaquil',
+                'inventario_ubicacion': 'guayaquil_norte',
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        ids = [item.pk for item in response.context['page_obj'].object_list]
+        self.assertIn(norte.pk, ids)
+        self.assertNotIn(quito.pk, ids)
+        self.assertContains(response, 'Monitor Norte')
+        self.assertNotContains(response, 'Monitor Quito')
+
     def test_admin_exporta_y_borra_resumen_equipos_mes_con_password(self):
         from openpyxl import load_workbook
 
@@ -2746,6 +3608,8 @@ class VentasTests(TestCase):
             accesorios_entregados='Ninguno',
             problema_reportado='Tinta Epson',
             valor_acordado=Decimal('25.00'),
+            abono_anticipo=Decimal('25.00'),
+            anticipo_metodo='efectivo',
             tecnico_encargado=self.usuario,
             estado='entregado',
             subestado_entregado='con_solucion',
@@ -2764,11 +3628,17 @@ class VentasTests(TestCase):
         tecnico_alt.groups.add(Group.objects.get(name='Tecnicos'))
         venta_yandri = self.crear_venta_producto(
             problema_reportado='Cable HDMI',
+            valor_acordado=Decimal('20.00'),
+            abono_anticipo=Decimal('20.00'),
+            anticipo_metodo='efectivo',
             tecnico_encargado=self.usuario,
             registrado_por=self.usuario,
         )
         venta_carlos = self.crear_venta_producto(
             problema_reportado='Mouse',
+            valor_acordado=Decimal('20.00'),
+            abono_anticipo=Decimal('20.00'),
+            anticipo_metodo='efectivo',
             tecnico_encargado=tecnico_alt,
             registrado_por=self.vendedor,
         )
@@ -2790,16 +3660,135 @@ class VentasTests(TestCase):
         self.assertContains(response, venta_carlos.codigo_equipo)
         self.assertNotContains(response, venta_yandri.codigo_equipo)
 
+    def test_lista_ventas_no_muestra_pago_pendiente(self):
+        venta = self.crear_venta_producto(
+            problema_reportado='Cable HDMI',
+            valor_acordado=Decimal('20.00'),
+            abono_anticipo=Decimal('20.00'),
+            anticipo_metodo='efectivo',
+        )
+
+        response = self.client.get(reverse('econotec:venta_lista'))
+
+        self.assertContains(response, venta.codigo_equipo)
+        self.assertContains(response, 'Pagado')
+        self.assertNotContains(response, 'Saldo Pendiente')
+        self.assertNotContains(response, '💵 Pagar')
+
+    def test_lista_ventas_pago_parcial_muestra_solo_ventas_con_abono(self):
+        venta_completa = self.crear_venta_producto(
+            problema_reportado='Cable HDMI',
+            valor_acordado=Decimal('20.00'),
+            abono_anticipo=Decimal('20.00'),
+            anticipo_metodo='efectivo',
+        )
+        venta_parcial = self.crear_venta_producto(
+            problema_reportado='Tarjeta grafica',
+            valor_acordado=Decimal('200.00'),
+            abono_anticipo=Decimal('100.00'),
+            anticipo_metodo='transferencia',
+            anticipo_banco='pichincha',
+        )
+
+        response = self.client.get(reverse('econotec:venta_lista_parciales'))
+
+        self.assertContains(response, 'Ventas con')
+        self.assertContains(response, 'Pago Parcial')
+        self.assertContains(response, venta_parcial.codigo_equipo)
+        self.assertContains(response, 'Tarjeta grafica')
+        self.assertNotContains(response, venta_completa.codigo_equipo)
+        self.assertContains(response, 'pago=parcial')
+
+        response = self.client.get(reverse('econotec:venta_lista'))
+
+        self.assertContains(response, 'Pago Completo')
+        self.assertContains(response, venta_completa.codigo_equipo)
+        self.assertNotContains(response, venta_parcial.codigo_equipo)
+        self.assertContains(response, 'pago=completo')
+
+    def test_lista_ventas_permite_editar_a_roles_y_eliminar_solo_admin(self):
+        venta = self.crear_venta_producto(
+            problema_reportado='Tarjeta',
+            valor_acordado=Decimal('20.00'),
+            abono_anticipo=Decimal('20.00'),
+            anticipo_metodo='efectivo',
+        )
+        editar_url = reverse('econotec:venta_editar', kwargs={'pk': venta.pk})
+        eliminar_url = reverse('econotec:venta_eliminar', kwargs={'pk': venta.pk})
+
+        response = self.client.get(reverse('econotec:venta_lista'))
+
+        self.assertContains(response, editar_url)
+        self.assertContains(response, 'Editar')
+        self.assertNotContains(response, eliminar_url)
+        self.assertNotContains(response, 'Eliminar Venta')
+
+        self.client.force_login(self.vendedor)
+        response = self.client.get(reverse('econotec:venta_lista'))
+
+        self.assertContains(response, editar_url)
+        self.assertContains(response, 'Editar')
+        self.assertNotContains(response, eliminar_url)
+        self.assertNotContains(response, 'Eliminar Venta')
+        self.assertEqual(self.client.get(editar_url).status_code, 200)
+
+        self.client.force_login(self.admin)
+        response = self.client.get(reverse('econotec:venta_lista'))
+
+        self.assertContains(response, editar_url)
+        self.assertContains(response, eliminar_url)
+        self.assertContains(response, 'Eliminar Venta')
+
+    def test_lista_ventas_muestra_envio_whatsapp_y_ayuda(self):
+        venta = self.crear_venta_producto(
+            problema_reportado='1 x Tarjeta',
+            valor_acordado=Decimal('20.00'),
+            abono_anticipo=Decimal('20.00'),
+            anticipo_metodo='efectivo',
+        )
+
+        response = self.client.get(reverse('econotec:venta_lista'))
+
+        self.assertContains(response, venta.codigo_equipo)
+        self.assertContains(response, 'Enviar WhatsApp')
+        self.assertContains(response, 'Cómo enviar la hoja por WhatsApp')
+        self.assertContains(response, 'Primero presiona')
+        self.assertContains(response, 'Descargar 📄')
+        self.assertContains(response, 'api.whatsapp.com/send')
+
+    def test_whatsapp_venta_producto_usa_saludo_por_hora_y_detalle(self):
+        venta = self.crear_venta_producto(
+            problema_reportado='1 x Tarjeta',
+            valor_acordado=Decimal('20.00'),
+            abono_anticipo=Decimal('20.00'),
+        )
+        ahora = datetime(2026, 7, 25, 15, 30, tzinfo=ZoneInfo('America/Guayaquil'))
+
+        link = whatsapp_link_venta_producto(venta, ahora=ahora)
+        texto = parse_qs(urlparse(link).query)['text'][0]
+
+        self.assertIn('Buenas tardes, *Yandri Guevara*.', texto)
+        self.assertIn('Le adjunto la hoja correspondiente a su producto comprado en Econotec.', texto)
+        self.assertIn(f'Venta: *{venta.codigo_equipo}*', texto)
+        self.assertIn('Producto(s): 1 x Tarjeta', texto)
+        self.assertIn('Valor: $20.00', texto)
+
     def test_export_ventas_respeta_filtro_tecnico_vendio(self):
         User = get_user_model()
         tecnico_alt = User.objects.create_user(username='Carlos')
         tecnico_alt.groups.add(Group.objects.get(name='Tecnicos'))
         venta_yandri = self.crear_venta_producto(
             problema_reportado='Cable HDMI',
+            valor_acordado=Decimal('20.00'),
+            abono_anticipo=Decimal('20.00'),
+            anticipo_metodo='efectivo',
             tecnico_encargado=self.usuario,
         )
         venta_carlos = self.crear_venta_producto(
             problema_reportado='Mouse',
+            valor_acordado=Decimal('20.00'),
+            abono_anticipo=Decimal('20.00'),
+            anticipo_metodo='efectivo',
             tecnico_encargado=tecnico_alt,
         )
 
@@ -2846,6 +3835,139 @@ class VentasTests(TestCase):
         self.assertEqual(response.context['total_count'], 1)
         self.assertContains(response, venta.codigo_equipo)
         self.assertContains(response, 'Yandri Guevará')
+
+    def test_control_pago_ventas_usa_solo_boton_ver_pago(self):
+        venta = self.crear_venta_producto(
+            problema_reportado='Tarjeta',
+            valor_acordado=Decimal('20.00'),
+            abono_anticipo=Decimal('20.00'),
+            anticipo_metodo='efectivo',
+        )
+
+        response = self.client.get(reverse('econotec:pagos_ventas_lista'))
+
+        self.assertContains(response, venta.codigo_equipo)
+        self.assertContains(response, 'Ver pago')
+        self.assertNotContains(response, 'Ver / Ingresar Abonos')
+        self.assertNotContains(response, 'Gestionar Pagos')
+
+    def test_control_pago_ventas_menu_muestra_pago_completo_y_parcial(self):
+        self.crear_venta_producto(
+            problema_reportado='Tarjeta',
+            valor_acordado=Decimal('20.00'),
+            abono_anticipo=Decimal('20.00'),
+            anticipo_metodo='efectivo',
+        )
+        self.crear_venta_producto(
+            problema_reportado='Neutron',
+            valor_acordado=Decimal('200.00'),
+            abono_anticipo=Decimal('100.00'),
+            anticipo_metodo='efectivo',
+        )
+
+        response = self.client.get(reverse('econotec:pagos_ventas_menu'))
+
+        self.assertContains(response, 'Control de Pago de')
+        self.assertContains(response, 'Pago completo')
+        self.assertContains(response, 'Pagos parciales')
+        self.assertContains(response, reverse('econotec:pagos_ventas_completos'))
+        self.assertContains(response, reverse('econotec:pagos_ventas_parciales'))
+        self.assertContains(response, 'Ventas: 1')
+
+    def test_control_pago_ventas_filtra_completos_y_parciales(self):
+        venta_completa = self.crear_venta_producto(
+            problema_reportado='Tarjeta',
+            valor_acordado=Decimal('20.00'),
+            abono_anticipo=Decimal('20.00'),
+            anticipo_metodo='efectivo',
+        )
+        venta_parcial = self.crear_venta_producto(
+            problema_reportado='Neutron',
+            valor_acordado=Decimal('200.00'),
+            abono_anticipo=Decimal('100.00'),
+            anticipo_metodo='efectivo',
+        )
+
+        response = self.client.get(reverse('econotec:pagos_ventas_completos'))
+
+        self.assertContains(response, 'Pago Completo')
+        self.assertContains(response, venta_completa.codigo_equipo)
+        self.assertNotContains(response, venta_parcial.codigo_equipo)
+        self.assertContains(response, 'Ver pago')
+
+        response = self.client.get(reverse('econotec:pagos_ventas_parciales'))
+
+        self.assertContains(response, 'Pagos Parciales')
+        self.assertContains(response, venta_parcial.codigo_equipo)
+        self.assertNotContains(response, venta_completa.codigo_equipo)
+        self.assertContains(response, 'Ver abono / Historial')
+
+    def test_registrar_venta_con_abono_activa_historial_de_pagos(self):
+        response = self.client.post(
+            reverse('econotec:venta_registrar'),
+            self.venta_post_data(
+                **{
+                    'ing-valor_acordado': '25.00',
+                    'venta_pago_modalidad': 'abono',
+                    'ing-abono_anticipo': '10.00',
+                    'ing-anticipo_metodo': 'efectivo',
+                }
+            ),
+        )
+
+        self.assertRedirects(response, reverse('econotec:venta_lista_parciales'))
+        venta = IngresoEquipo.objects.get(sede='ventas')
+        self.assertEqual(venta.abono_anticipo, Decimal('10.00'))
+        self.assertEqual(venta.diferencia, Decimal('15.00'))
+        self.assertEqual(venta.estado_pago, 'Parcial')
+
+        response = self.client.get(reverse('econotec:pagos_ventas_lista'))
+        self.assertContains(response, venta.codigo_equipo)
+        self.assertContains(response, 'Ver abono / Historial')
+        self.assertNotContains(response, 'Gestionar Pagos')
+
+        response = self.client.get(reverse('econotec:ingreso_abonos', kwargs={'pk': venta.pk}))
+        self.assertContains(response, 'Abonos / Historial de la Venta')
+        self.assertContains(response, '+ Nuevo Abono')
+        self.assertContains(response, 'Abono inicial de venta')
+
+    def test_venta_con_abono_permite_registrar_pago_posterior(self):
+        venta = self.crear_venta_producto(
+            problema_reportado='Tarjeta',
+            valor_acordado=Decimal('25.00'),
+            abono_anticipo=Decimal('10.00'),
+            anticipo_metodo='efectivo',
+        )
+
+        response = self.client.post(
+            reverse('econotec:abono_crear', kwargs={'ingreso_pk': venta.pk}),
+            {
+                'fecha': '2026-07-25',
+                'monto': '15.00',
+                'metodo': 'transferencia',
+                'banco': 'pichincha',
+                'banco_otro': '',
+                'tarjeta_app': '',
+                'comprobante_url': '',
+                'numero_recibo': '',
+                'observaciones': 'Pago de saldo de venta.',
+                'factura_realizada': 'no',
+                'factura_nombres': '',
+                'factura_cedula': '',
+                'factura_correo': '',
+                'bodegaje_decision': 'na',
+                'bodegaje_monto_aplicado': '0.00',
+            },
+        )
+
+        self.assertRedirects(response, reverse('econotec:ingreso_abonos', kwargs={'pk': venta.pk}))
+        venta.refresh_from_db()
+        self.assertEqual(venta.abonos.count(), 1)
+        self.assertEqual(venta.total_abonado, Decimal('25.00'))
+        self.assertEqual(venta.diferencia, Decimal('0.00'))
+
+        response = self.client.get(reverse('econotec:pagos_ventas_lista'))
+        self.assertContains(response, 'Ver abono / Historial')
 
     def test_ingreso_permite_detalle_simple_en_reparacion(self):
         form = IngresoEquipoForm(data={

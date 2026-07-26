@@ -10,6 +10,8 @@ import unicodedata
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.core.exceptions import ValidationError
+from django.core.validators import validate_email
 from django.db import transaction
 from django.db.models import Count, Q, Sum
 from django.db.models.deletion import ProtectedError
@@ -33,10 +35,11 @@ from .busqueda import (
 from .models import (
     Cliente, IngresoEquipo, SalidaEquipo, Abono, SEDES_EQUIPOS,
     UsuarioActividad, NotificacionAsesora, BitacoraTecnico, InventarioItem,
-    VentaInventarioItem,
+    NotificacionInventarioAdmin, VentaInventarioItem,
 )
 from .bitacora import registrar_bitacora, nombre_corto_usuario, construir_bitacora_usuario
 from .date_filters import aplicar_rango_fecha, contexto_rango_fecha, obtener_rango_fecha
+from .pagination import paginar_resultados
 from .permisos import admin_requerido, tecnico_requerido, es_admin, es_asesor, es_tecnico
 from .gamificacion import (
     SALIDA_BUENA_ESTADOS,
@@ -53,6 +56,7 @@ from .alertas import (
     whatsapp_link_equipo_listo,
     whatsapp_link_bodegaje,
     whatsapp_link_hoja_ingreso,
+    whatsapp_link_venta_producto,
     UMBRAL_DIAS_DIAGNOSTICO,
     UMBRAL_DIAS_BODEGAJE,
     COSTO_BODEGAJE_DIA,
@@ -524,6 +528,22 @@ INVENTARIO_SEDES = {
     'quito': 'Quito',
 }
 
+INVENTARIO_UBICACIONES_POR_SEDE = {
+    'guayaquil': (
+        ('guayaquil_norte', 'Guayaquil - Norte'),
+        ('guayaquil_centro', 'Guayaquil - Centro'),
+    ),
+    'quito': (
+        ('quito', 'Quito'),
+    ),
+}
+
+INVENTARIO_UBICACIONES_LABELS = {
+    valor: etiqueta
+    for opciones in INVENTARIO_UBICACIONES_POR_SEDE.values()
+    for valor, etiqueta in opciones
+}
+
 INVENTARIO_CATEGORIAS = {
     'impresora': {
         'nombre': 'Impresora',
@@ -574,8 +594,83 @@ def _inventario_tipo_por_slug(categoria_info, tipo_slug):
     return None
 
 
+def _inventario_ubicaciones_para_sede(sede_slug):
+    return INVENTARIO_UBICACIONES_POR_SEDE.get(sede_slug, ())
+
+
+def _texto_inventario_item_busqueda(item):
+    ubicacion_label = INVENTARIO_UBICACIONES_LABELS.get(
+        item.ubicacion,
+        item.get_ubicacion_display(),
+    )
+    return ' '.join(str(valor or '') for valor in (
+        item.producto,
+        item.codigo,
+        item.marca,
+        item.modelo,
+        item.serie,
+        item.estado,
+        item.get_estado_display(),
+        item.causa_no_disponible,
+        item.get_causa_no_disponible_display(),
+        item.ubicacion,
+        item.get_ubicacion_display(),
+        ubicacion_label,
+    ))
+
+
 def _puede_gestionar_inventario(user):
     return es_admin(user) or es_tecnico(user)
+
+
+def _puede_notificar_admin_inventario(user):
+    return es_tecnico(user) or es_asesor(user)
+
+
+def _inventario_listado_filtrado(request, sede_slug, categoria_slug, tipo_slug):
+    filtro_q = (request.GET.get('q') or '').strip()
+    estado_filtro = (request.GET.get('estado') or '').strip()
+    ubicacion_filtro = (request.GET.get('ubicacion') or '').strip()
+    estado_valores = {valor for valor, _ in InventarioItem.ESTADOS}
+    ubicaciones_opciones = _inventario_ubicaciones_para_sede(sede_slug)
+    ubicacion_valores = {valor for valor, _ in ubicaciones_opciones}
+
+    if estado_filtro not in estado_valores:
+        estado_filtro = ''
+    if ubicacion_filtro not in ubicacion_valores:
+        ubicacion_filtro = ''
+
+    items_qs = (
+        InventarioItem.objects
+        .filter(sede=sede_slug, categoria=categoria_slug, tipo=tipo_slug)
+        .select_related('registrado_por')
+        .order_by('-creado')
+    )
+    total_general = items_qs.count()
+
+    if estado_filtro:
+        items_qs = items_qs.filter(estado=estado_filtro)
+    if ubicacion_filtro:
+        items_qs = items_qs.filter(ubicacion=ubicacion_filtro)
+
+    items = list(items_qs)
+    if filtro_q:
+        items = filtrar_objetos_normalizado(
+            items,
+            filtro_q,
+            _texto_inventario_item_busqueda,
+        )
+
+    return {
+        'items': items,
+        'filtro_q': filtro_q,
+        'estado_filtro': estado_filtro,
+        'ubicacion_filtro': ubicacion_filtro,
+        'ubicacion_opciones': ubicaciones_opciones,
+        'filtros_activos': bool(filtro_q or estado_filtro or ubicacion_filtro),
+        'total_general': total_general,
+        'total_filtrado': len(items),
+    }
 
 
 def _inventario_redirect_tabla(item):
@@ -668,17 +763,29 @@ def inventario_tabla(request, sede, categoria, tipo):
         messages.error(request, 'Selecciona un tipo válido para inventario.')
         return redirect('econotec:inventario_categoria', sede=sede_slug, categoria=categoria_slug)
 
-    items = list(
-        InventarioItem.objects
-        .filter(sede=sede_slug, categoria=categoria_slug, tipo=tipo_slug)
-        .select_related('registrado_por')
-        .order_by('-creado')
-    )
+    listado = _inventario_listado_filtrado(request, sede_slug, categoria_slug, tipo_slug)
+    items_filtrados = listado['items']
+    page_obj, querystring = paginar_resultados(request, items_filtrados)
+    items = list(page_obj.object_list)
+
     for item in items:
         detalle_url = reverse('econotec:inventario_detalle_item', kwargs={'codigo': item.codigo})
         item.detalle_url = detalle_url
         item.imprimir_qr_url = reverse('econotec:inventario_qr_imprimir', kwargs={'codigo': item.codigo})
         item.qr_data_uri = _inventario_item_contexto(request, item, box_size=3)['qr_data_uri']
+
+    items_bajo_stock = [item for item in items_filtrados if item.cantidad == 1]
+    for item in items_bajo_stock:
+        item.detalle_url = reverse('econotec:inventario_detalle_item', kwargs={'codigo': item.codigo})
+    notificados_ids = set()
+    if items_bajo_stock:
+        notificados_ids = set(
+            NotificacionInventarioAdmin.objects
+            .filter(inventario_item__in=items_bajo_stock, leida=False)
+            .values_list('inventario_item_id', flat=True)
+        )
+    for item in items_bajo_stock:
+        item.notificacion_admin_pendiente = item.pk in notificados_ids
 
     return render(request, 'inventario/tabla.html', {
         'sede_slug': sede_slug,
@@ -687,9 +794,160 @@ def inventario_tabla(request, sede, categoria, tipo):
         'categoria': categoria_info,
         'tipo': tipo_info,
         'items': items,
+        'page_obj': page_obj,
+        'querystring': querystring,
         'tiene_subtipos': len(categoria_info['tipos']) > 1,
         'puede_gestionar_inventario': _puede_gestionar_inventario(request.user),
+        'puede_notificar_admin_inventario': _puede_notificar_admin_inventario(request.user),
+        'items_bajo_stock': items_bajo_stock,
+        'filtro_q': listado['filtro_q'],
+        'estado_filtro': listado['estado_filtro'],
+        'ubicacion_filtro': listado['ubicacion_filtro'],
+        'estado_opciones': InventarioItem.ESTADOS,
+        'ubicacion_opciones': listado['ubicacion_opciones'],
+        'filtros_activos': listado['filtros_activos'],
+        'total_general': listado['total_general'],
+        'total_filtrado': listado['total_filtrado'],
     })
+
+
+@login_required
+def inventario_export(request, sede, categoria, tipo):
+    sede_slug = (sede or '').strip().lower()
+    categoria_slug = (categoria or '').strip().lower()
+    tipo_slug = (tipo or '').strip().lower()
+    sede_label = INVENTARIO_SEDES.get(sede_slug)
+    categoria_info = INVENTARIO_CATEGORIAS.get(categoria_slug)
+    if not sede_label or not categoria_info:
+        messages.error(request, 'Selecciona una sede y una categoría válida para exportar inventario.')
+        return redirect('econotec:inventario_menu')
+
+    tipo_info = _inventario_tipo_por_slug(categoria_info, tipo_slug)
+    if not tipo_info:
+        messages.error(request, 'Selecciona un tipo válido para exportar inventario.')
+        return redirect('econotec:inventario_categoria', sede=sede_slug, categoria=categoria_slug)
+
+    from openpyxl import Workbook
+    from openpyxl.styles import Alignment, Font, PatternFill
+
+    listado = _inventario_listado_filtrado(request, sede_slug, categoria_slug, tipo_slug)
+    wb = Workbook()
+    ws = wb.active
+    ws.title = 'Inventario'
+    headers = [
+        'Código',
+        'Producto',
+        'Marca',
+        'Modelo',
+        'Serie',
+        'Estado',
+        'Causa no disponible',
+        'Cantidad',
+        'Costo (USD)',
+        'Ubicación',
+        'Sede',
+        'Categoría',
+        'Tipo',
+        'Registrado por',
+        'Creado',
+        'Actualizado',
+    ]
+    ws.append(headers)
+
+    header_fill = PatternFill('solid', fgColor='F97316')
+    for cell in ws[1]:
+        cell.fill = header_fill
+        cell.font = Font(color='FFFFFF', bold=True)
+        cell.alignment = Alignment(horizontal='center')
+
+    for item in listado['items']:
+        registrado_por = item.registrado_por.get_full_name() or item.registrado_por.username if item.registrado_por else '—'
+        ws.append([
+            item.codigo,
+            item.producto,
+            item.marca,
+            item.modelo,
+            item.serie or '—',
+            item.get_estado_display(),
+            item.get_causa_no_disponible_display() if item.causa_no_disponible else '—',
+            item.cantidad,
+            float(item.costo or 0),
+            item.get_ubicacion_display(),
+            sede_label,
+            categoria_info['nombre'],
+            tipo_info['nombre'],
+            registrado_por,
+            timezone.localtime(item.creado).strftime('%d/%m/%Y %H:%M') if item.creado else '—',
+            timezone.localtime(item.actualizado).strftime('%d/%m/%Y %H:%M') if item.actualizado else '—',
+        ])
+
+    widths = [24, 28, 18, 18, 18, 18, 24, 12, 14, 22, 16, 18, 20, 22, 18, 18]
+    for index, width in enumerate(widths, start=1):
+        ws.column_dimensions[ws.cell(row=1, column=index).column_letter].width = width
+
+    for row in ws.iter_rows(min_row=2):
+        for cell in row:
+            cell.alignment = Alignment(vertical='center', wrap_text=True)
+    ws.freeze_panes = 'A2'
+    ws.auto_filter.ref = ws.dimensions
+
+    response = HttpResponse(
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    )
+    filename = f'inventario_{sede_slug}_{categoria_slug}_{tipo_slug}.xlsx'
+    response['Content-Disposition'] = f'attachment; filename="{filename}"'
+    wb.save(response)
+    return response
+
+
+@login_required
+@require_POST
+def inventario_notificar_admin(request, codigo):
+    if not _puede_notificar_admin_inventario(request.user):
+        messages.error(request, 'Solo técnicos y asesoras pueden notificar stock crítico al admin.')
+        return redirect('econotec:inventario_detalle_item', codigo=codigo)
+
+    item = get_object_or_404(InventarioItem, codigo=codigo)
+    next_url = (request.POST.get('next') or '').strip()
+    if not url_has_allowed_host_and_scheme(next_url, allowed_hosts={request.get_host()}):
+        next_url = reverse('econotec:inventario_tabla', kwargs={
+            'sede': item.sede,
+            'categoria': item.categoria,
+            'tipo': item.tipo,
+        })
+
+    if item.cantidad != 1:
+        messages.warning(request, 'La notificación al admin solo se activa cuando queda exactamente 1 unidad.')
+        return redirect(next_url)
+
+    mensaje = (
+        f'Solo queda 1 unidad de {item.producto} ({item.codigo}) '
+        f'en {item.get_ubicacion_display()}.'
+    )
+    notificacion, creada = NotificacionInventarioAdmin.objects.get_or_create(
+        inventario_item=item,
+        leida=False,
+        defaults={
+            'creado_por': request.user,
+            'mensaje': mensaje,
+        },
+    )
+    if creada:
+        messages.success(request, 'Admin notificado por stock crítico.')
+    else:
+        messages.info(request, 'Este producto ya tiene una notificación pendiente para el admin.')
+    return redirect(next_url)
+
+
+@admin_requerido
+def notificacion_inventario_admin_ver(request, pk):
+    notificacion = get_object_or_404(
+        NotificacionInventarioAdmin.objects.select_related('inventario_item'),
+        pk=pk,
+    )
+    item = notificacion.inventario_item
+    notificacion.marcar_vista()
+    return redirect('econotec:inventario_detalle_item', codigo=item.codigo)
 
 
 @login_required
@@ -1405,8 +1663,13 @@ def ingreso_lista(request):
         ('salida_garantia', '   ↳ Salida por garantía'),
     ]
 
+    total = total_resultados(qs)
+    page_obj, querystring = paginar_resultados(request, qs)
+
     context = {
-        'ingresos': qs,
+        'ingresos': page_obj.object_list,
+        'page_obj': page_obj,
+        'querystring': querystring,
         'q': q,
         'estado_filtro': estado,
         'tipo_filtro': tipo,
@@ -1421,7 +1684,7 @@ def ingreso_lista(request):
         'asesores_choices': asesores_choices,
         'estados': estados_filtro,
         'tipos': IngresoEquipo._meta.get_field('tipo_equipo').choices,
-        'total': total_resultados(qs),
+        'total': total,
     }
     context.update(contexto_rango_fecha(
         fecha_desde,
@@ -1586,8 +1849,11 @@ def _inventario_item_venta_json(item, cantidad=None, relacion_id=None):
         'ubicacion': _venta_inventario_ubicacion_nombre(item.ubicacion, item.get_ubicacion_display()),
         'cantidad': item.cantidad if cantidad is None else cantidad,
         'disponible': item.cantidad,
+        'costo': f'{(item.costo or D("0.00")):.2f}',
         'estado': item.estado,
         'estado_label': item.get_estado_display(),
+        'causa_no_disponible': item.causa_no_disponible,
+        'causa_no_disponible_label': item.get_causa_no_disponible_display() if item.causa_no_disponible else '',
         'seleccionable': seleccionable,
     }
 
@@ -1658,6 +1924,21 @@ def _venta_inventario_contexto_desde_post(post_data):
         if item:
             contexto.append(_inventario_item_venta_json(item, cantidad=cantidad))
     return contexto
+
+
+def _venta_usa_valor_desde_inventario(post_data):
+    return (post_data.get('venta_valor_desde_inventario') or '').strip() == 'si'
+
+
+def _venta_total_desde_inventario(selecciones):
+    items = InventarioItem.objects.in_bulk([item_id for item_id, _cantidad in selecciones])
+    total = D('0.00')
+    for item_id, cantidad in selecciones:
+        item = items.get(item_id)
+        if not item:
+            continue
+        total += (item.costo or D('0.00')) * D(cantidad)
+    return total.quantize(D('0.01'))
 
 
 def _resumen_venta_inventario(venta):
@@ -1731,6 +2012,7 @@ def venta_inventario_catalogo(request):
             | Q(tipo__icontains=q)
             | Q(marca__icontains=q)
             | Q(modelo__icontains=q)
+            | Q(causa_no_disponible__icontains=q)
         )
     datos = [_inventario_item_venta_json(item) for item in items[:200]]
     return JsonResponse({'items': datos})
@@ -1777,6 +2059,50 @@ def venta_inventario_agregar(request, pk):
 @tecnico_requerido
 @require_POST
 @transaction.atomic
+def venta_inventario_actualizar_cantidad(request, pk, relacion_pk):
+    """Actualiza la cantidad vendida y compensa la diferencia en inventario."""
+    venta = get_object_or_404(IngresoEquipo, pk=pk, sede='ventas')
+    relacion = get_object_or_404(
+        VentaInventarioItem.objects.select_for_update(),
+        pk=relacion_pk,
+        venta=venta,
+    )
+    try:
+        nueva_cantidad = int(request.POST.get('cantidad'))
+    except (TypeError, ValueError):
+        return JsonResponse({'ok': False, 'error': 'Selecciona una cantidad válida.'}, status=400)
+    if nueva_cantidad < 1:
+        return JsonResponse({'ok': False, 'error': 'La cantidad debe ser mayor que cero.'}, status=400)
+
+    item = InventarioItem.objects.select_for_update().get(pk=relacion.inventario_item_id)
+    cantidad_actual = relacion.cantidad
+    diferencia = nueva_cantidad - cantidad_actual
+
+    if diferencia > 0:
+        if item.estado != 'disponible' or item.cantidad < diferencia:
+            return JsonResponse({
+                'ok': False,
+                'error': f'Solo puedes aumentar {item.cantidad} unidad(es) adicionales de «{item.producto}».',
+            }, status=409)
+        item.cantidad -= diferencia
+    elif diferencia < 0:
+        item.cantidad += abs(diferencia)
+
+    if diferencia:
+        item.save(update_fields=['cantidad', 'actualizado'])
+        relacion.cantidad = nueva_cantidad
+        relacion.save(update_fields=['cantidad', 'actualizado'])
+
+    return JsonResponse({
+        'ok': True,
+        'producto': _venta_inventario_item_json(relacion),
+        'disponible': item.cantidad,
+    })
+
+
+@tecnico_requerido
+@require_POST
+@transaction.atomic
 def venta_inventario_quitar(request, pk, relacion_pk):
     """Quita un producto de una venta y devuelve sus unidades al inventario."""
     venta = get_object_or_404(IngresoEquipo, pk=pk, sede='ventas')
@@ -1795,10 +2121,28 @@ def venta_inventario_quitar(request, pk, relacion_pk):
 @tecnico_requerido
 def venta_menu(request):
     """Menú de ventas: registrar nueva / ver lista."""
-    total = IngresoEquipo.objects.filter(sede='ventas').count()
+    ventas = list(IngresoEquipo.objects.filter(sede='ventas').prefetch_related('abonos'))
+    total = len(ventas)
+    total_parciales = sum(1 for venta in ventas if _venta_con_pago_parcial(venta))
+    total_completas = total - total_parciales
     return render(request, 'ventas/menu.html', {
         'total': total,
+        'total_parciales': total_parciales,
+        'total_completas': total_completas,
     })
+
+
+def _venta_con_pago_parcial(venta):
+    """
+    Una venta pertenece al flujo parcial si nació con abono inicial menor al
+    valor total o si ya tiene abonos posteriores. Se mantiene en esa lista
+    aunque luego el saldo quede pagado.
+    """
+    if venta.sede != 'ventas':
+        return False
+    valor = venta.valor_efectivo_a_cobrar or D('0.00')
+    anticipo = venta.abono_anticipo or D('0.00')
+    return venta.abonos.exists() or (valor > D('0.00') and anticipo < valor)
 
 
 def _preparar_post_venta(post_data):
@@ -1836,6 +2180,22 @@ def _preparar_post_venta(post_data):
         if not post_data.get(campo):
             post_data[campo] = valor
 
+    if _venta_usa_valor_desde_inventario(post_data):
+        try:
+            total_inventario = _venta_total_desde_inventario(_venta_inventario_selecciones(post_data))
+        except ValueError:
+            total_inventario = None
+        if total_inventario is not None:
+            post_data['ing-valor_acordado'] = f'{total_inventario:.2f}'
+
+    # En ventas de producto el pago puede ser directo o por abono.
+    # Pago directo: el abono inicial refleja el valor total a cobrar.
+    # Pago por abono: se respeta el monto parcial ingresado por el usuario.
+    valor_venta = (post_data.get('ing-valor_acordado') or '').strip()
+    modalidad_pago = (post_data.get('venta_pago_modalidad') or 'directo').strip()
+    if valor_venta and modalidad_pago != 'abono':
+        post_data['ing-abono_anticipo'] = valor_venta.replace(',', '.')
+
     # El diagnóstico no aplica a ventas, pero IngresoEquipoForm exige el método.
     post_data['ing-diagnostico_inmediato'] = 'no'
     post_data['ing-valor_diagnostico'] = '0.00'
@@ -1870,6 +2230,173 @@ def _configurar_form_venta(ing_form):
     ing_form.fields['problema_reportado'].widget.attrs['placeholder'] = 'Ej.: 1 Tinta Epson Negra, 2 Cables USB'
 
 
+def _venta_pago_contexto(post_data=None, venta=None):
+    if post_data is not None:
+        factura_realizada = (post_data.get('venta_factura_realizada') or 'no').strip()
+        modalidad = (post_data.get('venta_pago_modalidad') or 'directo').strip()
+        return {
+            'modalidad': modalidad if modalidad in ('directo', 'abono') else 'directo',
+            'valor_desde_inventario': _venta_usa_valor_desde_inventario(post_data),
+            'factura_realizada': factura_realizada if factura_realizada in ('si', 'no') else 'no',
+            'factura_nombres': (post_data.get('venta_factura_nombres') or '').strip(),
+            'factura_cedula': (post_data.get('venta_factura_cedula') or '').strip(),
+            'factura_correo': (post_data.get('venta_factura_correo') or '').strip(),
+        }
+    if venta is not None:
+        valor = venta.valor_efectivo_a_cobrar or D('0.00')
+        abono = venta.abono_anticipo or D('0.00')
+        modalidad = 'abono' if (valor > D('0.00') and abono < valor) or venta.abonos.exists() else 'directo'
+        return {
+            'modalidad': modalidad,
+            'valor_desde_inventario': False,
+            'factura_realizada': venta.factura_realizada or 'no',
+            'factura_nombres': venta.factura_nombres or '',
+            'factura_cedula': venta.factura_cedula or '',
+            'factura_correo': venta.factura_correo or '',
+        }
+    return {
+        'modalidad': 'directo',
+        'valor_desde_inventario': True,
+        'factura_realizada': 'no',
+        'factura_nombres': '',
+        'factura_cedula': '',
+        'factura_correo': '',
+    }
+
+
+def _agregar_error_pago_venta(ing_form, mensaje):
+    ing_form.add_error(None, mensaje)
+
+
+def _validar_pago_venta(post_data, ing_form):
+    valor = ing_form.cleaned_data.get('valor_acordado')
+    if valor is None or valor <= D('0.00'):
+        ing_form.add_error('valor_acordado', 'Ingresa el valor total de la venta.')
+        return
+
+    modalidad_pago = (post_data.get('venta_pago_modalidad') or 'directo').strip()
+    if modalidad_pago not in ('directo', 'abono'):
+        modalidad_pago = 'directo'
+
+    abono_inicial = ing_form.cleaned_data.get('abono_anticipo') or D('0.00')
+    if modalidad_pago == 'abono':
+        if abono_inicial <= D('0.00'):
+            ing_form.add_error('abono_anticipo', 'Ingresa el monto del abono inicial.')
+        if abono_inicial >= valor:
+            ing_form.add_error(
+                'abono_anticipo',
+                'Para pago por abono, el monto inicial debe ser menor al valor total de la venta.',
+            )
+    else:
+        abono_inicial = valor
+
+    monto_a_validar = abono_inicial
+
+    metodo = ing_form.cleaned_data.get('anticipo_metodo')
+    metodos_validos = {codigo for codigo, _ in IngresoEquipo.METODOS_PAGO}
+    if metodo not in metodos_validos:
+        _agregar_error_pago_venta(ing_form, 'Selecciona el método de pago de la venta.')
+        return
+
+    banco = ing_form.cleaned_data.get('anticipo_banco')
+    banco_otro = (ing_form.cleaned_data.get('anticipo_banco_otro') or '').strip()
+    tarjeta_app = ing_form.cleaned_data.get('anticipo_tarjeta_app')
+
+    if metodo == 'transferencia':
+        if not banco:
+            _agregar_error_pago_venta(ing_form, 'Indica el banco usado para la transferencia.')
+        if banco == 'otro' and not banco_otro:
+            _agregar_error_pago_venta(ing_form, 'Escribe el nombre del banco usado en la transferencia.')
+    elif metodo == 'tarjeta':
+        if not tarjeta_app:
+            _agregar_error_pago_venta(ing_form, 'Selecciona la aplicación o tarjeta usada para el pago.')
+    elif metodo == 'mixto':
+        monto_1 = ing_form.cleaned_data.get('anticipo_monto_1') or D('0.00')
+        monto_2 = ing_form.cleaned_data.get('anticipo_monto_2') or D('0.00')
+        metodo_1 = ing_form.cleaned_data.get('anticipo_metodo_1')
+        metodo_2 = ing_form.cleaned_data.get('anticipo_metodo_2')
+        banco_1 = ing_form.cleaned_data.get('anticipo_banco_1')
+        banco_2 = ing_form.cleaned_data.get('anticipo_banco_2')
+
+        if monto_1 <= 0:
+            _agregar_error_pago_venta(ing_form, 'Ingresa el primer monto del pago mixto.')
+        if monto_2 <= 0:
+            _agregar_error_pago_venta(ing_form, 'Ingresa el segundo monto del pago mixto.')
+        if not metodo_1 or metodo_1 == 'mixto':
+            _agregar_error_pago_venta(ing_form, 'Selecciona un método válido para la primera parte del pago mixto.')
+        elif metodo_1 == 'transferencia' and not banco_1:
+            _agregar_error_pago_venta(ing_form, 'Selecciona el banco de la primera transferencia.')
+        if not metodo_2 or metodo_2 == 'mixto':
+            _agregar_error_pago_venta(ing_form, 'Selecciona un método válido para la segunda parte del pago mixto.')
+        elif metodo_2 == 'transferencia' and not banco_2:
+            _agregar_error_pago_venta(ing_form, 'Selecciona el banco de la segunda transferencia.')
+        if (monto_1 + monto_2) != monto_a_validar:
+            _agregar_error_pago_venta(
+                ing_form,
+                f'La suma del pago mixto debe ser igual al monto cobrado ahora: ${monto_a_validar:.2f}.',
+            )
+
+    factura = _venta_pago_contexto(post_data)
+    if factura['factura_realizada'] == 'si':
+        if not factura['factura_nombres']:
+            _agregar_error_pago_venta(ing_form, 'Completa los nombres o razón social para la factura.')
+        if not factura['factura_cedula']:
+            _agregar_error_pago_venta(ing_form, 'Completa la cédula o RUC para la factura.')
+        if not factura['factura_correo']:
+            _agregar_error_pago_venta(ing_form, 'Completa el correo para la factura.')
+        else:
+            try:
+                validate_email(factura['factura_correo'])
+            except ValidationError:
+                _agregar_error_pago_venta(ing_form, 'Ingresa un correo válido para la factura.')
+
+
+def _limpiar_pago_venta(venta):
+    metodo = venta.anticipo_metodo
+    if metodo == 'efectivo':
+        venta.anticipo_banco = ''
+        venta.anticipo_banco_otro = ''
+        venta.anticipo_tarjeta_app = ''
+        venta.anticipo_comprobante_url = ''
+    elif metodo == 'transferencia':
+        venta.anticipo_tarjeta_app = ''
+    elif metodo == 'tarjeta':
+        venta.anticipo_banco = ''
+        venta.anticipo_banco_otro = ''
+        venta.anticipo_comprobante_url = ''
+
+    if metodo != 'mixto':
+        venta.anticipo_monto_1 = None
+        venta.anticipo_metodo_1 = ''
+        venta.anticipo_banco_1 = ''
+        venta.anticipo_monto_2 = None
+        venta.anticipo_metodo_2 = ''
+        venta.anticipo_banco_2 = ''
+    else:
+        venta.anticipo_banco = ''
+        venta.anticipo_banco_otro = ''
+        venta.anticipo_tarjeta_app = ''
+        venta.anticipo_comprobante_url = ''
+
+
+def _aplicar_pago_venta(venta, post_data):
+    modalidad_pago = (post_data.get('venta_pago_modalidad') or 'directo').strip()
+    if modalidad_pago != 'abono':
+        venta.abono_anticipo = venta.valor_acordado or D('0.00')
+    _limpiar_pago_venta(venta)
+
+    factura = _venta_pago_contexto(post_data)
+    venta.factura_realizada = factura['factura_realizada']
+    if factura['factura_realizada'] == 'si':
+        venta.factura_nombres = factura['factura_nombres']
+        venta.factura_cedula = factura['factura_cedula']
+        venta.factura_correo = factura['factura_correo']
+    else:
+        venta.factura_nombres = ''
+        venta.factura_cedula = ''
+        venta.factura_correo = ''
+
+
 @tecnico_requerido
 @transaction.atomic
 def venta_registrar(request):
@@ -1895,6 +2422,9 @@ def venta_registrar(request):
             cli_form_existente = cli_form
 
         if cli_form_existente.is_valid() and ing_form.is_valid():
+            _validar_pago_venta(post_data, ing_form)
+
+        if cli_form_existente.is_valid() and ing_form.is_valid():
             try:
                 selecciones = _venta_inventario_selecciones(post_data)
                 if not selecciones:
@@ -1907,6 +2437,7 @@ def venta_registrar(request):
                     venta.registrado_por = request.user
                     venta.estado = 'entregado'
                     venta.subestado_entregado = 'con_solucion'
+                    _aplicar_pago_venta(venta, post_data)
                     venta.save()
                     _aplicar_inventario_a_venta(venta, selecciones)
                     if selecciones and not (venta.problema_reportado or '').strip():
@@ -1926,6 +2457,8 @@ def venta_registrar(request):
                 )
 
                 messages.success(request, f'Venta {venta.codigo_equipo} registrada para {cliente.nombres}.')
+                if _venta_con_pago_parcial(venta):
+                    return redirect('econotec:venta_lista_parciales')
                 return redirect('econotec:venta_lista')
             
     else:
@@ -1962,6 +2495,7 @@ def venta_registrar(request):
         'inventario_seleccionados_json': inventario_seleccionados_json,
         'venta_inventario_sedes_json': VENTA_INVENTARIO_UBICACIONES,
         'venta_inventario_categorias_json': _venta_inventario_categorias_json(),
+        'venta_pago_form': _venta_pago_contexto(request.POST if request.method == 'POST' else None),
         'modo': 'registrar',
         'titulo': 'Nueva Venta de Producto',
         'siguiente_numero': siguiente_numero,
@@ -1983,12 +2517,16 @@ def venta_editar(request, pk):
         _configurar_form_venta(ing_form)
         
         if cli_form.is_valid() and ing_form.is_valid():
+            _validar_pago_venta(post_data, ing_form)
+
+        if cli_form.is_valid() and ing_form.is_valid():
             campos_cambiados = set(cli_form.changed_data or []) | set(ing_form.changed_data or [])
             cli_form.save()
             venta = ing_form.save(commit=False)
             venta.sede = 'ventas'
             venta.estado = 'entregado'
             venta.subestado_entregado = 'con_solucion'
+            _aplicar_pago_venta(venta, post_data)
             venta.save()
             if campos_cambiados:
                 registrar_bitacora(
@@ -1998,6 +2536,8 @@ def venta_editar(request, pk):
                     ingreso=venta,
                 )
             messages.success(request, f'Venta {venta.codigo_equipo} actualizada.')
+            if _venta_con_pago_parcial(venta):
+                return redirect('econotec:venta_lista_parciales')
             return redirect('econotec:venta_lista')
     else:
         cli_form = ClienteForm(prefix='cli', instance=venta.cliente)
@@ -2016,6 +2556,7 @@ def venta_editar(request, pk):
         ],
         'venta_inventario_sedes_json': VENTA_INVENTARIO_UBICACIONES,
         'venta_inventario_categorias_json': _venta_inventario_categorias_json(),
+        'venta_pago_form': _venta_pago_contexto(request.POST if request.method == 'POST' else None, venta),
         'modo': 'editar',
         'titulo': f'Editar Venta {venta.codigo_equipo}',
         'siguiente_numero': venta.numero_equipo,
@@ -2052,6 +2593,7 @@ def venta_export(request):
     q = (request.GET.get('q') or '').strip()
     tecnico_vendio_filtro = (request.GET.get('tecnico_vendio') or '').strip()
     registrador_filtro = (request.GET.get('registrador') or '').strip()
+    pago_filtro = (request.GET.get('pago') or '').strip()
 
     wb = Workbook()
     ws = wb.active
@@ -2067,6 +2609,7 @@ def venta_export(request):
     ventas = (
         IngresoEquipo.objects
         .select_related('cliente', 'tecnico_encargado', 'registrado_por')
+        .prefetch_related('abonos')
         .filter(sede='ventas')
         .order_by('-fecha_ingreso', '-pk')
     )
@@ -2075,6 +2618,11 @@ def venta_export(request):
     if registrador_filtro.isdigit():
         ventas = ventas.filter(registrado_por_id=registrador_filtro)
     ventas = filtrar_objetos_normalizado(ventas, q, texto_ingreso_busqueda)
+    ventas = list(ventas)
+    if pago_filtro == 'parcial':
+        ventas = [v for v in ventas if _venta_con_pago_parcial(v)]
+    elif pago_filtro != 'todos':
+        ventas = [v for v in ventas if not _venta_con_pago_parcial(v)]
 
     for row, v in enumerate(ventas, start=2):
         ws.cell(row=row, column=1, value=v.codigo_equipo)
@@ -2107,7 +2655,18 @@ def venta_export(request):
 
 @tecnico_requerido
 def venta_lista(request):
-    """Listado de ventas."""
+    """Listado de ventas pagadas completas."""
+    return _render_venta_lista(request, filtro_pago='completo')
+
+
+@tecnico_requerido
+def venta_lista_parciales(request):
+    """Listado exclusivo de ventas que se registraron con pago parcial."""
+    return _render_venta_lista(request, filtro_pago='parcial')
+
+
+def _render_venta_lista(request, filtro_pago='completo'):
+    """Renderiza lista de ventas completa o filtrada por pago parcial."""
     q = (request.GET.get('q') or '').strip()
     tecnico_vendio_filtro = (request.GET.get('tecnico_vendio') or '').strip()
     registrador_filtro = (request.GET.get('registrador') or '').strip()
@@ -2130,15 +2689,36 @@ def venta_lista(request):
     usuarios_all = User.objects.filter(is_active=True).order_by('first_name', 'username')
     from .forms import _queryset_tecnicos
     tecnicos_solo = _queryset_tecnicos()
+    ventas = list(qs)
+    if filtro_pago == 'parcial':
+        ventas = [venta for venta in ventas if _venta_con_pago_parcial(venta)]
+    else:
+        ventas = [venta for venta in ventas if not _venta_con_pago_parcial(venta)]
+    total = len(ventas)
+    page_obj, querystring = paginar_resultados(request, ventas)
+    for venta in page_obj.object_list:
+        venta.wa_venta_link = whatsapp_link_venta_producto(venta)
+
+    export_params = request.GET.copy()
+    export_params.pop('pagina', None)
+    if filtro_pago == 'parcial':
+        export_params['pago'] = 'parcial'
+    else:
+        export_params['pago'] = 'completo'
 
     return render(request, 'ventas/lista.html', {
-        'ingresos': qs,
+        'ingresos': page_obj.object_list,
+        'page_obj': page_obj,
+        'querystring': querystring,
         'q': q,
         'tecnico_vendio_filtro': tecnico_vendio_filtro,
         'registrador_filtro': registrador_filtro,
         'usuarios_all': usuarios_all,
         'tecnicos_solo': tecnicos_solo,
-        'total': total_resultados(qs),
+        'total': total,
+        'lista_pago_parcial': filtro_pago == 'parcial',
+        'lista_pago_completo': filtro_pago != 'parcial',
+        'export_querystring': export_params.urlencode(),
     })
 
 
@@ -2198,9 +2778,13 @@ def salida_lista(request):
 
     # Excluir 'chatarrerizacion' del filtro de vistas públicas
     estados_filtro = [e for e in SalidaEquipo.ESTADO_REPARACION if e[0] != 'chatarrerizacion']
+    total = total_resultados(qs)
+    page_obj, querystring = paginar_resultados(request, qs)
 
     context = {
-        'salidas': qs,
+        'salidas': page_obj.object_list,
+        'page_obj': page_obj,
+        'querystring': querystring,
         'q': q,
         'estado_filtro': estado,
         'sede_filtro': sede_filtro,
@@ -2209,7 +2793,7 @@ def salida_lista(request):
         'tecnicos_all': tecnicos_all,
         'tecnicos_solo': tecnicos_solo,
         'estados': estados_filtro,
-        'total': total_resultados(qs),
+        'total': total,
     }
     context.update(contexto_rango_fecha(
         fecha_desde,
@@ -2473,11 +3057,15 @@ def cliente_lista(request):
         qs = qs.filter(ingresos__sede=sede_filtro).distinct()
 
     qs = filtrar_objetos_normalizado(qs, q, texto_cliente_busqueda)
+    total = total_resultados(qs)
+    page_obj, querystring = paginar_resultados(request, qs)
     return render(request, 'clientes/lista.html', {
-        'clientes': qs,
+        'clientes': page_obj.object_list,
+        'page_obj': page_obj,
+        'querystring': querystring,
         'q': q,
         'sede_filtro': sede_filtro,
-        'total': total_resultados(qs),
+        'total': total,
     })
 
 

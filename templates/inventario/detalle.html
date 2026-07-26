@@ -70,6 +70,14 @@
         font-size: 16px;
         overflow-wrap: anywhere;
     }
+    .inventario-detalle-row small {
+        display: block;
+        margin-top: 5px;
+        color: var(--danger);
+        font-size: 12px;
+        font-weight: 900;
+        line-height: 1.3;
+    }
     .inventario-cantidad-row {
         display: flex;
         align-items: center;
@@ -238,7 +246,13 @@
         <div class="inventario-detalle-row"><span>Marca</span><strong>{{ item.marca }}</strong></div>
         <div class="inventario-detalle-row"><span>Modelo</span><strong>{{ item.modelo }}</strong></div>
         <div class="inventario-detalle-row"><span>Serie</span><strong>{{ item.serie|default:"—" }}</strong></div>
-        <div class="inventario-detalle-row"><span>Estado</span><strong>{{ item.get_estado_display }}</strong></div>
+        <div class="inventario-detalle-row">
+            <span>Estado</span>
+            <strong>{{ item.get_estado_display }}</strong>
+            {% if item.estado == 'no_disponible' and item.causa_no_disponible %}
+                <small>Causa: {{ item.get_causa_no_disponible_display }}</small>
+            {% endif %}
+        </div>
         <div class="inventario-detalle-row inventario-cantidad-row">
             <span>Cantidad</span>
             {% if puede_gestionar_inventario %}

@@ -1,23 +1,44 @@
 {% extends 'base.html' %}
 {% load econotec_extras %}
 
-{% block title %}Abonos Equipo {{ ingreso.codigo_equipo }} — Econotec{% endblock %}
+{% block title %}{% if ingreso.sede == 'ventas' and venta_con_historial_abonos %}Abonos Venta{% elif ingreso.sede == 'ventas' %}Pago Venta{% else %}Abonos Equipo{% endif %} {{ ingreso.codigo_equipo }} — Econotec{% endblock %}
 
 {% block content %}
 <div class="crumb">
     <a href="{% url 'econotec:bienvenida' %}">Inicio</a> /
-    <a href="{% url 'econotec:pagos_lista' %}">Pagos</a> /
-    Equipo {{ ingreso.codigo_equipo }}
+    {% if ingreso.sede == 'ventas' %}
+        <a href="{% url 'econotec:pagos_ventas_menu' %}">Pagos de Ventas</a> /
+        Venta {{ ingreso.codigo_equipo }}
+    {% else %}
+        <a href="{% url 'econotec:pagos_lista' %}">Pagos</a> /
+        Equipo {{ ingreso.codigo_equipo }}
+    {% endif %}
 </div>
 
 <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 14px; margin-bottom: 22px;">
     <div>
-        <h2 class="page-title">Abonos del Equipo <span class="accent">{{ ingreso.codigo_equipo }}</span></h2>
-        <p class="page-subtitle">Cliente: <strong>{{ ingreso.cliente.nombres }}</strong> — {{ ingreso.tipo_equipo_display }} {{ ingreso.marca }}</p>
+        {% if ingreso.sede == 'ventas' %}
+            {% if venta_con_historial_abonos %}
+                <h2 class="page-title">Abonos / Historial de la Venta <span class="accent">{{ ingreso.codigo_equipo }}</span></h2>
+            {% else %}
+                <h2 class="page-title">Pago de la Venta <span class="accent">{{ ingreso.codigo_equipo }}</span></h2>
+            {% endif %}
+            <p class="page-subtitle">Cliente: <strong>{{ ingreso.cliente.nombres }}</strong> — {{ ingreso.problema_reportado|default:"Venta de producto" }}</p>
+        {% else %}
+            <h2 class="page-title">Abonos del Equipo <span class="accent">{{ ingreso.codigo_equipo }}</span></h2>
+            <p class="page-subtitle">Cliente: <strong>{{ ingreso.cliente.nombres }}</strong> — {{ ingreso.tipo_equipo_display }} {{ ingreso.marca }}</p>
+        {% endif %}
     </div>
     <div style="display: flex; gap: 8px;">
-        <a href="{% url 'econotec:ingreso_detalle' pk=ingreso.pk %}" class="btn btn-secondary">← Volver al equipo</a>
-        <a href="{% url 'econotec:abono_crear' ingreso_pk=ingreso.pk %}" class="btn btn-primary">+ Nuevo Abono</a>
+        {% if ingreso.sede == 'ventas' %}
+            <a href="{% url 'econotec:pagos_ventas_menu' %}" class="btn btn-secondary">← Volver a pagos de ventas</a>
+            {% if puede_registrar_abono %}
+                <a href="{% url 'econotec:abono_crear' ingreso_pk=ingreso.pk %}" class="btn btn-primary">+ Nuevo Abono</a>
+            {% endif %}
+        {% else %}
+            <a href="{% url 'econotec:ingreso_detalle' pk=ingreso.pk %}" class="btn btn-secondary">← Volver al equipo</a>
+            <a href="{% url 'econotec:abono_crear' ingreso_pk=ingreso.pk %}" class="btn btn-primary">+ Nuevo Abono</a>
+        {% endif %}
     </div>
 </div>
 
@@ -34,7 +55,9 @@
     </div>
     {% endif %}
     <div class="card-box" style="border-left: 4px solid #999; padding: 16px;">
-        <div style="font-size: 11px; color: #888; text-transform: uppercase;">Anticipo inicial</div>
+        <div style="font-size: 11px; color: #888; text-transform: uppercase;">
+            {% if ingreso.sede == 'ventas' and venta_con_historial_abonos %}Abono inicial{% elif ingreso.sede == 'ventas' %}Pago registrado{% else %}Anticipo inicial{% endif %}
+        </div>
         <div style="font-size: 22px; font-weight: 800; color: #555; margin-top: 4px;">{{ ingreso.abono_anticipo|dinero_signo }}</div>
     </div>
     <div class="card-box" style="border-left: 4px solid var(--success); padding: 16px;">
@@ -53,6 +76,22 @@
         {% endif %}
     </div>
 </div>
+
+{% if ingreso.sede == 'ventas' %}
+<div class="card-box" style="padding: 16px; margin-bottom: 24px; border-left: 4px solid var(--primary);">
+    <div style="font-size: 11px; color: #888; text-transform: uppercase; margin-bottom: 8px;">Factura</div>
+    <div style="font-weight: 800; color: var(--text-main);">
+        Factura con datos: {% if ingreso.factura_realizada == 'si' %}Sí{% else %}No{% endif %}
+    </div>
+    {% if ingreso.factura_realizada == 'si' %}
+        <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px; margin-top: 10px; color: var(--text-muted); font-size: 13px;">
+            <div><strong style="color:var(--text-main);">Titular:</strong> {{ ingreso.factura_nombres|default:"—" }}</div>
+            <div><strong style="color:var(--text-main);">Cédula/RUC:</strong> {{ ingreso.factura_cedula|default:"—" }}</div>
+            <div><strong style="color:var(--text-main);">Correo:</strong> {{ ingreso.factura_correo|default:"—" }}</div>
+        </div>
+    {% endif %}
+</div>
+{% endif %}
 
 {% if abonos or ingreso.abono_anticipo > 0 or salida and salida.valor_final_cobrado > 0 or ingreso.diagnostico_inmediato == 'si' and ingreso.valor_diagnostico > 0 %}
 <div class="table-wrap">
@@ -112,7 +151,7 @@
 
         {% if ingreso.abono_anticipo > 0 %}
             <tr>
-                <td><strong style="color: var(--primary);">ANTICIPO</strong></td>
+                <td><strong style="color: var(--primary);">{% if ingreso.sede == 'ventas' %}PAGO{% else %}ANTICIPO{% endif %}</strong></td>
                 <td>{{ ingreso.fecha_ingreso|date:"d/m/Y" }}</td>
                 <td style="color: var(--success); font-weight: 700;">{{ ingreso.abono_anticipo|dinero_signo }}</td>
                 <td>
@@ -138,7 +177,7 @@
                     {% endif %}
                 </td>
                 <td>
-                    Pago inicial (Anticipo)
+                    {% if ingreso.sede == 'ventas' and venta_con_historial_abonos %}Abono inicial de venta{% elif ingreso.sede == 'ventas' %}Pago completo de venta{% else %}Pago inicial (Anticipo){% endif %}
                     {% if ingreso.anticipo_comprobante_url %}
                         <br><a href="{{ ingreso.anticipo_comprobante_url }}" target="_blank" style="font-size:11px; text-decoration:underline;">Ver comprobante</a>
                     {% endif %}
@@ -221,9 +260,11 @@
 <div class="empty-state">
     <div class="icon">💳</div>
     <h3>No hay pagos registrados</h3>
-    <p>Aún no se ha registrado ningún abono, anticipo o pago de salida.</p>
+    <p>{% if ingreso.sede == 'ventas' %}Esta venta aún no tiene pago registrado.{% else %}Aún no se ha registrado ningún abono, anticipo o pago de salida.{% endif %}</p>
     <br>
-    <a href="{% url 'econotec:abono_crear' ingreso_pk=ingreso.pk %}" class="btn btn-primary">+ Registrar primer abono</a>
+    {% if puede_registrar_abono %}
+        <a href="{% url 'econotec:abono_crear' ingreso_pk=ingreso.pk %}" class="btn btn-primary">+ Registrar primer abono</a>
+    {% endif %}
 </div>
 {% endif %}
 {% endblock %}

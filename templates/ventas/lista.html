@@ -4,14 +4,162 @@
 {% block title %}Lista de Ventas — Econotec{% endblock %}
 
 {% block content %}
+<style>
+    .venta-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 7px;
+        align-items: center;
+    }
+    .venta-wa-btn {
+        background: #1f8f3a;
+        color: #fff;
+    }
+    .venta-wa-btn:hover {
+        background: #176f2d;
+        color: #fff;
+    }
+    .venta-wa-help-btn {
+        min-width: 32px;
+        padding: 7px 10px;
+        border: 0;
+        border-radius: 8px;
+        background: rgba(31, 143, 58, .10);
+        color: #1f8f3a;
+        font-size: 12px;
+        font-weight: 900;
+        cursor: pointer;
+    }
+    .venta-wa-disabled {
+        display: inline-flex;
+        align-items: center;
+        padding: 7px 10px;
+        border-radius: 8px;
+        background: rgba(107, 114, 128, .14);
+        color: var(--text-muted);
+        font-size: 11px;
+        font-weight: 800;
+        white-space: nowrap;
+    }
+    .venta-wa-helper-card {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 14px;
+        margin: 12px 0 18px;
+        padding: 12px 14px;
+        border: 1px solid rgba(31, 143, 58, .18);
+        border-radius: 12px;
+        background: rgba(31, 143, 58, .06);
+        color: var(--text-main);
+    }
+    .venta-wa-helper-card strong {
+        display: block;
+        margin-bottom: 3px;
+        color: #176f2d;
+    }
+    .venta-wa-helper-card span {
+        color: var(--text-muted);
+        font-size: 13px;
+    }
+    .venta-wa-help-overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 10000;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        padding: 18px;
+        background: rgba(17, 24, 39, .58);
+        backdrop-filter: blur(4px);
+    }
+    .venta-wa-help-overlay.is-open {
+        display: flex;
+    }
+    .venta-wa-help-modal {
+        width: min(100%, 460px);
+        border-radius: 16px;
+        background: var(--card-bg);
+        box-shadow: 0 22px 65px rgba(0, 0, 0, .26);
+        overflow: hidden;
+    }
+    .venta-wa-help-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 10px;
+        padding: 18px 20px;
+        border-bottom: 1px solid var(--border-color);
+    }
+    .venta-wa-help-head h3 {
+        margin: 0;
+        color: var(--text-main);
+        font-size: 18px;
+    }
+    .venta-wa-help-close {
+        width: 34px;
+        height: 34px;
+        border: 0;
+        border-radius: 50%;
+        background: var(--hover-bg);
+        color: var(--text-main);
+        font-size: 20px;
+        font-weight: 900;
+        cursor: pointer;
+    }
+    .venta-wa-help-body {
+        padding: 18px 20px 20px;
+    }
+    .venta-wa-help-body ol {
+        margin: 0;
+        padding-left: 20px;
+        color: var(--text-main);
+    }
+    .venta-wa-help-body li {
+        margin-bottom: 10px;
+        line-height: 1.45;
+    }
+    .venta-wa-help-note {
+        margin-top: 14px;
+        padding: 11px 12px;
+        border-radius: 10px;
+        background: var(--hover-bg);
+        color: var(--text-muted);
+        font-size: 13px;
+        line-height: 1.45;
+    }
+    @media (max-width: 760px) {
+        .venta-wa-helper-card {
+            align-items: flex-start;
+            flex-direction: column;
+        }
+        .venta-actions .btn,
+        .venta-actions .venta-wa-disabled,
+        .venta-actions .venta-wa-help-btn {
+            width: 100%;
+            justify-content: center;
+            text-align: center;
+        }
+    }
+</style>
+
 <div class="crumb">
     <a href="{% url 'econotec:bienvenida' %}">Inicio</a> /
-    <a href="{% url 'econotec:venta_menu' %}">Venta de Producto</a> / Lista
+    <a href="{% url 'econotec:venta_menu' %}">Venta de Producto</a> /
+    {% if lista_pago_parcial %}Ventas con pago parcial{% else %}Lista{% endif %}
 </div>
 
-<h2 class="page-title">Ventas <span class="accent">Registradas</span></h2>
+{% if lista_pago_parcial %}
+    <h2 class="page-title">Ventas con <span class="accent">Pago Parcial</span></h2>
+{% else %}
+    <h2 class="page-title">Ventas Registradas — <span class="accent">Pago Completo</span></h2>
+{% endif %}
 <p class="page-subtitle">
-    {{ total }} ventas registradas en total.
+    {% if lista_pago_parcial %}
+        {{ total }} venta{{ total|pluralize }} con abono inicial o historial de abonos.
+    {% else %}
+        {{ total }} venta{{ total|pluralize }} pagada{{ total|pluralize }} completa{{ total|pluralize }}.
+    {% endif %}
 </p>
 
 <div class="toolbar">
@@ -31,8 +179,16 @@
         </select>
         <button type="submit" class="btn btn-primary">Filtrar</button>
     </form>
-        <a href="{% url 'econotec:venta_export' %}?{{ request.GET.urlencode }}" class="btn btn-secondary">📥 Exportar Excel</a>
+        <a href="{% url 'econotec:venta_export' %}?{{ export_querystring }}" class="btn btn-secondary">📥 Exportar Excel</a>
         <a href="{% url 'econotec:venta_registrar' %}" class="btn btn-primary">+ Nueva Venta</a>
+</div>
+
+<div class="venta-wa-helper-card">
+    <div>
+        <strong>Envío de hoja por WhatsApp</strong>
+        <span>Descarga la hoja PDF de la venta y luego prepara el mensaje formal para el cliente por WhatsApp.</span>
+    </div>
+    <button type="button" class="btn btn-sm btn-secondary" data-open-wa-help>¿Cómo enviarla?</button>
 </div>
 
 {% if ingresos %}
@@ -48,7 +204,7 @@
                 <th>Técnico vendió</th>
                 <th>Registrado por</th>
                 <th>Valor Venta</th>
-                <th>Saldo Pendiente</th>
+                <th>Pago</th>
                 <th>Acciones</th>
             </tr>
         </thead>
@@ -82,73 +238,142 @@
                     {{ i.valor_acordado|dinero_signo }}
                 </td>
                 <td>
-                    {% if i.diferencia > 0 %}
-                        <span style="color: #d97706; font-weight: 600;">{{ i.diferencia|dinero_signo }}</span>
+                    {% if i.estado_pago == 'Pagado' %}
+                        <span style="color: #16a34a; font-weight: 700;">Pagado</span>
                     {% else %}
-                        <span style="color: #16a34a; font-weight: 600;">Pagado</span>
+                        <span style="color: #d97706; font-weight: 700;">{{ i.estado_pago }}</span>
+                    {% endif %}
+                    {% if i.resumen_metodos_pago %}
+                        <br><small style="color:#888;">{{ i.resumen_metodos_pago }}</small>
                     {% endif %}
                 </td>
                 <td class="row-actions">
-                    <a href="{% url 'econotec:ingreso_pdf' pk=i.pk %}" class="btn btn-sm btn-secondary" title="Descargar PDF">Descargar 📄</a>
-                    {% if i.diferencia > 0 %}
-                        <a href="{% url 'econotec:abono_crear' ingreso_pk=i.pk %}" class="btn btn-sm btn-primary" title="Registrar Pago">💵 Pagar</a>
-                    {% endif %}
-                    {% if es_admin %}
-                        <a href="{% url 'econotec:venta_editar' pk=i.pk %}" class="btn btn-sm btn-warning" title="Editar">✏️</a>
-                        <form method="post" action="{% url 'econotec:venta_eliminar' pk=i.pk %}" style="display:inline;" onsubmit="return openDeleteModal(this, event);">
-                            {% csrf_token %}
-                            <button type="submit" class="btn btn-sm btn-danger" title="Eliminar" style="padding: 4px 8px; font-size: 11px;">🗑️</button>
-                        </form>
-                    {% endif %}
+                    <div class="venta-actions">
+                        <a href="{% url 'econotec:ingreso_pdf' pk=i.pk %}" class="btn btn-sm btn-secondary" title="Descargar hoja PDF">Descargar 📄</a>
+                        {% if i.wa_venta_link %}
+                            <a href="{{ i.wa_venta_link }}" class="btn btn-sm venta-wa-btn" title="Enviar hoja por WhatsApp">Enviar WhatsApp</a>
+                        {% else %}
+                            <span class="venta-wa-disabled" title="Este cliente no tiene WhatsApp registrado">Sin WhatsApp</span>
+                        {% endif %}
+                        <button type="button" class="venta-wa-help-btn" data-open-wa-help title="Ayuda para enviar por WhatsApp">?</button>
+                        <a href="{% url 'econotec:venta_editar' pk=i.pk %}" class="btn btn-sm btn-warning" title="Editar venta">Editar</a>
+                        {% if es_admin %}
+                            <form method="post" action="{% url 'econotec:venta_eliminar' pk=i.pk %}" style="display:inline;" onsubmit="return openDeleteModal(this, event);">
+                                {% csrf_token %}
+                                <button type="submit" class="btn btn-sm btn-danger" title="Eliminar venta">Eliminar</button>
+                            </form>
+                        {% endif %}
+                    </div>
                 </td>
             </tr>
         {% endfor %}
         </tbody>
-    </table>
-</div>
-{% else %}
-<div class="empty-state">
-    <h3>No se encontraron ventas</h3>
-    <p>Ajusta los filtros o registra una nueva venta.</p>
+	    </table>
+	</div>
+	{% else %}
+	<div class="empty-state">
+    <h3>{% if lista_pago_parcial %}No hay ventas con pago parcial{% else %}No hay ventas con pago completo{% endif %}</h3>
+    <p>
+        {% if lista_pago_parcial %}
+            Cuando registres una venta con abono inicial, aparecerá aquí automáticamente.
+        {% else %}
+            Cuando registres una venta con pago directo/completo, aparecerá aquí automáticamente.
+        {% endif %}
+    </p>
     <br>
     <a href="{% url 'econotec:venta_registrar' %}" class="btn btn-primary">+ Registrar Venta</a>
-</div>
-{% endif %}
+	</div>
+	{% endif %}
+    {% include 'includes/paginacion.html' with page_obj=page_obj querystring=querystring page_param='pagina' aria_label='Paginación de ventas registradas' %}
 
-<!-- Custom Modal para Eliminar Venta -->
-<div id="delete-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 9999; align-items: center; justify-content: center; backdrop-filter: blur(4px);">
-    <div style="background: var(--bg-color, #fff); padding: 32px; border-radius: 16px; max-width: 400px; width: 90%; text-align: center; box-shadow: 0 10px 25px rgba(0,0,0,0.2);">
-        <div style="font-size: 48px; margin-bottom: 16px;">🗑️</div>
-        <h2 style="margin-top: 0; color: var(--text-main, #1f2937); font-size: 20px;">Eliminar Venta</h2>
-        <p style="color: var(--text-muted, #4b5563); margin-bottom: 24px; font-size: 15px;">¿Seguro que deseas eliminar esta venta permanentemente? Esta acción no se puede deshacer.</p>
-        <div style="display: flex; gap: 12px; margin-top: 24px;">
-            <button type="button" onclick="closeDeleteModal()" style="padding: 12px 20px; border-radius: 8px; border: 1px solid #d1d5db; background: transparent; color: var(--text-main, #1f2937); font-weight: 600; cursor: pointer; flex: 1;">Cancelar</button>
-            <button type="button" id="confirm-delete-btn" style="padding: 12px 20px; border-radius: 8px; border: none; background: #dc2626; color: white; font-weight: 700; cursor: pointer; flex: 1;">Sí, eliminar</button>
+<div class="venta-wa-help-overlay" id="venta-wa-help-modal" aria-hidden="true">
+    <div class="venta-wa-help-modal" role="dialog" aria-modal="true" aria-labelledby="venta-wa-help-title">
+        <div class="venta-wa-help-head">
+            <h3 id="venta-wa-help-title">Cómo enviar la hoja por WhatsApp</h3>
+            <button type="button" class="venta-wa-help-close" data-close-wa-help aria-label="Cerrar">×</button>
+        </div>
+        <div class="venta-wa-help-body">
+            <ol>
+                <li>Primero presiona <strong>Descargar 📄</strong> en la venta correspondiente y guarda la hoja PDF.</li>
+                <li>Luego presiona <strong>Enviar WhatsApp</strong>. El sistema toma el número registrado del cliente y prepara el mensaje formal automáticamente.</li>
+                <li>Elige <strong>WhatsApp Web</strong> o <strong>WhatsApp Desktop</strong> cuando aparezca la ventana.</li>
+                <li>Antes de enviar, adjunta manualmente el PDF que descargaste en el paso 1.</li>
+                <li>Revisa que el nombre del cliente, el producto y la venta sean correctos; después envía el mensaje.</li>
+            </ol>
+            <div class="venta-wa-help-note">
+                Nota: por seguridad del navegador, WhatsApp no permite adjuntar el PDF automáticamente. Por eso el flujo correcto es descargar la hoja primero y adjuntarla después en WhatsApp.
+            </div>
         </div>
     </div>
 </div>
 
+{% if es_admin %}
+    <!-- Custom Modal para Eliminar Venta -->
+    <div id="delete-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 9999; align-items: center; justify-content: center; backdrop-filter: blur(4px);">
+        <div style="background: var(--bg-color, #fff); padding: 32px; border-radius: 16px; max-width: 400px; width: 90%; text-align: center; box-shadow: 0 10px 25px rgba(0,0,0,0.2);">
+            <div style="font-size: 48px; margin-bottom: 16px;">🗑️</div>
+            <h2 style="margin-top: 0; color: var(--text-main, #1f2937); font-size: 20px;">Eliminar Venta</h2>
+            <p style="color: var(--text-muted, #4b5563); margin-bottom: 24px; font-size: 15px;">¿Seguro que deseas eliminar esta venta permanentemente? Esta acción no se puede deshacer.</p>
+            <div style="display: flex; gap: 12px; margin-top: 24px;">
+                <button type="button" onclick="closeDeleteModal()" style="padding: 12px 20px; border-radius: 8px; border: 1px solid #d1d5db; background: transparent; color: var(--text-main, #1f2937); font-weight: 600; cursor: pointer; flex: 1;">Cancelar</button>
+                <button type="button" id="confirm-delete-btn" style="padding: 12px 20px; border-radius: 8px; border: none; background: #dc2626; color: white; font-weight: 700; cursor: pointer; flex: 1;">Sí, eliminar</button>
+            </div>
+        </div>
+    </div>
+{% endif %}
+
 <script>
-    let formToDelete = null;
-
-    function openDeleteModal(formElement, event) {
-        event.preventDefault();
-        formToDelete = formElement;
-        document.getElementById('delete-modal').style.display = 'flex';
-        return false;
-    }
-
-    function closeDeleteModal() {
-        formToDelete = null;
-        document.getElementById('delete-modal').style.display = 'none';
-    }
-
-    document.getElementById('confirm-delete-btn').addEventListener('click', function() {
-        if (formToDelete) {
-            this.innerHTML = 'Eliminando...';
-            this.disabled = true;
-            formToDelete.submit();
+    (function () {
+        var helpModal = document.getElementById('venta-wa-help-modal');
+        if (!helpModal) return;
+        function openHelp() {
+            helpModal.classList.add('is-open');
+            helpModal.setAttribute('aria-hidden', 'false');
+            document.body.style.overflow = 'hidden';
         }
-    });
+        function closeHelp() {
+            helpModal.classList.remove('is-open');
+            helpModal.setAttribute('aria-hidden', 'true');
+            document.body.style.overflow = '';
+        }
+        document.querySelectorAll('[data-open-wa-help]').forEach(function (button) {
+            button.addEventListener('click', openHelp);
+        });
+        document.querySelectorAll('[data-close-wa-help]').forEach(function (button) {
+            button.addEventListener('click', closeHelp);
+        });
+        helpModal.addEventListener('click', function (event) {
+            if (event.target === helpModal) closeHelp();
+        });
+        document.addEventListener('keydown', function (event) {
+            if (event.key === 'Escape' && helpModal.classList.contains('is-open')) {
+                closeHelp();
+            }
+        });
+    })();
+
+    {% if es_admin %}
+        let formToDelete = null;
+
+        function openDeleteModal(formElement, event) {
+            event.preventDefault();
+            formToDelete = formElement;
+            document.getElementById('delete-modal').style.display = 'flex';
+            return false;
+        }
+
+        function closeDeleteModal() {
+            formToDelete = null;
+            document.getElementById('delete-modal').style.display = 'none';
+        }
+
+        document.getElementById('confirm-delete-btn').addEventListener('click', function() {
+            if (formToDelete) {
+                this.innerHTML = 'Eliminando...';
+                this.disabled = true;
+                formToDelete.submit();
+            }
+        });
+    {% endif %}
 </script>
 {% endblock %}

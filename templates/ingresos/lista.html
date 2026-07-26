@@ -64,6 +64,48 @@
         border-color: rgba(245, 158, 11, 0.35);
         color: #fbbf24;
     }
+    .ingreso-pagination {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        flex-wrap: wrap;
+        margin-top: 16px;
+        padding: 16px;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        background: var(--surface);
+        box-shadow: var(--shadow-soft);
+    }
+    .ingreso-pagination .current {
+        color: var(--text-muted);
+        font-size: 13px;
+        font-weight: 800;
+        padding: 0 6px;
+    }
+    .ingreso-page-count {
+        display: block;
+        margin-top: 6px;
+        color: var(--text-muted);
+        font-size: 11px;
+        font-weight: 700;
+        text-align: center;
+    }
+    @media (max-width: 640px) {
+        .ingreso-pagination {
+            align-items: stretch;
+            gap: 8px;
+        }
+        .ingreso-pagination .btn {
+            flex: 1 1 calc(50% - 8px);
+            justify-content: center;
+        }
+        .ingreso-pagination .current {
+            flex: 1 1 100%;
+            order: -1;
+            text-align: center;
+        }
+    }
 </style>
 
 <div class="crumb">
@@ -251,4 +293,5 @@
     <a href="{% url 'econotec:ingreso_registrar' %}" class="btn btn-primary">+ Registrar Equipo</a>
 </div>
 {% endif %}
+{% include 'includes/paginacion.html' with page_obj=page_obj querystring=querystring page_param='pagina' aria_label='Paginación de equipos registrados' %}
 {% endblock %}

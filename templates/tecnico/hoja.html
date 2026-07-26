@@ -3,7 +3,7 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>Hoja {{ ingreso.codigo_equipo }} — Econotec</title>
     <link rel="icon" type="image/jpeg" href="{% static 'logo.jpg' %}">
     <style>
@@ -68,7 +68,11 @@
                 radial-gradient(circle at 8% 0%, rgba(250, 204, 21, 0.17), transparent 32%),
                 linear-gradient(135deg, #0f0f10 0%, var(--rojo-profundo) 48%, var(--rojo-logo) 100%);
             color: white;
-            padding: 12px clamp(14px, 3vw, 28px);
+            padding:
+                max(12px, env(safe-area-inset-top))
+                max(clamp(14px, 3vw, 28px), env(safe-area-inset-right))
+                12px
+                max(clamp(14px, 3vw, 28px), env(safe-area-inset-left));
             display: flex; align-items: center; gap: 12px;
             box-shadow: 0 16px 42px rgba(38, 7, 8, 0.30);
             border-bottom: 1px solid rgba(250, 204, 21, 0.14);
@@ -554,7 +558,11 @@
                 display: grid;
                 grid-template-columns: auto minmax(0, 1fr);
                 gap: 10px;
-                padding: 10px 12px;
+                padding:
+                    max(10px, env(safe-area-inset-top))
+                    max(12px, env(safe-area-inset-right))
+                    10px
+                    max(12px, env(safe-area-inset-left));
             }
             .topbar .logo { width: 38px; height: 38px; }
             .topbar .tb-title { font-size: 15px; }

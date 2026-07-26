@@ -167,8 +167,6 @@
     </table>
 </div>
 
-
-
 {% else %}
 <div class="empty-state">
     <div class="icon">📤</div>
@@ -176,4 +174,5 @@
     <p>Las salidas se registran desde el detalle de cada equipo.</p>
 </div>
 {% endif %}
+    {% include 'includes/paginacion.html' with page_obj=page_obj querystring=querystring page_param='pagina' aria_label='Paginación de salidas registradas' %}
 {% endblock %}

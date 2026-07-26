@@ -1,0 +1,134 @@
+{% extends 'base.html' %}
+{% load econotec_extras %}
+
+{% block title %}Control de Pagos de Ventas — Econotec{% endblock %}
+
+{% block content %}
+<style>
+    .ventas-pago-menu-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 20px;
+        margin-top: 22px;
+    }
+    .ventas-pago-card {
+        text-decoration: none;
+        color: inherit;
+        min-height: 190px;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        transition: transform .15s ease, box-shadow .15s ease;
+    }
+    .ventas-pago-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 12px 28px rgba(15, 23, 42, 0.12);
+    }
+    .ventas-pago-card-head {
+        display: flex;
+        gap: 14px;
+        align-items: flex-start;
+    }
+    .ventas-pago-icon {
+        font-size: 40px;
+        line-height: 1;
+        width: 54px;
+        text-align: center;
+        flex: 0 0 54px;
+    }
+    .ventas-pago-card h3 {
+        font-size: 20px;
+        margin: 0 0 7px;
+    }
+    .ventas-pago-card p {
+        color: var(--text-muted);
+        font-size: 13px;
+        margin: 0;
+        line-height: 1.35;
+    }
+    .ventas-pago-meta {
+        border-top: 1px solid var(--border-color);
+        margin-top: 18px;
+        padding-top: 12px;
+        display: flex;
+        justify-content: space-between;
+        gap: 10px;
+        flex-wrap: wrap;
+        font-size: 12px;
+        font-weight: 800;
+    }
+    .ventas-pago-note {
+        background: rgba(249, 118, 24, 0.08);
+        border: 1px solid rgba(249, 118, 24, 0.22);
+        border-radius: 14px;
+        padding: 14px 18px;
+        color: var(--text-muted);
+        margin-top: 18px;
+        font-size: 13px;
+    }
+    @media (max-width: 720px) {
+        .ventas-pago-card {
+            min-height: auto;
+        }
+        .ventas-pago-card-head {
+            flex-direction: column;
+        }
+        .ventas-pago-icon {
+            text-align: left;
+            width: auto;
+        }
+    }
+</style>
+
+<div class="crumb">
+    <a href="{% url 'econotec:bienvenida' %}">Inicio</a> /
+    <a href="{% url 'econotec:venta_menu' %}">Venta de Producto</a> /
+    Control de Pago de Ventas
+</div>
+
+<div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:14px;">
+    <div>
+        <h2 class="page-title">Control de Pago de <span class="accent">Ventas</span></h2>
+        <p class="page-subtitle">Elige cómo quieres revisar los pagos de ventas de producto.</p>
+    </div>
+    <div style="display:flex; gap:8px; flex-wrap:wrap;">
+        <a href="{% url 'econotec:venta_menu' %}" class="btn btn-secondary">← Volver a ventas</a>
+        <a href="{% url 'econotec:pagos_ventas_lista' %}" class="btn btn-primary">Ver todo</a>
+    </div>
+</div>
+
+<div class="ventas-pago-note">
+    <strong>Total de ventas en control:</strong> {{ total_ventas }}.
+    Usa <strong>Pago completo</strong> para ventas pagadas al instante y <strong>Pagos parciales</strong> para ventas con abono inicial o historial de abonos.
+</div>
+
+<div class="ventas-pago-menu-grid">
+    <a href="{% url 'econotec:pagos_ventas_completos' %}" class="card-box ventas-pago-card" style="border-left: 5px solid #2e7d32;">
+        <div class="ventas-pago-card-head">
+            <div class="ventas-pago-icon">✅</div>
+            <div>
+                <h3 style="color:#2e7d32;">Pago completo</h3>
+                <p>Ventas que quedaron pagadas al registrarse. Aquí solo revisas el pago registrado, sin historial de abonos.</p>
+            </div>
+        </div>
+        <div class="ventas-pago-meta">
+            <span style="color:#2e7d32;">Ventas: {{ total_completas }}</span>
+            <span style="color:#2e7d32;">Cobrado: {{ cobrado_completo|dinero_signo }}</span>
+        </div>
+    </a>
+
+    <a href="{% url 'econotec:pagos_ventas_parciales' %}" class="card-box ventas-pago-card" style="border-left: 5px solid #d97706;">
+        <div class="ventas-pago-card-head">
+            <div class="ventas-pago-icon">🧾</div>
+            <div>
+                <h3 style="color:#d97706;">Pagos parciales</h3>
+                <p>Ventas con abono inicial o historial de abonos. Desde aquí revisas saldo, abonos y puedes ingresar pagos pendientes.</p>
+            </div>
+        </div>
+        <div class="ventas-pago-meta">
+            <span style="color:#d97706;">Ventas: {{ total_parciales }}</span>
+            <span style="color:#dc2626;">Saldo: {{ saldo_parcial|dinero_signo }}</span>
+        </div>
+    </a>
+</div>
+{% endblock %}

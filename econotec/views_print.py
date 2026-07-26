@@ -322,6 +322,180 @@ def _draw_paragraph(c, x, y, label, text, max_w=520, font_size=9, lines=3):
     return cy
 
 
+PDF_INVENTARIO_CATEGORIAS = {
+    'impresora': {
+        'nombre': 'Impresora',
+        'tipos': {
+            'impresora-laser': 'Impresora Laser',
+            'impresora-inyeccion': 'Impresora Inyección',
+        },
+    },
+    'computadora': {
+        'nombre': 'Computadora',
+        'tipos': {
+            'pc': 'PC',
+            'laptops': 'Laptops',
+        },
+    },
+    'consola': {
+        'nombre': 'Consola',
+        'tipos': {
+            'consola-de-mesa': 'Consola de mesa',
+            'portatil': 'Portátil',
+        },
+    },
+    'celular': {'nombre': 'Celular', 'tipos': {'celular': 'Celular'}},
+    'tablet': {'nombre': 'Tablet', 'tipos': {'tablet': 'Tablet'}},
+    'mando': {'nombre': 'Mando', 'tipos': {'mando': 'Mando'}},
+}
+
+
+def _texto_slug_legible(valor):
+    valor = (valor or '').strip()
+    if not valor:
+        return ''
+    return valor.replace('-', ' ').replace('_', ' ').title()
+
+
+def _valor_producto_visible(valor):
+    valor = str(valor or '').strip()
+    if not valor or valor.upper() in {'N/A', 'NA', 'NONE', '—', '-'}:
+        return ''
+    return valor
+
+
+def _venta_categoria_nombre(categoria):
+    info = PDF_INVENTARIO_CATEGORIAS.get(categoria or '')
+    return (info or {}).get('nombre') or _texto_slug_legible(categoria)
+
+
+def _venta_tipo_nombre(categoria, tipo):
+    info = PDF_INVENTARIO_CATEGORIAS.get(categoria or '')
+    tipo_nombre = ((info or {}).get('tipos') or {}).get(tipo or '')
+    return tipo_nombre or _texto_slug_legible(tipo)
+
+
+def _venta_productos_pdf_items(ingreso):
+    """Detalles de productos para el PDF de venta, sin sede ni stock."""
+    relaciones = list(
+        ingreso.productos_inventario
+        .select_related('inventario_item')
+        .all()
+    )
+    if not relaciones:
+        descripcion = (ingreso.problema_reportado or '').strip()
+        return [{'titulo': descripcion or 'Producto vendido', 'detalles': []}]
+
+    items = []
+    for relacion in relaciones:
+        item = relacion.inventario_item
+        categoria = _valor_producto_visible(_venta_categoria_nombre(item.categoria))
+        tipo = _valor_producto_visible(_venta_tipo_nombre(item.categoria, item.tipo))
+        marca = _valor_producto_visible(item.marca)
+        modelo = _valor_producto_visible(item.modelo)
+        serie = _valor_producto_visible(item.serie)
+
+        detalles = []
+        if categoria:
+            detalles.append(f'Categoría: {categoria}')
+        if tipo and tipo != categoria:
+            detalles.append(f'Tipo: {tipo}')
+        if marca:
+            detalles.append(f'Marca: {marca}')
+        if modelo:
+            detalles.append(f'Modelo: {modelo}')
+        if serie:
+            detalles.append(f'Serie: {serie}')
+
+        items.append({
+            'titulo': f'{relacion.cantidad} x {item.producto}',
+            'detalles': detalles,
+        })
+    return items
+
+
+def _wrap_pdf_text(c, text, font_name, font_size, max_w, max_lines=None):
+    palabras = str(text or '').split()
+    if not palabras:
+        return []
+
+    lineas = []
+    linea = ''
+    for palabra in palabras:
+        prueba = (linea + ' ' + palabra).strip()
+        if linea and c.stringWidth(prueba, font_name, font_size) > max_w:
+            lineas.append(linea)
+            linea = palabra
+            if max_lines and len(lineas) >= max_lines:
+                break
+        else:
+            linea = prueba
+    if linea and (not max_lines or len(lineas) < max_lines):
+        lineas.append(linea)
+    return lineas
+
+
+def _clip_pdf_text(c, text, font_name, font_size, max_w):
+    text = str(text or '—')
+    if c.stringWidth(text, font_name, font_size) <= max_w:
+        return text
+    sufijo = '...'
+    while text and c.stringWidth(text + sufijo, font_name, font_size) > max_w:
+        text = text[:-1]
+    return (text + sufijo) if text else sufijo
+
+
+def _venta_metodo_pago_pdf(ingreso):
+    resumen = (ingreso.resumen_metodos_pago or '').strip()
+    if resumen:
+        return resumen
+    metodo = (ingreso.anticipo_metodo or '').strip()
+    if metodo:
+        return ingreso.get_anticipo_metodo_display()
+    return '—'
+
+
+def _draw_productos_venta_pdf(c, x, y, ingreso, max_w=510):
+    from reportlab.lib.colors import Color, black
+
+    naranja = Color(*ECO_NARANJA)
+    borde = Color(0.88, 0.78, 0.72)
+
+    c.setFillColor(naranja)
+    c.setFont('Helvetica-Bold', 10)
+    c.drawString(x, y, 'PRODUCTOS VENDIDOS')
+    y -= 14
+
+    for item in _venta_productos_pdf_items(ingreso):
+        titulo_lineas = _wrap_pdf_text(c, item['titulo'], 'Helvetica-Bold', 8.8, max_w - 18, max_lines=1)
+        detalle_texto = ' · '.join(item['detalles'])
+        detalle_lineas = _wrap_pdf_text(c, detalle_texto, 'Helvetica', 7.6, max_w - 18, max_lines=2)
+        if not titulo_lineas:
+            titulo_lineas = ['Producto vendido']
+
+        row_h = 16 + (len(titulo_lineas) * 10) + (max(len(detalle_lineas), 1) * 9)
+        c.setStrokeColor(borde)
+        c.setLineWidth(0.5)
+        c.rect(x, y - row_h, max_w, row_h, stroke=1, fill=0)
+
+        cy = y - 12
+        c.setFillColor(black)
+        c.setFont('Helvetica-Bold', 8.8)
+        for linea in titulo_lineas:
+            c.drawString(x + 8, cy, linea)
+            cy -= 10
+
+        c.setFont('Helvetica', 7.6)
+        detalle_lineas = detalle_lineas or ['Detalle registrado en hoja de venta.']
+        for linea in detalle_lineas:
+            c.drawString(x + 8, cy, linea)
+            cy -= 9
+
+        y -= row_h + 6
+
+    return y
+
+
 @tecnico_requerido
 def ingreso_pdf(request, pk):
     """Genera el PDF de la Solicitud de Ingreso, replicando el formato del papel."""
@@ -329,7 +503,7 @@ def ingreso_pdf(request, pk):
     naranja = Color(*ECO_NARANJA)
 
     ingreso = get_object_or_404(
-        IngresoEquipo.objects.select_related('cliente'),
+        IngresoEquipo.objects.select_related('cliente', 'tecnico_encargado'),
         pk=pk,
     )
     cliente = ingreso.cliente
@@ -353,6 +527,8 @@ def ingreso_pdf(request, pk):
 
     if es_venta:
         _draw_label_value(c, margen, y, 'Asesor Comercial:', ingreso.asesor_comercial, label_w=120, line_w=line_w)
+        y -= 22
+        _draw_label_value(c, margen, y, 'Técnico vendió:', ingreso.tecnico_encargado_nombre, label_w=120, line_w=line_w)
         y -= 22
         _draw_label_value(c, margen, y, 'Fecha de Venta:', ingreso.fecha_ingreso.strftime('%d/%m/%Y'), label_w=120, line_w=line_w)
         y -= 22
@@ -397,13 +573,9 @@ def ingreso_pdf(request, pk):
         c.drawString(margen, y, 'DETALLES DEL PRODUCTO VENDIDO')
         y -= 18
 
-        _draw_label_value(c, margen, y, 'Categoría del producto:', ingreso.tipo_equipo_display, label_w=140, line_w=360)
-        y -= 30
-
-        # ── DESCRIPCIÓN ─────────
-        y = _draw_paragraph(c, margen, y, 'DESCRIPCIÓN DE PRODUCTOS (CABLES, TINTAS, ETC.)',
-                           ingreso.problema_reportado, max_w=500, lines=4)
-        y -= 20
+        # ── Productos vendidos ─────────
+        y = _draw_productos_venta_pdf(c, margen, y, ingreso, max_w=510)
+        y -= 14
 
         # ── Valores ──────
         c.setFillColor(naranja)
@@ -416,10 +588,7 @@ def ingreso_pdf(request, pk):
         val_acord_str = f'$ {ingreso.valor_acordado:.2f}' if ingreso.valor_acordado is not None else '—'
         c.drawString(margen + 124, y + 1, val_acord_str)
 
-        # Buscar el método de pago desde la salida vinculada si existe
-        metodo_pago_txt = '—'
-        if hasattr(ingreso, 'salida') and ingreso.salida:
-            metodo_pago_txt = ingreso.salida.get_metodo_pago_final_display()
+        metodo_pago_txt = _venta_metodo_pago_pdf(ingreso)
 
         c.setFillColor(naranja)
         c.setFont('Helvetica-Bold', 9)
@@ -427,8 +596,8 @@ def ingreso_pdf(request, pk):
         c.setStrokeColor(Color(0.6, 0.6, 0.6))
         c.line(margen + 340, y - 1, margen + 480, y - 1)
         c.setFillColor(black)
-        c.setFont('Helvetica', 9)
-        c.drawString(margen + 344, y + 1, metodo_pago_txt)
+        c.setFont('Helvetica', 7.8)
+        c.drawString(margen + 344, y + 1, _clip_pdf_text(c, metodo_pago_txt, 'Helvetica', 7.8, 165))
 
         y -= 40
 
@@ -459,13 +628,14 @@ def ingreso_pdf(request, pk):
         c.setStrokeColor(Color(0.4, 0.4, 0.4))
         if ingreso.firma_cliente and ingreso.firma_cliente_imagen:
             _draw_signature_image(c, ingreso.firma_cliente_imagen, margen + 12, y + 1, 176, 32)
+        _draw_static_image(c, 'firma_tecnico_recibe.png', margen + 326, y + 1, 168, 32)
         c.line(margen, y, margen + 200, y)
         c.line(margen + 310, y, margen + 510, y)
 
         c.setFillColor(naranja)
         c.setFont('Helvetica-Bold', 7.5)
         c.drawString(margen + 50, y - 10, 'FIRMA DEL CLIENTE')
-        c.drawString(margen + 350, y - 10, 'FIRMA DEL ASESOR / VENDEDOR')
+        c.drawString(margen + 365, y - 10, 'FIRMA DEL TÉCNICO')
 
     else:
         # ── DETALLES DEL EQUIPO (Reparaciones) ─────────

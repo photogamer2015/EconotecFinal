@@ -138,8 +138,13 @@
 
 <div class="crumb">
     <a href="{% url 'econotec:bienvenida' %}">Inicio</a> /
-    <a href="{% url 'econotec:pagos_lista' %}">Pagos</a> /
-    <a href="{% url 'econotec:ingreso_abonos' pk=ingreso.pk %}">Equipo {{ ingreso.codigo_equipo }}</a> /
+    {% if ingreso.sede == 'ventas' %}
+        <a href="{% url 'econotec:pagos_ventas_menu' %}">Pagos de Ventas</a> /
+        <a href="{% url 'econotec:ingreso_abonos' pk=ingreso.pk %}">Venta {{ ingreso.codigo_equipo }}</a> /
+    {% else %}
+        <a href="{% url 'econotec:pagos_lista' %}">Pagos</a> /
+        <a href="{% url 'econotec:ingreso_abonos' pk=ingreso.pk %}">Equipo {{ ingreso.codigo_equipo }}</a> /
+    {% endif %}
     {{ titulo }}
 </div>
 
@@ -150,7 +155,11 @@
 
     <div style="background: var(--primary-light); padding: 12px 16px; border-radius: 8px; margin-bottom: 18px;">
         <strong>Cliente:</strong> {{ ingreso.cliente.nombres }}<br>
-        <strong>Equipo:</strong> {{ ingreso.tipo_equipo_display }} — {{ ingreso.marca }}<br>
+        {% if ingreso.sede == 'ventas' %}
+            <strong>Producto:</strong> {{ ingreso.problema_reportado|default:"Venta de producto" }}<br>
+        {% else %}
+            <strong>Equipo:</strong> {{ ingreso.tipo_equipo_display }} — {{ ingreso.marca }}<br>
+        {% endif %}
         <strong>Saldo pendiente:</strong>
         <span style="color: var(--primary-dark); font-weight: 800;">{{ ingreso.diferencia|dinero_signo }}</span>
         {% if ingreso.bodegaje_pendiente > 0 %}

@@ -828,7 +828,7 @@
     <a href="{% url 'econotec:ingreso_menu' %}">Ingreso de Equipo</a> / {{ titulo }}
 </div>
 
-<form method="post" class="form-card" id="ingreso-form">
+<form method="post" class="form-card" id="ingreso-form" autocomplete="off">
     {% csrf_token %}
 
     <div class="top-meta">

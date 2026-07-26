@@ -67,6 +67,9 @@
         font-size: 12px;
         font-weight: 750;
     }
+    .inventario-causa-field.is-hidden {
+        display: none;
+    }
     .inventario-form-actions {
         display: flex;
         justify-content: flex-end;
@@ -183,10 +186,20 @@
                 {{ form.estado }}
                 {% if form.estado.errors %}<div class="field-errors">{{ form.estado.errors }}</div>{% endif %}
             </div>
+            <div class="inventario-causa-field" id="inventario-causa-field">
+                <label class="form-label" for="{{ form.causa_no_disponible.id_for_label }}">Causa de no disponibilidad</label>
+                {{ form.causa_no_disponible }}
+                {% if form.causa_no_disponible.errors %}<div class="field-errors">{{ form.causa_no_disponible.errors }}</div>{% endif %}
+            </div>
             <div>
                 <label class="form-label" for="{{ form.cantidad.id_for_label }}">Cantidad</label>
                 {{ form.cantidad }}
                 {% if form.cantidad.errors %}<div class="field-errors">{{ form.cantidad.errors }}</div>{% endif %}
+            </div>
+            <div>
+                <label class="form-label" for="{{ form.costo.id_for_label }}">Costo (USD)</label>
+                {{ form.costo }}
+                {% if form.costo.errors %}<div class="field-errors">{{ form.costo.errors }}</div>{% endif %}
             </div>
             <div>
                 <label class="form-label" for="{{ form.ubicacion.id_for_label }}">Ubicación</label>
@@ -205,4 +218,22 @@
         </div>
     </form>
 </div>
+<script>
+    (function () {
+        var estado = document.getElementById('{{ form.estado.id_for_label }}');
+        var causaWrap = document.getElementById('inventario-causa-field');
+        var causa = document.getElementById('{{ form.causa_no_disponible.id_for_label }}');
+        if (!estado || !causaWrap || !causa) return;
+
+        function syncCausaNoDisponible() {
+            var noDisponible = estado.value === 'no_disponible';
+            causaWrap.classList.toggle('is-hidden', !noDisponible);
+            causa.required = noDisponible;
+            if (!noDisponible) causa.value = '';
+        }
+
+        estado.addEventListener('change', syncCausaNoDisponible);
+        syncCausaNoDisponible();
+    })();
+</script>
 {% endblock %}

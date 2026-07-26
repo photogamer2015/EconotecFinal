@@ -59,7 +59,10 @@ def _queryset_asesores():
 class InventarioItemForm(forms.ModelForm):
     class Meta:
         model = InventarioItem
-        fields = ['producto', 'marca', 'modelo', 'serie', 'estado', 'cantidad', 'ubicacion']
+        fields = [
+            'producto', 'marca', 'modelo', 'serie', 'estado',
+            'causa_no_disponible', 'cantidad', 'costo', 'ubicacion',
+        ]
         widgets = {
             'producto': forms.TextInput(attrs={
                 'class': 'form-input',
@@ -82,11 +85,19 @@ class InventarioItemForm(forms.ModelForm):
                 'autocomplete': 'off',
             }),
             'estado': forms.Select(attrs={'class': 'form-input'}),
+            'causa_no_disponible': forms.Select(attrs={'class': 'form-input'}),
             'cantidad': forms.NumberInput(attrs={
                 'class': 'form-input',
                 'min': '0',
                 'inputmode': 'numeric',
                 'placeholder': '1',
+            }),
+            'costo': forms.NumberInput(attrs={
+                'class': 'form-input',
+                'min': '0',
+                'step': '0.01',
+                'inputmode': 'decimal',
+                'placeholder': '0.00',
             }),
             'ubicacion': forms.Select(attrs={'class': 'form-input'}),
         }
@@ -94,6 +105,10 @@ class InventarioItemForm(forms.ModelForm):
     def __init__(self, *args, sede_slug='', **kwargs):
         super().__init__(*args, **kwargs)
         self.fields['serie'].required = False
+        for field_name, field in self.fields.items():
+            if field_name not in {'serie', 'causa_no_disponible'}:
+                field.required = True
+        self.fields['causa_no_disponible'].required = False
         if sede_slug == 'guayaquil':
             self.fields['ubicacion'].choices = [
                 ('guayaquil_norte', 'Guayaquil Norte'),
@@ -111,6 +126,26 @@ class InventarioItemForm(forms.ModelForm):
             raise forms.ValidationError('La cantidad no puede ser negativa.')
         return cantidad
 
+    def clean_costo(self):
+        costo = self.cleaned_data.get('costo') or 0
+        if costo < 0:
+            raise forms.ValidationError('El costo no puede ser negativo.')
+        return costo
+
+    def clean(self):
+        cleaned_data = super().clean()
+        estado = cleaned_data.get('estado')
+        causa = cleaned_data.get('causa_no_disponible')
+        if estado == 'no_disponible':
+            if not causa:
+                self.add_error(
+                    'causa_no_disponible',
+                    'Indica la causa por la que este producto no está disponible.',
+                )
+        else:
+            cleaned_data['causa_no_disponible'] = ''
+        return cleaned_data
+
 
 # ─────────────────────────────────────────────────────────
 # Cliente
@@ -124,22 +159,36 @@ class ClienteForm(forms.ModelForm):
             'cedula': forms.TextInput(attrs={
                 'class': 'form-input', 'placeholder': 'Ej.:0919254458',
                 'pattern': '[0-9]+',
+                'inputmode': 'numeric',
+                'autocomplete': 'off',
+                'autocapitalize': 'off',
+                'spellcheck': 'false',
                 'title': 'Por favor ingrese solo números.',
                 'oninvalid': 'this.setCustomValidity("Por favor ingrese solo valores numéricos para Cédula o RUC.")',
                 'oninput': 'this.setCustomValidity("")',
             }),
             'nombres': forms.TextInput(attrs={
                 'class': 'form-input', 'placeholder': 'Ej.: David Guevara',
+                'autocomplete': 'name',
+                'autocapitalize': 'words',
             }),
             'whatsapp': forms.TextInput(attrs={
                 'class': 'form-input', 'placeholder': 'Ej.:0996345364',
                 'pattern': '[0-9]+',
+                'inputmode': 'tel',
+                'autocomplete': 'tel',
+                'autocapitalize': 'off',
+                'spellcheck': 'false',
                 'title': 'Por favor ingrese solo números.',
                 'oninvalid': 'this.setCustomValidity("Por favor ingrese solo números para el WhatsApp.")',
                 'oninput': 'this.setCustomValidity("")',
             }),
             'correo': forms.EmailInput(attrs={
                 'class': 'form-input', 'placeholder': 'Ej.: cliente@correo.com',
+                'inputmode': 'email',
+                'autocomplete': 'email',
+                'autocapitalize': 'off',
+                'spellcheck': 'false',
                 'title': 'Por favor ingrese un correo válido.',
                 'oninvalid': 'this.setCustomValidity("Por favor incluya un signo @ y el dominio en la dirección de correo.")',
                 'oninput': 'this.setCustomValidity("")',
@@ -147,6 +196,7 @@ class ClienteForm(forms.ModelForm):
             'sector': forms.Select(attrs={'class': 'form-input'}),
             'sector_otro': forms.TextInput(attrs={
                 'class': 'form-input', 'placeholder': 'Especificar sector si elegiste "Otro"',
+                'autocomplete': 'off',
             }),
         }
 
@@ -227,23 +277,40 @@ class IngresoEquipoForm(forms.ModelForm):
             'equipo_garantia', 'equipo_garantia_manual', 'motivo_garantia',
         ]
         widgets = {
-            'numero_factura': forms.TextInput(attrs={'class': 'form-input', 'placeholder': '(opcional)'}),
-            'asesor_comercial': forms.TextInput(attrs={'class': 'form-input', 'placeholder': 'Ej.: Kimberly'}),
+            'numero_factura': forms.TextInput(attrs={
+                'class': 'form-input', 'placeholder': '(opcional)',
+                'autocomplete': 'off', 'autocapitalize': 'characters',
+            }),
+            'asesor_comercial': forms.TextInput(attrs={
+                'class': 'form-input', 'placeholder': 'Ej.: Kimberly',
+                'autocomplete': 'off', 'autocapitalize': 'words',
+            }),
             'tecnico_encargado': forms.Select(attrs={'class': 'form-input'}),
             'fecha_ingreso': forms.DateInput(attrs={'class': 'form-input', 'type': 'date'}, format='%Y-%m-%d'),
             'tipo_equipo': forms.Select(attrs={'class': 'form-input', 'id': 'id_tipo_equipo'}),
             'tipo_equipo_otro': forms.TextInput(attrs={
                 'class': 'form-input',
                 'placeholder': 'Solo si elegiste "Otros equipos"',
+                'autocomplete': 'off',
+                'autocapitalize': 'words',
             }),
             'marca': forms.TextInput(attrs={
                 'class': 'form-input', 'placeholder': 'Ej.: BlackBerry',
+                'autocomplete': 'off',
+                'autocapitalize': 'words',
+                'spellcheck': 'false',
             }),
             'modelo_serie': forms.TextInput(attrs={
                 'class': 'form-input', 'placeholder': 'Ej.: Curve 9320',
+                'autocomplete': 'off',
+                'autocapitalize': 'characters',
+                'spellcheck': 'false',
             }),
             'serie': forms.TextInput(attrs={
                 'class': 'form-input', 'placeholder': 'Ej.: SN123456 (opcional)',
+                'autocomplete': 'off',
+                'autocapitalize': 'characters',
+                'spellcheck': 'false',
             }),
             'accesorios_entregados': forms.Textarea(attrs={
                 'class': 'form-input', 'rows': 2,

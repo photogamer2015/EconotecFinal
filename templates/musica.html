@@ -3,7 +3,7 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>EconoPlayer - Música</title>
     <style>
         :root {
@@ -81,6 +81,29 @@
             color: #9ca3af;
             text-align: center;
             font-size: 14px;
+        }
+        @media (max-width: 520px) {
+            body {
+                min-height: 100dvh;
+                height: auto;
+                padding:
+                    max(14px, env(safe-area-inset-top))
+                    max(12px, env(safe-area-inset-right))
+                    max(18px, env(safe-area-inset-bottom))
+                    max(12px, env(safe-area-inset-left));
+            }
+            .search-container {
+                width: 100%;
+                display: grid;
+                grid-template-columns: 1fr;
+            }
+            input,
+            button {
+                width: 100%;
+                min-height: 46px;
+                box-sizing: border-box;
+                font-size: 16px;
+            }
         }
     </style>
 </head>

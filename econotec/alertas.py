@@ -28,6 +28,7 @@ from datetime import date, timedelta
 from decimal import Decimal
 from urllib.parse import quote
 from django.urls import reverse
+from django.utils import timezone
 
 from .models import IngresoEquipo, SalidaEquipo
 
@@ -386,3 +387,52 @@ def whatsapp_link_hoja_ingreso(request, ingreso):
     )
 
     return f"https://api.whatsapp.com/send?phone={numero_limpio}&text={quote(texto)}"
+
+
+def _saludo_por_hora(ahora=None):
+    """Saludo formal según la hora local."""
+    if ahora is None:
+        ahora = timezone.localtime()
+    elif timezone.is_aware(ahora):
+        ahora = timezone.localtime(ahora)
+
+    hora = ahora.hour
+    if 5 <= hora < 12:
+        return 'Buenos días'
+    if 12 <= hora < 19:
+        return 'Buenas tardes'
+    return 'Buenas noches'
+
+
+def whatsapp_link_venta_producto(venta, ahora=None):
+    """
+    Mensaje al cliente para enviar por WhatsApp la hoja PDF de una venta de producto.
+    Devuelve None si el cliente no tiene número de WhatsApp válido.
+    """
+    numero = (venta.cliente.whatsapp or '').strip()
+    if not numero:
+        return None
+    numero_limpio = _normalizar_numero_ec(numero)
+    if not numero_limpio:
+        return None
+
+    saludo = _saludo_por_hora(ahora)
+    nombre_cliente = (venta.cliente.nombres or '').strip() or 'cliente'
+    descripcion = (venta.problema_reportado or 'Producto comprado').strip()
+    valor = venta.valor_acordado or Decimal('0.00')
+
+    mensaje = (
+        f"{saludo}, *{nombre_cliente}*.\n\n"
+        f"Le saluda el equipo de *Econotec*.\n\n"
+        f"Le adjunto la hoja correspondiente a su producto comprado en Econotec.\n\n"
+        f"📄 *Detalle de la compra*\n"
+        f"• Venta: *{venta.codigo_equipo}*\n"
+        f"• Producto(s): {descripcion}\n"
+        f"• Fecha: {venta.fecha_ingreso.strftime('%d/%m/%Y')}\n"
+        f"• Valor: ${valor:.2f}\n\n"
+        f"Por favor revise el documento adjunto y consérvelo como respaldo de su compra.\n\n"
+        f"Gracias por confiar en *Econotec*.\n"
+        f"Saludos cordiales."
+    )
+
+    return f"https://api.whatsapp.com/send?phone={numero_limpio}&text={quote(mensaje)}"

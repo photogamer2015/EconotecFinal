@@ -253,6 +253,22 @@
         font-size: 11px;
         font-weight: 850;
     }
+    .venta-inventario-card-actions {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+        gap: 8px;
+    }
+    .venta-inventario-edit {
+        border: 0;
+        border-radius: 7px;
+        padding: 7px 9px;
+        background: rgba(249, 118, 24, .14);
+        color: var(--primary-dark);
+        font: inherit;
+        font-size: 11px;
+        font-weight: 850;
+    }
     .venta-inventario-modal {
         position: fixed;
         inset: 0;
@@ -375,6 +391,10 @@
     }
     .venta-catalogo-row strong { display: block; font-size: 14px; }
     .venta-catalogo-row small { display: block; margin-top: 3px; color: var(--text-muted); font-size: 11px; }
+    .venta-catalogo-row.is-unavailable small.venta-catalogo-causa {
+        color: var(--danger);
+        font-weight: 900;
+    }
     .venta-catalogo-stock { color: var(--success); font-size: 12px; font-weight: 850; }
     .venta-catalogo-status-danger { color: var(--danger); font-size: 12px; font-weight: 900; }
     .venta-catalogo-arrow { color: var(--primary); font-size: 20px; font-weight: 900; }
@@ -395,6 +415,10 @@
         color: var(--text-muted);
         font-size: 12px;
         font-weight: 750;
+    }
+    .venta-unavailable-card .venta-unavailable-cause {
+        color: var(--danger);
+        font-weight: 950;
     }
     .venta-quantity-summary {
         padding: 13px;
@@ -449,11 +473,278 @@
     .venta-modal-actions { display: flex; justify-content: flex-end; gap: 9px; margin-top: 18px; }
     .venta-modal-note { color: var(--text-muted); font-size: 13px; line-height: 1.45; }
     .venta-modal-error { display: none; margin-top: 10px; color: var(--danger); font-size: 12px; font-weight: 750; }
+    .venta-valores-box,
+    .venta-pago-box,
+    .venta-factura-box {
+        margin-top: 14px;
+        padding: 16px;
+        border: 1px solid rgba(249, 118, 24, .22);
+        border-radius: 12px;
+        background: rgba(255, 248, 243, .72);
+    }
+    .venta-valores-box h4,
+    .venta-pago-box h4,
+    .venta-factura-box h4 {
+        margin: 0 0 12px;
+        color: var(--text-main);
+        font-size: 15px;
+        font-weight: 850;
+    }
+    .venta-valores-list {
+        display: grid;
+        gap: 8px;
+        margin-bottom: 12px;
+    }
+    .venta-valor-row {
+        display: flex;
+        justify-content: space-between;
+        gap: 10px;
+        padding: 10px 12px;
+        border: 1px solid var(--border-color);
+        border-radius: 9px;
+        background: var(--card-bg);
+        color: var(--text-main);
+        font-size: 13px;
+    }
+    .venta-valor-row small {
+        display: block;
+        color: var(--text-muted);
+        font-size: 11px;
+        margin-top: 2px;
+    }
+    .venta-valor-money {
+        text-align: right;
+        white-space: nowrap;
+    }
+    .venta-valor-money strong {
+        display: block;
+        color: var(--success);
+    }
+    .venta-valor-source {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        flex-wrap: wrap;
+        margin-bottom: 7px;
+    }
+    .venta-valor-check {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 11px;
+        border-radius: 999px;
+        background: rgba(249, 118, 24, .10);
+        color: var(--primary-dark);
+        font-size: 12px;
+        font-weight: 850;
+        cursor: pointer;
+        user-select: none;
+    }
+    .venta-valor-check input {
+        width: 16px;
+        height: 16px;
+        accent-color: var(--primary);
+    }
+    .venta-valor-auto-input {
+        background: rgba(22, 163, 74, .08) !important;
+        color: var(--success) !important;
+        font-weight: 850 !important;
+    }
+    .venta-monto-readonly {
+        background: rgba(22, 163, 74, .08) !important;
+        color: var(--success);
+        font-weight: 850;
+    }
+    .venta-factura-disabled {
+        opacity: .58;
+        background: rgba(107, 114, 128, .06);
+    }
+    .firma-panel {
+        padding: 18px;
+        border: 1px solid rgba(249, 118, 24, .22);
+        border-radius: 12px;
+        background: rgba(255, 248, 243, .72);
+    }
+    .firma-label {
+        margin-bottom: 8px;
+        color: var(--text-muted);
+        font-size: 13px;
+        font-weight: 850;
+    }
+    .firma-opciones {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+    }
+    .firma-opcion {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        min-height: 52px;
+        padding: 12px 14px;
+        border: 1px solid var(--border-color);
+        border-radius: 10px;
+        background: var(--card-bg);
+        color: var(--text-main);
+        font-weight: 850;
+        cursor: pointer;
+        transition: border-color .15s ease, background .15s ease, box-shadow .15s ease;
+    }
+    .firma-opcion.is-active {
+        border-color: var(--primary);
+        background: var(--hover-bg);
+        box-shadow: 0 0 0 1px rgba(249, 118, 24, .12);
+    }
+    .firma-opcion input {
+        width: 18px;
+        height: 18px;
+        accent-color: var(--primary);
+    }
+    .firma-controls {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 12px;
+        margin-top: 14px;
+    }
+    .firma-status {
+        color: var(--text-muted);
+        font-size: 13px;
+        font-weight: 800;
+        line-height: 1.35;
+    }
+    .firma-no-disponible {
+        background: #e5e7eb !important;
+        color: #2d2f33 !important;
+    }
+    .firma-lista {
+        background: var(--primary) !important;
+        color: #fff !important;
+    }
+    .firma-preview {
+        display: none;
+        margin-top: 12px;
+        min-height: 86px;
+        padding: 10px;
+        border: 1px dashed var(--border-color);
+        border-radius: 10px;
+        background: #fff;
+    }
+    .firma-preview img {
+        display: block;
+        max-width: 100%;
+        max-height: 96px;
+        object-fit: contain;
+    }
+    .firma-modal {
+        position: fixed;
+        inset: 0;
+        z-index: 11000;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        padding: 18px;
+        background: rgba(17, 24, 39, .62);
+        backdrop-filter: blur(5px);
+    }
+    .firma-modal.show { display: flex; }
+    .firma-card {
+        width: min(720px, 96vw);
+        max-height: calc(100dvh - 36px);
+        overflow: hidden;
+        border-radius: 16px;
+        background: var(--card-bg);
+        box-shadow: 0 24px 70px rgba(0, 0, 0, .28);
+    }
+    .firma-head {
+        padding: 15px 18px;
+        background: linear-gradient(135deg, #f97618, #c75b12);
+        color: #fff;
+    }
+    .firma-head h3 {
+        margin: 0;
+        color: #fff;
+        font-size: 16px;
+        font-weight: 900;
+        text-transform: none;
+        letter-spacing: 0;
+    }
+    .firma-body {
+        padding: 16px;
+        overflow: auto;
+    }
+    .firma-instruccion {
+        margin: 0 0 10px;
+        color: var(--text-muted);
+        font-size: 13px;
+        font-weight: 800;
+        line-height: 1.4;
+    }
+    .firma-canvas-wrap {
+        border: 2px solid #d1d5db;
+        border-radius: 12px;
+        background: #fff;
+        overflow: hidden;
+    }
+    #firma-canvas {
+        display: block;
+        width: 100%;
+        height: clamp(210px, 44dvh, 280px);
+        touch-action: none;
+        cursor: crosshair;
+    }
+    .firma-actions {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+        gap: 10px;
+        margin-top: 14px;
+    }
+    .firma-btn {
+        border: 0;
+        border-radius: 9px;
+        padding: 10px 14px;
+        font: inherit;
+        font-size: 13px;
+        font-weight: 900;
+        cursor: pointer;
+    }
+    .firma-btn.cancelar { background: #e5e7eb; color: #222; }
+    .firma-btn.reintentar { display: none; background: #374151; color: #fff; }
+    .firma-btn.aceptar { background: var(--primary); color: #fff; }
+    .firma-btn.aceptar:disabled {
+        background: #d1d5db;
+        color: #6b7280;
+        cursor: not-allowed;
+    }
+    .firma-aviso-card {
+        width: min(440px, 94vw);
+    }
+    .firma-aviso-texto {
+        margin: 0;
+        color: var(--text-main);
+        font-size: 15px;
+        font-weight: 800;
+        line-height: 1.45;
+    }
+    body.firma-modal-open {
+        overflow: hidden;
+        touch-action: none;
+    }
     @media (max-width: 650px) {
         .venta-catalogo-row { grid-template-columns: 1fr auto; }
         .venta-catalogo-stock { grid-column: 1; }
         .venta-confirm-detail { grid-template-columns: 1fr; }
         .venta-modal-top, .venta-modal-body { padding-left: 16px; padding-right: 16px; }
+        .venta-inventario-card-foot { align-items: stretch; flex-direction: column; }
+        .venta-inventario-card-actions { justify-content: stretch; }
+        .venta-inventario-card-actions button { flex: 1 1 auto; min-height: 40px; }
+        .firma-opciones { grid-template-columns: 1fr; }
+        .firma-controls { display: grid; grid-template-columns: 1fr; }
+        #btn-abrir-firma { width: 100%; min-height: 48px; }
+        .firma-actions { display: grid; grid-template-columns: 1fr; }
+        .firma-btn { width: 100%; min-height: 48px; }
     }
 </style>
 
@@ -608,13 +899,28 @@
     <!-- Valores de la venta -->
     <div class="form-section">
         <h3>Valores de la Venta</h3>
-        <div class="form-row cols-1">
-            <div>
-                <label class="form-label">Valor total de la venta (USD) *</label>
-                {{ ing_form.valor_acordado }}
+        <div class="venta-valores-box">
+            <h4>Valor / valores del producto</h4>
+            <div class="venta-valores-list" id="venta-valores-productos">
+                <div class="venta-inventario-empty">Selecciona productos del inventario para ver aquí el detalle de valores.</div>
             </div>
-            <div style="display:none;">
-                {{ ing_form.abono_anticipo }}
+            <div>
+                <div class="venta-valor-source">
+                    <label class="form-label" for="{{ ing_form.valor_acordado.id_for_label }}" style="margin:0;">Valor total de la venta (USD) *</label>
+                    <label class="venta-valor-check" for="id_venta_valor_desde_inventario">
+                        <input type="checkbox"
+                               name="venta_valor_desde_inventario"
+                               id="id_venta_valor_desde_inventario"
+                               value="si"
+                               {% if venta_pago_form.valor_desde_inventario %}checked{% endif %}>
+                        Valor desde inventario
+                    </label>
+                </div>
+                {{ ing_form.valor_acordado }}
+                {{ ing_form.valor_acordado.errors }}
+                <small id="venta-valor-helper" style="display:block; color:var(--text-muted); font-size:11px; margin-top:5px;">
+                    Si el check está activo, el total se calcula desde el costo del inventario. Si lo quitas, puedes escribir el valor manualmente.
+                </small>
             </div>
         </div>
         <script>
@@ -625,20 +931,48 @@
             }
         </script>
 
-        <!-- Método de Pago Inicial (se muestra dinámicamente) -->
-        <div id="wrap_pago_inicial" style="display:none; margin-top:14px; background:#f5f7fa; padding:15px; border-radius:8px; border:1px solid #e1e4e8;">
-            <h4 style="margin-top:0; margin-bottom:10px; color:#333; font-size:14px;">MÉTODO DE PAGO INICIAL</h4>
+        <!-- Método de pago de la venta -->
+        <div id="wrap_pago_inicial" class="venta-pago-box">
+            <h4>💳 Método de pago</h4>
+            <div style="height:2px; background:#f5a623; margin:0 0 14px;"></div>
+            <div class="form-row cols-2" style="margin-bottom:12px;">
+                <div>
+                    <label class="form-label" for="id_venta_pago_modalidad">Forma de cobro *</label>
+                    <select name="venta_pago_modalidad" id="id_venta_pago_modalidad" class="form-input" required>
+                        <option value="directo" {% if venta_pago_form.modalidad != 'abono' %}selected{% endif %}>Pago directo / completo</option>
+                        <option value="abono" {% if venta_pago_form.modalidad == 'abono' %}selected{% endif %}>Pago por abono</option>
+                    </select>
+                    <small id="venta-modalidad-helper" style="display:block; color:var(--text-muted); font-size:11px; margin-top:5px;">
+                        Pago directo deja la venta pagada al registrar. Abono deja saldo pendiente y activa historial de pagos.
+                    </small>
+                </div>
+                <div>
+                    <label class="form-label">Monto a pagar (USD)</label>
+                    <input type="text" class="form-input venta-monto-readonly" id="venta-monto-pagar" value="$0.00" readonly>
+                    <small id="venta-monto-helper" style="display:block; color:var(--text-muted); font-size:11px; margin-top:5px;">
+                        Este monto se iguala automáticamente al valor total de la venta.
+                    </small>
+                </div>
+            </div>
+            <div id="wrap_venta_abono_inicial" style="display:none; margin-bottom:12px;">
+                <label class="form-label">Monto del abono inicial (USD) *</label>
+                {{ ing_form.abono_anticipo }}
+                {{ ing_form.abono_anticipo.errors }}
+                <small id="venta-abono-helper" style="display:block; color:var(--text-muted); font-size:11px; margin-top:5px;">
+                    Ingresa cuánto paga el cliente ahora. Debe ser menor al valor total para quedar como venta con abono.
+                </small>
+            </div>
             <div class="form-row cols-2">
                 <div>
-                    <label class="form-label">Método de pago</label>
+                    <label class="form-label">Método de pago del valor cobrado *</label>
                     {{ ing_form.anticipo_metodo }}
                 </div>
                 <div id="wrap_anticipo_banco" style="display:none;">
-                    <label class="form-label">Banco</label>
+                    <label class="form-label">Banco *</label>
                     {{ ing_form.anticipo_banco }}
                 </div>
                 <div id="wrap_anticipo_tarjeta" style="display:none;">
-                    <label class="form-label">Tarjeta / App</label>
+                    <label class="form-label">Tarjeta / App *</label>
                     {{ ing_form.anticipo_tarjeta_app }}
                 </div>
             </div>
@@ -654,7 +988,7 @@
             </div>
             
             <div id="wrap_pago_mixto" style="display:none; margin-top:14px; background:#fff; padding:15px; border-radius:8px; border:1px dashed #c4cdd5;">
-                <h5 style="margin-top:0; margin-bottom:10px; color:#1a1f36; font-size:13px;">Pago Mixto (Dividir el valor pagado en dos)</h5>
+                <h5 style="margin-top:0; margin-bottom:10px; color:#1a1f36; font-size:13px;">Pago Mixto (Dividir el valor cobrado en dos)</h5>
                 <div class="form-row cols-2">
                     <div>
                         <label class="form-label">Monto 1 (USD) *</label>
@@ -689,11 +1023,71 @@
             </div>
         </div>
 
+        <div class="venta-factura-box">
+            <h4>🧾 Factura</h4>
+            <div style="height:2px; background:#f5a623; margin:0 0 14px;"></div>
+            <div style="margin-bottom: 14px;">
+                <label class="form-label" for="id_factura_realizada">¿Factura con datos? *</label>
+                <select name="venta_factura_realizada" id="id_factura_realizada" class="form-input" required>
+                    <option value="no" {% if venta_pago_form.factura_realizada != 'si' %}selected{% endif %}>No</option>
+                    <option value="si" {% if venta_pago_form.factura_realizada == 'si' %}selected{% endif %}>Sí</option>
+                </select>
+            </div>
+            <div id="factura-data" class="venta-factura-disabled" style="border: 1px solid transparent; border-radius: 10px; padding: 12px;">
+                <div style="font-weight: 850; color: #8098c8; margin-bottom: 12px;">Datos para factura</div>
+                <div class="form-row cols-2">
+                    <div>
+                        <label class="form-label" id="label-factura-nombres" for="id_factura_nombres">Nombres / Razón Social</label>
+                        <input type="text" name="venta_factura_nombres" id="id_factura_nombres" class="form-input" placeholder="Nombres del titular de factura" value="{{ venta_pago_form.factura_nombres|default:'' }}">
+                    </div>
+                    <div>
+                        <label class="form-label" id="label-factura-cedula" for="id_factura_cedula">Número de cédula / RUC</label>
+                        <input type="text" name="venta_factura_cedula" id="id_factura_cedula" class="form-input" placeholder="Cédula / RUC" value="{{ venta_pago_form.factura_cedula|default:'' }}" pattern="[0-9]+">
+                    </div>
+                    <div>
+                        <label class="form-label" id="label-factura-correo" for="id_factura_correo">Correo electrónico</label>
+                        <input type="email" name="venta_factura_correo" id="id_factura_correo" class="form-input" placeholder="correo@ejemplo.com" value="{{ venta_pago_form.factura_correo|default:'' }}">
+                    </div>
+                </div>
+                <small id="factura-helper" style="display:block; color:var(--text-muted); font-size:11px; margin-top:10px;">
+                    Selecciona Sí para habilitar los campos de factura.
+                </small>
+            </div>
+        </div>
+
         <!-- Campos ocultos de estado (ya vienen seteados a entregado en la vista) -->
         <div style="display:none;">
             {{ ing_form.estado }}
             {{ ing_form.subestado_reparacion }}
             {{ ing_form.subestado_entregado }}
+        </div>
+    </div>
+
+    <div class="form-section">
+        <h3>Firma del Cliente</h3>
+        <div class="firma-panel">
+            {{ ing_form.firma_cliente }}
+            {{ ing_form.firma_cliente_imagen }}
+            <div>
+                <div class="firma-label">Seleccione si el cliente firma *</div>
+                <div class="firma-opciones" id="firma-cliente-opciones">
+                    {% for radio in ing_form.firma_cliente_opcion %}
+                        <label class="firma-opcion" data-firma-opcion="{{ radio.data.value }}">
+                            {{ radio.tag }}
+                            <span>{{ radio.choice_label }}</span>
+                        </label>
+                    {% endfor %}
+                </div>
+            </div>
+            {{ ing_form.firma_cliente_opcion.errors }}
+            {{ ing_form.firma_cliente_imagen.errors }}
+            <div class="firma-controls">
+                <button type="button" class="btn btn-secondary firma-no-disponible" id="btn-abrir-firma" aria-disabled="true">Firmar ahora</button>
+                <span class="firma-status" id="firma-status">Selecciona Sí o No para continuar.</span>
+            </div>
+            <div class="firma-preview" id="firma-preview" aria-live="polite">
+                <img id="firma-preview-img" alt="Firma del cliente capturada">
+            </div>
         </div>
     </div>
 
@@ -704,6 +1098,39 @@
         </button>
     </div>
 </form>
+
+<div class="firma-modal" id="firma-modal" aria-hidden="true">
+    <div class="firma-card" role="dialog" aria-modal="true" aria-labelledby="firma-modal-title">
+        <div class="firma-head">
+            <h3 id="firma-modal-title">Firma del cliente</h3>
+        </div>
+        <div class="firma-body">
+            <p class="firma-instruccion">Firme dentro del recuadro. Funciona con trackpad, mouse, pantalla táctil o pluma.</p>
+            <div class="firma-canvas-wrap">
+                <canvas id="firma-canvas"></canvas>
+            </div>
+            <div class="firma-actions">
+                <button type="button" class="firma-btn cancelar" id="firma-cancelar">Cancelar</button>
+                <button type="button" class="firma-btn reintentar" id="firma-reintentar">Reintentar</button>
+                <button type="button" class="firma-btn aceptar" id="firma-aceptar" disabled>Aceptar firma</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="firma-modal" id="firma-aviso-modal" aria-hidden="true">
+    <div class="firma-card firma-aviso-card" role="dialog" aria-modal="true" aria-labelledby="firma-aviso-title">
+        <div class="firma-head">
+            <h3 id="firma-aviso-title">Firma del cliente</h3>
+        </div>
+        <div class="firma-body">
+            <p class="firma-aviso-texto">Selecciona <strong>Sí</strong> en Firma del cliente para poder capturar la firma.</p>
+            <div class="firma-actions">
+                <button type="button" class="firma-btn aceptar" id="firma-aviso-ok">Entendido</button>
+            </div>
+        </div>
+    </div>
+</div>
 
 <div class="venta-inventario-modal" id="inventario-catalogo-modal" aria-hidden="true">
     <div class="venta-inventario-dialog" role="dialog" aria-modal="true" aria-labelledby="inventario-catalogo-title">
@@ -798,6 +1225,294 @@
     </div>
 </div>
 
+<script>
+    // Firma digital del cliente para venta de producto.
+    (function () {
+        var modal = document.getElementById('firma-modal');
+        var avisoModal = document.getElementById('firma-aviso-modal');
+        var canvas = document.getElementById('firma-canvas');
+        var btnAbrir = document.getElementById('btn-abrir-firma');
+        var btnCancelar = document.getElementById('firma-cancelar');
+        var btnAceptar = document.getElementById('firma-aceptar');
+        var btnReintentar = document.getElementById('firma-reintentar');
+        var btnAvisoOk = document.getElementById('firma-aviso-ok');
+        var inputFirma = document.getElementById('id_firma_cliente_imagen');
+        var inputFirmaFlag = document.getElementById('id_firma_cliente_check');
+        var radiosFirma = Array.prototype.slice.call(document.querySelectorAll('input[name="ing-firma_cliente_opcion"]'));
+        var status = document.getElementById('firma-status');
+        var preview = document.getElementById('firma-preview');
+        var previewImg = document.getElementById('firma-preview-img');
+        var form = document.querySelector('form.form-card');
+
+        if (!modal || !canvas || !inputFirma || !radiosFirma.length) return;
+
+        var ctx = canvas.getContext('2d');
+        var dibujando = false;
+        var tieneFirmaCanvas = false;
+        var ratio = 1;
+
+        function actualizarBloqueoFondo() {
+            var firmaAbierta = modal.classList.contains('show');
+            var avisoAbierto = avisoModal && avisoModal.classList.contains('show');
+            document.body.classList.toggle('firma-modal-open', !!(firmaAbierta || avisoAbierto));
+        }
+
+        function ajustarCanvas() {
+            var rect = canvas.getBoundingClientRect();
+            ratio = window.devicePixelRatio || 1;
+            canvas.width = Math.max(1, Math.floor(rect.width * ratio));
+            canvas.height = Math.max(1, Math.floor(rect.height * ratio));
+            ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, rect.width, rect.height);
+            ctx.strokeStyle = '#111827';
+            ctx.lineWidth = 2.4;
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            if (inputFirma.value) {
+                var img = new Image();
+                img.onload = function () {
+                    ctx.drawImage(img, 0, 0, rect.width, rect.height);
+                    marcarCanvasFirmado(true);
+                };
+                img.src = inputFirma.value;
+            } else {
+                marcarCanvasFirmado(false);
+            }
+        }
+
+        function posicion(event) {
+            var rect = canvas.getBoundingClientRect();
+            return {x: event.clientX - rect.left, y: event.clientY - rect.top};
+        }
+
+        function marcarCanvasFirmado(valor) {
+            tieneFirmaCanvas = !!valor;
+            if (btnAceptar) btnAceptar.disabled = !tieneFirmaCanvas;
+            if (btnReintentar) btnReintentar.style.display = tieneFirmaCanvas ? 'inline-flex' : 'none';
+        }
+
+        function decisionFirma() {
+            for (var i = 0; i < radiosFirma.length; i += 1) {
+                if (radiosFirma[i].checked) return radiosFirma[i].value;
+            }
+            return '';
+        }
+
+        function marcarOpcionActiva() {
+            radiosFirma.forEach(function (radio) {
+                var label = radio.closest('.firma-opcion');
+                if (label) label.classList.toggle('is-active', radio.checked);
+            });
+        }
+
+        function setValidezFirma(mensaje) {
+            radiosFirma.forEach(function (radio) { radio.setCustomValidity(''); });
+            if (mensaje && radiosFirma[0]) radiosFirma[0].setCustomValidity(mensaje);
+        }
+
+        function actualizarVistaFirma() {
+            var decision = decisionFirma();
+            var firmada = !!inputFirma.value;
+
+            if (decision === 'no' && firmada) {
+                inputFirma.value = '';
+                firmada = false;
+            }
+            if (inputFirmaFlag) inputFirmaFlag.value = firmada ? 'true' : 'false';
+            marcarOpcionActiva();
+
+            if (btnAbrir) {
+                var puedeFirmar = decision === 'si';
+                btnAbrir.classList.toggle('firma-no-disponible', !puedeFirmar);
+                btnAbrir.classList.toggle('firma-lista', puedeFirmar);
+                btnAbrir.setAttribute('aria-disabled', puedeFirmar ? 'false' : 'true');
+            }
+
+            if (status) {
+                if (!decision) {
+                    status.textContent = 'Selecciona Sí o No para continuar.';
+                    setValidezFirma('');
+                } else if (decision === 'no') {
+                    status.textContent = 'No firma seleccionado. En el PDF se imprimirá la línea en blanco.';
+                    setValidezFirma('');
+                } else if (firmada) {
+                    status.textContent = 'Firma capturada. Se imprimirá automáticamente en el PDF de la venta.';
+                    setValidezFirma('');
+                } else {
+                    status.textContent = 'Firma Sí seleccionado. Pulsa Firmar ahora para capturarla.';
+                    setValidezFirma('Captura la firma del cliente o selecciona No firma.');
+                }
+            }
+
+            if (preview && previewImg) {
+                preview.style.display = firmada ? 'block' : 'none';
+                if (firmada) previewImg.src = inputFirma.value;
+                else previewImg.removeAttribute('src');
+            }
+            if (window.__checkRequired) window.__checkRequired();
+        }
+
+        function limpiarCanvas() {
+            inputFirma.value = '';
+            ajustarCanvas();
+            marcarCanvasFirmado(false);
+            actualizarVistaFirma();
+        }
+
+        function firmaRecortadaDataUrl() {
+            var ancho = canvas.width;
+            var alto = canvas.height;
+            var datos = ctx.getImageData(0, 0, ancho, alto).data;
+            var minX = ancho;
+            var minY = alto;
+            var maxX = 0;
+            var maxY = 0;
+            var encontrado = false;
+
+            for (var y = 0; y < alto; y += 1) {
+                for (var x = 0; x < ancho; x += 1) {
+                    var i = (y * ancho + x) * 4;
+                    var alpha = datos[i + 3];
+                    var noBlanco = datos[i] < 245 || datos[i + 1] < 245 || datos[i + 2] < 245;
+                    if (alpha > 0 && noBlanco) {
+                        encontrado = true;
+                        if (x < minX) minX = x;
+                        if (y < minY) minY = y;
+                        if (x > maxX) maxX = x;
+                        if (y > maxY) maxY = y;
+                    }
+                }
+            }
+
+            if (!encontrado) return canvas.toDataURL('image/png');
+
+            var margen = Math.max(10, Math.round(12 * ratio));
+            minX = Math.max(0, minX - margen);
+            minY = Math.max(0, minY - margen);
+            maxX = Math.min(ancho - 1, maxX + margen);
+            maxY = Math.min(alto - 1, maxY + margen);
+
+            var recorte = document.createElement('canvas');
+            recorte.width = Math.max(1, maxX - minX + 1);
+            recorte.height = Math.max(1, maxY - minY + 1);
+            var recorteCtx = recorte.getContext('2d');
+            recorteCtx.fillStyle = '#ffffff';
+            recorteCtx.fillRect(0, 0, recorte.width, recorte.height);
+            recorteCtx.drawImage(
+                canvas,
+                minX, minY, recorte.width, recorte.height,
+                0, 0, recorte.width, recorte.height
+            );
+            return recorte.toDataURL('image/png');
+        }
+
+        function abrirAvisoFirma() {
+            if (!avisoModal) return;
+            avisoModal.classList.add('show');
+            avisoModal.setAttribute('aria-hidden', 'false');
+            actualizarBloqueoFondo();
+        }
+
+        function cerrarAvisoFirma() {
+            if (!avisoModal) return;
+            avisoModal.classList.remove('show');
+            avisoModal.setAttribute('aria-hidden', 'true');
+            actualizarBloqueoFondo();
+        }
+
+        function abrirModal() {
+            if (decisionFirma() !== 'si') {
+                abrirAvisoFirma();
+                return;
+            }
+            modal.classList.add('show');
+            modal.setAttribute('aria-hidden', 'false');
+            actualizarBloqueoFondo();
+            window.setTimeout(ajustarCanvas, 50);
+        }
+
+        function cerrarModal() {
+            modal.classList.remove('show');
+            modal.setAttribute('aria-hidden', 'true');
+            actualizarBloqueoFondo();
+            actualizarVistaFirma();
+        }
+
+        canvas.addEventListener('pointerdown', function (event) {
+            event.preventDefault();
+            canvas.setPointerCapture(event.pointerId);
+            dibujando = true;
+            var p = posicion(event);
+            ctx.beginPath();
+            ctx.moveTo(p.x, p.y);
+        });
+        canvas.addEventListener('pointermove', function (event) {
+            if (!dibujando) return;
+            event.preventDefault();
+            var p = posicion(event);
+            ctx.lineTo(p.x, p.y);
+            ctx.stroke();
+            marcarCanvasFirmado(true);
+        });
+        ['pointerup', 'pointercancel', 'pointerleave'].forEach(function (nombreEvento) {
+            canvas.addEventListener(nombreEvento, function (event) {
+                if (!dibujando) return;
+                event.preventDefault();
+                dibujando = false;
+                if (canvas.hasPointerCapture && canvas.hasPointerCapture(event.pointerId)) {
+                    canvas.releasePointerCapture(event.pointerId);
+                }
+            });
+        });
+
+        if (btnAbrir) btnAbrir.addEventListener('click', abrirModal);
+        if (btnCancelar) btnCancelar.addEventListener('click', cerrarModal);
+        if (btnReintentar) btnReintentar.addEventListener('click', limpiarCanvas);
+        if (btnAvisoOk) btnAvisoOk.addEventListener('click', cerrarAvisoFirma);
+        if (btnAceptar) {
+            btnAceptar.addEventListener('click', function () {
+                if (!tieneFirmaCanvas) return;
+                inputFirma.value = firmaRecortadaDataUrl();
+                actualizarVistaFirma();
+                cerrarModal();
+            });
+        }
+        radiosFirma.forEach(function (radio) {
+            radio.addEventListener('change', function () {
+                if (decisionFirma() === 'no') inputFirma.value = '';
+                actualizarVistaFirma();
+            });
+        });
+        if (avisoModal) {
+            avisoModal.addEventListener('click', function (event) {
+                if (event.target === avisoModal) cerrarAvisoFirma();
+            });
+        }
+        modal.addEventListener('click', function (event) {
+            if (event.target === modal) cerrarModal();
+        });
+        document.addEventListener('keydown', function (event) {
+            if (event.key !== 'Escape') return;
+            cerrarAvisoFirma();
+            if (modal.classList.contains('show')) cerrarModal();
+        });
+        if (form) {
+            form.addEventListener('submit', function () {
+                if (decisionFirma() === 'no') {
+                    inputFirma.value = '';
+                    actualizarVistaFirma();
+                }
+            });
+        }
+        window.addEventListener('resize', function () {
+            if (modal.classList.contains('show')) ajustarCanvas();
+        });
+
+        actualizarVistaFirma();
+    })();
+</script>
+
 {{ inventario_seleccionados_json|json_script:"venta-inventario-inicial" }}
 {{ venta_inventario_sedes_json|json_script:"venta-inventario-sedes" }}
 {{ venta_inventario_categorias_json|json_script:"venta-inventario-categorias" }}
@@ -807,6 +1522,7 @@
         var isEdit = {% if venta %}true{% else %}false{% endif %};
         var catalogUrl = "{% url 'econotec:venta_inventario_catalogo' %}";
         var addUrl = {% if venta %}"{% url 'econotec:venta_inventario_agregar' pk=venta.pk %}"{% else %}null{% endif %};
+        var updateQuantityUrlBase = {% if venta %}"{% url 'econotec:venta_inventario_actualizar_cantidad' pk=venta.pk relacion_pk=0 %}"{% else %}null{% endif %};
         var removeUrlBase = {% if venta %}"{% url 'econotec:venta_inventario_quitar' pk=venta.pk relacion_pk=0 %}"{% else %}null{% endif %};
         var catalogModal = document.getElementById('inventario-catalogo-modal');
         var quantityModal = document.getElementById('inventario-cantidad-modal');
@@ -825,7 +1541,11 @@
         var catalogEmpty = document.getElementById('venta-catalogo-empty');
         var searchInput = document.getElementById('inventario-busqueda');
         var selectedNode = document.getElementById('venta-inventario-selected');
+        var valoresProductosNode = document.getElementById('venta-valores-productos');
         var hiddenInput = document.getElementById('inventario-seleccionado');
+        var valorVentaInput = document.querySelector('[name="ing-valor_acordado"]');
+        var valorDesdeInventarioInput = document.getElementById('id_venta_valor_desde_inventario');
+        var valorHelperNode = document.getElementById('venta-valor-helper');
         var quantityProductNode = document.getElementById('venta-cantidad-producto');
         var unavailableDetailNode = document.getElementById('venta-unavailable-detail');
         var detailNode = document.getElementById('venta-confirm-detail');
@@ -839,9 +1559,11 @@
         var acceptQuantityButton = document.getElementById('btn-aceptar-cantidad');
         var backToQuantityButton = document.getElementById('btn-volver-cantidad');
         var confirmButton = document.getElementById('btn-confirmar-producto');
+        var quantityTitleNode = document.getElementById('inventario-cantidad-title');
         var descriptionInput = document.querySelector('[name="ing-problema_reportado"]');
         var selected = [];
         var candidate = null;
+        var editingIndex = null;
         var pendingQuantity = 1;
         var autoDescription = '';
         var locationOptions = parseScriptJson('venta-inventario-sedes', []);
@@ -861,6 +1583,17 @@
             selected = [];
         }
         if (!Array.isArray(selected)) selected = [];
+        if (valorDesdeInventarioInput) {
+            valorDesdeInventarioInput.addEventListener('change', function () {
+                syncValorDesdeInventario();
+                if (!valorDesdeInventarioInput.checked && valorVentaInput) {
+                    setTimeout(function () {
+                        valorVentaInput.focus();
+                        valorVentaInput.select();
+                    }, 50);
+                }
+            });
+        }
 
         function parseScriptJson(id, fallback) {
             var node = document.getElementById(id);
@@ -883,6 +1616,47 @@
             });
         }
 
+        function numberValue(value) {
+            return parseFloat(String(value == null ? '0' : value).replace(',', '.')) || 0;
+        }
+
+        function moneyValue(value) {
+            return '$' + numberValue(value).toFixed(2);
+        }
+
+        function precioInventario(item) {
+            return numberValue(item && item.costo);
+        }
+
+        function subtotalInventario(item) {
+            return precioInventario(item) * (Number(item && item.cantidad) || 0);
+        }
+
+        function totalInventarioSeleccionado() {
+            return selected.reduce(function (total, item) {
+                return total + subtotalInventario(item);
+            }, 0);
+        }
+
+        function syncValorDesdeInventario() {
+            if (!valorVentaInput || !valorDesdeInventarioInput) return;
+            var automatico = valorDesdeInventarioInput.checked;
+            valorVentaInput.readOnly = automatico;
+            valorVentaInput.classList.toggle('venta-valor-auto-input', automatico);
+            if (automatico) {
+                var total = totalInventarioSeleccionado();
+                valorVentaInput.value = total > 0 ? total.toFixed(2) : '';
+            }
+            if (valorHelperNode) {
+                valorHelperNode.textContent = automatico
+                    ? 'Activo: el total se toma del costo del inventario y no se puede editar manualmente.'
+                    : 'Manual: escribe aquí el valor final que el cliente va a pagar.';
+            }
+            valorVentaInput.dispatchEvent(new Event('input', {bubbles: true}));
+            if (window.__syncPagoVenta) window.__syncPagoVenta();
+            if (window.__checkRequired) window.__checkRequired();
+        }
+
         function openModal(modal) {
             modal.classList.add('is-open');
             modal.setAttribute('aria-hidden', 'false');
@@ -891,6 +1665,12 @@
         function closeModal(modal) {
             modal.classList.remove('is-open');
             modal.setAttribute('aria-hidden', 'true');
+        }
+
+        function resetQuantityFlow() {
+            candidate = null;
+            editingIndex = null;
+            if (confirmButton) confirmButton.textContent = 'Sí, agregar';
         }
 
         function labelFor(option) {
@@ -1038,6 +1818,23 @@
             }, 0);
         }
 
+        function stockBaseForSelected(item) {
+            if (!item) return 1;
+            if (item.stock_base != null) {
+                return Math.max(Number(item.stock_base) || 0, Number(item.cantidad || 0), 1);
+            }
+            if (isEdit) {
+                return Math.max((Number(item.disponible || 0) + Number(item.cantidad || 0)), Number(item.cantidad || 0), 1);
+            }
+            return Math.max(Number(item.disponible != null ? item.disponible : item.cantidad) || 0, Number(item.cantidad || 0), 1);
+        }
+
+        function remainingForSelected(item) {
+            if (!item) return 0;
+            if (isEdit) return Math.max(Number(item.disponible || 0), 0);
+            return Math.max(stockBaseForSelected(item) - Number(item.cantidad || 0), 0);
+        }
+
         function availableFor(item) {
             var available = Number(item.disponible != null ? item.disponible : item.cantidad) || 0;
             if (!isEdit) available -= selectedQuantityFor(item.item_id);
@@ -1092,22 +1889,46 @@
             }
         }
 
+        function renderValoresProductos() {
+            if (!valoresProductosNode) return;
+            if (!selected.length) {
+                valoresProductosNode.innerHTML = '<div class="venta-inventario-empty">Selecciona productos del inventario para ver aquí el detalle de valores.</div>';
+                return;
+            }
+            valoresProductosNode.innerHTML = selected.map(function (item) {
+                var precio = precioInventario(item);
+                var subtotal = subtotalInventario(item);
+                return '<div class="venta-valor-row">'
+                    + '<span><strong>' + esc(item.producto) + '</strong><small>' + esc(item.categoria) + ' · ' + esc(item.marca) + ' ' + esc(item.modelo) + '</small><small>Costo inventario: ' + esc(moneyValue(precio)) + ' c/u</small></span>'
+                    + '<span class="venta-valor-money"><strong>' + esc(moneyValue(subtotal)) + '</strong><small>' + esc(item.cantidad) + ' und.</small></span>'
+                    + '</div>';
+            }).join('');
+        }
+
         function renderSelected() {
             syncHidden();
             if (!selected.length) {
                 selectedNode.innerHTML = '<div class="venta-inventario-empty">Aún no has seleccionado productos. Usa el botón para consultar el inventario disponible.</div>';
+                renderValoresProductos();
+                syncValorDesdeInventario();
                 syncDescription();
                 return;
             }
             selectedNode.innerHTML = selected.map(function (item, index) {
-                var disponible = item.disponible == null ? '' : ' · <strong>Disponible ahora:</strong> ' + esc(item.disponible);
+                var disponibleRestante = remainingForSelected(item);
+                var disponible = item.disponible == null ? '' : ' · <strong>Disponible ahora:</strong> ' + esc(disponibleRestante);
                 return '<article class="venta-inventario-card">'
                     + '<div class="venta-inventario-card-head"><h5>' + esc(item.producto) + '</h5><span class="venta-inventario-qty">' + esc(item.cantidad) + ' und.</span></div>'
                     + '<p>' + esc(item.categoria) + ' · ' + esc(item.marca) + ' ' + esc(item.modelo) + '<br><strong>Código:</strong> ' + esc(item.codigo) + ' · <strong>Sede:</strong> ' + esc(item.sede) + '<br><strong>Ubicación:</strong> ' + esc(item.ubicacion) + (item.serie ? ' · <strong>Serie:</strong> ' + esc(item.serie) : '') + disponible + '</p>'
                     + '<div class="venta-inventario-card-foot"><small style="color:var(--text-muted);">' + (isEdit ? 'Stock actualizado' : 'Se descontará al registrar') + '</small>'
-                    + '<button type="button" class="venta-inventario-remove" data-remove-index="' + index + '">Revertir y eliminar</button></div>'
+                    + '<div class="venta-inventario-card-actions">'
+                    + '<button type="button" class="venta-inventario-edit" data-edit-index="' + index + '">Editar cantidad</button>'
+                    + '<button type="button" class="venta-inventario-remove" data-remove-index="' + index + '">Revertir y eliminar</button>'
+                    + '</div></div>'
                     + '</article>';
             }).join('');
+            renderValoresProductos();
+            syncValorDesdeInventario();
             syncDescription();
         }
 
@@ -1116,8 +1937,12 @@
                 var available = availableFor(item);
                 var selectable = item.seleccionable !== false && available > 0;
                 var statusLabel = selectable ? available + ' disponibles' : (item.estado === 'no_disponible' ? 'No disponible' : 'Sin stock');
+                var causa = item.causa_no_disponible_label || '';
+                var causaHtml = item.estado === 'no_disponible' && causa
+                    ? '<small class="venta-catalogo-causa">Causa: ' + esc(causa) + '</small>'
+                    : '';
                 return '<button type="button" class="venta-catalogo-row' + (selectable ? '' : ' is-unavailable') + '" data-item-id="' + esc(item.item_id) + '">'
-                    + '<span><strong>' + esc(item.producto) + '</strong><small>' + esc(item.categoria) + ' / ' + esc(item.tipo) + ' · ' + esc(item.marca) + ' ' + esc(item.modelo) + '</small><small>' + esc(item.codigo) + ' · ' + esc(item.ubicacion) + '</small></span>'
+                    + '<span><strong>' + esc(item.producto) + '</strong><small>' + esc(item.categoria) + ' / ' + esc(item.tipo) + ' · ' + esc(item.marca) + ' ' + esc(item.modelo) + '</small><small>' + esc(item.codigo) + ' · ' + esc(item.ubicacion) + '</small>' + causaHtml + '</span>'
                     + '<span class="' + (selectable ? 'venta-catalogo-stock' : 'venta-catalogo-status-danger') + '">' + esc(statusLabel) + '</span>'
                     + '<span class="venta-catalogo-arrow">›</span></button>';
             }).join('');
@@ -1155,11 +1980,13 @@
 
         function openQuantity(item) {
             closeModal(catalogModal);
+            editingIndex = null;
             var available = availableFor(item);
             if (available < 1) {
                 openUnavailable(item);
                 return;
             }
+            if (quantityTitleNode) quantityTitleNode.textContent = 'Cantidad a llevar';
             quantityProductNode.innerHTML = '<strong>' + esc(item.producto) + '</strong>'
                 + '<small>' + esc(item.categoria) + ' · ' + esc(item.marca) + ' ' + esc(item.modelo) + '</small>'
                 + '<small>' + esc(item.codigo) + ' · ' + esc(item.sede) + ' · ' + esc(item.ubicacion) + '</small>';
@@ -1172,15 +1999,53 @@
             setTimeout(function () { quantityInput.focus(); quantityInput.select(); }, 50);
         }
 
+        function openEditQuantity(index) {
+            var item = selected[index];
+            if (!item) return;
+            candidate = null;
+            editingIndex = index;
+            var max = stockBaseForSelected(item);
+            if (quantityTitleNode) quantityTitleNode.textContent = 'Editar cantidad';
+            quantityProductNode.innerHTML = '<strong>' + esc(item.producto) + '</strong>'
+                + '<small>' + esc(item.categoria) + ' · ' + esc(item.marca) + ' ' + esc(item.modelo) + '</small>'
+                + '<small>Cantidad actual: ' + esc(item.cantidad) + ' unidad(es)</small>';
+            quantityErrorNode.style.display = 'none';
+            quantityInput.value = Number(item.cantidad || 1);
+            quantityInput.max = max;
+            quantityHelp.textContent = 'Puedes elegir entre 1 y ' + max + ' unidad(es).';
+            updateQuantityButtons();
+            openModal(quantityModal);
+            setTimeout(function () { quantityInput.focus(); quantityInput.select(); }, 50);
+        }
+
         function openUnavailable(item) {
+            var causa = item.causa_no_disponible_label || '';
             unavailableDetailNode.innerHTML = '<strong>' + esc(item.producto) + '</strong>'
                 + '<span>' + esc(item.categoria) + ' / ' + esc(item.tipo) + ' · ' + esc(item.marca) + ' ' + esc(item.modelo) + '</span>'
-                + '<span>' + esc(item.codigo) + ' · ' + esc(item.ubicacion) + ' · Estado: ' + esc(item.estado_label || 'No disponible') + '</span>';
+                + '<span>' + esc(item.codigo) + ' · ' + esc(item.ubicacion) + ' · Estado: ' + esc(item.estado_label || 'No disponible') + '</span>'
+                + (causa ? '<span class="venta-unavailable-cause">Causa: ' + esc(causa) + '</span>' : '');
             openModal(unavailableModal);
         }
 
         function openFinalConfirmation() {
             var cantidad = validQuantity();
+            if (editingIndex !== null) {
+                var editingItem = selected[editingIndex];
+                if (!editingItem || !cantidad) return;
+                pendingQuantity = cantidad;
+                var maxEdit = stockBaseForSelected(editingItem);
+                questionNode.textContent = '¿Está seguro que desea cambiar la cantidad de ' + editingItem.producto + ' a ' + cantidad + ' unidad(es)?';
+                detailNode.innerHTML = '<div><span>Producto</span><strong>' + esc(editingItem.producto) + '</strong></div>'
+                    + '<div><span>Cantidad actual</span><strong>' + esc(editingItem.cantidad) + ' unidad(es)</strong></div>'
+                    + '<div><span>Nueva cantidad</span><strong>' + esc(cantidad) + ' unidad(es)</strong></div>'
+                    + '<div><span>Quedaría disponible</span><strong>' + esc(Math.max(maxEdit - cantidad, 0)) + ' unidad(es)</strong></div>';
+                confirmErrorNode.style.display = 'none';
+                confirmButton.disabled = false;
+                confirmButton.textContent = 'Sí, actualizar';
+                closeModal(quantityModal);
+                openModal(confirmModal);
+                return;
+            }
             if (!candidate || !cantidad) return;
             pendingQuantity = cantidad;
             var available = availableFor(candidate);
@@ -1191,24 +2056,76 @@
                 + '<div><span>Quedaría disponible</span><strong>' + esc(Math.max(available - cantidad, 0)) + ' unidad(es)</strong></div>';
             confirmErrorNode.style.display = 'none';
             confirmButton.disabled = false;
+            confirmButton.textContent = 'Sí, agregar';
             closeModal(quantityModal);
             openModal(confirmModal);
         }
 
         function mergeLocalSelection(item, cantidad) {
+            var stockBase = Number(item.disponible != null ? item.disponible : item.cantidad) || cantidad;
             var existing = selected.find(function (entry) { return Number(entry.item_id) === Number(item.item_id); });
             if (existing) {
+                existing.stock_base = Number(existing.stock_base != null ? existing.stock_base : stockBase) || stockBase;
                 existing.cantidad = Number(existing.cantidad || 0) + cantidad;
-                existing.disponible = Number(item.disponible != null ? item.disponible : item.cantidad) - existing.cantidad;
+                existing.disponible = Math.max(existing.stock_base - existing.cantidad, 0);
                 return;
             }
             selected.push(Object.assign({}, item, {
                 cantidad: cantidad,
-                disponible: Number(item.disponible != null ? item.disponible : item.cantidad) - cantidad
+                stock_base: stockBase,
+                disponible: Math.max(stockBase - cantidad, 0)
             }));
         }
 
+        function updateSelectionQuantity() {
+            if (editingIndex === null) return;
+            var item = selected[editingIndex];
+            var cantidad = Number(pendingQuantity);
+            var max = stockBaseForSelected(item);
+            if (!item || !Number.isInteger(cantidad) || cantidad < 1 || cantidad > max) {
+                confirmErrorNode.textContent = 'Indica una cantidad entre 1 y ' + max + '.';
+                confirmErrorNode.style.display = 'block';
+                return;
+            }
+            confirmButton.disabled = true;
+            if (!isEdit) {
+                item.cantidad = cantidad;
+                item.disponible = Math.max(max - cantidad, 0);
+                closeModal(confirmModal);
+                editingIndex = null;
+                renderSelected();
+                return;
+            }
+            if (!updateQuantityUrlBase || !item.relacion_id) {
+                confirmErrorNode.textContent = 'No se pudo identificar el producto para actualizar la cantidad.';
+                confirmErrorNode.style.display = 'block';
+                confirmButton.disabled = false;
+                return;
+            }
+            var formData = new FormData();
+            formData.append('cantidad', cantidad);
+            var url = updateQuantityUrlBase.replace('/0/cantidad/', '/' + item.relacion_id + '/cantidad/');
+            fetch(url, {method: 'POST', body: formData, credentials: 'same-origin', headers: {'X-CSRFToken': csrfToken(), 'X-Requested-With': 'XMLHttpRequest'}})
+                .then(function (response) { return response.json().then(function (data) { return {ok: response.ok, data: data}; }); })
+                .then(function (result) {
+                    if (!result.ok || !result.data.ok) throw new Error(result.data.error || 'No se pudo actualizar la cantidad.');
+                    Object.assign(item, result.data.producto);
+                    closeModal(confirmModal);
+                    editingIndex = null;
+                    renderSelected();
+                })
+                .catch(function (error) {
+                    confirmErrorNode.textContent = error.message;
+                    confirmErrorNode.style.display = 'block';
+                    confirmButton.disabled = false;
+                });
+        }
+
         function addSelection() {
+            if (editingIndex !== null) {
+                updateSelectionQuantity();
+                return;
+            }
             if (!candidate) return;
             var cantidad = Number(pendingQuantity);
             var available = availableFor(candidate);
@@ -1279,17 +2196,20 @@
             button.addEventListener('click', function () { closeModal(catalogModal); });
         });
         document.querySelectorAll('[data-close-quantity]').forEach(function (button) {
-            button.addEventListener('click', function () { closeModal(quantityModal); candidate = null; });
+            button.addEventListener('click', function () { closeModal(quantityModal); candidate = null; editingIndex = null; });
         });
         document.querySelectorAll('[data-close-unavailable]').forEach(function (button) {
             button.addEventListener('click', function () { closeModal(unavailableModal); candidate = null; });
         });
         document.querySelectorAll('[data-close-confirm]').forEach(function (button) {
-            button.addEventListener('click', function () { closeModal(confirmModal); candidate = null; });
+            button.addEventListener('click', function () { closeModal(confirmModal); candidate = null; editingIndex = null; });
         });
         [catalogModal, quantityModal, unavailableModal, confirmModal].forEach(function (modal) {
             modal.addEventListener('click', function (event) {
-                if (event.target === modal) closeModal(modal);
+                if (event.target === modal) {
+                    closeModal(modal);
+                    if (modal === quantityModal || modal === confirmModal) resetQuantityFlow();
+                }
             });
         });
         document.addEventListener('keydown', function (event) {
@@ -1298,9 +2218,15 @@
                 closeModal(quantityModal);
                 closeModal(unavailableModal);
                 closeModal(confirmModal);
+                resetQuantityFlow();
             }
         });
         selectedNode.addEventListener('click', function (event) {
+            var editButton = event.target.closest('[data-edit-index]');
+            if (editButton) {
+                openEditQuantity(Number(editButton.getAttribute('data-edit-index')));
+                return;
+            }
             var button = event.target.closest('[data-remove-index]');
             if (!button) return;
             var index = Number(button.getAttribute('data-remove-index'));
@@ -1398,9 +2324,15 @@
                             aviso.style.display = '';
                         }
                         camposClienteEditables(false);
+                        if (window.__syncFacturaVentaCliente) {
+                            window.__syncFacturaVentaCliente(false);
+                        }
                         if (window.__checkRequired) window.__checkRequired();
                     } else {
                         ocultarAviso();
+                        if (window.__syncFacturaVentaCliente) {
+                            window.__syncFacturaVentaCliente(false);
+                        }
                         if (window.__checkRequired) window.__checkRequired();
                     }
                 })
@@ -1440,8 +2372,40 @@
             document.getElementById('label-factura-cedula'),
             document.getElementById('label-factura-correo')
         ];
+        var clienteFacturaInputs = {
+            nombres: document.querySelector('input[name="cli-nombres"]'),
+            cedula: document.querySelector('input[name="cli-cedula"]'),
+            correo: document.querySelector('input[name="cli-correo"]')
+        };
 
-        function actualizarFactura() {
+        function valorLimpio(input) {
+            return input ? (input.value || '').trim() : '';
+        }
+
+        function puedeAutollenarFactura(input, forzar) {
+            if (!input) return false;
+            return !!forzar || !valorLimpio(input) || input.dataset.facturaAuto === '1';
+        }
+
+        function setFacturaAuto(input, valor, forzar) {
+            if (!input || !valor || !puedeAutollenarFactura(input, forzar)) return;
+            input.value = valor;
+            input.dataset.facturaAuto = '1';
+        }
+
+        function sincronizarFacturaDesdeCliente(forzar) {
+            if (!selFactura || selFactura.value !== 'si') return;
+            setFacturaAuto(document.getElementById('id_factura_nombres'), valorLimpio(clienteFacturaInputs.nombres), forzar);
+            setFacturaAuto(document.getElementById('id_factura_cedula'), valorLimpio(clienteFacturaInputs.cedula), forzar);
+            setFacturaAuto(document.getElementById('id_factura_correo'), valorLimpio(clienteFacturaInputs.correo), forzar);
+            if (window.__checkRequired) window.__checkRequired();
+        }
+
+        window.__syncFacturaVentaCliente = function(forzar) {
+            sincronizarFacturaDesdeCliente(!!forzar);
+        };
+
+        function actualizarFactura(forzarAutollenado) {
             if (!selFactura) return;
             var req = (selFactura.value === 'si');
             if (divFacturaData) {
@@ -1457,7 +2421,7 @@
             }
             if (facturaHelper) {
                 facturaHelper.innerHTML = req 
-                    ? 'Completa estos datos para emitir la factura.' 
+                    ? 'Si los datos del cliente ya están capturados, se completan automáticamente. Puedes editarlos si la factura va a otro titular.'
                     : 'Selecciona <strong>Sí</strong> para habilitar los campos de factura.';
             }
             inpsFactura.forEach(function(inp, idx) {
@@ -1469,21 +2433,50 @@
                 } else {
                     inp.removeAttribute('required');
                     inp.value = '';
+                    inp.dataset.facturaAuto = '';
                     if (labelsFactura[idx]) labelsFactura[idx].style.color = 'var(--text-muted)';
                 }
             });
+            if (req) {
+                sincronizarFacturaDesdeCliente(!!forzarAutollenado);
+            }
             if (window.__checkRequired) window.__checkRequired();
         }
 
+        inpsFactura.forEach(function(inp) {
+            if (!inp) return;
+            inp.addEventListener('input', function () {
+                inp.dataset.facturaAuto = '0';
+            });
+        });
+        Object.keys(clienteFacturaInputs).forEach(function(key) {
+            var input = clienteFacturaInputs[key];
+            if (!input) return;
+            input.addEventListener('input', function () {
+                sincronizarFacturaDesdeCliente(false);
+            });
+            input.addEventListener('change', function () {
+                sincronizarFacturaDesdeCliente(false);
+            });
+        });
+
         if (selFactura) {
-            selFactura.addEventListener('change', actualizarFactura);
-            actualizarFactura(); // run on load
+            selFactura.addEventListener('change', function () {
+                actualizarFactura(true);
+            });
+            actualizarFactura(false); // run on load
         }
         // --- Fin Lógica Factura ---
 
         // Lógica para mostrar/ocultar los campos de pago inicial
+        var inpValorVenta = document.querySelector('[name="ing-valor_acordado"]');
         var inpAbono = document.querySelector('[name="ing-abono_anticipo"]');
+        var selPagoModalidad = document.getElementById('id_venta_pago_modalidad');
+        var wrapAbonoInicial = document.getElementById('wrap_venta_abono_inicial');
         var wrapPago = document.getElementById('wrap_pago_inicial');
+        var montoPagar = document.getElementById('venta-monto-pagar');
+        var montoPagarHelper = document.getElementById('venta-monto-helper');
+        var modalidadHelper = document.getElementById('venta-modalidad-helper');
         
         var selMetodo = document.querySelector('[name="ing-anticipo_metodo"]');
         var wrapBanco = document.getElementById('wrap_anticipo_banco');
@@ -1502,17 +2495,88 @@
         var inpMonto2 = document.querySelector('[name="ing-anticipo_monto_2"]');
         var msgErrorMixto = document.getElementById('msg_error_mixto');
 
-        function checkPagoInicial() {
-            var abonoVal = parseFloat((inpAbono && inpAbono.value) ? inpAbono.value.replace(',', '.') : 0) || 0;
-            if (abonoVal > 0) {
-                wrapPago.style.display = 'block';
+        function money(value) {
+            var number = parseFloat(String(value || '0').replace(',', '.')) || 0;
+            return '$' + number.toFixed(2);
+        }
+
+        function valorVentaActual() {
+            return parseFloat((inpValorVenta && inpValorVenta.value ? inpValorVenta.value : '0').replace(',', '.')) || 0;
+        }
+
+        function abonoActual() {
+            return parseFloat((inpAbono && inpAbono.value ? inpAbono.value : '0').replace(',', '.')) || 0;
+        }
+
+        function esPagoPorAbono() {
+            return selPagoModalidad && selPagoModalidad.value === 'abono';
+        }
+
+        function montoCobradoAhora() {
+            return esPagoPorAbono() ? abonoActual() : valorVentaActual();
+        }
+
+        function syncPagoVenta() {
+            var valor = valorVentaActual();
+            if (montoPagar) montoPagar.value = money(valor);
+            if (esPagoPorAbono()) {
+                if (wrapAbonoInicial) wrapAbonoInicial.style.display = 'block';
+                setRequired(inpAbono, true);
+                if (inpAbono) {
+                    var abono = abonoActual();
+                    if (valor > 0 && abono >= valor) {
+                        inpAbono.setCustomValidity('El abono inicial debe ser menor al valor total de la venta.');
+                    } else if (abono <= 0) {
+                        inpAbono.setCustomValidity('Ingresa un abono inicial mayor a cero.');
+                    } else {
+                        inpAbono.setCustomValidity('');
+                    }
+                }
+                if (montoPagarHelper) {
+                    montoPagarHelper.textContent = 'Este es el valor total de la venta. El abono inicial queda registrado como pago parcial.';
+                }
+                if (modalidadHelper) {
+                    modalidadHelper.textContent = 'Al registrar con abono, quedará saldo pendiente y se habilitará el historial de abonos.';
+                }
             } else {
-                wrapPago.style.display = 'none';
+                if (inpAbono) {
+                    inpAbono.value = valor > 0 ? valor.toFixed(2) : '0.00';
+                    inpAbono.setCustomValidity('');
+                }
+                if (wrapAbonoInicial) wrapAbonoInicial.style.display = 'none';
+                setRequired(inpAbono, false);
+                if (montoPagarHelper) {
+                    montoPagarHelper.textContent = 'Este monto se iguala automáticamente al valor total de la venta.';
+                }
+                if (modalidadHelper) {
+                    modalidadHelper.textContent = 'Pago directo deja la venta pagada al registrar. Abono deja saldo pendiente y activa historial de pagos.';
+                }
+            }
+            validarSumaMixto();
+            if (window.__checkRequired) window.__checkRequired();
+        }
+
+        window.__syncPagoVenta = syncPagoVenta;
+
+        function setRequired(el, required) {
+            if (!el) return;
+            if (required) {
+                el.setAttribute('required', 'required');
+            } else {
+                el.removeAttribute('required');
             }
         }
 
         function checkMetodo() {
             var metodo = selMetodo ? selMetodo.value : 'efectivo';
+            setRequired(selMetodo, true);
+            setRequired(selBanco, metodo === 'transferencia');
+            setRequired(document.querySelector('[name="ing-anticipo_banco_otro"]'), metodo === 'transferencia' && selBanco && selBanco.value === 'otro');
+            setRequired(document.querySelector('[name="ing-anticipo_tarjeta_app"]'), metodo === 'tarjeta');
+            setRequired(inpMonto1, metodo === 'mixto');
+            setRequired(inpMonto2, metodo === 'mixto');
+            setRequired(selMetodo1, metodo === 'mixto');
+            setRequired(selMetodo2, metodo === 'mixto');
             if (metodo === 'mixto') {
                 if (wrapPagoMixto) wrapPagoMixto.style.display = 'block';
                 if (wrapBanco) wrapBanco.style.display = 'none';
@@ -1532,15 +2596,20 @@
                 } else {
                     checkBanco();
                 }
+                if (inpMonto1) inpMonto1.setCustomValidity('');
+                if (inpMonto2) inpMonto2.setCustomValidity('');
             }
+            if (window.__checkRequired) window.__checkRequired();
         }
 
         function checkMetodoMixto() {
             if (selMetodo1 && wrapBanco1) {
                 wrapBanco1.style.display = (selMetodo1.value === 'transferencia') ? 'block' : 'none';
+                setRequired(document.querySelector('[name="ing-anticipo_banco_1"]'), selMetodo && selMetodo.value === 'mixto' && selMetodo1.value === 'transferencia');
             }
             if (selMetodo2 && wrapBanco2) {
                 wrapBanco2.style.display = (selMetodo2.value === 'transferencia') ? 'block' : 'none';
+                setRequired(document.querySelector('[name="ing-anticipo_banco_2"]'), selMetodo && selMetodo.value === 'mixto' && selMetodo2.value === 'transferencia');
             }
             validarSumaMixto();
         }
@@ -1553,7 +2622,7 @@
                 return;
             }
 
-            var totalRequerido = inpAbono ? parseFloat(inpAbono.value.replace(',', '.')) || 0 : 0;
+            var totalRequerido = montoCobradoAhora();
             var m1 = inpMonto1 ? parseFloat(inpMonto1.value) || 0 : 0;
             var m2 = inpMonto2 ? parseFloat(inpMonto2.value) || 0 : 0;
             var suma = m1 + m2;
@@ -1561,7 +2630,7 @@
             if (totalRequerido > 0) {
                 if (Math.abs(suma - totalRequerido) > 0.001) {
                     if (msgErrorMixto) {
-                        msgErrorMixto.textContent = "⚠️ La suma de ambos montos ($" + suma.toFixed(2) + ") debe ser igual al total a pagar ($" + totalRequerido.toFixed(2) + ").";
+                        msgErrorMixto.textContent = "⚠️ La suma de ambos montos ($" + suma.toFixed(2) + ") debe ser igual al valor cobrado ahora ($" + totalRequerido.toFixed(2) + ").";
                         msgErrorMixto.style.display = 'block';
                     }
                     if (inpMonto2) inpMonto2.setCustomValidity("La suma debe ser " + totalRequerido.toFixed(2));
@@ -1579,16 +2648,24 @@
         function checkBanco() {
             if (selMetodo && selMetodo.value === 'transferencia' && selBanco && selBanco.value === 'otro') {
                 if (wrapBancoOtro) wrapBancoOtro.style.display = 'block';
+                setRequired(document.querySelector('[name="ing-anticipo_banco_otro"]'), true);
             } else {
                 if (wrapBancoOtro) wrapBancoOtro.style.display = 'none';
+                setRequired(document.querySelector('[name="ing-anticipo_banco_otro"]'), false);
             }
+            if (window.__checkRequired) window.__checkRequired();
         }
 
+        if (inpValorVenta) {
+            inpValorVenta.addEventListener('input', syncPagoVenta);
+            inpValorVenta.addEventListener('change', syncPagoVenta);
+        }
         if (inpAbono) {
-            inpAbono.addEventListener('input', checkPagoInicial);
-            inpAbono.addEventListener('change', checkPagoInicial);
-            inpAbono.addEventListener('input', validarSumaMixto);
-            inpAbono.addEventListener('change', validarSumaMixto);
+            inpAbono.addEventListener('input', syncPagoVenta);
+            inpAbono.addEventListener('change', syncPagoVenta);
+        }
+        if (selPagoModalidad) {
+            selPagoModalidad.addEventListener('change', syncPagoVenta);
         }
         if (inpMonto1) {
             inpMonto1.addEventListener('input', validarSumaMixto);
@@ -1603,7 +2680,8 @@
         if (selMetodo1) selMetodo1.addEventListener('change', checkMetodoMixto);
         if (selMetodo2) selMetodo2.addEventListener('change', checkMetodoMixto);
 
-        checkPagoInicial();
+        if (wrapPago) wrapPago.style.display = 'block';
+        syncPagoVenta();
         if (selMetodo) checkMetodo();
 
         window.__checkRequired = function() {
@@ -1624,6 +2702,7 @@
         };
 
         if (form) {
+            form.addEventListener('submit', syncPagoVenta);
             form.addEventListener('input', window.__checkRequired);
             form.addEventListener('change', window.__checkRequired);
             setTimeout(window.__checkRequired, 100);

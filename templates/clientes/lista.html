@@ -67,13 +67,14 @@
             </tr>
         {% endfor %}
         </tbody>
-    </table>
-</div>
-{% else %}
-<div class="empty-state">
+	    </table>
+	</div>
+	{% else %}
+	<div class="empty-state">
     <div class="icon">👥</div>
     <h3>No hay clientes</h3>
-    <p>Los clientes se crean automáticamente cuando registras un ingreso de equipo.</p>
-</div>
-{% endif %}
-{% endblock %}
+	    <p>Los clientes se crean automáticamente cuando registras un ingreso de equipo.</p>
+	</div>
+	{% endif %}
+    {% include 'includes/paginacion.html' with page_obj=page_obj querystring=querystring page_param='pagina' aria_label='Paginación de clientes' %}
+	{% endblock %}

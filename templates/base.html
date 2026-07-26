@@ -1395,11 +1395,13 @@
     </style>
     <script>
         // Init theme early to avoid flash
+        document.documentElement.classList.add('js');
         if (localStorage.getItem('theme') === 'dark' || (!localStorage.getItem('theme') && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
             document.documentElement.setAttribute('data-theme', 'dark');
         }
     </script>
     {% block extra_head %}{% endblock %}
+    <link rel="stylesheet" href="{% static 'responsive.css' %}">
     <!-- SweetAlert2 -->
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 </head>
@@ -1416,15 +1418,24 @@
             {% if user.is_authenticated %}
                 <div class="brand-actions">
                     <a href="{% url 'econotec:inventario_menu' %}" class="top-inventory-link" title="Abrir inventario">
-                        📦 Inventario
+                        <span aria-hidden="true">📦</span>
+                        <span class="top-inventory-text" aria-hidden="true">Inventario</span>
+                        <span class="visually-hidden">📦 Inventario</span>
                     </a>
                 </div>
+            {% endif %}
+            {% if user.is_authenticated %}
+                <button type="button" class="mobile-nav-toggle" id="mobile-nav-toggle"
+                        aria-expanded="false" aria-controls="main-navigation">
+                    <span class="mobile-nav-toggle-icon" aria-hidden="true"><span></span></span>
+                    <span class="mobile-nav-toggle-text">Menú</span>
+                </button>
             {% endif %}
         </div>
         
 
 
-        <nav>
+        <nav id="main-navigation">
             {% if user.is_authenticated %}
                 <div class="user-info">
                     <h3>{{ user.first_name|default:user.username }}</h3>
@@ -1481,6 +1492,36 @@
                     </a>
                 {% endif %}
                 {% if es_admin %}
+                    {% if notificaciones_inventario_admin_count > 0 %}
+                        <div class="noti-bell-wrap">
+                            <button type="button" class="noti-bell-btn" id="inventario-admin-bell-btn" aria-expanded="false" aria-controls="inventario-admin-bell-menu" title="Inventario con stock crítico">
+                                📦
+                                <span class="noti-bell-count">{{ notificaciones_inventario_admin_count }}</span>
+                            </button>
+                            <div class="noti-menu" id="inventario-admin-bell-menu">
+                                <div class="noti-menu-head">
+                                    <strong>Inventario bajo</strong>
+                                    <span>{{ notificaciones_inventario_admin_count }} pendiente{{ notificaciones_inventario_admin_count|pluralize }}</span>
+                                </div>
+                                <div class="noti-menu-list">
+                                    {% for notificacion in notificaciones_inventario_admin_preview %}
+                                        <a href="{% url 'econotec:notificacion_inventario_admin_ver' pk=notificacion.pk %}" class="noti-item">
+                                            <div class="noti-item-title">
+                                                <span>{{ notificacion.inventario_item.producto|truncatechars:28 }}</span>
+                                                <span class="noti-item-value">1 und.</span>
+                                            </div>
+                                            <div class="noti-item-meta">
+                                                {{ notificacion.inventario_item.codigo }}
+                                                · {{ notificacion.inventario_item.get_ubicacion_display }}
+                                                · notificó {{ notificacion.creado_por.get_full_name|default:notificacion.creado_por.username|default:"un usuario" }}
+                                            </div>
+                                        </a>
+                                    {% endfor %}
+                                </div>
+                                <a href="{% url 'econotec:inventario_menu' %}" class="noti-menu-foot">Ver inventario</a>
+                            </div>
+                        </div>
+                    {% endif %}
                     <a href="{% url 'econotec:notificaciones_asesora' %}" class="admin-noti-link" title="Ver todas las notificaciones de asesoras">
                         Asesoras
                         {% if notificaciones_asesora_admin_count > 0 %}
@@ -1620,9 +1661,11 @@
             });
         }
 
-        const bellBtn = document.getElementById('noti-bell-btn');
-        const bellMenu = document.getElementById('noti-bell-menu');
-        if (bellBtn && bellMenu) {
+        function activarMenuNotificaciones(botonId, menuId) {
+            const bellBtn = document.getElementById(botonId);
+            const bellMenu = document.getElementById(menuId);
+            if (!bellBtn || !bellMenu) return;
+
             function cerrarNotificaciones() {
                 bellMenu.classList.remove('open');
                 bellBtn.setAttribute('aria-expanded', 'false');
@@ -1643,6 +1686,84 @@
                 if (event.key === 'Escape') cerrarNotificaciones();
             });
         }
+        activarMenuNotificaciones('noti-bell-btn', 'noti-bell-menu');
+        activarMenuNotificaciones('inventario-admin-bell-btn', 'inventario-admin-bell-menu');
+
+        (function activarNavegacionMovil() {
+            const header = document.querySelector('header.top');
+            const toggle = document.getElementById('mobile-nav-toggle');
+            const nav = document.getElementById('main-navigation');
+            if (!header || !toggle || !nav) return;
+
+            function cerrarMenuMovil() {
+                header.classList.remove('nav-open');
+                toggle.setAttribute('aria-expanded', 'false');
+            }
+
+            toggle.addEventListener('click', function(event) {
+                event.stopPropagation();
+                const abierto = header.classList.toggle('nav-open');
+                toggle.setAttribute('aria-expanded', abierto ? 'true' : 'false');
+            });
+
+            nav.addEventListener('click', function(event) {
+                if (window.matchMedia('(max-width: 900px)').matches && event.target.closest('a')) {
+                    cerrarMenuMovil();
+                }
+            });
+
+            document.addEventListener('click', function(event) {
+                if (
+                    window.matchMedia('(max-width: 900px)').matches &&
+                    header.classList.contains('nav-open') &&
+                    !header.contains(event.target)
+                ) {
+                    cerrarMenuMovil();
+                }
+            });
+
+            document.addEventListener('keydown', function(event) {
+                if (event.key === 'Escape') cerrarMenuMovil();
+            });
+
+            window.addEventListener('resize', function() {
+                if (!window.matchMedia('(max-width: 900px)').matches) cerrarMenuMovil();
+            });
+        })();
+
+        (function prepararTablasParaMovil() {
+            const wrappers = Array.prototype.slice.call(document.querySelectorAll('.table-wrap'));
+            if (!wrappers.length) return;
+
+            function actualizarTabla(wrapper) {
+                const table = wrapper.querySelector('table');
+                if (!table) return;
+
+                const necesitaDesplazamiento = table.scrollWidth > wrapper.clientWidth + 8;
+                wrapper.dataset.mobileScroll = necesitaDesplazamiento ? 'true' : 'false';
+                wrapper.setAttribute('role', 'region');
+                wrapper.setAttribute('aria-label', 'Tabla con desplazamiento horizontal');
+                wrapper.tabIndex = necesitaDesplazamiento ? 0 : -1;
+
+                let hint = wrapper.querySelector('.table-mobile-hint');
+                if (necesitaDesplazamiento && !hint) {
+                    hint = document.createElement('div');
+                    hint.className = 'table-mobile-hint';
+                    hint.setAttribute('aria-hidden', 'true');
+                    hint.innerHTML = '<span>↔</span><span>Desliza para consultar todas las columnas</span>';
+                    wrapper.insertBefore(hint, table);
+                }
+            }
+
+            wrappers.forEach(actualizarTabla);
+            let resizeTimer = null;
+            window.addEventListener('resize', function() {
+                window.clearTimeout(resizeTimer);
+                resizeTimer = window.setTimeout(function() {
+                    wrappers.forEach(actualizarTabla);
+                }, 120);
+            });
+        })();
     </script>
     <script>
         function confirmDelete(event, form, text = '¿Estás seguro de eliminar este registro?', confirmText = 'Sí, eliminar', cancelText = 'Cancelar / Volver') {

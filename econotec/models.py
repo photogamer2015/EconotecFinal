@@ -154,6 +154,14 @@ class InventarioItem(models.Model):
         ('no_disponible', 'No disponible'),
     ]
 
+    CAUSAS_NO_DISPONIBLE = [
+        ('', '—'),
+        ('bajo_pedido', 'Bajo pedido'),
+        ('defectuoso', 'Defectuoso'),
+        ('agotado', 'Agotado'),
+        ('obsoleto', 'Obsoleto'),
+    ]
+
     UBICACIONES = [
         ('guayaquil_norte', 'Guayaquil Norte'),
         ('guayaquil_centro', 'Guayaquil Centro'),
@@ -169,7 +177,21 @@ class InventarioItem(models.Model):
     modelo = models.CharField(max_length=100, verbose_name='Modelo')
     serie = models.CharField(max_length=120, blank=True, verbose_name='Serie')
     estado = models.CharField(max_length=20, choices=ESTADOS, default='disponible', verbose_name='Estado')
+    causa_no_disponible = models.CharField(
+        max_length=30,
+        choices=CAUSAS_NO_DISPONIBLE,
+        blank=True,
+        default='',
+        verbose_name='Causa de no disponibilidad',
+    )
     cantidad = models.PositiveIntegerField(default=1, verbose_name='Cantidad')
+    costo = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        blank=True,
+        verbose_name='Costo (USD)',
+    )
     ubicacion = models.CharField(max_length=30, choices=UBICACIONES, verbose_name='Ubicación')
     registrado_por = models.ForeignKey(
         'auth.User',
@@ -210,6 +232,61 @@ class InventarioItem(models.Model):
 
     def __str__(self):
         return f'{self.codigo} — {self.producto}'
+
+
+class NotificacionInventarioAdmin(models.Model):
+    """Aviso interno para que el administrador revise productos con stock crítico."""
+
+    inventario_item = models.ForeignKey(
+        InventarioItem,
+        on_delete=models.CASCADE,
+        related_name='notificaciones_admin',
+        verbose_name='Producto de inventario',
+    )
+    creado_por = models.ForeignKey(
+        'auth.User',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='notificaciones_inventario_creadas',
+        verbose_name='Notificado por',
+    )
+    mensaje = models.TextField(
+        blank=True,
+        verbose_name='Mensaje para administración',
+    )
+    leida = models.BooleanField(
+        default=False,
+        verbose_name='Vista por administración',
+    )
+    leida_en = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name='Vista el',
+    )
+    creado = models.DateTimeField(auto_now_add=True)
+    actualizado = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'Notificación de inventario para admin'
+        verbose_name_plural = 'Notificaciones de inventario para admin'
+        ordering = ['-creado']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['inventario_item'],
+                condition=models.Q(leida=False),
+                name='uniq_notificacion_inventario_pendiente',
+            ),
+        ]
+
+    def marcar_vista(self):
+        if not self.leida:
+            self.leida = True
+            self.leida_en = timezone.now()
+            self.save(update_fields=['leida', 'leida_en', 'actualizado'])
+
+    def __str__(self):
+        return f'Stock crítico — {self.inventario_item.codigo}'
 
 
 # ─────────────────────────────────────────────────────────
@@ -381,6 +458,10 @@ class IngresoEquipo(models.Model):
         ('payphone', 'Payphone'),
         ('deuna', 'Deuna'),
     ]
+    FACTURA_OPCIONES = [
+        ('no', 'No'),
+        ('si', 'Sí'),
+    ]
 
     # ── Métodos de Pago Inicial (Anticipo / Diagnóstico) ──
     anticipo_metodo = models.CharField(
@@ -481,6 +562,21 @@ class IngresoEquipo(models.Model):
     anticipo_banco_2 = models.CharField(
         max_length=20, choices=BANCOS, blank=True,
         verbose_name='Banco 2'
+    )
+
+    # ── Factura asociada al pago inicial / ventas de producto ──
+    factura_realizada = models.CharField(
+        max_length=2, choices=FACTURA_OPCIONES, default='no',
+        verbose_name='¿Factura realizada?',
+    )
+    factura_nombres = models.CharField(
+        max_length=100, blank=True, verbose_name='Nombres (factura)',
+    )
+    factura_cedula = models.CharField(
+        max_length=20, blank=True, verbose_name='Cédula / RUC (factura)',
+    )
+    factura_correo = models.EmailField(
+        blank=True, verbose_name='Correo electrónico (factura)',
     )
 
     # ── Estado del flujo ─────────────────────────────────

@@ -29,20 +29,39 @@
 
 <div class="crumb">
     <a href="{% url 'econotec:bienvenida' %}">Inicio</a> /
-    {% if modo == 'ventas' %}Pagos de Ventas{% else %}Pagos{% endif %}
+    {% if modo == 'ventas' %}
+        <a href="{% url 'econotec:pagos_ventas_menu' %}">Pagos de Ventas</a> /
+        {% if filtro_ventas_pago == 'completo' %}Pago completo{% elif filtro_ventas_pago == 'parcial' %}Pagos parciales{% else %}Todas{% endif %}
+    {% else %}
+        Pagos
+    {% endif %}
 </div>
 
 {% if modo == 'ventas' %}
-<h2 class="page-title">Control de Pagos — <span class="accent">Ventas de Producto</span></h2>
-<p class="page-subtitle">{{ total_count }} venta{{ total_count|pluralize }} de producto en seguimiento.</p>
-<div style="margin: 4px 0 18px;">
-    <a href="{% url 'econotec:pagos_lista' %}" class="btn btn-sm btn-secondary">← Ver pagos de reparaciones</a>
+<h2 class="page-title">
+    Control de Pagos —
+    <span class="accent">
+        {% if filtro_ventas_pago == 'completo' %}Pago Completo{% elif filtro_ventas_pago == 'parcial' %}Pagos Parciales{% else %}Ventas de Producto{% endif %}
+    </span>
+</h2>
+<p class="page-subtitle">
+    {% if filtro_ventas_pago == 'completo' %}
+        {{ total_count }} venta{{ total_count|pluralize }} pagada{{ total_count|pluralize }} al registrarse.
+    {% elif filtro_ventas_pago == 'parcial' %}
+        {{ total_count }} venta{{ total_count|pluralize }} con abono inicial o historial de abonos.
+    {% else %}
+        {{ total_count }} venta{{ total_count|pluralize }} de producto en seguimiento.
+    {% endif %}
+</p>
+<div style="margin: 4px 0 18px; display:flex; gap:8px; flex-wrap:wrap;">
+    <a href="{% url 'econotec:pagos_ventas_menu' %}" class="btn btn-sm btn-secondary">← Volver al menú de pagos de ventas</a>
+    <a href="{% url 'econotec:pagos_lista' %}" class="btn btn-sm btn-secondary">Ver pagos de reparaciones</a>
 </div>
 {% else %}
 <h2 class="page-title">Control de <span class="accent">Pagos</span></h2>
 <p class="page-subtitle">{{ total_count }} equipo{{ total_count|pluralize }} en seguimiento (reparaciones).</p>
 <div style="margin: 4px 0 18px;">
-    <a href="{% url 'econotec:pagos_ventas_lista' %}" class="btn btn-sm btn-success">🛒 Ver pagos de ventas de producto</a>
+    <a href="{% url 'econotec:pagos_ventas_menu' %}" class="btn btn-sm btn-success">🛒 Ver pagos de ventas de producto</a>
 </div>
 {% endif %}
 
@@ -50,18 +69,20 @@
 
 <div class="toolbar">
     <form method="get">
-        <input type="text" name="q" value="{{ q }}" placeholder="Buscar por N° equipo, cliente, marca…" class="form-input">
+        <input type="text" name="q" value="{{ q }}" placeholder="{% if modo == 'ventas' %}Buscar por N° venta, cliente, producto…{% else %}Buscar por N° equipo, cliente, marca…{% endif %}" class="form-input">
         <select name="estado_pago" class="form-input" style="max-width:200px;">
             <option value="">— Estado de pago —</option>
             <option value="Pagado" {% if estado_pago == 'Pagado' %}selected{% endif %}>Pagado</option>
             <option value="Parcial" {% if estado_pago == 'Parcial' %}selected{% endif %}>Parcial</option>
             <option value="Pendiente" {% if estado_pago == 'Pendiente' %}selected{% endif %}>Pendiente</option>
         </select>
+        {% if modo != 'ventas' %}
         <select name="sede_pago" class="form-input" style="max-width:150px;">
             <option value="">— Sede —</option>
             <option value="guayaquil" {% if sede_pago == 'guayaquil' %}selected{% endif %}>Guayaquil (G)</option>
             <option value="quito" {% if sede_pago == 'quito' %}selected{% endif %}>Quito (U)</option>
         </select>
+        {% endif %}
         <button type="submit" class="btn btn-primary">Filtrar</button>
     </form>
     <a href="{% url 'econotec:pagos_export' %}" class="btn btn-success">📊 Exportar Excel</a>
@@ -75,7 +96,7 @@
                 <th>N°</th>
                 <th>Fecha</th>
                 <th>Cliente</th>
-                <th>Equipo</th>
+                <th>{% if modo == 'ventas' %}Producto{% else %}Equipo{% endif %}</th>
                 <th>Acordado</th>
                 <th>Adicional</th>
                 <th>Abonado</th>
@@ -90,7 +111,13 @@
                 <td><strong style="color: var(--primary);">{{ i.codigo_equipo }}</strong></td>
                 <td>{{ i.fecha_ingreso|date:"d/m/Y" }}</td>
                 <td>{{ i.cliente.nombres }}<br><small style="color:#888;">{{ i.cliente.cedula }}</small></td>
-                <td>{{ i.tipo_equipo_display }} — {{ i.marca|truncatechars:20 }}</td>
+                <td>
+                    {% if modo == 'ventas' %}
+                        {{ i.problema_reportado|truncatechars:60 }}
+                    {% else %}
+                        {{ i.tipo_equipo_display }} — {{ i.marca|truncatechars:20 }}
+                    {% endif %}
+                </td>
                 <td>
                     {% if i.reparacion_cancelada %}
                         <span style="color:#999; text-decoration: line-through; font-size: 12px;">{{ i.valor_acordado|dinero_signo }}</span>
@@ -141,18 +168,27 @@
                     {% endif %}
                 </td>
                 <td class="row-actions">
-                    <a href="{% url 'econotec:ingreso_abonos' pk=i.pk %}" class="btn btn-sm btn-primary">Ver / Ingresar Abonos</a>
-                    <a href="{% url 'econotec:abono_crear' ingreso_pk=i.pk %}" class="btn btn-sm btn-success">Gestionar Pagos</a>
+                    {% if modo == 'ventas' %}
+                        {% if i.venta_con_historial_abonos %}
+                            <a href="{% url 'econotec:ingreso_abonos' pk=i.pk %}" class="btn btn-sm btn-primary">Ver abono / Historial</a>
+                        {% else %}
+                            <a href="{% url 'econotec:ingreso_abonos' pk=i.pk %}" class="btn btn-sm btn-primary">Ver pago</a>
+                        {% endif %}
+                    {% else %}
+                        <a href="{% url 'econotec:ingreso_abonos' pk=i.pk %}" class="btn btn-sm btn-primary">Ver / Ingresar Abonos</a>
+                        <a href="{% url 'econotec:abono_crear' ingreso_pk=i.pk %}" class="btn btn-sm btn-success">Gestionar Pagos</a>
+                    {% endif %}
                 </td>
             </tr>
         {% endfor %}
         </tbody>
-    </table>
-</div>
-{% else %}
-<div class="empty-state">
-    <div class="icon">💳</div>
-    <h3>No se encontraron pagos</h3>
-</div>
-{% endif %}
-{% endblock %}
+	    </table>
+	</div>
+	{% else %}
+	<div class="empty-state">
+	    <div class="icon">💳</div>
+	    <h3>No se encontraron pagos</h3>
+	</div>
+	{% endif %}
+    {% include 'includes/paginacion.html' with page_obj=page_obj querystring=querystring page_param='pagina' aria_label='Paginación de control de pagos' %}
+	{% endblock %}
