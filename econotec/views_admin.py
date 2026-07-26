@@ -37,7 +37,7 @@ from .models import (
     SEDES_EQUIPOS, VentaInventarioItem,
 )
 from .pagination import paginar_resultados
-from .permisos import GRUPOS_TECNICO, admin_requerido, tecnico_requerido
+from .permisos import GRUPOS_TECNICO, admin_requerido, es_admin, tecnico_requerido
 
 
 MESES_ES = [
@@ -1167,6 +1167,88 @@ def admin_activos_bodegaje(request):
         'chatarrerizacion': chatarrerizacion,
         'count_chatarrerizacion': chatarrerizacion.count(),
     })
+
+def _equipos_administrativos_filtrados(request, incluir_egreso=False):
+    """Consulta común sin calcular totales financieros para vistas generales."""
+    estado_filtro = (request.GET.get('estado') or '').strip()
+    q = (request.GET.get('q') or '').strip()
+    relaciones = ['cliente', 'registrado_por', 'tecnico_encargado']
+    if incluir_egreso:
+        relaciones.extend([
+            'egreso_compra',
+            'egreso_compra__categoria',
+            'egreso_compra__registrado_por',
+        ])
+    qs = (
+        IngresoEquipo.objects
+        .filter(estado__in=('donado', 'equipo_a_comprar'))
+        .select_related(*relaciones)
+        .order_by('-fecha_ingreso', '-numero_equipo')
+    )
+    if estado_filtro in ('donado', 'equipo_a_comprar'):
+        qs = qs.filter(estado=estado_filtro)
+    if q:
+        filtros_busqueda = (
+            Q(marca__icontains=q)
+            | Q(modelo_serie__icontains=q)
+            | Q(serie__icontains=q)
+            | Q(cliente__nombres__icontains=q)
+            | Q(cliente__cedula__icontains=q)
+        )
+        if q.isdigit():
+            filtros_busqueda |= Q(numero_equipo=int(q))
+        elif len(q) > 1 and q[0].upper() in {'G', 'U', 'P'} and q[1:].isdigit():
+            sede_por_prefijo = {'G': 'guayaquil', 'U': 'quito', 'P': 'ventas'}
+            filtros_busqueda |= Q(
+                sede=sede_por_prefijo[q[0].upper()],
+                numero_equipo=int(q[1:]),
+            )
+        qs = qs.filter(filtros_busqueda)
+    return qs, estado_filtro, q
+
+
+@tecnico_requerido
+def equipos_administrativos_general(request):
+    """Consulta separada para técnicos y asesores, sin resumen ni egresos."""
+    if es_admin(request.user):
+        return redirect('econotec:admin_equipos_administrativos')
+
+    qs, estado_filtro, q = _equipos_administrativos_filtrados(
+        request,
+        incluir_egreso=False,
+    )
+    return render(request, 'admin_panel/equipos_administrativos.html', {
+        'ingresos': qs,
+        'estado_filtro': estado_filtro,
+        'q': q,
+        'vista_admin': False,
+    })
+
+
+@admin_requerido
+def admin_equipos_administrativos(request):
+    """Bandeja administrativa completa para Donados y Equipos a comprar."""
+    qs, estado_filtro, q = _equipos_administrativos_filtrados(
+        request,
+        incluir_egreso=True,
+    )
+
+    resumen = {
+        'total': qs.count(),
+        'donados': qs.filter(estado='donado').count(),
+        'compras': qs.filter(estado='equipo_a_comprar').count(),
+        'valor_compras': qs.filter(estado='equipo_a_comprar').aggregate(
+            total=Sum('valor_acordado')
+        )['total'] or Decimal('0.00'),
+    }
+    return render(request, 'admin_panel/equipos_administrativos.html', {
+        'ingresos': qs,
+        'resumen': resumen,
+        'estado_filtro': estado_filtro,
+        'q': q,
+        'vista_admin': True,
+    })
+
 
 @admin_requerido
 def egresos_lista(request):

@@ -157,6 +157,22 @@
             {{ form.metodo.errors }}
         </div>
 
+        <div id="campo-mixto-wrap" class="sub-block hidden">
+            <div class="sub-block-title">🔀 Pago mixto</div>
+            <div class="form-grid">
+                <div><label class="form-label">Monto 1</label>{{ form.monto_1 }}{{ form.monto_1.errors }}</div>
+                <div><label class="form-label">Método 1</label>{{ form.metodo_1 }}{{ form.metodo_1.errors }}</div>
+                <div><label class="form-label">Banco 1 si aplica</label>{{ form.banco_1 }}{{ form.banco_1.errors }}</div>
+                <div><label class="form-label">Otro banco 1 si aplica</label>{{ form.banco_otro_1 }}{{ form.banco_otro_1.errors }}</div>
+                <div><label class="form-label">Tarjeta / App 1 si aplica</label>{{ form.tarjeta_app_1 }}</div>
+                <div><label class="form-label">Monto 2</label>{{ form.monto_2 }}{{ form.monto_2.errors }}</div>
+                <div><label class="form-label">Método 2</label>{{ form.metodo_2 }}{{ form.metodo_2.errors }}</div>
+                <div><label class="form-label">Banco 2 si aplica</label>{{ form.banco_2 }}{{ form.banco_2.errors }}</div>
+                <div><label class="form-label">Otro banco 2 si aplica</label>{{ form.banco_otro_2 }}{{ form.banco_otro_2.errors }}</div>
+                <div><label class="form-label">Tarjeta / App 2 si aplica</label>{{ form.tarjeta_app_2 }}</div>
+            </div>
+        </div>
+
         {# Banco — solo si método = transferencia #}
         <div id="campo-banco-wrap" class="sub-block hidden">
             <div class="sub-block-title">🏦 <span id="label-banco">Banco <span class="req-star">*</span></span></div>
@@ -268,6 +284,7 @@
     const comprobante = document.getElementById('id_comprobante_url');
 
     const wrapBanco = document.getElementById('campo-banco-wrap');
+    const wrapMixto = document.getElementById('campo-mixto-wrap');
     const wrapBancoOtro = document.getElementById('campo-banco-otro-wrap');
     const wrapTarjetaApp = document.getElementById('campo-tarjeta-app-wrap');
     const wrapComprobante = document.getElementById('campo-comprobante-wrap');
@@ -344,6 +361,7 @@
         const v = metodo.value;
 
         hide(wrapBanco);
+        hide(wrapMixto);
         hide(wrapBancoOtro);
         hide(wrapTarjetaApp);
         hide(wrapComprobante);
@@ -361,6 +379,8 @@
         } else if (v === 'tarjeta') {
             show(wrapTarjetaApp);
             setRequired(tarjetaApp, labelTarjetaApp, true);
+        } else if (v === 'mixto') {
+            show(wrapMixto);
         }
         updateSubmitState();
     }

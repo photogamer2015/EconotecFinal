@@ -238,7 +238,7 @@ class IngresoEquipoForm(forms.ModelForm):
 
     firma_cliente_opcion = forms.ChoiceField(
         choices=FIRMA_CLIENTE_OPCIONES,
-        required=True,
+        required=False,
         widget=forms.RadioSelect(attrs={'class': 'firma-cliente-radio'}),
         label='Firma del cliente'
     )
@@ -265,6 +265,10 @@ class IngresoEquipoForm(forms.ModelForm):
             'problema_reportado', 'firma_cliente', 'firma_cliente_imagen',
             'diagnostico_inmediato', 'valor_diagnostico',
             'valor_acordado', 'abono_anticipo',
+            'compra_metodo_pago', 'compra_banco', 'compra_banco_otro',
+            'compra_tarjeta_app', 'compra_comprobante_url',
+            'compra_monto_1', 'compra_metodo_1', 'compra_banco_1', 'compra_banco_otro_1', 'compra_tarjeta_app_1',
+            'compra_monto_2', 'compra_metodo_2', 'compra_banco_2', 'compra_banco_otro_2', 'compra_tarjeta_app_2',
             'diagnostico_metodo', 'diagnostico_banco', 'diagnostico_banco_otro',
             'diagnostico_tarjeta_app', 'diagnostico_comprobante_url',
             'diagnostico_monto_1', 'diagnostico_metodo_1', 'diagnostico_banco_1',
@@ -333,6 +337,21 @@ class IngresoEquipoForm(forms.ModelForm):
             'abono_anticipo': forms.NumberInput(attrs={
                 'class': 'form-input', 'step': '0.01', 'min': '0',
             }),
+            'compra_metodo_pago': forms.Select(attrs={'class': 'form-input', 'id': 'id_compra_metodo_pago'}),
+            'compra_banco': forms.Select(attrs={'class': 'form-input', 'id': 'id_compra_banco'}),
+            'compra_banco_otro': forms.TextInput(attrs={'class': 'form-input', 'id': 'id_compra_banco_otro', 'placeholder': 'Especificar banco'}),
+            'compra_tarjeta_app': forms.Select(attrs={'class': 'form-input', 'id': 'id_compra_tarjeta_app'}),
+            'compra_comprobante_url': forms.URLInput(attrs={'class': 'form-input', 'id': 'id_compra_comprobante_url', 'placeholder': 'Link del comprobante'}),
+            'compra_monto_1': forms.NumberInput(attrs={'class': 'form-input', 'step': '0.01', 'min': '0', 'id': 'id_compra_monto_1'}),
+            'compra_metodo_1': forms.Select(attrs={'class': 'form-input', 'id': 'id_compra_metodo_1'}),
+            'compra_banco_1': forms.Select(attrs={'class': 'form-input', 'id': 'id_compra_banco_1'}),
+            'compra_banco_otro_1': forms.TextInput(attrs={'class': 'form-input', 'id': 'id_compra_banco_otro_1', 'placeholder': 'Otro banco'}),
+            'compra_tarjeta_app_1': forms.Select(attrs={'class': 'form-input', 'id': 'id_compra_tarjeta_app_1'}),
+            'compra_monto_2': forms.NumberInput(attrs={'class': 'form-input', 'step': '0.01', 'min': '0', 'id': 'id_compra_monto_2'}),
+            'compra_metodo_2': forms.Select(attrs={'class': 'form-input', 'id': 'id_compra_metodo_2'}),
+            'compra_banco_2': forms.Select(attrs={'class': 'form-input', 'id': 'id_compra_banco_2'}),
+            'compra_banco_otro_2': forms.TextInput(attrs={'class': 'form-input', 'id': 'id_compra_banco_otro_2', 'placeholder': 'Otro banco'}),
+            'compra_tarjeta_app_2': forms.Select(attrs={'class': 'form-input', 'id': 'id_compra_tarjeta_app_2'}),
             'diagnostico_metodo': forms.Select(attrs={'class': 'form-input', 'id': 'id_diagnostico_metodo'}),
             'diagnostico_banco': forms.Select(attrs={'class': 'form-input', 'id': 'id_diagnostico_banco'}),
             'diagnostico_banco_otro': forms.TextInput(attrs={'class': 'form-input', 'id': 'id_diagnostico_banco_otro', 'placeholder': 'Especificar banco'}),
@@ -403,6 +422,11 @@ class IngresoEquipoForm(forms.ModelForm):
         self.fields['equipo_garantia_manual'].required = False
         self.fields['firma_cliente'].required = False
         self.fields['firma_cliente_imagen'].required = False
+        # Solo es obligatorio para el estado "Equipo a comprar"; el resto del
+        # formulario (incluidas ventas y reparaciones normales) no lo usa.
+        self.fields['compra_metodo_pago'].required = False
+        if not self.is_bound:
+            self.fields['compra_metodo_pago'].initial = 'efectivo'
         self.fields['firma_cliente_opcion'].initial = self._firma_cliente_opcion_inicial()
         self.fields['valor_acordado_estado'] = forms.ChoiceField(
             choices=self.VALOR_ACORDADO_ESTADOS,
@@ -550,6 +574,8 @@ class IngresoEquipoForm(forms.ModelForm):
             estado_equipo = (self.data.get(self.add_prefix('estado')) or '').strip()
         if estado_equipo == 'garantia':
             return Decimal('0.00')
+        if estado_equipo == 'donado':
+            return Decimal('0.00')
 
         estado = ''
         if self.is_bound:
@@ -595,16 +621,23 @@ class IngresoEquipoForm(forms.ModelForm):
         """
         cleaned = super().clean()
         estado = cleaned.get('estado')
+        estado_administrativo = estado in ('donado', 'equipo_a_comprar')
         valor_acordado_estado = cleaned.get('valor_acordado_estado')
         firma_cliente_opcion = cleaned.get('firma_cliente_opcion')
         firma_cliente_imagen = cleaned.get('firma_cliente_imagen')
-        if firma_cliente_opcion == 'si':
+        if estado_administrativo:
+            cleaned['firma_cliente'] = False
+            cleaned['firma_cliente_imagen'] = ''
+            cleaned['firma_cliente_opcion'] = 'no'
+        elif firma_cliente_opcion == 'si':
             if not firma_cliente_imagen:
                 self.add_error('firma_cliente_opcion', 'Captura la firma del cliente o selecciona No firma.')
             cleaned['firma_cliente'] = bool(firma_cliente_imagen)
         elif firma_cliente_opcion == 'no':
             cleaned['firma_cliente'] = False
             cleaned['firma_cliente_imagen'] = ''
+        else:
+            self.add_error('firma_cliente_opcion', 'Selecciona Sí o No firma para continuar.')
 
         if self.estado_bloqueado_por_salida:
             cleaned['valor_acordado'] = self.instance.valor_acordado
@@ -650,7 +683,7 @@ class IngresoEquipoForm(forms.ModelForm):
         if self.estado_bloqueado_por_salida:
             for nombre in self.CAMPOS_DIAGNOSTICO:
                 cleaned[nombre] = getattr(self.instance, nombre)
-        elif estado == 'garantia':
+        elif estado in ('garantia', 'donado', 'equipo_a_comprar'):
             cleaned['diagnostico_inmediato'] = 'no'
             cleaned['valor_diagnostico'] = Decimal('0.00')
             cleaned['diagnostico_metodo'] = 'efectivo'
@@ -682,7 +715,20 @@ class IngresoEquipoForm(forms.ModelForm):
                     f'La suma del pago mixto debe ser igual al total del diagnóstico: ${diagnostico:.2f}.'
                 )
 
-        if cleaned.get('anticipo_metodo') == 'mixto':
+        if estado_administrativo:
+            cleaned['abono_anticipo'] = Decimal('0.00')
+            cleaned['anticipo_metodo'] = 'efectivo'
+            cleaned['anticipo_banco'] = ''
+            cleaned['anticipo_banco_otro'] = ''
+            cleaned['anticipo_tarjeta_app'] = ''
+            cleaned['anticipo_comprobante_url'] = ''
+            cleaned['anticipo_monto_1'] = None
+            cleaned['anticipo_metodo_1'] = ''
+            cleaned['anticipo_banco_1'] = ''
+            cleaned['anticipo_monto_2'] = None
+            cleaned['anticipo_metodo_2'] = ''
+            cleaned['anticipo_banco_2'] = ''
+        elif cleaned.get('anticipo_metodo') == 'mixto':
             abono = cleaned.get('abono_anticipo') or Decimal('0.00')
             monto_1 = cleaned.get('anticipo_monto_1') or Decimal('0.00')
             monto_2 = cleaned.get('anticipo_monto_2') or Decimal('0.00')
@@ -692,6 +738,74 @@ class IngresoEquipoForm(forms.ModelForm):
                     'anticipo_monto_2',
                     f'La suma del pago mixto debe ser igual al total del abono / anticipo: ${abono:.2f}.'
                 )
+
+        # Donado no tiene salida ni valor a pagar. Equipo a comprar usa el
+        # valor acordado como valor de compra y se sincroniza con Egresos.
+        campos_compra = (
+            'compra_metodo_pago', 'compra_banco', 'compra_banco_otro',
+            'compra_tarjeta_app', 'compra_comprobante_url',
+            'compra_monto_1', 'compra_metodo_1', 'compra_banco_1',
+            'compra_banco_otro_1', 'compra_tarjeta_app_1', 'compra_monto_2', 'compra_metodo_2',
+            'compra_banco_2', 'compra_banco_otro_2', 'compra_tarjeta_app_2',
+        )
+        if estado == 'donado':
+            cleaned['valor_acordado'] = Decimal('0.00')
+            for nombre in campos_compra:
+                if nombre in cleaned:
+                    cleaned[nombre] = None if 'monto' in nombre else ''
+        elif estado == 'equipo_a_comprar':
+            valor_compra = cleaned.get('valor_acordado') or Decimal('0.00')
+            cleaned['compra_metodo_pago'] = cleaned.get('compra_metodo_pago') or 'efectivo'
+            if valor_compra <= 0:
+                self.add_error('valor_acordado', 'Ingresa el valor a pagar por la compra del equipo.')
+
+            metodo = cleaned.get('compra_metodo_pago') or 'efectivo'
+            banco = cleaned.get('compra_banco') or ''
+            if metodo == 'transferencia':
+                if not banco:
+                    self.add_error('compra_banco', 'Indica el banco usado para la compra.')
+                if banco == 'otro' and not (cleaned.get('compra_banco_otro') or '').strip():
+                    self.add_error('compra_banco_otro', 'Especifica el nombre del banco.')
+            elif metodo == 'tarjeta' and not cleaned.get('compra_tarjeta_app'):
+                self.add_error('compra_tarjeta_app', 'Selecciona la tarjeta o aplicación usada.')
+            elif metodo == 'mixto':
+                monto_1 = cleaned.get('compra_monto_1') or Decimal('0.00')
+                monto_2 = cleaned.get('compra_monto_2') or Decimal('0.00')
+                metodo_1 = cleaned.get('compra_metodo_1') or ''
+                metodo_2 = cleaned.get('compra_metodo_2') or ''
+                if monto_1 <= 0:
+                    self.add_error('compra_monto_1', 'Ingresa el primer monto de la compra.')
+                if monto_2 <= 0:
+                    self.add_error('compra_monto_2', 'Ingresa el segundo monto de la compra.')
+                if not metodo_1:
+                    self.add_error('compra_metodo_1', 'Selecciona el primer método.')
+                elif metodo_1 == 'mixto':
+                    self.add_error('compra_metodo_1', 'Selecciona un método individual para la primera parte.')
+                if not metodo_2:
+                    self.add_error('compra_metodo_2', 'Selecciona el segundo método.')
+                elif metodo_2 == 'mixto':
+                    self.add_error('compra_metodo_2', 'Selecciona un método individual para la segunda parte.')
+                if metodo_1 == 'transferencia' and not cleaned.get('compra_banco_1'):
+                    self.add_error('compra_banco_1', 'Selecciona el banco del primer pago.')
+                if metodo_2 == 'transferencia' and not cleaned.get('compra_banco_2'):
+                    self.add_error('compra_banco_2', 'Selecciona el banco del segundo pago.')
+                if metodo_1 == 'transferencia' and cleaned.get('compra_banco_1') == 'otro' and not cleaned.get('compra_banco_otro_1'):
+                    self.add_error('compra_banco_otro_1', 'Especifica el banco del primer pago.')
+                if metodo_2 == 'transferencia' and cleaned.get('compra_banco_2') == 'otro' and not cleaned.get('compra_banco_otro_2'):
+                    self.add_error('compra_banco_otro_2', 'Especifica el banco del segundo pago.')
+                if metodo_1 == 'tarjeta' and not cleaned.get('compra_tarjeta_app_1'):
+                    self.add_error('compra_tarjeta_app_1', 'Selecciona la tarjeta o app del primer pago.')
+                if metodo_2 == 'tarjeta' and not cleaned.get('compra_tarjeta_app_2'):
+                    self.add_error('compra_tarjeta_app_2', 'Selecciona la tarjeta o app del segundo pago.')
+                if monto_1 + monto_2 != valor_compra:
+                    self.add_error(
+                        'compra_monto_2',
+                        f'La suma de la compra mixta debe ser igual al valor a pagar: ${valor_compra:.2f}.'
+                    )
+        else:
+            for nombre in campos_compra:
+                if nombre in cleaned:
+                    cleaned[nombre] = None if 'monto' in nombre else ''
         
             
         return cleaned
@@ -1334,6 +1448,8 @@ class EgresoForm(forms.ModelForm):
         fields = [
             'fecha', 'categoria', 'concepto', 'monto', 'notas',
             'metodo', 'banco', 'banco_otro', 'tarjeta_app', 'comprobante_url', 'numero_recibo',
+            'monto_1', 'metodo_1', 'banco_1', 'banco_otro_1', 'tarjeta_app_1',
+            'monto_2', 'metodo_2', 'banco_2', 'banco_otro_2', 'tarjeta_app_2',
             'factura_realizada', 'factura_nombres', 'factura_cedula', 'factura_correo'
         ]
         widgets = {
@@ -1356,6 +1472,16 @@ class EgresoForm(forms.ModelForm):
                 'class': 'form-input',
                 'placeholder': 'Se genera automáticamente si lo dejas vacío',
             }),
+            'monto_1': forms.NumberInput(attrs={'class': 'form-input', 'step': '0.01', 'min': '0'}),
+            'metodo_1': forms.Select(attrs={'class': 'form-input'}),
+            'banco_1': forms.TextInput(attrs={'class': 'form-input', 'placeholder': 'Banco si aplica'}),
+            'banco_otro_1': forms.TextInput(attrs={'class': 'form-input', 'placeholder': 'Otro banco si aplica'}),
+            'tarjeta_app_1': forms.TextInput(attrs={'class': 'form-input', 'placeholder': 'Tarjeta / App si aplica'}),
+            'monto_2': forms.NumberInput(attrs={'class': 'form-input', 'step': '0.01', 'min': '0'}),
+            'metodo_2': forms.Select(attrs={'class': 'form-input'}),
+            'banco_2': forms.TextInput(attrs={'class': 'form-input', 'placeholder': 'Banco si aplica'}),
+            'banco_otro_2': forms.TextInput(attrs={'class': 'form-input', 'placeholder': 'Otro banco si aplica'}),
+            'tarjeta_app_2': forms.TextInput(attrs={'class': 'form-input', 'placeholder': 'Tarjeta / App si aplica'}),
             'factura_realizada': forms.Select(attrs={'class': 'form-input'}),
             'factura_nombres': forms.TextInput(attrs={'class': 'form-input', 'placeholder': 'Nombres del titular de factura'}),
             'factura_cedula': forms.TextInput(attrs={
@@ -1377,6 +1503,47 @@ class EgresoForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         self.fields['categoria'].queryset = CategoriaEgreso.objects.filter(activo=True)
         self.fields['categoria'].empty_label = '— Selecciona categoría —'
+
+    def clean(self):
+        cleaned = super().clean()
+        metodo = cleaned.get('metodo')
+        monto = cleaned.get('monto') or Decimal('0.00')
+        if monto <= 0:
+            self.add_error('monto', 'El monto debe ser mayor que cero.')
+        if metodo == 'transferencia':
+            banco = cleaned.get('banco') or ''
+            if not banco:
+                self.add_error('banco', 'Indica el banco usado para el egreso.')
+            if banco == 'otro' and not (cleaned.get('banco_otro') or '').strip():
+                self.add_error('banco_otro', 'Especifica el nombre del banco.')
+        elif metodo == 'tarjeta' and not cleaned.get('tarjeta_app'):
+            self.add_error('tarjeta_app', 'Selecciona la tarjeta o aplicación usada.')
+        elif metodo == 'mixto':
+            monto_1 = cleaned.get('monto_1') or Decimal('0.00')
+            monto_2 = cleaned.get('monto_2') or Decimal('0.00')
+            if monto_1 <= 0:
+                self.add_error('monto_1', 'Ingresa el primer monto.')
+            if monto_2 <= 0:
+                self.add_error('monto_2', 'Ingresa el segundo monto.')
+            if not cleaned.get('metodo_1'):
+                self.add_error('metodo_1', 'Selecciona el primer método.')
+            elif cleaned.get('metodo_1') == 'mixto':
+                self.add_error('metodo_1', 'Selecciona un método individual para el primer pago.')
+            if not cleaned.get('metodo_2'):
+                self.add_error('metodo_2', 'Selecciona el segundo método.')
+            elif cleaned.get('metodo_2') == 'mixto':
+                self.add_error('metodo_2', 'Selecciona un método individual para el segundo pago.')
+            if cleaned.get('metodo_1') == 'transferencia' and not cleaned.get('banco_1'):
+                self.add_error('banco_1', 'Indica el banco del primer pago.')
+            if cleaned.get('metodo_2') == 'transferencia' and not cleaned.get('banco_2'):
+                self.add_error('banco_2', 'Indica el banco del segundo pago.')
+            if cleaned.get('metodo_1') == 'transferencia' and cleaned.get('banco_1') == 'otro' and not cleaned.get('banco_otro_1'):
+                self.add_error('banco_otro_1', 'Especifica el banco del primer pago.')
+            if cleaned.get('metodo_2') == 'transferencia' and cleaned.get('banco_2') == 'otro' and not cleaned.get('banco_otro_2'):
+                self.add_error('banco_otro_2', 'Especifica el banco del segundo pago.')
+            if monto_1 + monto_2 != monto:
+                self.add_error('monto_2', 'La suma de los pagos mixtos debe ser igual al monto del egreso.')
+        return cleaned
 
 
 # ─────────────────────────────────────────────────────────

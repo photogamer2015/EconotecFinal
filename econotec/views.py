@@ -35,7 +35,7 @@ from .busqueda import (
 from .models import (
     Cliente, IngresoEquipo, SalidaEquipo, Abono, SEDES_EQUIPOS,
     UsuarioActividad, NotificacionAsesora, BitacoraTecnico, InventarioItem,
-    NotificacionInventarioAdmin, VentaInventarioItem,
+    NotificacionInventarioAdmin, VentaInventarioItem, Egreso, CategoriaEgreso,
 )
 from .bitacora import registrar_bitacora, nombre_corto_usuario, construir_bitacora_usuario
 from .date_filters import aplicar_rango_fecha, contexto_rango_fecha, obtener_rango_fecha
@@ -174,6 +174,13 @@ def _confirmo_mismo_equipo_cliente(request):
 
 def ingresos_de_equipo_qs():
     return IngresoEquipo.objects.filter(sede__in=SEDES_EQUIPOS)
+
+
+def ingresos_operativos_qs():
+    """Equipos del flujo normal de reparación, sin donaciones ni compras."""
+    return ingresos_de_equipo_qs().exclude(
+        estado__in=('donado', 'equipo_a_comprar')
+    )
 
 
 def home(request):
@@ -1119,7 +1126,7 @@ def inventario_qr_imprimir(request, codigo):
 @tecnico_requerido
 def ingreso_menu(request):
     """Menú de ingresos: registrar nuevo / ver lista."""
-    ingresos_equipos = ingresos_de_equipo_qs()
+    ingresos_equipos = ingresos_operativos_qs()
     total = ingresos_equipos.count()
     pendientes = ingresos_equipos.filter(
         estado__in=['ingresado', 'en_reparacion'],
@@ -1138,10 +1145,56 @@ def ingreso_menu(request):
 
 def _ingresos_pendientes_valor_qs():
     return (
-        IngresoEquipo.objects
-        .filter(sede__in=['guayaquil', 'quito'], valor_acordado__isnull=True)
+        ingresos_operativos_qs()
+        .filter(valor_acordado__isnull=True)
         .exclude(estado='entregado')
     )
+
+
+def _sincronizar_egreso_compra(ingreso, usuario):
+    """Crea o actualiza el único egreso asociado a una compra de equipo."""
+    if ingreso.estado != 'equipo_a_comprar' or not ingreso.valor_acordado:
+        return None
+
+    categoria, _ = CategoriaEgreso.objects.get_or_create(
+        nombre='Compra de equipo',
+        defaults={
+            'descripcion': 'Compras de equipos registradas desde Ingreso de Equipo.',
+            'color': '#00838f',
+            'icono': '🖥️',
+        },
+    )
+    datos = {
+        'fecha': ingreso.fecha_ingreso,
+        'categoria': categoria,
+        'concepto': (
+            f'Compra de equipo {ingreso.codigo_equipo} — '
+            f'{ingreso.tipo_equipo_display}: {ingreso.marca} {ingreso.modelo_serie}'
+        )[:200],
+        'monto': ingreso.valor_acordado,
+        'metodo': ingreso.compra_metodo_pago or 'efectivo',
+        'banco': ingreso.compra_banco or '',
+        'banco_otro': ingreso.compra_banco_otro or '',
+        'tarjeta_app': ingreso.compra_tarjeta_app or '',
+        'comprobante_url': ingreso.compra_comprobante_url or '',
+        'monto_1': ingreso.compra_monto_1,
+        'metodo_1': ingreso.compra_metodo_1 or '',
+        'banco_1': ingreso.compra_banco_1 or '',
+        'banco_otro_1': ingreso.compra_banco_otro_1 or '',
+        'tarjeta_app_1': ingreso.compra_tarjeta_app_1 or '',
+        'monto_2': ingreso.compra_monto_2,
+        'metodo_2': ingreso.compra_metodo_2 or '',
+        'banco_2': ingreso.compra_banco_2 or '',
+        'banco_otro_2': ingreso.compra_banco_otro_2 or '',
+        'tarjeta_app_2': ingreso.compra_tarjeta_app_2 or '',
+        'registrado_por': usuario,
+        'notas': 'Egreso generado automáticamente desde Equipo a comprar.',
+    }
+    egreso, creado = Egreso.objects.update_or_create(
+        ingreso_compra=ingreso,
+        defaults=datos,
+    )
+    return egreso, creado
 
 
 @tecnico_requerido
@@ -1242,6 +1295,7 @@ def ingreso_registrar(request):
                     ingreso.sede = sede_actual           # ← sede de la sesión
                     ingreso.registrado_por = request.user
                     ingreso.save()
+                    _sincronizar_egreso_compra(ingreso, request.user)
                     registrar_bitacora(
                         request.user,
                         'ingreso',
@@ -1269,6 +1323,7 @@ def ingreso_registrar(request):
                 ingreso.sede = sede_actual           # ← sede de la sesión
                 ingreso.registrado_por = request.user
                 ingreso.save()
+                _sincronizar_egreso_compra(ingreso, request.user)
                 registrar_bitacora(
                     request.user,
                     'ingreso',
@@ -1438,6 +1493,7 @@ def ingreso_editar(request, pk):
 
             cliente_editado.save()
             ingreso = ing_form.save()
+            _sincronizar_egreso_compra(ingreso, request.user)
 
             # ── Auto-crear Salida si estado=entregado + subestado definido ──
             subestado = ingreso.subestado_entregado
@@ -1574,7 +1630,7 @@ def ingreso_lista(request):
     else:
         sede_filtro = sede_sesion
 
-    qs = (ingresos_de_equipo_qs()
+    qs = (ingresos_operativos_qs()
           .select_related('cliente', 'registrado_por', 'salida')
           .prefetch_related('abonos'))
 
@@ -1796,6 +1852,13 @@ def ingreso_eliminar(request, pk):
             request,
             f'No se puede eliminar el equipo #{numero}: ya tiene una salida registrada. '
             'Elimina primero la salida.'
+        )
+        return redirect('econotec:ingreso_detalle', pk=ingreso.pk)
+    if hasattr(ingreso, 'egreso_compra'):
+        messages.error(
+            request,
+            f'No se puede eliminar el equipo #{numero}: tiene un egreso automático de compra. '
+            'Conserva el registro para no perder el historial administrativo.'
         )
         return redirect('econotec:ingreso_detalle', pk=ingreso.pk)
     codigo = ingreso.codigo_equipo
@@ -2159,6 +2222,21 @@ def _preparar_post_venta(post_data):
         'ing-tipo_equipo_otro': '',
         'ing-accesorios_entregados': 'Ninguno',
         'ing-abono_anticipo': '0.00',
+        'ing-compra_metodo_pago': 'efectivo',
+        'ing-compra_banco': '',
+        'ing-compra_banco_otro': '',
+        'ing-compra_tarjeta_app': '',
+        'ing-compra_comprobante_url': '',
+        'ing-compra_monto_1': '',
+        'ing-compra_metodo_1': '',
+        'ing-compra_banco_1': '',
+        'ing-compra_banco_otro_1': '',
+        'ing-compra_tarjeta_app_1': '',
+        'ing-compra_monto_2': '',
+        'ing-compra_metodo_2': '',
+        'ing-compra_banco_2': '',
+        'ing-compra_banco_otro_2': '',
+        'ing-compra_tarjeta_app_2': '',
         'ing-anticipo_metodo': 'efectivo',
         'ing-anticipo_banco': '',
         'ing-anticipo_banco_otro': '',
@@ -2809,6 +2887,14 @@ def salida_lista(request):
 def salida_registrar(request, ingreso_pk):
     """Registrar la salida de un equipo (cierre del ciclo de reparación)."""
     ingreso = get_object_or_404(IngresoEquipo, pk=ingreso_pk)
+
+    if ingreso.estado in ('donado', 'equipo_a_comprar'):
+        messages.warning(
+            request,
+            f'El equipo {ingreso.codigo_equipo} está en "{ingreso.get_estado_display()}" '
+            'y se gestiona directamente desde el Registro Administrativo. No tiene salida de reparación.'
+        )
+        return redirect('econotec:ingreso_detalle', pk=ingreso.pk)
 
     if hasattr(ingreso, 'salida'):
         messages.info(

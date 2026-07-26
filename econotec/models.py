@@ -433,6 +433,82 @@ class IngresoEquipo(models.Model):
         verbose_name='Valor acordado (USD)',
         help_text='Costo total acordado de la reparación. Déjelo vacío si aún no se cotiza.'
     )
+
+    # ── Datos de compra interna (solo cuando el estado es Equipo a comprar) ──
+    COMPRA_METODOS_PAGO = [
+        ('efectivo', 'Efectivo'),
+        ('transferencia', 'Transferencia bancaria'),
+        ('tarjeta', 'Tarjeta de crédito / Débito'),
+        ('mixto', 'Pago mixto (2 métodos)'),
+    ]
+    COMPRA_BANCOS = [
+        ('pichincha', 'Banco Pichincha'),
+        ('guayaquil', 'Banco Guayaquil'),
+        ('produbanco', 'Produbanco'),
+        ('pacifico', 'Banco Pacífico'),
+        ('interbancaria', 'Interbancaria'),
+        ('otro', 'Otro banco'),
+    ]
+    COMPRA_TARJETAS_APPS = [
+        ('payphone', 'Payphone'),
+        ('deuna', 'Deuna'),
+    ]
+    compra_metodo_pago = models.CharField(
+        max_length=20, choices=COMPRA_METODOS_PAGO, default='efectivo',
+        verbose_name='Método de pago de compra',
+    )
+    compra_banco = models.CharField(
+        max_length=20, choices=COMPRA_BANCOS, blank=True,
+        verbose_name='Banco de compra',
+    )
+    compra_banco_otro = models.CharField(
+        max_length=100, blank=True, verbose_name='Banco de compra (otro)',
+    )
+    compra_tarjeta_app = models.CharField(
+        max_length=20, choices=COMPRA_TARJETAS_APPS, blank=True,
+        verbose_name='Tarjeta / App de compra',
+    )
+    compra_comprobante_url = models.URLField(
+        blank=True, verbose_name='Comprobante de compra',
+    )
+    compra_monto_1 = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True,
+        verbose_name='Monto de compra 1',
+    )
+    compra_metodo_1 = models.CharField(
+        max_length=20, choices=COMPRA_METODOS_PAGO, blank=True,
+        verbose_name='Método de compra 1',
+    )
+    compra_banco_1 = models.CharField(
+        max_length=20, choices=COMPRA_BANCOS, blank=True,
+        verbose_name='Banco de compra 1',
+    )
+    compra_banco_otro_1 = models.CharField(
+        max_length=100, blank=True, verbose_name='Banco de compra 1 (otro)',
+    )
+    compra_tarjeta_app_1 = models.CharField(
+        max_length=20, choices=COMPRA_TARJETAS_APPS, blank=True,
+        verbose_name='Tarjeta / App de compra 1',
+    )
+    compra_monto_2 = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True,
+        verbose_name='Monto de compra 2',
+    )
+    compra_metodo_2 = models.CharField(
+        max_length=20, choices=COMPRA_METODOS_PAGO, blank=True,
+        verbose_name='Método de compra 2',
+    )
+    compra_banco_2 = models.CharField(
+        max_length=20, choices=COMPRA_BANCOS, blank=True,
+        verbose_name='Banco de compra 2',
+    )
+    compra_banco_otro_2 = models.CharField(
+        max_length=100, blank=True, verbose_name='Banco de compra 2 (otro)',
+    )
+    compra_tarjeta_app_2 = models.CharField(
+        max_length=20, choices=COMPRA_TARJETAS_APPS, blank=True,
+        verbose_name='Tarjeta / App de compra 2',
+    )
     abono_anticipo = models.DecimalField(
         max_digits=10, decimal_places=2,
         default=Decimal('0.00'),
@@ -585,6 +661,8 @@ class IngresoEquipo(models.Model):
         ('en_reparacion', 'En reparación'),
         ('entregado', 'Entregado al cliente'),
         ('garantia', 'Garantía'),
+        ('donado', 'Donado'),
+        ('equipo_a_comprar', 'Equipo a comprar'),
     ]
     estado = models.CharField(
         max_length=30, choices=ESTADO_FLUJO, default='ingresado',
@@ -709,6 +787,37 @@ class IngresoEquipo(models.Model):
         if self.pendiente_retiro_visual:
             return 'Pendiente de retiro'
         return self.get_estado_display()
+
+    @property
+    def compra_pago_mixto_partes(self):
+        """Desglose de los dos métodos usados en una compra mixta."""
+        if self.compra_metodo_pago != 'mixto':
+            return []
+        metodos = dict(self.COMPRA_METODOS_PAGO)
+        bancos = dict(self.COMPRA_BANCOS)
+        tarjetas = dict(self.COMPRA_TARJETAS_APPS)
+        partes = []
+        for numero, monto, metodo, banco, banco_otro, tarjeta_app in (
+            (
+                1, self.compra_monto_1, self.compra_metodo_1,
+                self.compra_banco_1, self.compra_banco_otro_1,
+                self.compra_tarjeta_app_1,
+            ),
+            (
+                2, self.compra_monto_2, self.compra_metodo_2,
+                self.compra_banco_2, self.compra_banco_otro_2,
+                self.compra_tarjeta_app_2,
+            ),
+        ):
+            if not monto and not metodo:
+                continue
+            detalle = metodos.get(metodo, metodo or '—')
+            if metodo == 'transferencia' and banco:
+                detalle = f'{detalle} ({banco_otro if banco == "otro" and banco_otro else bancos.get(banco, banco)})'
+            elif metodo == 'tarjeta' and tarjeta_app:
+                detalle = f'{detalle} ({tarjetas.get(tarjeta_app, tarjeta_app)})'
+            partes.append({'monto': _q2(monto), 'detalle': detalle, 'numero': numero})
+        return partes
 
     @property
     def subestado_visual_display(self):
@@ -1743,6 +1852,13 @@ class CategoriaEgreso(models.Model):
 class Egreso(models.Model):
     """Cada gasto del taller (sueldos, repuestos, alquiler, etc.)"""
 
+    METODOS_PAGO = [
+        ('efectivo', 'Efectivo'),
+        ('transferencia', 'Transferencia bancaria'),
+        ('tarjeta', 'Tarjeta de crédito / Débito'),
+        ('mixto', 'Pago mixto (2 métodos)'),
+    ]
+
     fecha = models.DateField(
         help_text='Fecha en que se efectuó el gasto.'
     )
@@ -1762,11 +1878,7 @@ class Egreso(models.Model):
 
     # ── Método de pago ─────────────────────────────────────
     metodo = models.CharField(
-        max_length=20, choices=[
-            ('efectivo', 'Efectivo'),
-            ('transferencia', 'Transferencia bancaria'),
-            ('tarjeta', 'Tarjeta de crédito / Débito'),
-        ], default='efectivo',
+        max_length=20, choices=METODOS_PAGO, default='efectivo',
         verbose_name='Método de pago',
     )
     banco = models.CharField(
@@ -1802,6 +1914,48 @@ class Egreso(models.Model):
         verbose_name='Número de recibo',
     )
 
+    # Origen automático para compras registradas desde Ingreso de Equipo.
+    # La relación única evita duplicar el egreso si se edita el ingreso.
+    ingreso_compra = models.OneToOneField(
+        'IngresoEquipo', on_delete=models.PROTECT,
+        null=True, blank=True, related_name='egreso_compra',
+        verbose_name='Ingreso de equipo comprado',
+    )
+    monto_1 = models.DecimalField(
+        max_digits=12, decimal_places=2, null=True, blank=True,
+        verbose_name='Monto mixto 1',
+    )
+    metodo_1 = models.CharField(
+        max_length=20, choices=METODOS_PAGO, blank=True,
+        verbose_name='Método mixto 1',
+    )
+    banco_1 = models.CharField(
+        max_length=20, blank=True, verbose_name='Banco mixto 1',
+    )
+    banco_otro_1 = models.CharField(
+        max_length=100, blank=True, verbose_name='Banco mixto 1 (otro)',
+    )
+    tarjeta_app_1 = models.CharField(
+        max_length=20, blank=True, verbose_name='Tarjeta / App mixta 1',
+    )
+    monto_2 = models.DecimalField(
+        max_digits=12, decimal_places=2, null=True, blank=True,
+        verbose_name='Monto mixto 2',
+    )
+    metodo_2 = models.CharField(
+        max_length=20, choices=METODOS_PAGO, blank=True,
+        verbose_name='Método mixto 2',
+    )
+    banco_2 = models.CharField(
+        max_length=20, blank=True, verbose_name='Banco mixto 2',
+    )
+    banco_otro_2 = models.CharField(
+        max_length=100, blank=True, verbose_name='Banco mixto 2 (otro)',
+    )
+    tarjeta_app_2 = models.CharField(
+        max_length=20, blank=True, verbose_name='Tarjeta / App mixta 2',
+    )
+
     # ── Factura ──────────────────────────────────────────
     factura_realizada = models.CharField(
         max_length=2, choices=[('no', 'No'), ('si', 'Sí')], default='no',
@@ -1831,6 +1985,29 @@ class Egreso(models.Model):
         verbose_name = 'Egreso'
         verbose_name_plural = 'Egresos'
         ordering = ['-fecha', '-creado']
+
+    @property
+    def pago_mixto_partes(self):
+        """Desglose legible del egreso cuando fue pagado con dos métodos."""
+        if self.metodo != 'mixto':
+            return []
+        metodos = dict(self.METODOS_PAGO)
+        bancos = dict(IngresoEquipo.COMPRA_BANCOS)
+        partes = []
+        for numero, monto, metodo, banco, banco_otro, tarjeta_app in (
+            (1, self.monto_1, self.metodo_1, self.banco_1, self.banco_otro_1, self.tarjeta_app_1),
+            (2, self.monto_2, self.metodo_2, self.banco_2, self.banco_otro_2, self.tarjeta_app_2),
+        ):
+            if not monto and not metodo:
+                continue
+            detalle = metodos.get(metodo, metodo or '—')
+            if metodo == 'transferencia' and banco:
+                nombre_banco = banco_otro if banco == 'otro' and banco_otro else bancos.get(banco, banco)
+                detalle = f'{detalle} ({nombre_banco})'
+            elif metodo == 'tarjeta' and tarjeta_app:
+                detalle = f'{detalle} ({tarjeta_app.title()})'
+            partes.append({'numero': numero, 'monto': _q2(monto), 'detalle': detalle})
+        return partes
 
     def __str__(self):
         return f'{self.fecha.strftime("%d/%m/%Y")} — {self.concepto} (${self.monto})'

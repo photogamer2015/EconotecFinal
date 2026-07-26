@@ -550,6 +550,12 @@
         </div>
 
         <div class="info-card" style="margin-top:18px;">
+            {% if ingreso.estado == 'donado' or ingreso.estado == 'equipo_a_comprar' %}
+            <h3>📝 Observación</h3>
+            <p style="font-size:13px; color:#1f2937; padding:10px; background:#f0fdfa; border-radius:6px; margin:0; border-left:3px solid #0f766e;">
+                {{ ingreso.problema_reportado|linebreaksbr }}
+            </p>
+            {% else %}
             <h3>⚠ Problema y Reporte</h3>
             <p style="font-size:13px; color:#1f2937; padding:8px; background:#fff8f3; border-radius:6px; margin-bottom:10px;">
                 <strong>Problema reportado:</strong><br>{{ ingreso.problema_reportado }}
@@ -560,6 +566,7 @@
                 <br><small style="color:var(--primary,#f97618); font-weight:700;">✍️ Por {{ ingreso.reporte_por_nombre }}{% if ingreso.reporte_actualizado %} · {{ ingreso.reporte_actualizado|date:"d/m/Y H:i" }}{% endif %}</small>
                 {% endif %}
             </p>
+            {% endif %}
         </div>
         {% endif %}
     </div>
@@ -607,7 +614,7 @@
             </div>
         </div>
 
-        {% if ingreso.abono_anticipo > 0 or ingreso.diagnostico_inmediato == 'si' %}
+        {% if ingreso.estado != 'donado' and ingreso.estado != 'equipo_a_comprar' and ingreso.abono_anticipo > 0 or ingreso.estado != 'donado' and ingreso.estado != 'equipo_a_comprar' and ingreso.diagnostico_inmediato == 'si' %}
         <div class="info-card" style="margin-bottom:18px; border-left:4px solid var(--secondary);">
             <h3>💳 Pago Inicial (Mostrador)</h3>
             {% if ingreso.abono_anticipo > 0 %}
@@ -673,6 +680,40 @@
         </div>
         {% endif %}
 
+        {% if ingreso.estado == 'donado' or ingreso.estado == 'equipo_a_comprar' %}
+        <div class="info-card" style="margin-bottom:18px; border-left:4px solid {% if ingreso.estado == 'donado' %}#16a34a{% else %}#0f766e{% endif %};">
+            {% if ingreso.estado == 'donado' %}
+                <h3>🎁 Equipo donado</h3>
+                <div class="big-num" style="background:#ecfdf5; color:#15803d;">GRATIS</div>
+                <div style="text-align:center; font-size:13px; color:#166534; margin-top:8px;">No genera pago, egreso ni salida de reparación.</div>
+            {% else %}
+                <h3>🧾 Compra administrativa</h3>
+                <div class="big-num" style="background:#f0fdfa; color:#0f766e;">{{ ingreso.valor_acordado|dinero_signo }}</div>
+                <div style="text-align:center; font-size:13px; color:#115e59; margin-bottom:12px;">Valor pagado por Econotec</div>
+                <div class="field-row"><span class="label">Método</span><span class="value">{{ ingreso.get_compra_metodo_pago_display }}</span></div>
+                {% if ingreso.compra_metodo_pago == 'transferencia' %}
+                <div class="field-row"><span class="label">Banco</span><span class="value">{{ ingreso.compra_banco_otro|default:ingreso.get_compra_banco_display }}</span></div>
+                {% elif ingreso.compra_metodo_pago == 'tarjeta' %}
+                <div class="field-row"><span class="label">Tarjeta / App</span><span class="value">{{ ingreso.get_compra_tarjeta_app_display }}</span></div>
+                {% elif ingreso.compra_metodo_pago == 'mixto' %}
+                <div class="pago-mixto-detalle">
+                    {% for parte in ingreso.compra_pago_mixto_partes %}
+                    <div class="pago-mixto-parte">
+                        <strong>{{ parte.monto|dinero_signo }}</strong>
+                        <span>{{ parte.detalle }}</span>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+                {% if es_admin %}
+                <div class="field-row"><span class="label">Egreso automático</span><span class="value">{% if ingreso.egreso_compra %}{{ ingreso.egreso_compra.numero_recibo|default:"Registrado" }}{% else %}Pendiente de sincronizar{% endif %}</span></div>
+                {% endif %}
+                {% if ingreso.compra_comprobante_url %}
+                <a href="{{ ingreso.compra_comprobante_url }}" target="_blank" rel="noopener" class="btn btn-secondary" style="width:100%; margin-top:10px;">📎 Ver comprobante</a>
+                {% endif %}
+            {% endif %}
+        </div>
+        {% else %}
         <div class="info-card" style="margin-bottom:18px;">
             {% if ingreso.diagnostico_inmediato == 'si' and ingreso.valor_diagnostico > 0 %}
                 <div style="background: #fff3e0; border: 1px solid #ffcc80; padding: 12px; border-radius: 8px; margin-bottom: 16px; text-align: center;">
@@ -760,6 +801,7 @@
                 </div>
             {% endif %}
         </div>
+        {% endif %}
 
         {% if ingreso.valor_acordado is None and ingreso.valor_pendiente_reporte %}
         <div class="info-card pending-value-report-card" style="margin-bottom:18px;">
@@ -785,6 +827,16 @@
         <div class="info-card" style="margin-top:18px;">
             <h3> 📎 Acciones</h3>
             <div class="actions-grid">
+                {% if ingreso.estado == 'donado' or ingreso.estado == 'equipo_a_comprar' %}
+                {% if es_admin %}
+                <a href="{% url 'econotec:admin_equipos_administrativos' %}" class="btn btn-primary">🎁 Ver bandeja administrativa</a>
+                {% if ingreso.egreso_compra %}
+                <a href="{% url 'econotec:admin_egreso_editar' pk=ingreso.egreso_compra.pk %}" class="btn btn-secondary">🧾 Ver egreso</a>
+                {% endif %}
+                {% else %}
+                <a href="{% url 'econotec:equipos_administrativos_general' %}" class="btn btn-primary">🎁 Volver a Donados / Compras</a>
+                {% endif %}
+                {% else %}
                 {% if puede_gestionar_pagos %}
                 <a href="{% url 'econotec:abono_crear' ingreso_pk=ingreso.pk %}" class="btn btn-success">Pago Directo</a>
                 <a href="{% url 'econotec:ingreso_abonos' pk=ingreso.pk %}" class="btn btn-secondary">Ver Abonos / Pagos</a>
@@ -803,6 +855,7 @@
                             <a href="{% url 'econotec:salida_registrar' ingreso_pk=ingreso.pk %}" class="btn btn-primary">📤 Registrar equipo reparado / Salida</a>
                         {% endif %}
                     {% endif %}
+                {% endif %}
                 {% endif %}
             </div>
 

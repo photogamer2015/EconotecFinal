@@ -1,0 +1,404 @@
+{% extends 'base.html' %}
+{% load econotec_extras %}
+
+{% block title %}Donados y Compras — Econotec{% endblock %}
+
+{% block content %}
+<style>
+    .admin-special-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+        gap: 16px;
+        margin: 18px 0 24px;
+    }
+    .admin-special-card {
+        background: var(--card-bg);
+        border-radius: 12px;
+        padding: 18px;
+        border-top: 4px solid var(--primary);
+        box-shadow: 0 2px 8px rgba(0, 0, 0, .05);
+    }
+    .admin-special-card .label {
+        color: var(--text-muted);
+        font-size: 12px;
+        font-weight: 800;
+        text-transform: uppercase;
+    }
+    .admin-special-card .value {
+        margin-top: 5px;
+        color: var(--primary);
+        font-size: 28px;
+        font-weight: 900;
+    }
+    .admin-special-card.donado { border-top-color: #16a34a; }
+    .admin-special-card.donado .value { color: #15803d; }
+    .admin-special-card.compra { border-top-color: #0f766e; }
+    .admin-special-card.compra .value { color: #0f766e; }
+    .admin-special-filter {
+        display: flex;
+        gap: 10px;
+        align-items: end;
+        flex-wrap: wrap;
+        margin-bottom: 20px;
+    }
+    .admin-special-filter > div { min-width: 210px; }
+    .admin-equipment-list { display: grid; gap: 14px; }
+    .admin-equipment-item {
+        background: var(--card-bg);
+        border: 1px solid var(--border);
+        border-left: 5px solid #0f766e;
+        border-radius: 14px;
+        box-shadow: 0 3px 12px rgba(15, 23, 42, .05);
+        overflow: hidden;
+    }
+    .admin-equipment-item.is-donado { border-left-color: #16a34a; }
+    .admin-equipment-summary {
+        display: grid;
+        grid-template-columns: minmax(210px, 1.25fr) minmax(190px, 1fr) minmax(175px, .8fr) auto;
+        gap: 18px;
+        align-items: center;
+        padding: 18px;
+    }
+    .admin-equipment-code {
+        display: flex;
+        gap: 12px;
+        align-items: center;
+        min-width: 0;
+    }
+    .admin-equipment-icon {
+        width: 44px;
+        height: 44px;
+        display: grid;
+        place-items: center;
+        flex: 0 0 auto;
+        border-radius: 12px;
+        background: #ccfbf1;
+        font-size: 22px;
+    }
+    .is-donado .admin-equipment-icon { background: #dcfce7; }
+    .admin-equipment-code strong { color: var(--text-main); font-size: 17px; }
+    .admin-equipment-code small,
+    .admin-equipment-summary small {
+        display: block;
+        margin-top: 3px;
+        color: var(--text-muted);
+        line-height: 1.35;
+    }
+    .admin-equipment-client strong { color: var(--text-main); }
+    .admin-equipment-payment { text-align: right; }
+    .admin-equipment-payment strong { display: block; color: #0f766e; font-size: 20px; }
+    .is-donado .admin-equipment-payment strong { color: #15803d; }
+    .estado-admin {
+        display: inline-flex;
+        border-radius: 999px;
+        padding: 5px 9px;
+        font-size: 11px;
+        font-weight: 900;
+    }
+    .estado-admin.donado { background: #dcfce7; color: #166534; }
+    .estado-admin.compra { background: #ccfbf1; color: #115e59; }
+    .admin-equipment-details {
+        border-top: 1px solid var(--border);
+        background: color-mix(in srgb, var(--card-bg) 94%, #0f766e 6%);
+    }
+    .admin-equipment-details summary {
+        padding: 12px 18px;
+        color: #0f766e;
+        font-weight: 800;
+        cursor: pointer;
+        list-style: none;
+        user-select: none;
+    }
+    .admin-equipment-details summary::-webkit-details-marker { display: none; }
+    .admin-equipment-details summary::after { content: "⌄"; float: right; font-size: 18px; }
+    .admin-equipment-details[open] summary::after { content: "⌃"; }
+    [data-theme="dark"] .admin-equipment-details summary { color: #5eead4; }
+    .admin-detail-content {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 14px;
+        padding: 0 18px 18px;
+    }
+    .admin-detail-block {
+        background: var(--card-bg);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 14px;
+        min-width: 0;
+    }
+    .admin-detail-block h4 {
+        color: var(--primary);
+        font-size: 13px;
+        margin: 0 0 10px;
+        text-transform: uppercase;
+    }
+    .admin-detail-block.full { grid-column: 1 / -1; }
+    .admin-detail-row {
+        display: flex;
+        justify-content: space-between;
+        gap: 14px;
+        padding: 6px 0;
+        border-bottom: 1px dashed var(--border);
+        font-size: 13px;
+    }
+    .admin-detail-row:last-child { border-bottom: 0; }
+    .admin-detail-row span:first-child { color: var(--text-muted); font-weight: 700; }
+    .admin-detail-row span:last-child {
+        color: var(--text-main);
+        font-weight: 700;
+        text-align: right;
+        overflow-wrap: anywhere;
+    }
+    .admin-observation {
+        margin: 0;
+        color: var(--text-main);
+        line-height: 1.55;
+        white-space: normal;
+    }
+    .admin-mixed-parts {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px;
+        margin-top: 10px;
+    }
+    .admin-mixed-part {
+        border: 1px solid #99f6e4;
+        background: #f0fdfa;
+        border-radius: 8px;
+        padding: 9px;
+    }
+    .admin-mixed-part strong { display: block; color: #0f766e; }
+    .admin-mixed-part small { color: #115e59; }
+    .admin-detail-actions {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin-top: 12px;
+    }
+    @media (max-width: 980px) {
+        .admin-equipment-summary { grid-template-columns: 1fr 1fr; }
+        .admin-equipment-payment { text-align: left; }
+    }
+    @media (max-width: 700px) {
+        .admin-special-filter > div { min-width: 100%; }
+        .admin-special-filter .btn { width: 100%; }
+        .admin-equipment-summary,
+        .admin-detail-content { grid-template-columns: 1fr; }
+        .admin-detail-block.full { grid-column: auto; }
+        .admin-mixed-parts { grid-template-columns: 1fr; }
+    }
+</style>
+
+<div class="crumb">
+    <a href="{% url 'econotec:bienvenida' %}">Inicio</a> /
+    {% if vista_admin %}
+    <a href="{% url 'econotec:admin_dashboard' %}">Registro Administrativo</a> /
+    {% else %}
+    <a href="{% url 'econotec:ingreso_menu' %}">Ingreso de Equipo</a> /
+    {% endif %}
+    Donados y Compras
+</div>
+
+<div style="display:flex; justify-content:space-between; align-items:flex-start; gap:14px; flex-wrap:wrap;">
+    <div>
+        <h2 class="page-title">Donados y <span class="accent">Compras de Equipo</span></h2>
+        {% if vista_admin %}
+        <p class="page-subtitle">Bandeja administrativa completa. Estos ingresos no pasan por reparación ni generan salida.</p>
+        {% else %}
+        <p class="page-subtitle">Consulta separada de estos equipos. No forman parte de la lista general de reparaciones.</p>
+        {% endif %}
+    </div>
+    {% if vista_admin %}
+    <a href="{% url 'econotec:admin_dashboard' %}" class="btn btn-secondary">← Volver al administrativo</a>
+    {% else %}
+    <a href="{% url 'econotec:ingreso_menu' %}" class="btn btn-secondary">← Volver a Ingreso de Equipo</a>
+    {% endif %}
+</div>
+
+{% if vista_admin %}
+<div class="admin-special-grid">
+    <div class="admin-special-card"><div class="label">Total en bandeja</div><div class="value">{{ resumen.total }}</div></div>
+    <div class="admin-special-card donado"><div class="label">Donados</div><div class="value">{{ resumen.donados }}</div></div>
+    <div class="admin-special-card compra"><div class="label">Equipos comprados</div><div class="value">{{ resumen.compras }}</div></div>
+    <div class="admin-special-card compra"><div class="label">Total pagado</div><div class="value">{{ resumen.valor_compras|dinero_signo }}</div></div>
+</div>
+{% endif %}
+
+<form method="get" class="toolbar admin-special-filter">
+    <div>
+        <label class="form-label">Buscar</label>
+        <input class="form-input" name="q" value="{{ q }}" placeholder="Código, cliente, cédula, marca, modelo o serie">
+    </div>
+    <div>
+        <label class="form-label">Estado</label>
+        <select class="form-input" name="estado">
+            <option value="">Todos</option>
+            <option value="donado" {% if estado_filtro == 'donado' %}selected{% endif %}>Donado</option>
+            <option value="equipo_a_comprar" {% if estado_filtro == 'equipo_a_comprar' %}selected{% endif %}>Equipo a comprar</option>
+        </select>
+    </div>
+    <button class="btn btn-primary" type="submit">Filtrar</button>
+    <a class="btn btn-secondary" href="{% if vista_admin %}{% url 'econotec:admin_equipos_administrativos' %}{% else %}{% url 'econotec:equipos_administrativos_general' %}{% endif %}">Limpiar</a>
+</form>
+
+{% if ingresos %}
+<div class="admin-equipment-list">
+    {% for i in ingresos %}
+    <article class="admin-equipment-item {% if i.estado == 'donado' %}is-donado{% endif %}">
+        <div class="admin-equipment-summary">
+            <div class="admin-equipment-code">
+                <div class="admin-equipment-icon">{% if i.estado == 'donado' %}🎁{% else %}🧾{% endif %}</div>
+                <div>
+                    <a href="{% url 'econotec:ingreso_detalle' pk=i.pk %}"><strong>{{ i.codigo_equipo }}</strong></a>
+                    <small>{{ i.tipo_equipo_display }} · {{ i.marca }} {{ i.modelo_serie }}</small>
+                    <small>Serie: {{ i.serie|default:"—" }}</small>
+                </div>
+            </div>
+            <div class="admin-equipment-client">
+                <strong>{{ i.cliente.nombres }}</strong>
+                <small>{{ i.cliente.cedula }} · {{ i.cliente.whatsapp|default:"Sin WhatsApp" }}</small>
+                <small>{{ i.cliente.correo|default:"Sin correo" }}</small>
+            </div>
+            <div>
+                <span class="estado-admin {% if i.estado == 'donado' %}donado{% else %}compra{% endif %}">{{ i.get_estado_display }}</span>
+                <small>{{ i.fecha_ingreso|date:"d/m/Y" }} · {{ i.get_sede_display }}</small>
+            </div>
+            <div class="admin-equipment-payment">
+                {% if i.estado == 'equipo_a_comprar' %}
+                <strong>{{ i.valor_acordado|dinero_signo }}</strong>
+                <small>{{ i.get_compra_metodo_pago_display }}</small>
+                {% else %}
+                <strong>Gratis</strong>
+                <small>Sin egreso</small>
+                {% endif %}
+            </div>
+        </div>
+
+        <details class="admin-equipment-details">
+            <summary>{% if vista_admin %}Ver toda la información administrativa{% else %}Ver información completa del equipo{% endif %}</summary>
+            <div class="admin-detail-content">
+                <section class="admin-detail-block">
+                    <h4>Registro</h4>
+                    <div class="admin-detail-row"><span>Código</span><span>{{ i.codigo_equipo }}</span></div>
+                    <div class="admin-detail-row"><span>Sede</span><span>{{ i.get_sede_display }}</span></div>
+                    <div class="admin-detail-row"><span>Fecha de ingreso</span><span>{{ i.fecha_ingreso|date:"d/m/Y" }}</span></div>
+                    <div class="admin-detail-row"><span>Factura N.°</span><span>{{ i.numero_factura|default:"—" }}</span></div>
+                    <div class="admin-detail-row"><span>Asesor comercial</span><span>{{ i.asesor_comercial|default:"—" }}</span></div>
+                    <div class="admin-detail-row"><span>Técnico asignado</span><span>{{ i.tecnico_encargado_nombre|default:"—" }}</span></div>
+                    <div class="admin-detail-row"><span>Registrado por</span><span>{% if i.registrado_por %}{{ i.registrado_por.get_full_name|default:i.registrado_por.username }}{% else %}—{% endif %}</span></div>
+                    <div class="admin-detail-row"><span>Creado</span><span>{{ i.creado|date:"d/m/Y H:i" }}</span></div>
+                    <div class="admin-detail-row"><span>Última actualización</span><span>{{ i.actualizado|date:"d/m/Y H:i" }}</span></div>
+                </section>
+
+                <section class="admin-detail-block">
+                    <h4>Cliente</h4>
+                    <div class="admin-detail-row"><span>Nombre</span><span>{{ i.cliente.nombres }}</span></div>
+                    <div class="admin-detail-row"><span>Cédula / RUC</span><span>{{ i.cliente.cedula }}</span></div>
+                    <div class="admin-detail-row"><span>WhatsApp</span><span>{{ i.cliente.whatsapp|default:"—" }}</span></div>
+                    <div class="admin-detail-row"><span>Correo</span><span>{{ i.cliente.correo|default:"—" }}</span></div>
+                    <div class="admin-detail-row"><span>Sector</span><span>{{ i.cliente.sector_display }}</span></div>
+                </section>
+
+                <section class="admin-detail-block">
+                    <h4>Equipo recibido</h4>
+                    <div class="admin-detail-row"><span>Tipo</span><span>{{ i.tipo_equipo_display }}</span></div>
+                    <div class="admin-detail-row"><span>Marca</span><span>{{ i.marca }}</span></div>
+                    <div class="admin-detail-row"><span>Modelo</span><span>{{ i.modelo_serie|default:"—" }}</span></div>
+                    <div class="admin-detail-row"><span>Serie</span><span>{{ i.serie|default:"—" }}</span></div>
+                    <div class="admin-detail-row"><span>Accesorios</span><span>{{ i.accesorios_entregados|default:"—" }}</span></div>
+                </section>
+
+                <section class="admin-detail-block">
+                    <h4>{% if i.estado == 'donado' %}Condición de la donación{% else %}Pago de la compra{% endif %}</h4>
+                    {% if i.estado == 'donado' %}
+                    <div class="admin-detail-row"><span>Valor</span><span>Gratis / $0.00</span></div>
+                    <div class="admin-detail-row"><span>Egreso</span><span>No aplica</span></div>
+                    <div class="admin-detail-row"><span>Salida de reparación</span><span>No aplica</span></div>
+                    {% else %}
+                    <div class="admin-detail-row"><span>Valor pagado</span><span>{{ i.valor_acordado|dinero_signo }}</span></div>
+                    <div class="admin-detail-row"><span>Método</span><span>{{ i.get_compra_metodo_pago_display }}</span></div>
+                    {% if i.compra_metodo_pago == 'transferencia' %}
+                    <div class="admin-detail-row"><span>Banco</span><span>{{ i.compra_banco_otro|default:i.get_compra_banco_display }}</span></div>
+                    {% elif i.compra_metodo_pago == 'tarjeta' %}
+                    <div class="admin-detail-row"><span>Tarjeta / App</span><span>{{ i.get_compra_tarjeta_app_display }}</span></div>
+                    {% elif i.compra_metodo_pago == 'mixto' %}
+                    <div class="admin-mixed-parts">
+                        {% for parte in i.compra_pago_mixto_partes %}
+                        <div class="admin-mixed-part">
+                            <strong>Parte {{ parte.numero }} · {{ parte.monto|dinero_signo }}</strong>
+                            <small>{{ parte.detalle }}</small>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                    <div class="admin-detail-row"><span>Comprobante</span><span>{% if i.compra_comprobante_url %}<a href="{{ i.compra_comprobante_url }}" target="_blank" rel="noopener">Abrir enlace ↗</a>{% else %}No adjuntado{% endif %}</span></div>
+                    {% endif %}
+                </section>
+
+                <section class="admin-detail-block full">
+                    <h4>Observación</h4>
+                    <p class="admin-observation">{{ i.problema_reportado|linebreaksbr }}</p>
+                </section>
+
+                {% if vista_admin and i.estado == 'equipo_a_comprar' %}
+                <section class="admin-detail-block full">
+                    <h4>Egreso automático vinculado</h4>
+                    {% if i.egreso_compra %}
+                    <div class="admin-detail-content" style="padding:0;">
+                        <div>
+                            <div class="admin-detail-row"><span>Fecha</span><span>{{ i.egreso_compra.fecha|date:"d/m/Y" }}</span></div>
+                            <div class="admin-detail-row"><span>Categoría</span><span>{{ i.egreso_compra.categoria.nombre }}</span></div>
+                            <div class="admin-detail-row"><span>Concepto</span><span>{{ i.egreso_compra.concepto }}</span></div>
+                            <div class="admin-detail-row"><span>Monto</span><span>{{ i.egreso_compra.monto|dinero_signo }}</span></div>
+                        </div>
+                        <div>
+                            <div class="admin-detail-row"><span>Método</span><span>{{ i.egreso_compra.get_metodo_display }}</span></div>
+                            <div class="admin-detail-row"><span>Recibo</span><span>{{ i.egreso_compra.numero_recibo|default:"—" }}</span></div>
+                            <div class="admin-detail-row"><span>Registrado por</span><span>{% if i.egreso_compra.registrado_por %}{{ i.egreso_compra.registrado_por.get_full_name|default:i.egreso_compra.registrado_por.username }}{% else %}—{% endif %}</span></div>
+                            <div class="admin-detail-row"><span>Notas</span><span>{{ i.egreso_compra.notas|default:"—" }}</span></div>
+                        </div>
+                    </div>
+                    {% if i.egreso_compra.metodo == 'mixto' %}
+                    <div class="admin-mixed-parts">
+                        {% for parte in i.egreso_compra.pago_mixto_partes %}
+                        <div class="admin-mixed-part">
+                            <strong>Parte {{ parte.numero }} · {{ parte.monto|dinero_signo }}</strong>
+                            <small>{{ parte.detalle }}</small>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                    {% else %}
+                    <p style="margin:0; color:#b45309; font-weight:800;">El egreso aún no está sincronizado. Revisa y vuelve a guardar el ingreso.</p>
+                    {% endif %}
+                </section>
+                {% endif %}
+
+                <section class="admin-detail-block full">
+                    <h4>Acciones</h4>
+                    <div class="admin-detail-actions">
+                        <a href="{% url 'econotec:ingreso_detalle' pk=i.pk %}" class="btn btn-sm btn-primary">Ver hoja completa</a>
+                        {% if vista_admin %}
+                        <a href="{% url 'econotec:ingreso_editar' pk=i.pk %}" class="btn btn-sm btn-secondary">Editar ingreso</a>
+                        {% if i.egreso_compra %}
+                        <a href="{% url 'econotec:admin_egreso_editar' pk=i.egreso_compra.pk %}" class="btn btn-sm btn-secondary">Ver / editar egreso</a>
+                        {% endif %}
+                        {% endif %}
+                        {% if i.compra_comprobante_url %}
+                        <a href="{{ i.compra_comprobante_url }}" target="_blank" rel="noopener" class="btn btn-sm btn-secondary">Abrir comprobante</a>
+                        {% endif %}
+                    </div>
+                </section>
+            </div>
+        </details>
+    </article>
+    {% endfor %}
+</div>
+{% else %}
+<div class="empty-state">
+    <div class="icon">🎁</div>
+    <h3>No hay equipos donados o comprados</h3>
+    <p>Cuando un ingreso use uno de estos estados aparecerá aquí con toda su información.</p>
+</div>
+{% endif %}
+{% endblock %}

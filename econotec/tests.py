@@ -24,7 +24,7 @@ from .alertas import (
 )
 from .horarios import registrar_entrada_laboral
 from .models import (
-    Abono, BitacoraTecnico, Cliente, HorarioTecnico, IngresoEquipo, InventarioItem,
+    Abono, BitacoraTecnico, Cliente, Egreso, HorarioTecnico, IngresoEquipo, InventarioItem,
     NotificacionAsesora, NotificacionInventarioAdmin, SalidaEquipo, UsuarioActividad,
     VentaInventarioItem,
 )
@@ -4096,6 +4096,104 @@ class VentasTests(TestCase):
         self.assertIsNone(form.cleaned_data['diagnostico_monto_1'])
         self.assertIsNone(form.cleaned_data['diagnostico_monto_2'])
 
+    def test_ingreso_donado_limpia_firma_diagnostico_anticipo_y_valor(self):
+        data = self.ingreso_form_data(
+            estado='donado',
+            subestado_reparacion='',
+            valor_acordado='99.00',
+            diagnostico_inmediato='si',
+            valor_diagnostico='25.00',
+            abono_anticipo='15.00',
+        )
+        data.pop('firma_cliente_opcion')
+
+        form = IngresoEquipoForm(data=data)
+
+        self.assertTrue(form.is_valid(), form.errors.as_json())
+        self.assertEqual(form.cleaned_data['valor_acordado'], Decimal('0.00'))
+        self.assertEqual(form.cleaned_data['diagnostico_inmediato'], 'no')
+        self.assertEqual(form.cleaned_data['valor_diagnostico'], Decimal('0.00'))
+        self.assertEqual(form.cleaned_data['abono_anticipo'], Decimal('0.00'))
+        self.assertFalse(form.cleaned_data['firma_cliente'])
+
+    def test_compra_mixta_acepta_transferencia_y_tarjeta_y_limpia_anticipo(self):
+        data = self.ingreso_form_data(
+            estado='equipo_a_comprar',
+            subestado_reparacion='',
+            valor_acordado='100.00',
+            abono_anticipo='20.00',
+            compra_metodo_pago='mixto',
+            compra_monto_1='60.00',
+            compra_metodo_1='transferencia',
+            compra_banco_1='pichincha',
+            compra_monto_2='40.00',
+            compra_metodo_2='tarjeta',
+            compra_tarjeta_app_2='deuna',
+        )
+        data.pop('firma_cliente_opcion')
+
+        form = IngresoEquipoForm(data=data)
+
+        self.assertTrue(form.is_valid(), form.errors.as_json())
+        self.assertEqual(form.cleaned_data['abono_anticipo'], Decimal('0.00'))
+        self.assertEqual(form.cleaned_data['compra_monto_1'], Decimal('60.00'))
+        self.assertEqual(form.cleaned_data['compra_monto_2'], Decimal('40.00'))
+
+    def test_compra_mixta_no_permite_metodo_mixto_anidado(self):
+        form = IngresoEquipoForm(data=self.ingreso_form_data(
+            estado='equipo_a_comprar',
+            subestado_reparacion='',
+            valor_acordado='100.00',
+            compra_metodo_pago='mixto',
+            compra_monto_1='60.00',
+            compra_metodo_1='mixto',
+            compra_monto_2='40.00',
+            compra_metodo_2='efectivo',
+        ))
+
+        self.assertFalse(form.is_valid())
+        self.assertIn('compra_metodo_1', form.errors)
+
+    def test_registrar_compra_mixta_crea_un_solo_egreso_vinculado(self):
+        self.activar_sede_guayaquil()
+        data = self.ingreso_registro_post_data(
+            **{
+                'ing-estado': 'equipo_a_comprar',
+                'ing-subestado_reparacion': '',
+                'ing-valor_acordado': '100.00',
+                'ing-diagnostico_inmediato': 'si',
+                'ing-valor_diagnostico': '25.00',
+                'ing-abono_anticipo': '20.00',
+                'ing-compra_metodo_pago': 'mixto',
+                'ing-compra_monto_1': '60.00',
+                'ing-compra_metodo_1': 'transferencia',
+                'ing-compra_banco_1': 'pichincha',
+                'ing-compra_monto_2': '40.00',
+                'ing-compra_metodo_2': 'tarjeta',
+                'ing-compra_tarjeta_app_2': 'deuna',
+            }
+        )
+        data.pop('ing-firma_cliente_opcion')
+
+        response = self.client.post(reverse('econotec:ingreso_registrar'), data)
+
+        ingreso = IngresoEquipo.objects.get(cliente=self.cliente_existente)
+        self.assertRedirects(
+            response,
+            reverse('econotec:ingreso_detalle', kwargs={'pk': ingreso.pk}),
+        )
+        self.assertEqual(ingreso.estado, 'equipo_a_comprar')
+        self.assertEqual(ingreso.abono_anticipo, Decimal('0.00'))
+        self.assertEqual(ingreso.diagnostico_inmediato, 'no')
+        self.assertEqual(Egreso.objects.filter(ingreso_compra=ingreso).count(), 1)
+        egreso = ingreso.egreso_compra
+        self.assertEqual(egreso.monto, Decimal('100.00'))
+        self.assertEqual(egreso.metodo, 'mixto')
+        self.assertEqual(egreso.monto_1, Decimal('60.00'))
+        self.assertEqual(egreso.banco_1, 'pichincha')
+        self.assertEqual(egreso.monto_2, Decimal('40.00'))
+        self.assertEqual(egreso.tarjeta_app_2, 'deuna')
+
     def test_detalle_bloquea_boton_salida_si_valor_acordado_pendiente(self):
         ingreso = self.crear_ingreso_reparacion(valor_acordado=None)
 
@@ -4608,6 +4706,165 @@ class VentasTests(TestCase):
         self.assertContains(response, '1 pendiente')
         self.assertNotContains(response, 'Buscar equipos por fecha')
         self.assertNotContains(response, 'Filtrar equipos')
+
+    def test_menu_muestra_donados_compras_a_tecnico_en_ruta_general(self):
+        response = self.client.get(reverse('econotec:ingreso_menu'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Donados / Equipos a comprar')
+        self.assertContains(
+            response,
+            reverse('econotec:equipos_administrativos_general'),
+        )
+        self.assertNotContains(
+            response,
+            f'href="{reverse("econotec:admin_equipos_administrativos")}"',
+        )
+
+    def test_menu_admin_conserva_enlace_a_bandeja_administrativa(self):
+        self.client.force_login(self.admin)
+
+        response = self.client.get(reverse('econotec:ingreso_menu'))
+
+        self.assertContains(
+            response,
+            reverse('econotec:admin_equipos_administrativos'),
+        )
+        self.assertNotContains(
+            response,
+            f'href="{reverse("econotec:equipos_administrativos_general")}"',
+        )
+
+    def test_asesora_puede_abrir_vista_general_pero_no_bandeja_admin(self):
+        self.client.force_login(self.vendedor)
+
+        general = self.client.get(
+            reverse('econotec:equipos_administrativos_general')
+        )
+        admin = self.client.get(
+            reverse('econotec:admin_equipos_administrativos')
+        )
+
+        self.assertEqual(general.status_code, 200)
+        self.assertRedirects(admin, reverse('econotec:bienvenida'))
+
+    def test_vista_general_donados_compras_oculta_resumen_y_egreso_interno(self):
+        compra = self.crear_ingreso_reparacion(
+            estado='equipo_a_comprar',
+            subestado_reparacion='',
+            marca='Lenovo Compra Privada',
+            modelo_serie='ThinkPad Compra',
+            valor_acordado=Decimal('350.00'),
+            compra_metodo_pago='transferencia',
+            compra_banco='pichincha',
+        )
+        donado = self.crear_ingreso_reparacion(
+            estado='donado',
+            subestado_reparacion='',
+            marca='Sony Donado Privado',
+            modelo_serie='PlayStation Donada',
+            valor_acordado=Decimal('0.00'),
+        )
+
+        response = self.client.get(
+            reverse('econotec:equipos_administrativos_general')
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, compra.codigo_equipo)
+        self.assertContains(response, donado.codigo_equipo)
+        self.assertContains(response, 'Ver información completa del equipo')
+        self.assertNotContains(response, 'Total en bandeja')
+        self.assertNotContains(response, 'Equipos comprados')
+        self.assertNotContains(response, 'Total pagado')
+        self.assertNotContains(response, 'Egreso automático vinculado')
+        self.assertNotContains(response, 'Ver / editar egreso')
+        self.assertNotContains(response, 'Editar ingreso')
+
+    def test_detalle_compra_oculta_egreso_a_tecnico_y_lo_conserva_para_admin(self):
+        compra = self.crear_ingreso_reparacion(
+            estado='equipo_a_comprar',
+            subestado_reparacion='',
+            valor_acordado=Decimal('90.00'),
+            compra_metodo_pago='efectivo',
+        )
+
+        tecnico = self.client.get(
+            reverse('econotec:ingreso_detalle', kwargs={'pk': compra.pk})
+        )
+        self.assertNotContains(tecnico, 'Egreso automático')
+        self.assertNotContains(tecnico, 'Ver egreso')
+        self.assertContains(
+            tecnico,
+            reverse('econotec:equipos_administrativos_general'),
+        )
+
+        self.client.force_login(self.admin)
+        admin = self.client.get(
+            reverse('econotec:ingreso_detalle', kwargs={'pk': compra.pk})
+        )
+        self.assertContains(admin, 'Egreso automático')
+        self.assertContains(
+            admin,
+            reverse('econotec:admin_equipos_administrativos'),
+        )
+
+    def test_admin_conserva_resumen_completo_y_redirige_desde_vista_general(self):
+        self.crear_ingreso_reparacion(
+            estado='equipo_a_comprar',
+            subestado_reparacion='',
+            valor_acordado=Decimal('125.00'),
+            compra_metodo_pago='efectivo',
+        )
+        self.client.force_login(self.admin)
+
+        redireccion = self.client.get(
+            reverse('econotec:equipos_administrativos_general')
+        )
+        self.assertRedirects(
+            redireccion,
+            reverse('econotec:admin_equipos_administrativos'),
+        )
+
+        response = self.client.get(
+            reverse('econotec:admin_equipos_administrativos')
+        )
+        self.assertContains(response, 'Total en bandeja')
+        self.assertContains(response, 'Equipos comprados')
+        self.assertContains(response, 'Total pagado')
+        self.assertContains(response, 'Ver toda la información administrativa')
+
+    def test_lista_general_excluye_donados_y_equipos_a_comprar(self):
+        normal = self.crear_ingreso_reparacion(
+            marca='HP Operativo',
+            modelo_serie='Equipo normal',
+        )
+        compra = self.crear_ingreso_reparacion(
+            estado='equipo_a_comprar',
+            subestado_reparacion='',
+            marca='Lenovo Administrativo',
+            modelo_serie='Equipo comprado',
+        )
+        donado = self.crear_ingreso_reparacion(
+            estado='donado',
+            subestado_reparacion='',
+            marca='Sony Administrativo',
+            modelo_serie='Equipo donado',
+            valor_acordado=Decimal('0.00'),
+        )
+
+        response = self.client.get(
+            reverse('econotec:ingreso_lista'),
+            {'sede': 'todas'},
+        )
+
+        self.assertEqual(response.context['total'], 1)
+        self.assertEqual(list(response.context['ingresos']), [normal])
+        self.assertContains(response, normal.codigo_equipo)
+        self.assertNotContains(response, compra.codigo_equipo)
+        self.assertNotContains(response, donado.codigo_equipo)
+        self.assertNotContains(response, 'Donado — pasa a Administrativo')
+        self.assertNotContains(response, 'Equipo a comprar — pasa a Administrativo')
 
     def test_lista_filtra_valor_acordado_pendiente(self):
         pendiente = self.crear_ingreso_reparacion(valor_acordado=None)

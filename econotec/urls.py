@@ -54,6 +54,9 @@ urlpatterns = [
     # ── Ingreso de equipos (la "Solicitud de Ingreso") ────
     path('ingresos/', views.ingreso_lista, name='ingreso_lista'),
     path('ingresos/menu/', views.ingreso_menu, name='ingreso_menu'),
+    path('ingresos/donados-compras/',
+         views_admin.equipos_administrativos_general,
+         name='equipos_administrativos_general'),
     path('ingresos/registrar/', views.ingreso_registrar, name='ingreso_registrar'),
     path('ingresos/<int:pk>/', views.ingreso_detalle, name='ingreso_detalle'),
     path('ingresos/<int:pk>/reparacion-check/',
@@ -146,6 +149,8 @@ urlpatterns = [
          views_admin.admin_mantenimiento_reset, name='admin_mantenimiento_reset'),
     path('admin-panel/egresos/',
          views_admin.egresos_lista, name='admin_egresos_lista'),
+    path('admin-panel/equipos-administrativos/',
+         views_admin.admin_equipos_administrativos, name='admin_equipos_administrativos'),
     path('admin-panel/egresos/nuevo/',
          views_admin.egreso_crear, name='admin_egreso_crear'),
     path('admin-panel/egresos/<int:pk>/editar/',

@@ -263,6 +263,75 @@
         line-height: 1.35;
     }
 
+    .compra-mixto-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px;
+        margin-top: 12px;
+    }
+
+    .compra-mixto-parte {
+        min-width: 0;
+        padding: 13px;
+        border: 1px solid #99f6e4;
+        border-radius: 9px;
+        background: #ffffff;
+    }
+
+    .compra-mixto-parte-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        margin-bottom: 10px;
+        color: #115e59;
+        font-size: 12px;
+        font-weight: 900;
+        text-transform: uppercase;
+    }
+
+    .compra-mixto-parte .form-row {
+        gap: 10px;
+    }
+
+    .compra-mixto-total {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        margin-top: 12px;
+        padding: 10px 12px;
+        border-radius: 8px;
+        background: #ccfbf1;
+        color: #115e59;
+        font-size: 12px;
+        font-weight: 900;
+    }
+
+    .compra-mixto-total.is-error {
+        background: #fef2f2;
+        color: #b91c1c;
+    }
+
+    #wrap_compra_administrativa .form-label {
+        color: #115e59;
+    }
+
+    [data-theme="dark"] .compra-mixto-parte {
+        border-color: rgba(45, 212, 191, 0.35);
+        background: var(--card-bg);
+    }
+
+    [data-theme="dark"] .compra-mixto-parte-head,
+    [data-theme="dark"] .compra-mixto-parte .form-label {
+        color: #5eead4;
+    }
+
+    [data-theme="dark"] .compra-mixto-total {
+        background: rgba(20, 184, 166, 0.16);
+        color: #5eead4;
+    }
+
     [data-theme="dark"] .valor-acordado-aviso {
         border-color: rgba(255, 255, 255, 0.12);
         background: rgba(255, 255, 255, 0.05);
@@ -271,6 +340,10 @@
 
     @media (max-width: 640px) {
         .valor-acordado-opciones {
+            grid-template-columns: 1fr;
+        }
+
+        .compra-mixto-grid {
             grid-template-columns: 1fr;
         }
     }
@@ -986,17 +1059,17 @@
     </div>
 
     <!-- Problema y reporte -->
-    <div class="form-section">
-        <h3>Problema y Reporte</h3>
+    <div class="form-section" id="seccion-problema-reporte">
+        <h3 id="titulo-problema-reporte">Problema y Reporte</h3>
         <div>
-            <label class="form-label">Problema reportado *</label>
+            <label class="form-label" id="label-problema-reportado">Problema reportado *</label>
             {{ ing_form.problema_reportado }}
             {{ ing_form.problema_reportado.errors }}
         </div>
     </div>
 
     <!-- Diagnóstico inmediato -->
-    <div class="form-section {% if ing_form.estado_bloqueado_por_salida %}diagnostico-bloqueado{% endif %}">
+    <div class="form-section {% if ing_form.estado_bloqueado_por_salida %}diagnostico-bloqueado{% endif %}" id="seccion-diagnostico-inmediato">
         <h3>Diagnóstico Inmediato</h3>
         <div class="form-row cols-2">
             <div>
@@ -1087,26 +1160,28 @@
     <div class="form-section">
         <h3>Valor y Estado del Equipo</h3>
         <div class="form-row cols-2">
-            <div class="valor-acordado-panel {% if ing_form.estado_bloqueado_por_salida %}valor-bloqueado{% endif %}">
-                <label class="form-label">{{ ing_form.valor_acordado_estado.label }}</label>
-                <div class="valor-acordado-opciones" id="valor-acordado-opciones">
-                    {% for radio in ing_form.valor_acordado_estado %}
-                        <label class="valor-acordado-opcion" for="{{ radio.id_for_label }}">
-                            {{ radio.tag }}
-                            <span>{{ radio.choice_label }}</span>
-                        </label>
-                    {% endfor %}
+            <div class="valor-acordado-panel {% if ing_form.estado_bloqueado_por_salida %}valor-bloqueado{% endif %}" id="panel-valor-acordado">
+                <div id="valor-acordado-decision">
+                    <label class="form-label">{{ ing_form.valor_acordado_estado.label }}</label>
+                    <div class="valor-acordado-opciones" id="valor-acordado-opciones">
+                        {% for radio in ing_form.valor_acordado_estado %}
+                            <label class="valor-acordado-opcion" for="{{ radio.id_for_label }}">
+                                {{ radio.tag }}
+                                <span>{{ radio.choice_label }}</span>
+                            </label>
+                        {% endfor %}
+                    </div>
+                    {{ ing_form.valor_acordado_estado.errors }}
                 </div>
-                {{ ing_form.valor_acordado_estado.errors }}
 
                 <div id="wrap_valor_acordado_monto" class="valor-acordado-monto">
-                    <label class="form-label" for="{{ ing_form.valor_acordado.id_for_label }}">Valor acordado (USD)</label>
+                    <label class="form-label" id="label-valor-acordado" for="{{ ing_form.valor_acordado.id_for_label }}">Valor acordado (USD)</label>
                     {{ ing_form.valor_acordado }}
                     {{ ing_form.valor_acordado.errors }}
                     {% if ing_form.estado_bloqueado_por_salida %}
                     <small style="color:#888; font-size:11px; display:block; margin-top:4px;">El valor acordado queda tal cual fue registrado antes de la salida.</small>
                     {% else %}
-                    <small style="color:#888; font-size:11px; display:block; margin-top:4px;">Ingresa el monto acordado con el cliente.</small>
+                    <small id="ayuda-valor-acordado" style="color:#888; font-size:11px; display:block; margin-top:4px;">Ingresa el monto acordado con el cliente.</small>
                     {% endif %}
                 </div>
 
@@ -1132,6 +1207,44 @@
                     El estado de este ingreso queda bloqueado; si necesitas cambiar el cierre, hazlo desde la salida registrada.
                 </div>
                 {% endif %}
+            </div>
+        </div>
+
+        <div id="wrap_compra_administrativa" style="display:none; margin-top:18px; padding:16px; border:2px solid #0f766e; border-radius:10px; background:#f0fdfa;">
+            <h4 style="margin:0 0 6px; color:#115e59;">🧾 Compra de equipo — Registro administrativo</h4>
+            <p style="margin:0 0 14px; color:#0f766e; font-size:12px; font-weight:700;">El valor indicado arriba será el valor a pagar y se generará/actualizará automáticamente un egreso. Este equipo no tendrá salida de reparación.</p>
+            <div class="form-row cols-2">
+                <div><label class="form-label">Método de pago *</label>{{ ing_form.compra_metodo_pago }}{{ ing_form.compra_metodo_pago.errors }}</div>
+                <div><label class="form-label">Comprobante (opcional)</label>{{ ing_form.compra_comprobante_url }}{{ ing_form.compra_comprobante_url.errors }}</div>
+                <div id="wrap_compra_banco"><label class="form-label">Banco *</label>{{ ing_form.compra_banco }}{{ ing_form.compra_banco.errors }}</div>
+                <div id="wrap_compra_banco_otro"><label class="form-label">Especificar banco *</label>{{ ing_form.compra_banco_otro }}{{ ing_form.compra_banco_otro.errors }}</div>
+                <div id="wrap_compra_tarjeta"><label class="form-label">Tarjeta / App *</label>{{ ing_form.compra_tarjeta_app }}{{ ing_form.compra_tarjeta_app.errors }}</div>
+            </div>
+            <div id="wrap_compra_mixto" style="display:none; margin-top:14px; padding:12px; border:1px dashed #14b8a6; border-radius:8px; background:rgba(255,255,255,.58);">
+                <strong style="color:#115e59; font-size:13px;">Pago mixto · divide el valor a pagar en dos partes</strong>
+                <div class="compra-mixto-grid">
+                    <div class="compra-mixto-parte">
+                        <div class="compra-mixto-parte-head"><span>Parte 1</span><span id="compra-parte-1-resumen">Sin completar</span></div>
+                        <div class="form-row cols-2">
+                            <div><label class="form-label">Método *</label>{{ ing_form.compra_metodo_1 }}{{ ing_form.compra_metodo_1.errors }}</div>
+                            <div><label class="form-label">Monto (USD) *</label>{{ ing_form.compra_monto_1 }}{{ ing_form.compra_monto_1.errors }}</div>
+                        </div>
+                        <div id="wrap_compra_banco_1" style="display:none; margin-top:10px;"><label class="form-label">Banco *</label>{{ ing_form.compra_banco_1 }}{{ ing_form.compra_banco_1.errors }}</div>
+                        <div id="wrap_compra_banco_otro_1" style="display:none; margin-top:10px;"><label class="form-label">Especificar banco *</label>{{ ing_form.compra_banco_otro_1 }}{{ ing_form.compra_banco_otro_1.errors }}</div>
+                        <div id="wrap_compra_tarjeta_1" style="display:none; margin-top:10px;"><label class="form-label">Tarjeta / App *</label>{{ ing_form.compra_tarjeta_app_1 }}{{ ing_form.compra_tarjeta_app_1.errors }}</div>
+                    </div>
+                    <div class="compra-mixto-parte">
+                        <div class="compra-mixto-parte-head"><span>Parte 2</span><span id="compra-parte-2-resumen">Sin completar</span></div>
+                        <div class="form-row cols-2">
+                            <div><label class="form-label">Método *</label>{{ ing_form.compra_metodo_2 }}{{ ing_form.compra_metodo_2.errors }}</div>
+                            <div><label class="form-label">Monto (USD) *</label>{{ ing_form.compra_monto_2 }}{{ ing_form.compra_monto_2.errors }}</div>
+                        </div>
+                        <div id="wrap_compra_banco_2" style="display:none; margin-top:10px;"><label class="form-label">Banco *</label>{{ ing_form.compra_banco_2 }}{{ ing_form.compra_banco_2.errors }}</div>
+                        <div id="wrap_compra_banco_otro_2" style="display:none; margin-top:10px;"><label class="form-label">Especificar banco *</label>{{ ing_form.compra_banco_otro_2 }}{{ ing_form.compra_banco_otro_2.errors }}</div>
+                        <div id="wrap_compra_tarjeta_2" style="display:none; margin-top:10px;"><label class="form-label">Tarjeta / App *</label>{{ ing_form.compra_tarjeta_app_2 }}{{ ing_form.compra_tarjeta_app_2.errors }}</div>
+                    </div>
+                </div>
+                <div class="compra-mixto-total" id="compra-mixto-total"><span>Suma registrada</span><strong id="compra-mixto-total-texto">$0.00 de $0.00</strong></div>
             </div>
         </div>
 
@@ -1195,7 +1308,7 @@
     </div>
 
     <!-- Abono / anticipo -->
-    <div class="form-section">
+    <div class="form-section" id="seccion-abono-anticipo">
         <h3>Abono / Anticipo</h3>
         <div class="form-row cols-2">
             <div>
@@ -1273,7 +1386,7 @@
     </div>
 
     <!-- Firma del cliente -->
-    <div class="form-section">
+    <div class="form-section" id="seccion-firma-cliente">
         <h3>Firma del Cliente</h3>
         <div class="firma-panel">
             {{ ing_form.firma_cliente }}
@@ -1720,6 +1833,8 @@
         var ultimoValor = '';
         var valorAntesGarantia = '';
         var bloqueoGarantiaActivo = false;
+        var bloqueoCompraActivo = false;
+        var bloqueoDonadoActivo = false;
 
         if (!radios.length || !inpValor) return;
         var valorBloqueadoPorSalida = inpValor.disabled;
@@ -1742,6 +1857,14 @@
 
         function esGarantiaIngreso() {
             return selEstadoEquipo && selEstadoEquipo.value === 'garantia';
+        }
+
+        function esCompraIngreso() {
+            return selEstadoEquipo && selEstadoEquipo.value === 'equipo_a_comprar';
+        }
+
+        function esDonadoIngreso() {
+            return selEstadoEquipo && selEstadoEquipo.value === 'donado';
         }
 
         function seleccionarRadio(valor) {
@@ -1809,6 +1932,55 @@
                 return;
             }
 
+            if (esCompraIngreso()) {
+                bloqueoCompraActivo = true;
+                seleccionarRadio('si');
+                bloquearRadios(true);
+                marcarOpcionActiva();
+                if (esPendiente(inpValor.value)) inpValor.value = '';
+                inpValor.removeAttribute('readonly');
+                inpValor.removeAttribute('disabled');
+                inpValor.setAttribute('required', 'required');
+                inpValor.classList.remove('estado-lock-input');
+                if (wrapMonto) wrapMonto.style.display = 'block';
+                if (aviso) aviso.style.display = 'none';
+                var labelCompra = document.getElementById('label-valor-acordado');
+                if (labelCompra) labelCompra.textContent = 'Valor a pagar (USD)';
+                if (window.__checkRequired) window.__checkRequired();
+                return;
+            }
+
+            if (esDonadoIngreso()) {
+                bloqueoDonadoActivo = true;
+                seleccionarRadio('no');
+                bloquearRadios(true);
+                marcarOpcionActiva();
+                inpValor.value = '0.00';
+                inpValor.removeAttribute('required');
+                inpValor.setAttribute('readonly', 'readonly');
+                inpValor.classList.add('estado-lock-input');
+                if (wrapMonto) wrapMonto.style.display = 'none';
+                if (aviso) aviso.style.display = 'none';
+                if (window.__checkRequired) window.__checkRequired();
+                return;
+            }
+
+            if (bloqueoCompraActivo) {
+                bloqueoCompraActivo = false;
+                bloquearRadios(false);
+                var labelNormal = document.getElementById('label-valor-acordado');
+                if (labelNormal) labelNormal.textContent = 'Valor acordado (USD)';
+            }
+            if (bloqueoDonadoActivo) {
+                bloqueoDonadoActivo = false;
+                bloquearRadios(false);
+                inpValor.classList.remove('estado-lock-input');
+                inpValor.removeAttribute('readonly');
+                inpValor.value = '';
+                var labelNormalDonado = document.getElementById('label-valor-acordado');
+                if (labelNormalDonado) labelNormalDonado.textContent = 'Valor acordado (USD)';
+            }
+
             if (bloqueoGarantiaActivo) {
                 bloqueoGarantiaActivo = false;
                 bloquearRadios(false);
@@ -1870,6 +2042,224 @@
         actualizarValorAcordado();
         setTimeout(actualizarValorAcordado, 150);
         setTimeout(actualizarValorAcordado, 600);
+    })();
+
+    // Flujo administrativo para Donado / Equipo a comprar.
+    (function () {
+        var estado = document.querySelector('[name="ing-estado"]');
+        var panel = document.getElementById('wrap_compra_administrativa');
+        var seccionDiagnostico = document.getElementById('seccion-diagnostico-inmediato');
+        var seccionAbono = document.getElementById('seccion-abono-anticipo');
+        var seccionFirma = document.getElementById('seccion-firma-cliente');
+        var panelValor = document.getElementById('panel-valor-acordado');
+        var decisionValor = document.getElementById('valor-acordado-decision');
+        var tituloProblema = document.getElementById('titulo-problema-reporte');
+        var labelProblema = document.getElementById('label-problema-reportado');
+        var problema = document.querySelector('[name="ing-problema_reportado"]');
+        var ayudaValor = document.getElementById('ayuda-valor-acordado');
+        var metodo = document.querySelector('[name="ing-compra_metodo_pago"]');
+        var banco = document.querySelector('[name="ing-compra_banco"]');
+        var bancoWrap = document.getElementById('wrap_compra_banco');
+        var bancoOtroWrap = document.getElementById('wrap_compra_banco_otro');
+        var tarjetaWrap = document.getElementById('wrap_compra_tarjeta');
+        var mixto = document.getElementById('wrap_compra_mixto');
+        var metodo1 = document.querySelector('[name="ing-compra_metodo_1"]');
+        var banco1 = document.querySelector('[name="ing-compra_banco_1"]');
+        var monto1 = document.querySelector('[name="ing-compra_monto_1"]');
+        var bancoWrap1 = document.getElementById('wrap_compra_banco_1');
+        var bancoOtroWrap1 = document.getElementById('wrap_compra_banco_otro_1');
+        var tarjetaWrap1 = document.getElementById('wrap_compra_tarjeta_1');
+        var metodo2 = document.querySelector('[name="ing-compra_metodo_2"]');
+        var banco2 = document.querySelector('[name="ing-compra_banco_2"]');
+        var monto2 = document.querySelector('[name="ing-compra_monto_2"]');
+        var bancoWrap2 = document.getElementById('wrap_compra_banco_2');
+        var bancoOtroWrap2 = document.getElementById('wrap_compra_banco_otro_2');
+        var tarjetaWrap2 = document.getElementById('wrap_compra_tarjeta_2');
+        var valor = document.querySelector('[name="ing-valor_acordado"]');
+        var totalBox = document.getElementById('compra-mixto-total');
+        var totalTexto = document.getElementById('compra-mixto-total-texto');
+        var resumen1 = document.getElementById('compra-parte-1-resumen');
+        var resumen2 = document.getElementById('compra-parte-2-resumen');
+        var diagnostico = document.querySelector('[name="ing-diagnostico_inmediato"]');
+        var valorDiagnostico = document.querySelector('[name="ing-valor_diagnostico"]');
+        var abono = document.querySelector('[name="ing-abono_anticipo"]');
+        var firmaImagen = document.querySelector('[name="ing-firma_cliente_imagen"]');
+        var radiosFirma = Array.prototype.slice.call(document.querySelectorAll('[name="ing-firma_cliente_opcion"]'));
+        var placeholderProblema = problema ? problema.getAttribute('placeholder') : '';
+
+        if (!estado || !panel) return;
+
+        function mostrar(elemento, visible, displayVisible) {
+            if (elemento) elemento.style.display = visible ? (displayVisible || '') : 'none';
+        }
+
+        function requerido(campo, activo) {
+            if (!campo) return;
+            campo.required = !!activo;
+            if (!activo) campo.setCustomValidity('');
+        }
+
+        function dinero(campo) {
+            if (!campo) return 0;
+            var normalizado = String(campo.value || '').trim().replace(',', '.');
+            var numero = parseFloat(normalizado);
+            return Number.isFinite(numero) ? numero : 0;
+        }
+
+        function etiquetaMetodo(select) {
+            if (!select || !select.value) return '';
+            var opcion = select.options[select.selectedIndex];
+            return opcion ? opcion.text : '';
+        }
+
+        function bloquearMixtoAnidado(select) {
+            if (!select) return;
+            Array.prototype.forEach.call(select.options, function (opcion) {
+                if (opcion.value === 'mixto') opcion.disabled = true;
+            });
+        }
+
+        function actualizarParte(numero) {
+            var esPrimera = numero === 1;
+            var selectMetodo = esPrimera ? metodo1 : metodo2;
+            var selectBanco = esPrimera ? banco1 : banco2;
+            var campoMonto = esPrimera ? monto1 : monto2;
+            var wrapBanco = esPrimera ? bancoWrap1 : bancoWrap2;
+            var wrapBancoOtro = esPrimera ? bancoOtroWrap1 : bancoOtroWrap2;
+            var wrapTarjeta = esPrimera ? tarjetaWrap1 : tarjetaWrap2;
+            var resumen = esPrimera ? resumen1 : resumen2;
+            var activo = estado.value === 'equipo_a_comprar' && metodo && metodo.value === 'mixto';
+            var metodoParte = selectMetodo ? selectMetodo.value : '';
+            var esTransferencia = activo && metodoParte === 'transferencia';
+            var esTarjeta = activo && metodoParte === 'tarjeta';
+
+            mostrar(wrapBanco, esTransferencia);
+            mostrar(wrapBancoOtro, esTransferencia && selectBanco && selectBanco.value === 'otro');
+            mostrar(wrapTarjeta, esTarjeta);
+            requerido(selectMetodo, activo);
+            requerido(campoMonto, activo);
+            requerido(selectBanco, esTransferencia);
+            if (wrapBancoOtro) requerido(wrapBancoOtro.querySelector('input'), esTransferencia && selectBanco && selectBanco.value === 'otro');
+            if (wrapTarjeta) requerido(wrapTarjeta.querySelector('select, input'), esTarjeta);
+
+            if (resumen) {
+                var montoParte = dinero(campoMonto);
+                resumen.textContent = (montoParte > 0 && metodoParte)
+                    ? '$' + montoParte.toFixed(2) + ' · ' + etiquetaMetodo(selectMetodo)
+                    : 'Sin completar';
+            }
+        }
+
+        function validarMixto() {
+            var activo = estado.value === 'equipo_a_comprar' && metodo && metodo.value === 'mixto';
+            if (!activo) {
+                if (monto2) monto2.setCustomValidity('');
+                if (totalBox) totalBox.classList.remove('is-error');
+                return;
+            }
+            var total = dinero(valor);
+            var suma = dinero(monto1) + dinero(monto2);
+            var completa = total > 0 && dinero(monto1) > 0 && dinero(monto2) > 0;
+            var coincide = completa && Math.abs(suma - total) < 0.005;
+            if (totalTexto) totalTexto.textContent = '$' + suma.toFixed(2) + ' de $' + total.toFixed(2);
+            if (totalBox) totalBox.classList.toggle('is-error', !coincide);
+            if (monto2) {
+                monto2.setCustomValidity(
+                    coincide ? '' : 'La suma de las dos partes debe ser igual al valor a pagar.'
+                );
+            }
+        }
+
+        function limpiarCamposNoAplicables() {
+            var esAdministrativo = estado.value === 'donado' || estado.value === 'equipo_a_comprar';
+            if (!esAdministrativo) return;
+
+            if (diagnostico && diagnostico.value !== 'no') {
+                diagnostico.value = 'no';
+                diagnostico.dispatchEvent(new Event('change', {bubbles: true}));
+            }
+            if (valorDiagnostico) valorDiagnostico.value = '0.00';
+            if (abono) {
+                abono.value = '0.00';
+                abono.dispatchEvent(new Event('input', {bubbles: true}));
+            }
+            var radioNo = radiosFirma.find(function (radio) { return radio.value === 'no'; });
+            if (radioNo && !radioNo.checked) {
+                radioNo.checked = true;
+                radioNo.dispatchEvent(new Event('change', {bubbles: true}));
+            }
+            if (firmaImagen) firmaImagen.value = '';
+        }
+
+        function actualizar() {
+            var esCompra = estado.value === 'equipo_a_comprar';
+            var esDonado = estado.value === 'donado';
+            var esAdministrativo = esCompra || esDonado;
+
+            mostrar(seccionDiagnostico, !esAdministrativo);
+            mostrar(seccionAbono, !esAdministrativo);
+            mostrar(seccionFirma, !esAdministrativo);
+            mostrar(panelValor, !esDonado);
+            mostrar(decisionValor, !esAdministrativo);
+            panel.style.display = esCompra ? '' : 'none';
+
+            if (tituloProblema) tituloProblema.textContent = esAdministrativo ? 'Observación' : 'Problema y Reporte';
+            if (labelProblema) labelProblema.textContent = esAdministrativo ? 'Observación *' : 'Problema reportado *';
+            if (problema) {
+                problema.setAttribute(
+                    'placeholder',
+                    esAdministrativo
+                        ? 'Describe el estado, procedencia y cualquier observación importante del equipo...'
+                        : (placeholderProblema || 'Describe el problema reportado por el cliente...')
+                );
+            }
+            if (ayudaValor) {
+                ayudaValor.textContent = esCompra
+                    ? 'Este es el valor que Econotec pagará por el equipo.'
+                    : 'Ingresa el monto acordado con el cliente.';
+            }
+
+            limpiarCamposNoAplicables();
+
+            var v = esCompra && metodo ? metodo.value : '';
+            var esTransferencia = v === 'transferencia';
+            var esTarjeta = v === 'tarjeta';
+            var esMixto = v === 'mixto';
+            mostrar(bancoWrap, esCompra && esTransferencia);
+            mostrar(bancoOtroWrap, esCompra && esTransferencia && banco && banco.value === 'otro');
+            mostrar(tarjetaWrap, esCompra && esTarjeta);
+            mostrar(mixto, esCompra && esMixto);
+            requerido(metodo, esCompra);
+            requerido(banco, esCompra && esTransferencia);
+            if (bancoOtroWrap) requerido(bancoOtroWrap.querySelector('input'), esCompra && esTransferencia && banco && banco.value === 'otro');
+            if (tarjetaWrap) requerido(tarjetaWrap.querySelector('select, input'), esCompra && esTarjeta);
+
+            actualizarParte(1);
+            actualizarParte(2);
+            validarMixto();
+            if (window.__checkRequired) window.__checkRequired();
+        }
+
+        function completarSegundaParte() {
+            if (!metodo || metodo.value !== 'mixto' || !monto2 || monto2.value) return;
+            var restante = dinero(valor) - dinero(monto1);
+            if (restante > 0) monto2.value = restante.toFixed(2);
+            actualizar();
+        }
+
+        bloquearMixtoAnidado(metodo1);
+        bloquearMixtoAnidado(metodo2);
+        estado.addEventListener('change', actualizar);
+        if (metodo) metodo.addEventListener('change', actualizar);
+        if (banco) banco.addEventListener('change', actualizar);
+        if (valor) valor.addEventListener('input', actualizar);
+        if (metodo1) metodo1.addEventListener('change', actualizar);
+        if (banco1) banco1.addEventListener('change', actualizar);
+        if (metodo2) metodo2.addEventListener('change', actualizar);
+        if (banco2) banco2.addEventListener('change', actualizar);
+        if (monto1) monto1.addEventListener('input', completarSegundaParte);
+        if (monto2) monto2.addEventListener('input', actualizar);
+        actualizar();
     })();
 
     // Autocompletado de cliente por cédula

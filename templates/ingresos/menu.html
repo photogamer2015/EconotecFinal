@@ -72,5 +72,18 @@
             </div>
         </div>
     </a>
+
+    <a href="{% if es_admin %}{% url 'econotec:admin_equipos_administrativos' %}{% else %}{% url 'econotec:equipos_administrativos_general' %}{% endif %}" class="card-box" style="text-decoration:none; color:inherit; border-left:5px solid #0f766e;">
+        <div style="display:flex; align-items:center; gap:14px;">
+            <div style="font-size:38px;">🎁</div>
+            <div>
+                <h3 style="color:#0f766e; font-size:18px; margin-bottom:4px;">Donados / Equipos a comprar</h3>
+                <p style="color:#666; font-size:13px;">
+                    {% if es_admin %}Apartado administrativo para ver solo estos dos estados y sus pagos.
+                    {% else %}Consulta separada para ver únicamente estos dos estados y sus pagos.{% endif %}
+                </p>
+            </div>
+        </div>
+    </a>
 </div>
 {% endblock %}
