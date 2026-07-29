@@ -724,12 +724,14 @@
             {% endif %}
 
             {% if ingreso.reparacion_cancelada %}
-                <!-- CASO: Cliente no quiso reparar / no se pudo reparar -->
+                <!-- CASO: Cliente no quiso reparar / no se pudo reparar / revisión -->
                 <div class="big-num" style="background:#fff8e1; color:#b26a00;">
                     {{ ingreso.valor_efectivo_a_cobrar|dinero_signo }}
                 </div>
                 <div style="text-align:center; font-size:13px; color:#666;">
-                    {% if ingreso.salida.estado_reparacion == 'cliente_no_acepta' %}
+                    {% if ingreso.salida.estado_reparacion == 'revision' %}
+                        Valor acordado por revisión
+                    {% elif ingreso.salida.estado_reparacion == 'cliente_no_acepta' %}
                         Solo se cobra diagnóstico
                     {% else %}
                         No se cobra revisión (Gratuito)
@@ -740,7 +742,9 @@
                         Valor acordado original: {{ ingreso.valor_acordado|dinero_signo }}
                     </span><br>
                     <strong style="color: var(--primary-dark);">
-                        {% if ingreso.salida.estado_reparacion == 'cliente_no_acepta' %}
+                        {% if ingreso.salida.estado_reparacion == 'revision' %}
+                            🔎 Revisión
+                        {% elif ingreso.salida.estado_reparacion == 'cliente_no_acepta' %}
                             🚫 Cliente no quiso reparar
                         {% else %}
                             ❌ No se pudo reparar

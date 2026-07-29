@@ -119,7 +119,11 @@
                     {% endif %}
                 </td>
                 <td>
-                    {% if i.reparacion_cancelada %}
+                    {% if i.reparacion_cancelada and i.salida.estado_reparacion == 'revision' %}
+                        <span style="color:#999; text-decoration: line-through; font-size: 12px;">{{ i.valor_acordado|dinero_signo }}</span>
+                        <br><strong style="color: var(--primary-dark);">{{ i.valor_efectivo_a_cobrar|dinero_signo }}</strong>
+                        <br><small style="color: var(--primary-dark); font-weight: 700;">→ Revisión</small>
+                    {% elif i.reparacion_cancelada %}
                         <span style="color:#999; text-decoration: line-through; font-size: 12px;">{{ i.valor_acordado|dinero_signo }}</span>
                         <br><small style="color: var(--primary-dark); font-weight: 700;">→ Revisión</small>
                     {% else %}

@@ -52,6 +52,7 @@ COSTO_BODEGAJE_DIA = Decimal('1.00')
 # Estados de SalidaEquipo en los que aplica el cobro de bodegaje.
 ESTADOS_SALIDA_CON_BODEGAJE = [
     'pendiente_retiro',
+    'revision',
     'cliente_no_acepta',
     'no_reparable',
     'garantia',

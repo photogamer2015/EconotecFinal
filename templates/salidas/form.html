@@ -367,16 +367,29 @@
                 </p>
             </div>
         </div>
+
+        <div class="form-row cols-1" id="wrap-valor-revision" style="margin-top: 14px; display:none;">
+            <div style="background:#fff8e1; border:1px solid #ffe08a; border-radius:8px; padding:14px;">
+                <label class="form-label" for="{{ form.valor_acordado_revision.id_for_label }}">
+                    Valor acordado por revisión *
+                </label>
+                {{ form.valor_acordado_revision }}
+                {{ form.valor_acordado_revision.errors }}
+                <small style="display:block; margin-top:6px; color:#856404; font-weight:700; line-height:1.35;">
+                    Este valor solo aplica al estado Revisión y será la base del saldo pendiente de pago.
+                </small>
+            </div>
+        </div>
     </div>
 
     <div class="form-section" id="section-cierre-economico"{% if form.estado_reparacion.value == 'retirado' %} style="display:none;"{% endif %}>
         <h3>Cierre Económico</h3>
         
         <div id="wrap-cobrar-diagnostico" style="display:none; margin-bottom: 14px; background: #fff3cd; padding: 10px; border-radius: 8px; border: 1px solid #ffeeba;">
-            <label class="form-label" style="color: #856404; margin-bottom: 8px;">¿Cobrar diagnóstico / revisión?</label>
+            <label class="form-label" style="color: #856404; margin-bottom: 8px;">¿Cobrar diagnóstico?</label>
             <select id="cobrar_diagnostico_select" class="form-input" style="width: 100%; border-color: #ffeeba;">
                 <option value="no">No, no cobrar nada</option>
-                <option value="si">Sí, cobrar valor manual ($1 min)</option>
+                <option value="si">Sí, registrar valor pendiente ($1 min)</option>
             </select>
         </div>
 
@@ -539,6 +552,8 @@
         var wrapNotificarAsesora = document.getElementById('wrap-notificar-asesora');
         var asesoraNotificacion = document.querySelector('[name="asesora_notificacion"]');
         var labelValorCobrado = document.getElementById('label-valor-cobrado');
+        var wrapValorRevision = document.getElementById('wrap-valor-revision');
+        var inputValorRevision = document.querySelector('[name="valor_acordado_revision"]');
         var mensajeNotificacion = document.querySelector('[name="mensaje_notificacion"]');
         var tituloNotificarAsesora = document.getElementById('notificar-asesora-titulo');
         var ayudaNotificarAsesora = document.getElementById('notificar-asesora-ayuda');
@@ -571,7 +586,7 @@
                     revision: {
                         titulo: 'Notificar a asesora por revisión pendiente',
                         ayuda: 'La asesora verá esta notificación en su apartado y el valor quedará como saldo pendiente para cobrar antes del retiro.',
-                        placeholder: 'Ej.: Cliente no acepta reparación. Cobrar revisión antes del retiro.'
+                        placeholder: 'Ej.: Salida en revisión. Cobrar el valor acordado antes del retiro.'
                     },
                     retiro: {
                         titulo: 'Notificar a asesora: equipo listo con saldo pendiente',
@@ -637,6 +652,12 @@
                 if (wrapPagoFinal) wrapPagoFinal.style.display = '';
                 if (wrapNumeroRecibo) wrapNumeroRecibo.style.display = '';
                 if (inputCobrado) inputCobrado.setAttribute('min', '0');
+                if (wrapValorRevision) wrapValorRevision.style.display = 'none';
+                if (inputValorRevision) {
+                    inputValorRevision.removeAttribute('required');
+                    inputValorRevision.setAttribute('min', '0');
+                    inputValorRevision.setCustomValidity('');
+                }
                 setNotificacionAsesora(false);
                 bloquearMetodoPagoPendiente(metodoPago, false);
 
@@ -659,6 +680,34 @@
                     }
                     if (ayudaValor) {
                         ayudaValor.innerHTML = 'Este valor se guardará como <strong>valor acordado pendiente</strong>. No se registra como pago recibido ahora.';
+                        ayudaValor.style.color = '#856404';
+                    }
+                } else if (v === 'revision') {
+                    if (wrapValorRevision) wrapValorRevision.style.display = '';
+                    if (inputValorRevision) {
+                        inputValorRevision.setAttribute('required', 'required');
+                        inputValorRevision.setAttribute('min', '1');
+                        if (inputValorRevision.value === '0') inputValorRevision.value = '';
+                    }
+                    if (wrapPagoFinal) wrapPagoFinal.style.display = 'none';
+                    if (wrapNumeroRecibo) wrapNumeroRecibo.style.display = 'none';
+                    if (inputCobrado) {
+                        inputCobrado.value = '0';
+                        inputCobrado.setAttribute('readonly', 'readonly');
+                    }
+                    bloquearMetodoPagoPendiente(metodoPago, true);
+                    setNotificacionAsesora(true, 'revision');
+
+                    var valorRevision = valorInputCobrado(inputValorRevision);
+                    var saldoRevision = Math.max(valorRevision - totalAbonado, 0);
+                    saldoDisplay.textContent = '$' + saldoRevision.toFixed(2);
+                    saldoDisplay.style.color = saldoRevision > 0 ? 'var(--danger)' : 'var(--success)';
+                    if (saldoNota) {
+                        saldoNota.style.display = '';
+                        saldoNota.textContent = 'Saldo calculado desde el valor acordado de revisión.';
+                    }
+                    if (ayudaValor) {
+                        ayudaValor.innerHTML = 'En Revisión no se registra pago recibido ahora; el pendiente sale del valor acordado de revisión.';
                         ayudaValor.style.color = '#856404';
                     }
                 } else if (v === 'garantia') {
@@ -710,15 +759,15 @@
                         saldoDisplay.style.color = 'var(--danger)';
                         if (saldoNota) {
                             saldoNota.style.display = '';
-                            saldoNota.textContent = 'Revisión pendiente de pago antes del retiro.';
+                            saldoNota.textContent = 'Valor pendiente de pago antes del retiro.';
                         }
                         bloquearMetodoPagoPendiente(metodoPago, true);
                         setNotificacionAsesora(true, 'revision');
                         if (labelValorCobrado) {
-                            labelValorCobrado.textContent = 'Valor acordado por revisión (USD)';
+                            labelValorCobrado.textContent = 'Valor pendiente por diagnóstico (USD)';
                         }
                         if (ayudaValor) {
-                            ayudaValor.innerHTML = '<strong>Nota:</strong> Ingresa el valor pendiente (puede ser 1 o mayor). No se registra como pago recibido ahora.';
+                            ayudaValor.innerHTML = '<strong>Nota:</strong> Ingresa el valor pendiente por diagnóstico (puede ser 1 o mayor). No se registra como pago recibido ahora.';
                             ayudaValor.style.color = '#856404';
                         }
                     }
@@ -796,6 +845,10 @@
         if (inputCobrado) {
             inputCobrado.addEventListener('input', actualizar);
             inputCobrado.addEventListener('change', actualizar);
+        }
+        if (inputValorRevision) {
+            inputValorRevision.addEventListener('input', actualizar);
+            inputValorRevision.addEventListener('change', actualizar);
         }
         if (selEstado) {
             actualizar();

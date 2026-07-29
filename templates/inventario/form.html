@@ -206,6 +206,13 @@
                 {{ form.ubicacion }}
                 {% if form.ubicacion.errors %}<div class="field-errors">{{ form.ubicacion.errors }}</div>{% endif %}
             </div>
+            <div class="full">
+                <label class="form-label" for="{{ form.observacion.id_for_label }}">
+                    Observación <span style="font-weight: 750; color: var(--text-muted);">(opcional)</span>
+                </label>
+                {{ form.observacion }}
+                {% if form.observacion.errors %}<div class="field-errors">{{ form.observacion.errors }}</div>{% endif %}
+            </div>
         </div>
 
         <div class="inventario-form-actions">

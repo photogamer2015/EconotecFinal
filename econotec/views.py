@@ -623,6 +623,7 @@ def _texto_inventario_item_busqueda(item):
         item.ubicacion,
         item.get_ubicacion_display(),
         ubicacion_label,
+        item.observacion,
     ))
 
 
@@ -852,6 +853,7 @@ def inventario_export(request, sede, categoria, tipo):
         'Cantidad',
         'Costo (USD)',
         'Ubicación',
+        'Observación',
         'Sede',
         'Categoría',
         'Tipo',
@@ -880,6 +882,7 @@ def inventario_export(request, sede, categoria, tipo):
             item.cantidad,
             float(item.costo or 0),
             item.get_ubicacion_display(),
+            item.observacion or '—',
             sede_label,
             categoria_info['nombre'],
             tipo_info['nombre'],
@@ -888,7 +891,7 @@ def inventario_export(request, sede, categoria, tipo):
             timezone.localtime(item.actualizado).strftime('%d/%m/%Y %H:%M') if item.actualizado else '—',
         ])
 
-    widths = [24, 28, 18, 18, 18, 18, 24, 12, 14, 22, 16, 18, 20, 22, 18, 18]
+    widths = [24, 28, 18, 18, 18, 18, 24, 12, 14, 22, 32, 16, 18, 20, 22, 18, 18]
     for index, width in enumerate(widths, start=1):
         ws.column_dimensions[ws.cell(row=1, column=index).column_letter].width = width
 
@@ -1893,11 +1896,22 @@ def _venta_inventario_ubicacion_nombre(slug, default):
     return default
 
 
-def _inventario_item_venta_json(item, cantidad=None, relacion_id=None):
+def _venta_observacion_producto_limpia(valor):
+    texto = str(valor or '').replace('\r\n', '\n').replace('\r', '\n').strip()
+    if len(texto) > 500:
+        raise ValueError('La observación del producto no puede superar 500 caracteres.')
+    return texto
+
+
+def _inventario_item_venta_json(item, cantidad=None, relacion_id=None, observacion=''):
     categoria_info = INVENTARIO_CATEGORIAS.get(item.categoria, {})
     categoria_nombre = categoria_info.get('nombre', item.categoria)
     tipo_info = _inventario_tipo_por_slug(categoria_info, item.tipo) if categoria_info else None
     seleccionable = item.estado == 'disponible' and item.cantidad > 0
+    try:
+        observacion_venta = _venta_observacion_producto_limpia(observacion)
+    except ValueError:
+        observacion_venta = ''
     return {
         'relacion_id': relacion_id,
         'item_id': item.pk,
@@ -1913,6 +1927,8 @@ def _inventario_item_venta_json(item, cantidad=None, relacion_id=None):
         'cantidad': item.cantidad if cantidad is None else cantidad,
         'disponible': item.cantidad,
         'costo': f'{(item.costo or D("0.00")):.2f}',
+        'observacion': observacion_venta,
+        'observacion_inventario': item.observacion or '',
         'estado': item.estado,
         'estado_label': item.get_estado_display(),
         'causa_no_disponible': item.causa_no_disponible,
@@ -1926,6 +1942,7 @@ def _venta_inventario_item_json(relacion):
         relacion.inventario_item,
         cantidad=relacion.cantidad,
         relacion_id=relacion.pk,
+        observacion=relacion.observacion,
     )
 
 
@@ -1965,10 +1982,11 @@ def _venta_inventario_selecciones(post_data):
             cantidad = int(dato.get('cantidad'))
         except (TypeError, ValueError):
             raise ValueError('La cantidad seleccionada no es válida.')
+        observacion = _venta_observacion_producto_limpia(dato.get('observacion'))
         if item_id in vistos or cantidad < 1:
             raise ValueError('No se puede repetir un producto ni seleccionar una cantidad inválida.')
         vistos.add(item_id)
-        resultado.append((item_id, cantidad))
+        resultado.append((item_id, cantidad, observacion))
     return resultado
 
 
@@ -1980,12 +1998,12 @@ def _venta_inventario_contexto_desde_post(post_data):
         return []
     if not selecciones:
         return []
-    items = InventarioItem.objects.in_bulk([item_id for item_id, _cantidad in selecciones])
+    items = InventarioItem.objects.in_bulk([item_id for item_id, _cantidad, _observacion in selecciones])
     contexto = []
-    for item_id, cantidad in selecciones:
+    for item_id, cantidad, observacion in selecciones:
         item = items.get(item_id)
         if item:
-            contexto.append(_inventario_item_venta_json(item, cantidad=cantidad))
+            contexto.append(_inventario_item_venta_json(item, cantidad=cantidad, observacion=observacion))
     return contexto
 
 
@@ -1994,9 +2012,9 @@ def _venta_usa_valor_desde_inventario(post_data):
 
 
 def _venta_total_desde_inventario(selecciones):
-    items = InventarioItem.objects.in_bulk([item_id for item_id, _cantidad in selecciones])
+    items = InventarioItem.objects.in_bulk([item_id for item_id, _cantidad, _observacion in selecciones])
     total = D('0.00')
-    for item_id, cantidad in selecciones:
+    for item_id, cantidad, _observacion in selecciones:
         item = items.get(item_id)
         if not item:
             continue
@@ -2014,7 +2032,7 @@ def _resumen_venta_inventario(venta):
 
 def _aplicar_inventario_a_venta(venta, selecciones):
     """Descuenta stock y crea las relaciones dentro de la transacción de venta."""
-    for item_id, cantidad in selecciones:
+    for item_id, cantidad, observacion in selecciones:
         item = InventarioItem.objects.select_for_update().filter(pk=item_id).first()
         if not item:
             raise ValueError('Uno de los productos seleccionados ya no existe en inventario.')
@@ -2029,7 +2047,21 @@ def _aplicar_inventario_a_venta(venta, selecciones):
             venta=venta,
             inventario_item=item,
             cantidad=cantidad,
+            observacion=observacion,
         )
+
+
+def _actualizar_observaciones_inventario_venta(venta, selecciones):
+    """Actualiza solo las notas de productos ya vinculados a una venta."""
+    relaciones = {
+        relacion.inventario_item_id: relacion
+        for relacion in VentaInventarioItem.objects.filter(venta=venta)
+    }
+    for item_id, _cantidad, observacion in selecciones:
+        relacion = relaciones.get(item_id)
+        if relacion and relacion.observacion != observacion:
+            relacion.observacion = observacion
+            relacion.save(update_fields=['observacion', 'actualizado'])
 
 
 def _devolver_inventario_de_venta(venta, relacion_ids=None):
@@ -2075,6 +2107,7 @@ def venta_inventario_catalogo(request):
             | Q(tipo__icontains=q)
             | Q(marca__icontains=q)
             | Q(modelo__icontains=q)
+            | Q(observacion__icontains=q)
             | Q(causa_no_disponible__icontains=q)
         )
     datos = [_inventario_item_venta_json(item) for item in items[:200]]
@@ -2094,6 +2127,10 @@ def venta_inventario_agregar(request, pk):
         return JsonResponse({'ok': False, 'error': 'Selecciona una cantidad válida.'}, status=400)
     if cantidad < 1:
         return JsonResponse({'ok': False, 'error': 'La cantidad debe ser mayor que cero.'}, status=400)
+    try:
+        observacion = _venta_observacion_producto_limpia(request.POST.get('observacion'))
+    except ValueError as exc:
+        return JsonResponse({'ok': False, 'error': str(exc)}, status=400)
 
     item = get_object_or_404(InventarioItem.objects.select_for_update(), pk=item_id)
     if item.estado != 'disponible' or item.cantidad < cantidad:
@@ -2105,11 +2142,15 @@ def venta_inventario_agregar(request, pk):
     relacion, creada = VentaInventarioItem.objects.select_for_update().get_or_create(
         venta=venta,
         inventario_item=item,
-        defaults={'cantidad': cantidad},
+        defaults={'cantidad': cantidad, 'observacion': observacion},
     )
     if not creada:
         relacion.cantidad += cantidad
-        relacion.save(update_fields=['cantidad', 'actualizado'])
+        update_fields = ['cantidad', 'actualizado']
+        if observacion:
+            relacion.observacion = observacion
+            update_fields.append('observacion')
+        relacion.save(update_fields=update_fields)
     item.cantidad -= cantidad
     item.save(update_fields=['cantidad', 'actualizado'])
     return JsonResponse({
@@ -2160,6 +2201,30 @@ def venta_inventario_actualizar_cantidad(request, pk, relacion_pk):
         'ok': True,
         'producto': _venta_inventario_item_json(relacion),
         'disponible': item.cantidad,
+    })
+
+
+@tecnico_requerido
+@require_POST
+@transaction.atomic
+def venta_inventario_actualizar_observacion(request, pk, relacion_pk):
+    """Actualiza la observación de un producto vendido sin mover stock."""
+    venta = get_object_or_404(IngresoEquipo, pk=pk, sede='ventas')
+    relacion = get_object_or_404(
+        VentaInventarioItem.objects.select_for_update().select_related('inventario_item'),
+        pk=relacion_pk,
+        venta=venta,
+    )
+    try:
+        observacion = _venta_observacion_producto_limpia(request.POST.get('observacion'))
+    except ValueError as exc:
+        return JsonResponse({'ok': False, 'error': str(exc)}, status=400)
+
+    relacion.observacion = observacion
+    relacion.save(update_fields=['observacion', 'actualizado'])
+    return JsonResponse({
+        'ok': True,
+        'producto': _venta_inventario_item_json(relacion),
     })
 
 
@@ -2593,9 +2658,14 @@ def venta_editar(request, pk):
         cli_form = ClienteForm(post_data, prefix='cli', instance=venta.cliente)
         ing_form = IngresoEquipoForm(post_data, prefix='ing', instance=venta)
         _configurar_form_venta(ing_form)
+        selecciones = []
         
         if cli_form.is_valid() and ing_form.is_valid():
             _validar_pago_venta(post_data, ing_form)
+            try:
+                selecciones = _venta_inventario_selecciones(post_data)
+            except ValueError as exc:
+                ing_form.add_error(None, str(exc))
 
         if cli_form.is_valid() and ing_form.is_valid():
             campos_cambiados = set(cli_form.changed_data or []) | set(ing_form.changed_data or [])
@@ -2606,6 +2676,7 @@ def venta_editar(request, pk):
             venta.subestado_entregado = 'con_solucion'
             _aplicar_pago_venta(venta, post_data)
             venta.save()
+            _actualizar_observaciones_inventario_venta(venta, selecciones)
             if campos_cambiados:
                 registrar_bitacora(
                     request.user,
@@ -3344,6 +3415,9 @@ def salida_totales(request):
                 total_acordado += D('5.00')
             elif estado == 'no_reparable':
                 total_acordado -= (salida.ingreso.valor_acordado or D('0.00'))
+            elif estado == 'revision':
+                total_acordado -= (salida.ingreso.valor_acordado or D('0.00'))
+                total_acordado += (salida.valor_acordado_revision or D('0.00'))
 
         # Recaudado para el técnico: EXCLUYE anticipos, SOLO cobros de salida
         total_recaudado = cobrado_final
@@ -3385,6 +3459,7 @@ def salida_totales(request):
             'retirado',
             'cliente_no_acepta',
             'no_reparable',
+            'revision',
         ]
     ).count()
     cobrado_final_global = sal_global.aggregate(s=Sum('valor_final_cobrado'))['s'] or D('0.00')
@@ -3578,8 +3653,7 @@ def salida_marcar_retirada(request, pk):
     aplicar = request.POST.get('aplicar_bodegaje') == 'on'
 
     salida.fecha_retiro_real = date.today()
-    if salida.estado_reparacion == 'pendiente_retiro':
-        salida.estado_reparacion = 'retirado'
+    salida.estado_reparacion = 'retirado'
     salida.bodegaje_dias_congelado = bod['dias']
     salida.bodegaje_monto_congelado = bod['monto']
     salida.bodegaje_aplicado_al_pago = aplicar
@@ -4149,6 +4223,8 @@ def _texto_salida_bitacora(salida):
         return f'{base} #{ingreso.codigo_equipo} cliente no quiso reparar.'
     if salida.estado_reparacion == 'no_reparable':
         return f'{base} #{ingreso.codigo_equipo} no se pudo reparar.'
+    if salida.estado_reparacion == 'revision':
+        return f'{base} #{ingreso.codigo_equipo} salió en revisión.'
     return f'{base} #{ingreso.codigo_equipo} {salida.get_estado_reparacion_display()}.'
 
 

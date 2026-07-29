@@ -79,6 +79,7 @@ urlpatterns = [
     path('ventas/inventario/catalogo/', views.venta_inventario_catalogo, name='venta_inventario_catalogo'),
     path('ventas/<int:pk>/inventario/agregar/', views.venta_inventario_agregar, name='venta_inventario_agregar'),
     path('ventas/<int:pk>/inventario/<int:relacion_pk>/cantidad/', views.venta_inventario_actualizar_cantidad, name='venta_inventario_actualizar_cantidad'),
+    path('ventas/<int:pk>/inventario/<int:relacion_pk>/observacion/', views.venta_inventario_actualizar_observacion, name='venta_inventario_actualizar_observacion'),
     path('ventas/<int:pk>/inventario/<int:relacion_pk>/quitar/', views.venta_inventario_quitar, name='venta_inventario_quitar'),
     path('ventas/<int:pk>/editar/', views.venta_editar, name='venta_editar'),
     path('ventas/<int:pk>/eliminar/', views.venta_eliminar, name='venta_eliminar'),

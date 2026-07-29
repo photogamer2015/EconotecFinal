@@ -86,6 +86,7 @@ SUBESTADO_ENTREGADO = [
     ('sin_solucion', 'Sin solución'),
     ('no_quiso_reparar', 'No quiso repararlo'),
     ('pendiente_retiro', 'Pendiente de retiro'),
+    ('revision', 'Revisión'),
 ]
 
 
@@ -193,6 +194,11 @@ class InventarioItem(models.Model):
         verbose_name='Costo (USD)',
     )
     ubicacion = models.CharField(max_length=30, choices=UBICACIONES, verbose_name='Ubicación')
+    observacion = models.TextField(
+        blank=True,
+        verbose_name='Observación',
+        help_text='Nota interna opcional sobre el producto o pieza en inventario.',
+    )
     registrado_por = models.ForeignKey(
         'auth.User',
         on_delete=models.SET_NULL,
@@ -775,6 +781,8 @@ class IngresoEquipo(models.Model):
                 return 'no_reparable'
             if salida.estado_reparacion == 'cliente_no_acepta':
                 return 'cliente_no_acepta'
+            if salida.estado_reparacion == 'revision':
+                return 'revision'
         if self.estado == 'entregado':
             if self.subestado_entregado == 'sin_solucion':
                 return 'no_reparable'
@@ -786,6 +794,9 @@ class IngresoEquipo(models.Model):
     def estado_visual_display(self):
         if self.pendiente_retiro_visual:
             return 'Pendiente de retiro'
+        salida = self._salida_relacionada()
+        if salida is not None and salida.estado_reparacion == 'revision':
+            return 'Revisión'
         return self.get_estado_display()
 
     @property
@@ -823,6 +834,9 @@ class IngresoEquipo(models.Model):
     def subestado_visual_display(self):
         if self.pendiente_retiro_visual:
             return 'Reparado - pendiente de retiro'
+        salida = self._salida_relacionada()
+        if salida is not None and salida.estado_reparacion == 'revision':
+            return 'Revisión pendiente de pago'
         if self.estado == 'en_reparacion' and self.subestado_reparacion:
             return self.get_subestado_reparacion_display()
         if self.estado == 'entregado' and self.subestado_entregado:
@@ -1026,23 +1040,26 @@ class IngresoEquipo(models.Model):
     @property
     def reparacion_cancelada(self):
         """
-        ¿La reparación fue cancelada porque el cliente no quiso o no se pudo reparar?
-        Si la salida tiene estado 'cliente_no_acepta' o 'no_reparable', el valor
-        acordado original ya no aplica como deuda: solo se cobra el diagnóstico.
+        ¿La reparación fue cancelada o cerrada por revisión?
+        En estos estados el valor acordado original ya no aplica como deuda.
         """
         if hasattr(self, 'salida') and self.salida:
-            return self.salida.estado_reparacion in ('cliente_no_acepta', 'no_reparable')
+            return self.salida.estado_reparacion in ('cliente_no_acepta', 'no_reparable', 'revision')
         return False
 
     @property
     def valor_efectivo_a_cobrar(self):
         """
         Valor que realmente se le cobra al cliente por la REPARACIÓN / SALIDA:
+        - Si salió por Revisión: el valor acordado propio de esa salida.
         - Si la reparación fue cancelada: solo el valor del diagnóstico (si no lo pagó al inicio).
         - Si no: el valor acordado completo.
         """
+        salida = self.salida if hasattr(self, 'salida') else None
+        if salida and salida.estado_reparacion == 'revision':
+            return _q2(salida.valor_acordado_revision or Decimal('0.00'))
+
         if self.reparacion_cancelada:
-            salida = self.salida if hasattr(self, 'salida') else None
             if salida:
                 revision_pendiente = (
                     salida.notificaciones_asesora
@@ -1191,6 +1208,11 @@ class VentaInventarioItem(models.Model):
         verbose_name='Producto de inventario',
     )
     cantidad = models.PositiveIntegerField(verbose_name='Cantidad vendida')
+    observacion = models.TextField(
+        blank=True,
+        verbose_name='Observación',
+        help_text='Nota opcional de este producto dentro de la venta.',
+    )
     creado = models.DateTimeField(auto_now_add=True)
     actualizado = models.DateTimeField(auto_now=True)
 
@@ -1421,6 +1443,7 @@ class SalidaEquipo(models.Model):
 
     ESTADO_REPARACION = [
         ('pendiente_retiro', '⏳ Reparado — pendiente de retiro'),
+        ('revision', '🔎 Revisión'),
         ('cliente_no_acepta', '🚫 Cliente no quiso reparar'),
         ('no_reparable', '❌ No se pudo reparar'),
         ('garantia', '🛡 Salida por garantía'),
@@ -1498,6 +1521,14 @@ class SalidaEquipo(models.Model):
         default=Decimal('0.00'),
         verbose_name='Valor cobrado en esta salida (USD)',
         help_text='Si ya está totalmente pagado, puedes dejar 0.'
+    )
+    valor_acordado_revision = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        verbose_name='Valor acordado por revisión (USD)',
+        help_text='Solo aplica cuando el estado de salida es Revisión.',
     )
     metodo_pago_final = models.CharField(
         max_length=20, choices=METODOS_PAGO_FINAL, default='efectivo',
@@ -1699,6 +1730,7 @@ class SalidaEquipo(models.Model):
             'retirado',
             'cliente_no_acepta',
             'no_reparable',
+            'revision',
         )
 
     @property
@@ -1805,6 +1837,8 @@ class SalidaEquipo(models.Model):
                     self.ingreso.subestado_entregado = 'sin_solucion'
                 elif self.estado_reparacion == 'pendiente_retiro':
                     self.ingreso.subestado_entregado = 'pendiente_retiro'
+                elif self.estado_reparacion == 'revision':
+                    self.ingreso.subestado_entregado = 'revision'
             self.ingreso.save()
         super().save(*args, **kwargs)
 

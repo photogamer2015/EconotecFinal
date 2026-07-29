@@ -192,7 +192,7 @@ def pagos_export(request):
         ws.cell(row=row, column=4, value=ing.cliente.cedula)
         ws.cell(row=row, column=5, value=ing.tipo_equipo_display)
         ws.cell(row=row, column=6, value=ing.marca)
-        ws.cell(row=row, column=7, value=float(ing.valor_acordado or 0))
+        ws.cell(row=row, column=7, value=float(ing.valor_efectivo_a_cobrar or 0))
         
         diag_val = float(ing.valor_diagnostico or 0) if ing.diagnostico_inmediato == 'si' else 0.0
         ws.cell(row=row, column=8, value=diag_val)

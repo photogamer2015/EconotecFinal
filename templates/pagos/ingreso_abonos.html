@@ -45,8 +45,12 @@
 <!-- Resumen de pagos -->
 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 24px;">
     <div class="card-box" style="border-left: 4px solid var(--primary); padding: 16px;">
-        <div style="font-size: 11px; color: #888; text-transform: uppercase;">Valor acordado</div>
-        <div style="font-size: 22px; font-weight: 800; color: var(--secondary); margin-top: 4px;">{{ ingreso.valor_acordado|dinero_signo }}</div>
+        <div style="font-size: 11px; color: #888; text-transform: uppercase;">
+            {% if ingreso.salida.estado_reparacion == 'revision' %}Valor revisión{% else %}Valor acordado{% endif %}
+        </div>
+        <div style="font-size: 22px; font-weight: 800; color: var(--secondary); margin-top: 4px;">
+            {% if ingreso.salida.estado_reparacion == 'revision' %}{{ ingreso.valor_efectivo_a_cobrar|dinero_signo }}{% else %}{{ ingreso.valor_acordado|dinero_signo }}{% endif %}
+        </div>
     </div>
     {% if ingreso.diagnostico_inmediato == 'si' and ingreso.valor_diagnostico > 0 %}
     <div class="card-box" style="border-left: 4px solid #f39c12; padding: 16px;">

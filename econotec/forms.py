@@ -62,6 +62,7 @@ class InventarioItemForm(forms.ModelForm):
         fields = [
             'producto', 'marca', 'modelo', 'serie', 'estado',
             'causa_no_disponible', 'cantidad', 'costo', 'ubicacion',
+            'observacion',
         ]
         widgets = {
             'producto': forms.TextInput(attrs={
@@ -100,13 +101,19 @@ class InventarioItemForm(forms.ModelForm):
                 'placeholder': '0.00',
             }),
             'ubicacion': forms.Select(attrs={'class': 'form-input'}),
+            'observacion': forms.Textarea(attrs={
+                'class': 'form-input',
+                'rows': 3,
+                'placeholder': 'Observación opcional del inventario',
+            }),
         }
 
     def __init__(self, *args, sede_slug='', **kwargs):
         super().__init__(*args, **kwargs)
         self.fields['serie'].required = False
+        self.fields['observacion'].required = False
         for field_name, field in self.fields.items():
-            if field_name not in {'serie', 'causa_no_disponible'}:
+            if field_name not in {'serie', 'causa_no_disponible', 'observacion'}:
                 field.required = True
         self.fields['causa_no_disponible'].required = False
         if sede_slug == 'guayaquil':
@@ -1035,6 +1042,7 @@ class AbonoForm(forms.ModelForm):
 
 class SalidaEquipoForm(forms.ModelForm):
     ESTADOS_REVISION_PENDIENTE = ('cliente_no_acepta', 'no_reparable')
+    ESTADO_REVISION = 'revision'
 
     reporte_tecnico = forms.CharField(
         widget=forms.Textarea(attrs={
@@ -1067,6 +1075,7 @@ class SalidaEquipoForm(forms.ModelForm):
         fields = [
             'fecha_salida', 'estado_reparacion', 'tecnico_reparo',
             'observaciones',
+            'valor_acordado_revision',
             'valor_final_cobrado', 'metodo_pago_final', 'numero_recibo',
             'banco', 'banco_otro', 'tarjeta_app', 'comprobante_url',
             'monto_1', 'metodo_1', 'banco_1',
@@ -1088,6 +1097,12 @@ class SalidaEquipoForm(forms.ModelForm):
             }),
             'valor_final_cobrado': forms.NumberInput(attrs={
                 'class': 'form-input', 'step': '0.01', 'min': '0',
+            }),
+            'valor_acordado_revision': forms.NumberInput(attrs={
+                'class': 'form-input',
+                'step': '0.01',
+                'min': '0',
+                'placeholder': 'Ej.: 20.00',
             }),
             'metodo_pago_final': forms.Select(attrs={'class': 'form-input'}),
             'banco': forms.Select(attrs={'class': 'form-input', 'id': 'id_banco'}),
@@ -1154,6 +1169,13 @@ class SalidaEquipoForm(forms.ModelForm):
                     ):
                         self.initial['valor_final_cobrado'] = notificacion.valor_acordado
                         self.initial['metodo_pago_final'] = 'sin_pago'
+                    elif (
+                        notificacion
+                        and self.instance.estado_reparacion == self.ESTADO_REVISION
+                        and notificacion.tipo == NotificacionAsesora.TIPO_REVISION_PENDIENTE
+                        and not self.instance.valor_acordado_revision
+                    ):
+                        self.initial['valor_acordado_revision'] = notificacion.valor_acordado
                 if notificacion:
                     self.initial['asesora_notificacion'] = notificacion.asesora_id
                     self.initial['mensaje_notificacion'] = notificacion.mensaje
@@ -1257,14 +1279,41 @@ class SalidaEquipoForm(forms.ModelForm):
             if self.instance and self.instance.ingreso and self.instance.ingreso.diferencia > 0:
                 self.add_error('estado_reparacion', f'No se puede marcar como retirado porque hay un saldo pendiente de ${self.instance.ingreso.diferencia}. El cliente debe pagar todo primero.')
             cleaned['valor_final_cobrado'] = Decimal('0.00')
+            cleaned['valor_acordado_revision'] = None
             self._limpiar_pago_pendiente(cleaned)
             return cleaned
                 
         metodo = cleaned.get('metodo_pago_final')
         valor = cleaned.get('valor_final_cobrado') or Decimal('0.00')
+        valor_revision = cleaned.get('valor_acordado_revision') or Decimal('0.00')
         banco = cleaned.get('banco')
         banco_otro = cleaned.get('banco_otro')
         tarjeta_app = cleaned.get('tarjeta_app')
+
+        if estado_reparacion == self.ESTADO_REVISION:
+            if valor_revision < Decimal('1.00'):
+                self.add_error(
+                    'valor_acordado_revision',
+                    'Ingresa el valor acordado por revisión. Debe ser de $1.00 o más.'
+                )
+            if not cleaned.get('asesora_notificacion'):
+                self.add_error(
+                    'asesora_notificacion',
+                    'Selecciona la asesora que recibirá esta notificación.'
+                )
+            self._registrar_notificacion_pendiente(
+                NotificacionAsesora.TIPO_REVISION_PENDIENTE,
+                valor_revision,
+                (
+                    'El equipo {codigo} salió en estado Revisión. '
+                    'Valor acordado pendiente: ${valor:.2f}. No entregar hasta registrar el pago.'
+                ),
+            )
+            cleaned['valor_final_cobrado'] = Decimal('0.00')
+            self._limpiar_pago_pendiente(cleaned)
+            return cleaned
+
+        cleaned['valor_acordado_revision'] = None
 
         if estado_reparacion == 'garantia_fallos_adicionales':
             if valor <= 0:
@@ -1292,7 +1341,7 @@ class SalidaEquipoForm(forms.ModelForm):
             if valor < Decimal('1.00'):
                 self.add_error(
                     'valor_final_cobrado',
-                    'El valor de revisión pendiente debe ser de $1.00 o más.'
+                    'El valor pendiente debe ser de $1.00 o más.'
                 )
             if not cleaned.get('asesora_notificacion'):
                 self.add_error(
@@ -1388,6 +1437,21 @@ class SalidaEquipoForm(forms.ModelForm):
             salida.monto_2 = None
             salida.metodo_2 = ''
             salida.banco_2 = ''
+        elif salida.estado_reparacion == self.ESTADO_REVISION:
+            salida.valor_acordado_revision = self.cleaned_data.get('valor_acordado_revision') or Decimal('0.00')
+            salida.valor_final_cobrado = Decimal('0.00')
+            salida.metodo_pago_final = 'sin_pago'
+            salida.numero_recibo = ''
+            salida.banco = ''
+            salida.banco_otro = ''
+            salida.tarjeta_app = ''
+            salida.comprobante_url = ''
+            salida.monto_1 = None
+            salida.metodo_1 = ''
+            salida.banco_1 = ''
+            salida.monto_2 = None
+            salida.metodo_2 = ''
+            salida.banco_2 = ''
         elif (
             salida.estado_reparacion in self.ESTADOS_REVISION_PENDIENTE
             and self.notificacion_asesora_tipo == NotificacionAsesora.TIPO_REVISION_PENDIENTE
@@ -1405,6 +1469,8 @@ class SalidaEquipoForm(forms.ModelForm):
             salida.monto_2 = None
             salida.metodo_2 = ''
             salida.banco_2 = ''
+        else:
+            salida.valor_acordado_revision = None
 
         salida.cliente_recibe_conforme = 'si' if salida.es_positivo else 'no'
         reporte = self.cleaned_data.get('reporte_tecnico')

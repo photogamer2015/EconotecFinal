@@ -76,14 +76,158 @@ def ingreso_qr_png(request, pk):
 @tecnico_requerido
 def salida_imprimir(request, pk):
     salida = get_object_or_404(
-        SalidaEquipo.objects.select_related('ingreso', 'ingreso__cliente'),
+        SalidaEquipo.objects.select_related('ingreso', 'ingreso__cliente', 'tecnico_reparo')
+        .prefetch_related('ingreso__abonos'),
         pk=pk,
     )
     return render(request, 'salidas/imprimir.html', {
         'salida': salida,
         'ingreso': salida.ingreso,
         'cliente': salida.ingreso.cliente,
+        'mensaje_estado_salida': _mensaje_estado_salida(salida),
+        'pagos_detallados': _pagos_detallados_salida(salida),
     })
+
+
+def _money_text(valor):
+    valor = valor if valor is not None else Decimal('0.00')
+    return f'$ {valor:.2f}'
+
+
+def _detalle_partes_mixtas(partes):
+    detalle = []
+    for parte in partes or []:
+        detalle.append(
+            f"Parte {parte['numero']}: {_money_text(parte['monto'])} · {parte['detalle']}"
+        )
+    return '; '.join(detalle)
+
+
+def _detalle_pago_simple(obj, metodo, banco_attr='banco', banco_otro_attr='banco_otro',
+                         tarjeta_attr='tarjeta_app', comprobante_attr='comprobante_url'):
+    detalles = []
+    if metodo == 'transferencia':
+        banco = getattr(obj, banco_otro_attr, '') if getattr(obj, banco_attr, '') == 'otro' else ''
+        if not banco:
+            getter = getattr(obj, f'get_{banco_attr}_display', None)
+            banco = getter() if getter else getattr(obj, banco_attr, '')
+        if banco:
+            detalles.append(f'Banco: {banco}')
+    elif metodo == 'tarjeta':
+        getter = getattr(obj, f'get_{tarjeta_attr}_display', None)
+        tarjeta = getter() if getter and getattr(obj, tarjeta_attr, '') else getattr(obj, tarjeta_attr, '')
+        if tarjeta:
+            detalles.append(f'Tarjeta/App: {tarjeta}')
+
+    comprobante = getattr(obj, comprobante_attr, '')
+    if comprobante:
+        detalles.append(f'Comprobante: {comprobante}')
+    return ' · '.join(detalles)
+
+
+def _pagos_detallados_salida(salida):
+    ingreso = salida.ingreso
+    pagos = []
+
+    if ingreso.diagnostico_inmediato == 'si' and ingreso.valor_diagnostico and ingreso.valor_diagnostico > 0:
+        detalle = _detalle_partes_mixtas(ingreso.diagnostico_mixto_partes)
+        if not detalle:
+            detalle = _detalle_pago_simple(
+                ingreso,
+                ingreso.diagnostico_metodo,
+                banco_attr='diagnostico_banco',
+                banco_otro_attr='diagnostico_banco_otro',
+                tarjeta_attr='diagnostico_tarjeta_app',
+                comprobante_attr='diagnostico_comprobante_url',
+            )
+        pagos.append({
+            'fecha': ingreso.fecha_ingreso,
+            'concepto': 'Diagnóstico rápido',
+            'monto': ingreso.valor_diagnostico,
+            'metodo': ingreso.get_diagnostico_metodo_display(),
+            'detalle': detalle or '—',
+        })
+
+    if ingreso.abono_anticipo and ingreso.abono_anticipo > 0:
+        detalle = _detalle_partes_mixtas(ingreso.anticipo_mixto_partes)
+        if not detalle:
+            detalle = _detalle_pago_simple(
+                ingreso,
+                ingreso.anticipo_metodo,
+                banco_attr='anticipo_banco',
+                banco_otro_attr='anticipo_banco_otro',
+                tarjeta_attr='anticipo_tarjeta_app',
+                comprobante_attr='anticipo_comprobante_url',
+            )
+        pagos.append({
+            'fecha': ingreso.fecha_ingreso,
+            'concepto': 'Anticipo / abono inicial',
+            'monto': ingreso.abono_anticipo,
+            'metodo': ingreso.get_anticipo_metodo_display(),
+            'detalle': detalle or '—',
+        })
+
+    for abono in ingreso.abonos.all().order_by('fecha', 'creado'):
+        detalle = _detalle_pago_simple(abono, abono.metodo)
+        extras = []
+        if abono.numero_recibo:
+            extras.append(f'Recibo: {abono.numero_recibo}')
+        if abono.bodegaje_decision == 'si':
+            extras.append(f'Incluye bodegaje: {_money_text(abono.bodegaje_monto_aplicado)}')
+        elif abono.bodegaje_decision == 'no':
+            extras.append('Bodegaje perdonado')
+        if abono.observaciones:
+            extras.append(abono.observaciones)
+        if extras:
+            detalle = ' · '.join(part for part in [detalle, *extras] if part)
+        pagos.append({
+            'fecha': abono.fecha,
+            'concepto': 'Abono registrado',
+            'monto': abono.monto,
+            'metodo': abono.get_metodo_display(),
+            'detalle': detalle or '—',
+        })
+
+    if salida.valor_final_cobrado and salida.valor_final_cobrado > 0:
+        detalle = _detalle_partes_mixtas(salida.pago_mixto_partes)
+        if not detalle:
+            detalle = _detalle_pago_simple(
+                salida,
+                salida.metodo_pago_final,
+                banco_attr='banco',
+                banco_otro_attr='banco_otro',
+                tarjeta_attr='tarjeta_app',
+                comprobante_attr='comprobante_url',
+            )
+        if salida.numero_recibo:
+            detalle = ' · '.join(part for part in [detalle, f'Recibo: {salida.numero_recibo}'] if part)
+        pagos.append({
+            'fecha': salida.fecha_salida,
+            'concepto': 'Pago en salida',
+            'monto': salida.valor_final_cobrado,
+            'metodo': salida.get_metodo_pago_final_display(),
+            'detalle': detalle or '—',
+        })
+
+    return pagos
+
+
+def _mensaje_estado_salida(salida):
+    estado = salida.estado_reparacion
+    if salida.cliente_ya_retiro or estado == 'retirado':
+        fecha = salida.fecha_retiro_real or salida.fecha_salida
+        return f'Su equipo fue retirado por el cliente el {fecha.strftime("%d/%m/%Y")}.'
+    if estado == 'revision':
+        return 'Su equipo está listo para su retiro en estado de revisión. Debe cancelar el saldo pendiente antes de retirarlo.'
+    if estado == 'no_reparable':
+        return 'Su equipo está listo para su retiro. No se pudo reparar.'
+    if estado == 'cliente_no_acepta':
+        return 'Su equipo está listo para su retiro. El cliente no aceptó la reparación.'
+    if estado == 'garantia':
+        return 'Su equipo ya está listo para su retiro por garantía.'
+    if estado == 'garantia_fallos_adicionales':
+        return 'Su equipo ya está listo para su retiro por garantía con fallos adicionales pendientes.'
+    return 'Su equipo ya está listo para su retiro.'
 
 
 # ═════════════════════════════════════════════════════════════════
@@ -406,6 +550,9 @@ def _venta_productos_pdf_items(ingreso):
             detalles.append(f'Modelo: {modelo}')
         if serie:
             detalles.append(f'Serie: {serie}')
+        observacion = (relacion.observacion or '').strip()
+        if observacion:
+            detalles.append(f'Observación: {observacion}')
 
         items.append({
             'titulo': f'{relacion.cantidad} x {item.producto}',
@@ -808,11 +955,15 @@ def ingreso_pdf(request, pk):
 def salida_pdf(request, pk):
     """Genera el PDF del Acta de Salida del equipo."""
     salida = get_object_or_404(
-        SalidaEquipo.objects.select_related('ingreso', 'ingreso__cliente'),
+        SalidaEquipo.objects.select_related('ingreso', 'ingreso__cliente', 'tecnico_reparo')
+        .prefetch_related('ingreso__abonos'),
         pk=pk,
     )
     ingreso = salida.ingreso
     cliente = ingreso.cliente
+    tecnico_nombre = salida.tecnico_reparo_nombre or ingreso.tecnico_encargado_nombre
+    pagos_detallados = _pagos_detallados_salida(salida)
+    mensaje_estado = _mensaje_estado_salida(salida)
     buf = BytesIO()
     c, width, height = _setup_pdf(buf, f'Acta de Salida {ingreso.codigo_equipo}')
 
@@ -837,11 +988,12 @@ def salida_pdf(request, pk):
                      f'{ingreso.tipo_equipo_display} — {ingreso.marca} {ingreso.modelo_serie_detalle}',
                      label_w=60, line_w=line_w + 60)
     y -= 22
-    _draw_label_value(c, margen, y, 'Técnico que reparó:', ingreso.tecnico_encargado_nombre,
+    _draw_label_value(c, margen, y, 'Técnico que reparó:', tecnico_nombre,
                      label_w=130, line_w=line_w - 10)
     y -= 30
 
     from reportlab.lib.colors import Color, black
+    from reportlab.lib.utils import simpleSplit
     naranja = Color(*ECO_NARANJA)
 
     # ── Estado de la reparación (destacado) ──
@@ -853,6 +1005,8 @@ def salida_pdf(request, pk):
     # Mostrar las 5 opciones con marcado
     estados = [
         ('pendiente_retiro', 'Reparado — pendiente de retiro'),
+        ('retirado', 'Retirado por el cliente'),
+        ('revision', 'Revisión'),
         ('reparado_parcial', 'Reparado parcialmente'),
         ('no_reparable', 'No se pudo reparar'),
         ('cliente_no_acepta', 'Cliente no quiso reparar'),
@@ -877,7 +1031,15 @@ def salida_pdf(request, pk):
     # ── Problema reportado (del ingreso) ──
     y = _draw_paragraph(c, margen, y, 'PROBLEMA REPORTADO ORIGINALMENTE',
                        ingreso.problema_reportado, max_w=500, lines=2)
-    y -= 8
+    y -= 4
+
+    c.setStrokeColor(naranja)
+    c.setFillColorRGB(1, 0.97, 0.94)
+    c.roundRect(margen, y - 24, 500, 24, 4, stroke=1, fill=1)
+    c.setFillColor(black)
+    c.setFont('Helvetica-Bold', 8.5)
+    c.drawCentredString(margen + 250, y - 15, mensaje_estado[:128])
+    y -= 36
 
     # ── Reporte del técnico (del ingreso) ──
     if ingreso.reporte_tecnico:
@@ -896,17 +1058,16 @@ def salida_pdf(request, pk):
         texto = str(valor or '—')
         return texto if len(texto) <= max_len else f'{texto[:max_len - 1]}…'
 
-    c.setStrokeColor(naranja)
-    c.setLineWidth(0.8)
-    c.rect(margen, y - 62, 500, 62, stroke=1, fill=0)
-    c.setFillColor(naranja)
-    c.setFont('Helvetica-Bold', 10)
-    c.drawString(margen + 8, y - 14, 'FACTURA REALIZADA')
-    c.setFillColor(black)
-    c.setFont('Helvetica-Bold', 9)
-    c.drawRightString(margen + 490, y - 14, 'SI' if salida.factura_realizada == 'si' else 'NO')
-
     if salida.factura_realizada == 'si':
+        c.setStrokeColor(naranja)
+        c.setLineWidth(0.8)
+        c.rect(margen, y - 62, 500, 62, stroke=1, fill=0)
+        c.setFillColor(naranja)
+        c.setFont('Helvetica-Bold', 10)
+        c.drawString(margen + 8, y - 14, 'FACTURA REALIZADA')
+        c.setFillColor(black)
+        c.setFont('Helvetica-Bold', 9)
+        c.drawRightString(margen + 490, y - 14, 'SI')
         c.setFillColor(naranja)
         c.setFont('Helvetica-Bold', 7.5)
         c.drawString(margen + 8, y - 32, 'NOMBRES / RAZÓN SOCIAL')
@@ -917,11 +1078,7 @@ def salida_pdf(request, pk):
         c.drawString(margen + 8, y - 47, _clip_factura(salida.factura_nombres, 38))
         c.drawString(margen + 235, y - 47, _clip_factura(salida.factura_cedula, 18))
         c.drawString(margen + 350, y - 47, _clip_factura(salida.factura_correo, 30))
-    else:
-        c.setFillColor(black)
-        c.setFont('Helvetica', 8)
-        c.drawString(margen + 8, y - 38, 'No se registró factura para esta salida.')
-    y -= 78
+        y -= 78
 
     # ── Cierre económico ──
     c.setFillColor(naranja)
@@ -929,38 +1086,91 @@ def salida_pdf(request, pk):
     c.drawString(margen, y, 'CIERRE ECONÓMICO')
     y -= 18
 
-    rows_cierre = [
-        ('Valor acordado de la reparación:', f'$ {ingreso.valor_acordado:.2f}' if ingreso.valor_acordado is not None else '—'),
-        ('Total abonado previamente:', f'$ {ingreso.total_abonado:.2f}'),
-        ('Valor cobrado en esta entrega:', f'$ {salida.valor_final_cobrado:.2f}'),
-        ('Método de pago final:', salida.get_metodo_pago_final_display()),
-    ]
-    if salida.metodo_pago_final == 'mixto':
-        rows_cierre.extend([
-            ('Método 1:', f'{salida.get_metodo_1_display()} ($ {salida.monto_1:.2f})'),
-            ('Método 2:', f'{salida.get_metodo_2_display()} ($ {salida.monto_2:.2f})'),
-        ])
-    for label, val in rows_cierre:
-        c.setFillColor(naranja)
-        c.setFont('Helvetica-Bold', 9)
-        c.drawString(margen, y, label)
+    c.setStrokeColor(naranja)
+    c.setLineWidth(0.8)
+    c.roundRect(margen, y - 34, 500, 34, 4, stroke=1, fill=0)
+    c.setFillColor(naranja)
+    c.setFont('Helvetica-Bold', 11)
+    c.drawString(margen + 10, y - 21, 'Su valor pendiente es:')
+    c.setFillColor(black)
+    c.setFont('Helvetica-Bold', 13)
+    c.drawRightString(margen + 490, y - 21, _money_text(ingreso.diferencia))
+    y -= 48
+
+    if pagos_detallados:
         c.setFillColor(black)
-        c.setFont('Helvetica', 9)
-        c.drawString(margen + 220, y, val)
-        y -= 16
+        c.setFont('Helvetica-Bold', 8.5)
+        c.drawString(margen, y, 'Pagos / abonos registrados')
+        y -= 12
+        headers = [('Fecha', 0), ('Concepto', 58), ('Valor', 178), ('Método', 248), ('Detalle', 350)]
+        c.setFillColor(naranja)
+        c.setFont('Helvetica-Bold', 7.5)
+        for label, offset in headers:
+            c.drawString(margen + offset, y, label)
+        y -= 6
+        c.setStrokeColor(Color(0.88, 0.72, 0.6))
+        c.line(margen, y, margen + 500, y)
+        y -= 8
+        c.setFillColor(black)
+        font_name = 'Helvetica'
+        font_size = 6.8
+        leading = 8
+        c.setFont(font_name, font_size)
 
-    y -= 10
+        def _cell_lines(texto, ancho, max_lines=3):
+            lineas = simpleSplit(str(texto or '—'), font_name, font_size, ancho)
+            if not lineas:
+                return ['—']
+            if len(lineas) > max_lines:
+                lineas = lineas[:max_lines]
+                lineas[-1] = f'{lineas[-1].rstrip()[:-1]}…' if len(lineas[-1].rstrip()) > 1 else '…'
+            return lineas
 
+        for pago in pagos_detallados[:6]:
+            fecha_lineas = [pago['fecha'].strftime('%d/%m/%Y')]
+            concepto_lineas = _cell_lines(pago['concepto'], 110, max_lines=2)
+            monto_lineas = [_money_text(pago['monto'])]
+            metodo_lineas = _cell_lines(pago['metodo'], 92, max_lines=2)
+            detalle_lineas = _cell_lines(pago['detalle'], 145, max_lines=3)
+            filas = max(
+                len(fecha_lineas),
+                len(concepto_lineas),
+                len(monto_lineas),
+                len(metodo_lineas),
+                len(detalle_lineas),
+            )
 
-    y -= 18
+            for idx, texto in enumerate(fecha_lineas):
+                c.drawString(margen, y - (idx * leading), texto)
+            for idx, texto in enumerate(concepto_lineas):
+                c.drawString(margen + 58, y - (idx * leading), texto)
+            for idx, texto in enumerate(monto_lineas):
+                c.drawString(margen + 178, y - (idx * leading), texto)
+            for idx, texto in enumerate(metodo_lineas):
+                c.drawString(margen + 248, y - (idx * leading), texto)
+            for idx, texto in enumerate(detalle_lineas):
+                c.drawString(margen + 350, y - (idx * leading), texto)
+
+            y -= (filas * leading) + 5
+        if len(pagos_detallados) > 6:
+            c.setFont('Helvetica-Oblique', 6.8)
+            c.drawString(margen, y, f'Hay {len(pagos_detallados) - 6} pago(s) adicional(es) en el historial de abonos.')
+            y -= 10
+    else:
+        c.setFillColor(black)
+        c.setFont('Helvetica', 8)
+        c.drawString(margen, y, 'Este equipo no registra pagos ni abonos previos.')
+        y -= 12
+
+    y -= 48
     # ── Firmas ──
     c.setStrokeColor(Color(0.4, 0.4, 0.4))
-    c.line(margen, y, margen + 200, y)
-    c.line(margen + 310, y, margen + 510, y)
+    firma_x = margen + 145
+    _draw_static_image(c, 'firma_tecnico_recibe.png', firma_x + 52, y + 4, 112, 28)
+    c.line(firma_x, y, firma_x + 220, y)
     c.setFillColor(naranja)
     c.setFont('Helvetica-Bold', 8)
-    c.drawString(margen + 50, y - 10, 'FIRMA DEL CLIENTE')
-    c.drawString(margen + 350, y - 10, 'FIRMA DEL TÉCNICO')
+    c.drawCentredString(firma_x + 110, y - 10, 'FIRMA DEL TÉCNICO')
 
     c.showPage()
     c.save()

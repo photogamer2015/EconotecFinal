@@ -86,6 +86,8 @@ def _texto_salida_bitacora(salida):
         return f'{base} #{ingreso.codigo_equipo} cliente no quiso reparar.'
     if salida.estado_reparacion == 'no_reparable':
         return f'{base} #{ingreso.codigo_equipo} no se pudo reparar.'
+    if salida.estado_reparacion == 'revision':
+        return f'{base} #{ingreso.codigo_equipo} salió en revisión.'
     return f'{base} #{ingreso.codigo_equipo} {salida.get_estado_reparacion_display()}.'
 
 

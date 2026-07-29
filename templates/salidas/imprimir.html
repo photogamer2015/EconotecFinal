@@ -89,6 +89,83 @@
         .closing-row:last-child { border-bottom: none; font-weight: 800; color: var(--naranja); padding-top: 8px; }
         .closing-row .lbl { color: #444; }
         .closing-row .val { font-family: 'Courier New', monospace; font-weight: 700; }
+        .status-notice {
+            margin-top: 8px;
+            border: 1px solid var(--naranja);
+            border-radius: 6px;
+            background: #fff8f3;
+            padding: 8px 10px;
+            color: #1f2937;
+            font-size: 12px;
+            font-weight: 800;
+            text-align: center;
+        }
+        .pending-total {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            gap: 16px;
+            border-bottom: 1px solid #f2c19a;
+            padding-bottom: 8px;
+            margin-bottom: 8px;
+        }
+        .pending-total .lbl {
+            color: var(--naranja);
+            font-size: 13px;
+            font-weight: 900;
+        }
+        .pending-total .val {
+            color: #111827;
+            font-family: 'Courier New', monospace;
+            font-size: 15px;
+            font-weight: 900;
+        }
+        .payments-title {
+            color: #444;
+            font-size: 10px;
+            font-weight: 900;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+            margin: 8px 0 5px;
+        }
+        .payments-table {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0;
+            table-layout: fixed;
+            font-size: 9px;
+        }
+        .payments-table th:nth-child(1), .payments-table td:nth-child(1) { width: 12%; }
+        .payments-table th:nth-child(2), .payments-table td:nth-child(2) { width: 23%; }
+        .payments-table th:nth-child(3), .payments-table td:nth-child(3) { width: 13%; }
+        .payments-table th:nth-child(4), .payments-table td:nth-child(4) { width: 19%; }
+        .payments-table th:nth-child(5), .payments-table td:nth-child(5) { width: 33%; }
+        .payments-table th {
+            color: var(--naranja);
+            border-bottom: 1px solid #f2c19a;
+            text-align: left;
+            padding: 3px 3px 7px;
+            font-weight: 900;
+        }
+        .payments-table td {
+            border-bottom: 1px dashed #e5e7eb;
+            padding: 3px 3px 4px;
+            vertical-align: top;
+            line-height: 1.25;
+            overflow-wrap: anywhere;
+        }
+        .payments-table tbody tr:first-child td { padding-top: 7px; }
+        .payments-table .money {
+            white-space: nowrap;
+            font-family: 'Courier New', monospace;
+            font-weight: 800;
+        }
+        .no-payments {
+            color: #555;
+            font-size: 10px;
+            font-weight: 700;
+            padding-top: 4px;
+        }
 
         .invoice-box {
             border: 1.3px solid var(--naranja);
@@ -156,14 +233,31 @@
             font-weight: 700;
         }
 
-        .sig-grid {
-            margin-top: 36px;
-            display: grid; grid-template-columns: 1fr 1fr; gap: 32px;
+        .sig-single {
+            clear: both;
+            margin-top: 72px;
             text-align: center;
+            page-break-inside: avoid;
+        }
+        .sig-image-wrap {
+            height: 38px;
+            display: flex;
+            align-items: flex-end;
+            justify-content: center;
+            margin-bottom: 2px;
+        }
+        .tech-signature-img {
+            max-width: 190px;
+            max-height: 36px;
+            object-fit: contain;
+            display: block;
         }
         .sig-line {
-            border-top: 1px solid #555; padding-top: 6px;
+            border-top: 1px solid #555;
+            padding-top: 6px;
             font-size: 9px; color: var(--naranja); font-weight: 700;
+            width: 260px;
+            margin: 0 auto;
         }
 
         @media print {
@@ -210,14 +304,22 @@
     <div class="field-line"><span class="label">WhatsApp:</span><span class="value">{{ cliente.whatsapp }}</span></div>
     <div class="field-line"><span class="label">Equipo:</span><span class="value">{{ ingreso.tipo_equipo_display }} — {{ ingreso.marca }} {{ ingreso.modelo_serie_detalle }}</span></div>
     <div class="field-line"><span class="label">Fecha de Ingreso:</span><span class="value">{{ ingreso.fecha_ingreso|date:"d/m/Y" }}</span></div>
-    <div class="field-line"><span class="label">Técnico que reparó:</span><span class="value">{{ ingreso.tecnico_encargado_nombre }}</span></div>
+    <div class="field-line"><span class="label">Técnico que reparó:</span><span class="value">{{ salida.tecnico_reparo_nombre|default:ingreso.tecnico_encargado_nombre }}</span></div>
 
     <!-- ESTADO DE LA SALIDA -->
     <div class="section-header">ESTADO DE LA SALIDA</div>
     <div class="estado-grid">
         <div class="checkbox-item-l {% if salida.estado_reparacion == 'pendiente_retiro' %}activo{% endif %}">
             <span class="check-box">{% if salida.estado_reparacion == 'pendiente_retiro' %}X{% endif %}</span>
-            ✅ RETIRADO / ENTREGADO CONFORME
+            ⏳ REPARADO — PENDIENTE DE RETIRO
+        </div>
+        <div class="checkbox-item-l {% if salida.estado_reparacion == 'retirado' %}activo{% endif %}">
+            <span class="check-box">{% if salida.estado_reparacion == 'retirado' %}X{% endif %}</span>
+            ✅ RETIRADO POR EL CLIENTE
+        </div>
+        <div class="checkbox-item-l {% if salida.estado_reparacion == 'revision' %}activo{% endif %}">
+            <span class="check-box">{% if salida.estado_reparacion == 'revision' %}X{% endif %}</span>
+            🔎 REVISIÓN
         </div>
         <div class="checkbox-item-l {% if salida.estado_reparacion == 'reparado_parcial' %}activo{% endif %}">
             <span class="check-box">{% if salida.estado_reparacion == 'reparado_parcial' %}X{% endif %}</span>
@@ -244,6 +346,7 @@
     <!-- PROBLEMA REPORTADO (del ingreso) -->
     <div class="section-header">PROBLEMA REPORTADO ORIGINALMENTE</div>
     <div class="underlined-block">{{ ingreso.problema_reportado|linebreaksbr }}</div>
+    <div class="status-notice">{{ mensaje_estado_salida }}</div>
 
     <!-- REPORTE DEL TÉCNICO (del ingreso) -->
     {% if ingreso.reporte_tecnico %}
@@ -257,26 +360,13 @@
     <div class="underlined-block">{{ salida.observaciones|linebreaksbr }}</div>
     {% endif %}
 
-    <!-- MÉTODO DE PAGO -->
-    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin-top: 8px;">
-        <div class="field-line"><span class="label">Método pago:</span><span class="value">{{ salida.get_metodo_pago_final_display }}</span></div>
-        {% if salida.metodo_pago_final == 'mixto' %}
-        <div class="field-line"><span class="label">Método 1:</span><span class="value">{{ salida.get_metodo_1_display }} ({{ salida.monto_1|dinero_signo }})</span></div>
-        <div class="field-line"><span class="label">Método 2:</span><span class="value">{{ salida.get_metodo_2_display }} ({{ salida.monto_2|dinero_signo }})</span></div>
-        {% endif %}
-    </div>
-
+    {% if salida.factura_realizada == 'si' %}
     <!-- FACTURA -->
     <div class="invoice-box">
         <div class="invoice-head">
             <span>FACTURA REALIZADA</span>
-            {% if salida.factura_realizada == 'si' %}
-                <span class="invoice-status">Sí</span>
-            {% else %}
-                <span class="invoice-status no">No</span>
-            {% endif %}
+            <span class="invoice-status">Sí</span>
         </div>
-        {% if salida.factura_realizada == 'si' %}
         <div class="invoice-grid">
             <div class="invoice-item">
                 <span class="lbl">Nombres / Razón Social</span>
@@ -291,58 +381,57 @@
                 <span class="val">{{ salida.factura_correo|default:"—" }}</span>
             </div>
         </div>
-        {% else %}
-        <div class="invoice-empty">No se registró factura para esta salida.</div>
-        {% endif %}
     </div>
+    {% endif %}
 
     <!-- CIERRE ECONÓMICO -->
     <div class="section-header">CIERRE ECONÓMICO</div>
     <div class="closing-box">
-        {% if salida.estado_reparacion == 'cliente_no_acepta' or salida.estado_reparacion == 'no_reparable' %}
-        <div class="closing-row">
-            <span class="lbl">Valor acordado original (no aplica):</span>
-            <span class="val" style="text-decoration: line-through; color:#999;">{{ ingreso.valor_acordado|dinero_signo }}</span>
+        <div class="pending-total">
+            <span class="lbl">Su valor pendiente es:</span>
+            <span class="val">{{ ingreso.diferencia|dinero_signo }}</span>
         </div>
-        <div class="closing-row">
-            <span class="lbl">Valor del diagnóstico (lo que se cobra):</span>
-            <span class="val">{{ ingreso.valor_diagnostico|dinero_signo }}</span>
-        </div>
+
+        {% if pagos_detallados %}
+            <div class="payments-title">Pagos / abonos registrados</div>
+            <table class="payments-table">
+                <thead>
+                    <tr>
+                        <th>Fecha</th>
+                        <th>Concepto</th>
+                        <th>Valor</th>
+                        <th>Método</th>
+                        <th>Detalle</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for pago in pagos_detallados %}
+                    <tr>
+                        <td>{{ pago.fecha|date:"d/m/Y" }}</td>
+                        <td>{{ pago.concepto }}</td>
+                        <td class="money">{{ pago.monto|dinero_signo }}</td>
+                        <td>{{ pago.metodo }}</td>
+                        <td>{{ pago.detalle }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
         {% else %}
-        <div class="closing-row">
-            <span class="lbl">Valor acordado de la reparación:</span>
-            <span class="val">{{ ingreso.valor_acordado|dinero_signo }}</span>
-        </div>
-        {% if ingreso.diagnostico_inmediato == 'si' and ingreso.valor_diagnostico > 0 %}
-        <div class="closing-row">
-            <span class="lbl">Adicional (Diagnóstico Rápido):</span>
-            <span class="val">{{ ingreso.valor_diagnostico|dinero_signo }}</span>
-        </div>
+            <div class="no-payments">Este equipo no registra pagos ni abonos previos.</div>
         {% endif %}
-        {% endif %}
-        <div class="closing-row">
-            <span class="lbl">Anticipo / abono inicial:</span>
-            <span class="val">{{ ingreso.abono_anticipo|dinero_signo }}</span>
-        </div>
-        <div class="closing-row">
-            <span class="lbl">Total abonado previamente (incluye anticipo):</span>
-            <span class="val">{{ ingreso.total_abonado|dinero_signo }}</span>
-        </div>
-        <div class="closing-row">
-            <span class="lbl">Valor cobrado en esta entrega:</span>
-            <span class="val">{{ salida.valor_final_cobrado|dinero_signo }}</span>
-        </div>
     </div>
 
     <!-- TÉCNICO QUE GESTIONÓ LA REPARACIÓN -->
     <div style="margin-top: 14px; padding: 10px 14px; background: #fff8f3; border-radius: 6px; font-size: 11px; color: #555;">
         <strong>Técnico responsable:</strong>
-        {{ ingreso.tecnico_encargado_nombre|default:"— Sin asignar —" }}
+        {{ salida.tecnico_reparo_nombre|default:ingreso.tecnico_encargado_nombre|default:"— Sin asignar —" }}
     </div>
 
     <!-- FIRMAS -->
-    <div class="sig-grid">
-        <div class="sig-line">FIRMA DEL CLIENTE</div>
+    <div class="sig-single">
+        <div class="sig-image-wrap">
+            <img src="{% static 'firma_tecnico_recibe.png' %}" alt="Firma del técnico" class="tech-signature-img">
+        </div>
         <div class="sig-line">FIRMA DEL TÉCNICO</div>
     </div>
 

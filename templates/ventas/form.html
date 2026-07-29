@@ -226,6 +226,56 @@
         font-size: 12px;
         line-height: 1.35;
     }
+    .venta-inventario-observacion {
+        margin-top: 10px;
+        padding: 10px;
+        border: 1px dashed rgba(249, 118, 24, 0.28);
+        border-radius: 9px;
+        background: rgba(255, 248, 243, 0.78);
+        display: grid;
+        gap: 8px;
+    }
+    .venta-observacion-options {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        align-items: center;
+    }
+    .venta-observacion-option {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        min-height: 34px;
+        padding: 6px 9px;
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        background: #ffffff;
+        color: var(--text-main);
+        font-size: 12px;
+        font-weight: 850;
+        cursor: pointer;
+    }
+    .venta-observacion-option input {
+        width: 14px;
+        height: 14px;
+        accent-color: var(--primary);
+    }
+    .venta-observacion-input {
+        display: none;
+        width: 100%;
+        min-height: 64px;
+        resize: vertical;
+        font-size: 12px;
+    }
+    .venta-observacion-input.is-visible {
+        display: block;
+    }
+    .venta-observacion-status {
+        color: var(--text-muted);
+        font-size: 11px;
+        font-weight: 800;
+        min-height: 14px;
+    }
     .venta-inventario-card-foot {
         display: flex;
         justify-content: space-between;
@@ -740,6 +790,8 @@
         .venta-inventario-card-foot { align-items: stretch; flex-direction: column; }
         .venta-inventario-card-actions { justify-content: stretch; }
         .venta-inventario-card-actions button { flex: 1 1 auto; min-height: 40px; }
+        .venta-observacion-options { display: grid; grid-template-columns: 1fr; }
+        .venta-observacion-option { width: 100%; }
         .firma-opciones { grid-template-columns: 1fr; }
         .firma-controls { display: grid; grid-template-columns: 1fr; }
         #btn-abrir-firma { width: 100%; min-height: 48px; }
@@ -1523,6 +1575,7 @@
         var catalogUrl = "{% url 'econotec:venta_inventario_catalogo' %}";
         var addUrl = {% if venta %}"{% url 'econotec:venta_inventario_agregar' pk=venta.pk %}"{% else %}null{% endif %};
         var updateQuantityUrlBase = {% if venta %}"{% url 'econotec:venta_inventario_actualizar_cantidad' pk=venta.pk relacion_pk=0 %}"{% else %}null{% endif %};
+        var updateObservationUrlBase = {% if venta %}"{% url 'econotec:venta_inventario_actualizar_observacion' pk=venta.pk relacion_pk=0 %}"{% else %}null{% endif %};
         var removeUrlBase = {% if venta %}"{% url 'econotec:venta_inventario_quitar' pk=venta.pk relacion_pk=0 %}"{% else %}null{% endif %};
         var catalogModal = document.getElementById('inventario-catalogo-modal');
         var quantityModal = document.getElementById('inventario-cantidad-modal');
@@ -1566,6 +1619,7 @@
         var editingIndex = null;
         var pendingQuantity = 1;
         var autoDescription = '';
+        var observationTimers = {};
         var locationOptions = parseScriptJson('venta-inventario-sedes', []);
         var categoryOptions = parseScriptJson('venta-inventario-categorias', []);
         var flow = {
@@ -1583,6 +1637,11 @@
             selected = [];
         }
         if (!Array.isArray(selected)) selected = [];
+        selected = selected.map(function (item) {
+            item.observacion = selectedObservation(item);
+            item.observacion_inventario = normalizeObservation(item.observacion_inventario);
+            return item;
+        });
         if (valorDesdeInventarioInput) {
             valorDesdeInventarioInput.addEventListener('change', function () {
                 syncValorDesdeInventario();
@@ -1614,6 +1673,14 @@
             return String(value == null ? '' : value).replace(/[&<>'"]/g, function (char) {
                 return {'&':'&amp;', '<':'&lt;', '>':'&gt;', "'":'&#39;', '"':'&quot;'}[char];
             });
+        }
+
+        function normalizeObservation(value) {
+            return String(value == null ? '' : value).replace(/\r\n/g, '\n').replace(/\r/g, '\n').trim().slice(0, 500);
+        }
+
+        function selectedObservation(item) {
+            return normalizeObservation(item && item.observacion);
         }
 
         function numberValue(value) {
@@ -1869,7 +1936,12 @@
 
         function syncHidden() {
             hiddenInput.value = JSON.stringify(selected.map(function (item) {
-                return {item_id: item.item_id, cantidad: item.cantidad};
+                return {
+                    relacion_id: item.relacion_id || null,
+                    item_id: item.item_id,
+                    cantidad: item.cantidad,
+                    observacion: selectedObservation(item)
+                };
             }));
         }
 
@@ -1917,9 +1989,21 @@
             selectedNode.innerHTML = selected.map(function (item, index) {
                 var disponibleRestante = remainingForSelected(item);
                 var disponible = item.disponible == null ? '' : ' · <strong>Disponible ahora:</strong> ' + esc(disponibleRestante);
+                var observacion = selectedObservation(item);
+                var observacionInventario = normalizeObservation(item.observacion_inventario);
+                var obsModeName = 'venta_observacion_' + index;
+                var observacionHtml = '<div class="venta-inventario-observacion" data-observation-index="' + index + '">'
+                    + '<div class="venta-observacion-options">'
+                    + '<label class="venta-observacion-option"><input type="radio" name="' + obsModeName + '" value="none" data-observation-mode="none" data-observation-index="' + index + '"' + (observacion ? '' : ' checked') + '> Ninguna</label>'
+                    + '<label class="venta-observacion-option"><input type="radio" name="' + obsModeName + '" value="custom" data-observation-mode="custom" data-observation-index="' + index + '"' + (observacion ? ' checked' : '') + '> Incluir observación</label>'
+                    + '</div>'
+                    + '<textarea class="form-input venta-observacion-input' + (observacion ? ' is-visible' : '') + '" data-observation-input data-observation-index="' + index + '" maxlength="500" placeholder="Escribe una observación opcional para este producto vendido">' + esc(observacion) + '</textarea>'
+                    + '<small class="venta-observacion-status" data-observation-status="' + index + '"></small>'
+                    + '</div>';
                 return '<article class="venta-inventario-card">'
                     + '<div class="venta-inventario-card-head"><h5>' + esc(item.producto) + '</h5><span class="venta-inventario-qty">' + esc(item.cantidad) + ' und.</span></div>'
-                    + '<p>' + esc(item.categoria) + ' · ' + esc(item.marca) + ' ' + esc(item.modelo) + '<br><strong>Código:</strong> ' + esc(item.codigo) + ' · <strong>Sede:</strong> ' + esc(item.sede) + '<br><strong>Ubicación:</strong> ' + esc(item.ubicacion) + (item.serie ? ' · <strong>Serie:</strong> ' + esc(item.serie) : '') + disponible + '</p>'
+                    + '<p>' + esc(item.categoria) + ' · ' + esc(item.marca) + ' ' + esc(item.modelo) + '<br><strong>Código:</strong> ' + esc(item.codigo) + ' · <strong>Sede:</strong> ' + esc(item.sede) + '<br><strong>Ubicación:</strong> ' + esc(item.ubicacion) + (item.serie ? ' · <strong>Serie:</strong> ' + esc(item.serie) : '') + disponible + (observacionInventario ? '<br><strong>Obs. inventario:</strong> ' + esc(observacionInventario) : '') + '</p>'
+                    + observacionHtml
                     + '<div class="venta-inventario-card-foot"><small style="color:var(--text-muted);">' + (isEdit ? 'Stock actualizado' : 'Se descontará al registrar') + '</small>'
                     + '<div class="venta-inventario-card-actions">'
                     + '<button type="button" class="venta-inventario-edit" data-edit-index="' + index + '">Editar cantidad</button>'
@@ -1932,6 +2016,48 @@
             syncDescription();
         }
 
+        function observationStatus(index, mensaje, error) {
+            var node = selectedNode.querySelector('[data-observation-status="' + index + '"]');
+            if (!node) return;
+            node.textContent = mensaje || '';
+            node.style.color = error ? 'var(--danger)' : 'var(--text-muted)';
+        }
+
+        function persistObservation(index) {
+            var item = selected[index];
+            if (!isEdit || !item || !item.relacion_id || !updateObservationUrlBase) return;
+            var key = item.relacion_id || item.item_id;
+            if (observationTimers[key]) {
+                clearTimeout(observationTimers[key]);
+                delete observationTimers[key];
+            }
+            observationStatus(index, 'Guardando observación...', false);
+            var formData = new FormData();
+            formData.append('observacion', selectedObservation(item));
+            var url = updateObservationUrlBase.replace('/0/observacion/', '/' + item.relacion_id + '/observacion/');
+            fetch(url, {method: 'POST', body: formData, credentials: 'same-origin', headers: {'X-CSRFToken': csrfToken(), 'X-Requested-With': 'XMLHttpRequest'}})
+                .then(function (response) { return response.json().then(function (data) { return {ok: response.ok, data: data}; }); })
+                .then(function (result) {
+                    if (!result.ok || !result.data.ok) throw new Error(result.data.error || 'No se pudo guardar la observación.');
+                    Object.assign(item, result.data.producto);
+                    syncHidden();
+                    observationStatus(index, 'Observación guardada.', false);
+                })
+                .catch(function (error) {
+                    observationStatus(index, error.message, true);
+                });
+        }
+
+        function scheduleObservationSave(index) {
+            var item = selected[index];
+            if (!isEdit || !item || !item.relacion_id) return;
+            var key = item.relacion_id || item.item_id;
+            if (observationTimers[key]) clearTimeout(observationTimers[key]);
+            observationTimers[key] = setTimeout(function () {
+                persistObservation(index);
+            }, 650);
+        }
+
         function showCatalog(items) {
             catalogList.innerHTML = items.map(function (item) {
                 var available = availableFor(item);
@@ -1941,8 +2067,11 @@
                 var causaHtml = item.estado === 'no_disponible' && causa
                     ? '<small class="venta-catalogo-causa">Causa: ' + esc(causa) + '</small>'
                     : '';
+                var observacionInventarioHtml = normalizeObservation(item.observacion_inventario)
+                    ? '<small>Obs.: ' + esc(normalizeObservation(item.observacion_inventario)) + '</small>'
+                    : '';
                 return '<button type="button" class="venta-catalogo-row' + (selectable ? '' : ' is-unavailable') + '" data-item-id="' + esc(item.item_id) + '">'
-                    + '<span><strong>' + esc(item.producto) + '</strong><small>' + esc(item.categoria) + ' / ' + esc(item.tipo) + ' · ' + esc(item.marca) + ' ' + esc(item.modelo) + '</small><small>' + esc(item.codigo) + ' · ' + esc(item.ubicacion) + '</small>' + causaHtml + '</span>'
+                    + '<span><strong>' + esc(item.producto) + '</strong><small>' + esc(item.categoria) + ' / ' + esc(item.tipo) + ' · ' + esc(item.marca) + ' ' + esc(item.modelo) + '</small><small>' + esc(item.codigo) + ' · ' + esc(item.ubicacion) + '</small>' + observacionInventarioHtml + causaHtml + '</span>'
                     + '<span class="' + (selectable ? 'venta-catalogo-stock' : 'venta-catalogo-status-danger') + '">' + esc(statusLabel) + '</span>'
                     + '<span class="venta-catalogo-arrow">›</span></button>';
             }).join('');
@@ -2145,6 +2274,7 @@
             var formData = new FormData();
             formData.append('item_id', candidate.item_id);
             formData.append('cantidad', cantidad);
+            formData.append('observacion', selectedObservation(candidate));
             fetch(addUrl, {method: 'POST', body: formData, credentials: 'same-origin', headers: {'X-CSRFToken': csrfToken(), 'X-Requested-With': 'XMLHttpRequest'}})
                 .then(function (response) { return response.json().then(function (data) { return {ok: response.ok, data: data}; }); })
                 .then(function (result) {
@@ -2221,6 +2351,45 @@
                 resetQuantityFlow();
             }
         });
+        selectedNode.addEventListener('change', function (event) {
+            var radio = event.target.closest('[data-observation-mode]');
+            if (!radio) return;
+            var index = Number(radio.getAttribute('data-observation-index'));
+            var item = selected[index];
+            if (!item) return;
+            var input = selectedNode.querySelector('[data-observation-input][data-observation-index="' + index + '"]');
+            if (radio.value === 'none') {
+                item.observacion = '';
+                if (input) {
+                    input.value = '';
+                    input.classList.remove('is-visible');
+                }
+                syncHidden();
+                persistObservation(index);
+                return;
+            }
+            if (input) {
+                input.classList.add('is-visible');
+                setTimeout(function () { input.focus(); }, 30);
+            }
+            syncHidden();
+        });
+        selectedNode.addEventListener('input', function (event) {
+            var input = event.target.closest('[data-observation-input]');
+            if (!input) return;
+            var index = Number(input.getAttribute('data-observation-index'));
+            var item = selected[index];
+            if (!item) return;
+            item.observacion = normalizeObservation(input.value);
+            syncHidden();
+            scheduleObservationSave(index);
+        });
+        selectedNode.addEventListener('focusout', function (event) {
+            var input = event.target.closest('[data-observation-input]');
+            if (!input) return;
+            var index = Number(input.getAttribute('data-observation-index'));
+            persistObservation(index);
+        });
         selectedNode.addEventListener('click', function (event) {
             var editButton = event.target.closest('[data-edit-index]');
             if (editButton) {
@@ -2251,6 +2420,10 @@
                     window.alert(error.message);
                 });
         });
+        var ventaForm = document.querySelector('form.form-card');
+        if (ventaForm) {
+            ventaForm.addEventListener('submit', syncHidden);
+        }
         renderSedeOptions();
         renderSelected();
     })();

@@ -146,7 +146,12 @@
                         <span style="color: var(--text-muted); font-size: 11px;">N/A</span>
                     {% endif %}
                 </td>
-                <td>{{ s.valor_final_cobrado|dinero_signo }}</td>
+                <td>
+                    {{ s.ingreso.total_abonado|dinero_signo }}
+                    {% if s.ingreso.resumen_metodos_pago %}
+                        <br><small style="color: var(--text-muted); font-size: 10px;">{{ s.ingreso.resumen_metodos_pago }}</small>
+                    {% endif %}
+                </td>
                 <td>
                     <span style="color: {% if s.ingreso.diferencia > 0 %}var(--danger){% else %}var(--success){% endif %}; font-weight: bold;">
                         {{ s.ingreso.diferencia|dinero_signo }}
