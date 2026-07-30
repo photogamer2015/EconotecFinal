@@ -502,6 +502,7 @@
     <div style="display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end;">
         <a href="{% url 'econotec:admin_egresos_lista' %}" class="btn btn-secondary">Ver Egresos</a>
         <a href="{% url 'econotec:admin_equipos_administrativos' %}" class="btn btn-secondary" style="background:#0f766e; color:#fff; border-color:#0f766e;">🎁 Donados / Compras</a>
+        <a href="{% url 'econotec:admin_equipos_cortesia' %}?ano={{ year }}&mes={{ month }}" class="btn btn-secondary" style="background:#0369a1; color:#fff; border-color:#0369a1;">Equipos de cortesía</a>
         <a href="{% url 'econotec:admin_bitacoras_tecnicos' %}" class="btn btn-secondary">Bitácoras Técnicos</a>
         <a href="{% url 'econotec:admin_ventas_inventario' %}?ano={{ year }}&mes={{ month }}" class="btn btn-secondary" style="background:#0f766e; color:#fff; border-color:#0f766e;">Ventas e Inventario</a>
         <a href="{% url 'econotec:salida_facturas_lista' %}?ano={{ year }}&mes={{ month }}" class="btn btn-secondary">Facturas Salidas</a>

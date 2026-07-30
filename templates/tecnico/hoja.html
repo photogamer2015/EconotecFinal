@@ -864,7 +864,9 @@
                                 <div class="money-card-mobile">
                                     <div class="label">Estado</div>
                                     <div class="value">
-                                        {% if ingreso.estado_pago == 'Pagado' %}
+                                        {% if ingreso.estado_pago == 'Cortesía' %}
+                                            <span class="estado-pill-mobile pagado">Cortesía</span>
+                                        {% elif ingreso.estado_pago == 'Pagado' %}
                                             <span class="estado-pill-mobile pagado">Pagado</span>
                                         {% elif ingreso.estado_pago == 'Parcial' %}
                                             <span class="estado-pill-mobile parcial">Parcial</span>

@@ -75,6 +75,7 @@
             <option value="Pagado" {% if estado_pago == 'Pagado' %}selected{% endif %}>Pagado</option>
             <option value="Parcial" {% if estado_pago == 'Parcial' %}selected{% endif %}>Parcial</option>
             <option value="Pendiente" {% if estado_pago == 'Pendiente' %}selected{% endif %}>Pendiente</option>
+            <option value="Cortesía" {% if estado_pago == 'Cortesía' %}selected{% endif %}>Cortesía</option>
         </select>
         {% if modo != 'ventas' %}
         <select name="sede_pago" class="form-input" style="max-width:150px;">
@@ -161,7 +162,9 @@
                             🚫 No reparado
                         </span><br>
                     {% endif %}
-                    {% if i.estado_pago == 'Pagado' %}
+                    {% if i.estado_pago == 'Cortesía' %}
+                        <span class="badge badge-cortesia">Cortesía / sin cobro</span>
+                    {% elif i.estado_pago == 'Pagado' %}
                         <span class="badge badge-pagado">Pagado</span>
                     {% elif i.estado_pago == 'Parcial' %}
                         <span class="badge badge-parcial">Parcial</span>

@@ -310,6 +310,20 @@
         font-weight: 900;
         white-space: nowrap;
     }
+    .inventario-observacion-cell {
+        min-width: 180px;
+        max-width: 260px;
+        color: var(--text-muted);
+        font-size: 12px;
+        font-weight: 750;
+        line-height: 1.35;
+        white-space: normal;
+        overflow-wrap: anywhere;
+    }
+    .inventario-observacion-cell.is-empty {
+        color: #9ca3af;
+        font-weight: 850;
+    }
     .inventario-qr-modal {
         position: fixed;
         inset: 0;
@@ -389,7 +403,7 @@
             overflow-wrap: anywhere;
         }
         .inventario-table-card table {
-            min-width: 1000px;
+            min-width: 1120px;
         }
         .inventario-actions {
             display: grid;
@@ -591,6 +605,7 @@
                         <th>Cantidad</th>
                         <th>Costo</th>
                         <th>Ubicación</th>
+                        <th>Observación</th>
                         {% if puede_gestionar_inventario %}<th>Acción</th>{% endif %}
                     </tr>
                 </thead>
@@ -636,6 +651,13 @@
                             </td>
                             <td><span class="inventario-cost-cell">{{ item.costo|dinero_signo }}</span></td>
                             <td>{{ item.get_ubicacion_display }}</td>
+                            <td>
+                                {% if item.observacion %}
+                                    <div class="inventario-observacion-cell">{{ item.observacion }}</div>
+                                {% else %}
+                                    <div class="inventario-observacion-cell is-empty">—</div>
+                                {% endif %}
+                            </td>
                             {% if puede_gestionar_inventario %}
                                 <td>
                                     <div class="inventario-table-actions">
@@ -652,7 +674,7 @@
                         </tr>
                     {% empty %}
                         <tr>
-                            <td colspan="{% if puede_gestionar_inventario %}10{% else %}9{% endif %}" class="inventario-empty-row">
+                            <td colspan="{% if puede_gestionar_inventario %}11{% else %}10{% endif %}" class="inventario-empty-row">
                                 {% if filtros_activos %}
                                     No hay productos con esos filtros en {{ tipo.nombre }} — {{ sede_label }}.
                                 {% else %}

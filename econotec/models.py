@@ -42,6 +42,7 @@ TIPOS_EQUIPO = [
     ('tablet', 'Tablet'),
     ('consola', 'Consola'),
     ('mando', 'Mando'),
+    ('maquina_coser', 'Máquina de Coser'),
     ('otro', 'Otros equipos'),
 ]
 
@@ -667,6 +668,7 @@ class IngresoEquipo(models.Model):
         ('en_reparacion', 'En reparación'),
         ('entregado', 'Entregado al cliente'),
         ('garantia', 'Garantía'),
+        ('cortesia', 'Cortesía'),
         ('donado', 'Donado'),
         ('equipo_a_comprar', 'Equipo a comprar'),
     ]
@@ -962,6 +964,9 @@ class IngresoEquipo(models.Model):
     @property
     def resumen_metodos_pago(self):
         """Devuelve un string con los métodos de pago usados en los abonos y cierre detallados."""
+        if self.estado == 'cortesia':
+            return 'Cortesía / sin cobro'
+
         metodos = []
 
         if self.diagnostico_inmediato == 'si' and self.valor_diagnostico and self.valor_diagnostico > 0:
@@ -1055,6 +1060,9 @@ class IngresoEquipo(models.Model):
         - Si la reparación fue cancelada: solo el valor del diagnóstico (si no lo pagó al inicio).
         - Si no: el valor acordado completo.
         """
+        if self.estado == 'cortesia':
+            return Decimal('0.00')
+
         salida = self.salida if hasattr(self, 'salida') else None
         if salida and salida.estado_reparacion == 'revision':
             return _q2(salida.valor_acordado_revision or Decimal('0.00'))
@@ -1145,6 +1153,9 @@ class IngresoEquipo(models.Model):
 
     @property
     def estado_pago(self):
+        if self.estado == 'cortesia':
+            return 'Cortesía'
+
         # Si aún no hay valor acordado (es nulo) y la reparación no fue cancelada
         if self.valor_acordado is None and not self.reparacion_cancelada:
             return 'Pendiente'
@@ -1178,6 +1189,20 @@ class IngresoEquipo(models.Model):
     def save(self, *args, **kwargs):
         if not self.numero_equipo:
             self.numero_equipo = IngresoEquipo.siguiente_numero_equipo(self.sede)
+        if self.estado == 'cortesia':
+            self.valor_acordado = Decimal('0.00')
+            self.diagnostico_inmediato = 'no'
+            self.valor_diagnostico = Decimal('0.00')
+            self.abono_anticipo = Decimal('0.00')
+
+            update_fields = kwargs.get('update_fields')
+            if update_fields is not None:
+                kwargs['update_fields'] = set(update_fields) | {
+                    'valor_acordado',
+                    'diagnostico_inmediato',
+                    'valor_diagnostico',
+                    'abono_anticipo',
+                }
         # Si el equipo ya no está en estado "ingresado", reactivamos la alerta
         # (el silenciado solo tiene sentido mientras el equipo está pendiente).
         if self.estado != 'ingresado' and self.diagnostico_silenciado:
@@ -1448,6 +1473,7 @@ class SalidaEquipo(models.Model):
         ('no_reparable', '❌ No se pudo reparar'),
         ('garantia', '🛡 Salida por garantía'),
         ('garantia_fallos_adicionales', '🛡 Salida + fallos adicionales'),
+        ('cortesia', 'Salida de cortesía'),
         ('retirado', '✅ Retirado por el cliente'),
         ('chatarrerizacion', '♻️ Chatarrerización'),
     ]
@@ -1718,7 +1744,13 @@ class SalidaEquipo(models.Model):
     @property
     def es_positivo(self):
         """¿La salida es positiva (cliente se llevó equipo reparado)?"""
-        return self.estado_reparacion in ('garantia', 'garantia_fallos_adicionales', 'pendiente_retiro', 'retirado')
+        return self.estado_reparacion in (
+            'garantia',
+            'garantia_fallos_adicionales',
+            'cortesia',
+            'pendiente_retiro',
+            'retirado',
+        )
 
     @property
     def pendiente_de_retiro_fisico(self):
@@ -1726,6 +1758,7 @@ class SalidaEquipo(models.Model):
         return self.estado_reparacion in (
             'garantia',
             'garantia_fallos_adicionales',
+            'cortesia',
             'pendiente_retiro',
             'retirado',
             'cliente_no_acepta',
@@ -1764,6 +1797,9 @@ class SalidaEquipo(models.Model):
         from decimal import Decimal as D
         # Importar config local para evitar import circular
         from .alertas import COSTO_BODEGAJE_DIA, UMBRAL_DIAS_BODEGAJE
+
+        if self.estado_reparacion == 'cortesia' or self.ingreso.estado == 'cortesia':
+            return {'aplica': False, 'dias': 0, 'monto': D('0.00'), 'cerrado': False}
         
         if costo_dia is None:
             costo_dia = COSTO_BODEGAJE_DIA
@@ -1821,11 +1857,66 @@ class SalidaEquipo(models.Model):
         return f'RECS-{siguiente:04d}'
 
     def save(self, *args, **kwargs):
+        es_cortesia = (
+            self.estado_reparacion == 'cortesia'
+            or (self.ingreso_id and self.ingreso.estado == 'cortesia')
+        )
+        if es_cortesia:
+            self.estado_reparacion = 'cortesia'
+            self.valor_final_cobrado = Decimal('0.00')
+            self.valor_acordado_revision = None
+            self.metodo_pago_final = 'cortesia'
+            self.numero_recibo = ''
+            self.banco = ''
+            self.banco_otro = ''
+            self.tarjeta_app = ''
+            self.comprobante_url = ''
+            self.monto_1 = None
+            self.metodo_1 = ''
+            self.banco_1 = ''
+            self.monto_2 = None
+            self.metodo_2 = ''
+            self.banco_2 = ''
+            self.factura_realizada = 'no'
+            self.factura_nombres = ''
+            self.factura_apellidos = ''
+            self.factura_cedula = ''
+            self.factura_correo = ''
+
+            update_fields = kwargs.get('update_fields')
+            if update_fields is not None:
+                kwargs['update_fields'] = set(update_fields) | {
+                    'estado_reparacion',
+                    'valor_final_cobrado',
+                    'valor_acordado_revision',
+                    'metodo_pago_final',
+                    'numero_recibo',
+                    'banco',
+                    'banco_otro',
+                    'tarjeta_app',
+                    'comprobante_url',
+                    'monto_1',
+                    'metodo_1',
+                    'banco_1',
+                    'monto_2',
+                    'metodo_2',
+                    'banco_2',
+                    'factura_realizada',
+                    'factura_nombres',
+                    'factura_apellidos',
+                    'factura_cedula',
+                    'factura_correo',
+                }
+
         if self.valor_final_cobrado and self.valor_final_cobrado > 0 and not self.numero_recibo:
             self.numero_recibo = SalidaEquipo.generar_numero_recibo()
         # Sincronizar estado del ingreso al guardar la salida
         if self.ingreso_id:
-            if self.estado_reparacion in ('garantia', 'garantia_fallos_adicionales'):
+            if self.estado_reparacion == 'cortesia':
+                self.ingreso.estado = 'cortesia'
+                self.ingreso.subestado_reparacion = ''
+                self.ingreso.subestado_entregado = ''
+            elif self.estado_reparacion in ('garantia', 'garantia_fallos_adicionales'):
                 self.ingreso.estado = 'garantia'
             else:
                 self.ingreso.estado = 'entregado'

@@ -614,7 +614,7 @@
             </div>
         </div>
 
-        {% if ingreso.estado != 'donado' and ingreso.estado != 'equipo_a_comprar' and ingreso.abono_anticipo > 0 or ingreso.estado != 'donado' and ingreso.estado != 'equipo_a_comprar' and ingreso.diagnostico_inmediato == 'si' %}
+        {% if ingreso.estado != 'donado' and ingreso.estado != 'equipo_a_comprar' and ingreso.estado != 'cortesia' and ingreso.abono_anticipo > 0 or ingreso.estado != 'donado' and ingreso.estado != 'equipo_a_comprar' and ingreso.estado != 'cortesia' and ingreso.diagnostico_inmediato == 'si' %}
         <div class="info-card" style="margin-bottom:18px; border-left:4px solid var(--secondary);">
             <h3>💳 Pago Inicial (Mostrador)</h3>
             {% if ingreso.abono_anticipo > 0 %}
@@ -680,9 +680,15 @@
         </div>
         {% endif %}
 
-        {% if ingreso.estado == 'donado' or ingreso.estado == 'equipo_a_comprar' %}
-        <div class="info-card" style="margin-bottom:18px; border-left:4px solid {% if ingreso.estado == 'donado' %}#16a34a{% else %}#0f766e{% endif %};">
-            {% if ingreso.estado == 'donado' %}
+        {% if ingreso.estado == 'donado' or ingreso.estado == 'equipo_a_comprar' or ingreso.estado == 'cortesia' %}
+        <div class="info-card" style="margin-bottom:18px; border-left:4px solid {% if ingreso.estado == 'donado' %}#16a34a{% elif ingreso.estado == 'cortesia' %}#0284c7{% else %}#0f766e{% endif %};">
+            {% if ingreso.estado == 'cortesia' %}
+                <h3>Servicio de cortesía</h3>
+                <div class="big-num" style="background:#e0f2fe; color:#0369a1;">SIN COBRO</div>
+                <div style="text-align:center; font-size:13px; color:#075985; margin-top:8px;">
+                    Valor acordado $0.00. La salida se registrará únicamente como Salida de cortesía.
+                </div>
+            {% elif ingreso.estado == 'donado' %}
                 <h3>🎁 Equipo donado</h3>
                 <div class="big-num" style="background:#ecfdf5; color:#15803d;">GRATIS</div>
                 <div style="text-align:center; font-size:13px; color:#166534; margin-top:8px;">No genera pago, egreso ni salida de reparación.</div>
@@ -842,8 +848,10 @@
                 {% endif %}
                 {% else %}
                 {% if puede_gestionar_pagos %}
+                {% if ingreso.estado != 'cortesia' %}
                 <a href="{% url 'econotec:abono_crear' ingreso_pk=ingreso.pk %}" class="btn btn-success">Pago Directo</a>
                 <a href="{% url 'econotec:ingreso_abonos' pk=ingreso.pk %}" class="btn btn-secondary">Ver Abonos / Pagos</a>
+                {% endif %}
                 {% endif %}
 
                 {% if ingreso.sede != 'ventas' %}

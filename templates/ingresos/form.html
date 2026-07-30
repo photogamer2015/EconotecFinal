@@ -252,6 +252,30 @@
         margin-top: 2px;
     }
 
+    .valor-acordado-monto .form-input.is-invalid {
+        border-color: #dc2626;
+        background: #fef2f2;
+        color: #7f1d1d;
+        box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.12);
+    }
+
+    .valor-acordado-monto .form-input.is-invalid:focus {
+        border-color: #dc2626;
+        box-shadow: 0 0 0 4px rgba(220, 38, 38, 0.16);
+    }
+
+    .valor-acordado-ayuda {
+        color: #888;
+        font-size: 11px;
+        display: block;
+        margin-top: 4px;
+        font-weight: 700;
+    }
+
+    .valor-acordado-ayuda.is-error {
+        color: #dc2626;
+    }
+
     .valor-acordado-aviso {
         padding: 11px 12px;
         border-radius: 8px;
@@ -336,6 +360,17 @@
         border-color: rgba(255, 255, 255, 0.12);
         background: rgba(255, 255, 255, 0.05);
         color: var(--text-muted);
+    }
+
+    [data-theme="dark"] .valor-acordado-monto .form-input.is-invalid {
+        border-color: #ef4444;
+        background: rgba(127, 29, 29, 0.28);
+        color: #fee2e2;
+        box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.18);
+    }
+
+    [data-theme="dark"] .valor-acordado-ayuda.is-error {
+        color: #fca5a5;
     }
 
     @media (max-width: 640px) {
@@ -1179,9 +1214,9 @@
                     {{ ing_form.valor_acordado }}
                     {{ ing_form.valor_acordado.errors }}
                     {% if ing_form.estado_bloqueado_por_salida %}
-                    <small style="color:#888; font-size:11px; display:block; margin-top:4px;">El valor acordado queda tal cual fue registrado antes de la salida.</small>
+                    <small class="valor-acordado-ayuda">El valor acordado queda tal cual fue registrado antes de la salida.</small>
                     {% else %}
-                    <small id="ayuda-valor-acordado" style="color:#888; font-size:11px; display:block; margin-top:4px;">Ingresa el monto acordado con el cliente.</small>
+                    <small id="ayuda-valor-acordado" class="valor-acordado-ayuda">El valor debe ser igual o mayor a $1.00.</small>
                     {% endif %}
                 </div>
 
@@ -1830,11 +1865,13 @@
         var selEstadoEquipo = document.querySelector('[name="ing-estado"]');
         var wrapMonto = document.getElementById('wrap_valor_acordado_monto');
         var aviso = document.getElementById('valor-acordado-aviso');
+        var ayudaValor = document.getElementById('ayuda-valor-acordado');
         var ultimoValor = '';
         var valorAntesGarantia = '';
         var bloqueoGarantiaActivo = false;
         var bloqueoCompraActivo = false;
         var bloqueoDonadoActivo = false;
+        var mensajeValorMinimo = 'El valor debe ser igual o mayor a $1.00.';
 
         if (!radios.length || !inpValor) return;
         var valorBloqueadoPorSalida = inpValor.disabled;
@@ -1857,6 +1894,10 @@
 
         function esGarantiaIngreso() {
             return selEstadoEquipo && selEstadoEquipo.value === 'garantia';
+        }
+
+        function esCortesiaIngreso() {
+            return selEstadoEquipo && selEstadoEquipo.value === 'cortesia';
         }
 
         function esCompraIngreso() {
@@ -1901,17 +1942,50 @@
             });
         }
 
+        function validarValorMinimo() {
+            if (
+                valorBloqueadoPorSalida ||
+                esGarantiaIngreso() ||
+                esCortesiaIngreso() ||
+                esDonadoIngreso() ||
+                estadoActual() !== 'si'
+            ) {
+                inpValor.setCustomValidity('');
+                inpValor.classList.remove('is-invalid');
+                inpValor.removeAttribute('aria-invalid');
+                if (ayudaValor) ayudaValor.classList.remove('is-error');
+                return true;
+            }
+            var limpio = String(inpValor.value || '').trim();
+            var formatoValido = /^(?:[1-9]\d*)(?:[.,]\d{1,2})?$/.test(limpio);
+            var numero = parseFloat(limpio.replace(',', '.'));
+            var valido = formatoValido && Number.isFinite(numero) && numero >= 1;
+            inpValor.setCustomValidity(valido ? '' : mensajeValorMinimo);
+            inpValor.classList.toggle('is-invalid', !valido);
+            if (valido) {
+                inpValor.removeAttribute('aria-invalid');
+            } else {
+                inpValor.setAttribute('aria-invalid', 'true');
+            }
+            if (ayudaValor) {
+                ayudaValor.textContent = mensajeValorMinimo;
+                ayudaValor.classList.toggle('is-error', !valido);
+            }
+            return valido;
+        }
+
         function actualizarValorAcordado() {
             if (valorBloqueadoPorSalida) {
                 var estadoBloqueado = estadoActual();
                 marcarOpcionActiva();
                 if (wrapMonto) wrapMonto.style.display = (estadoBloqueado === 'si') ? 'block' : 'none';
                 if (aviso) aviso.style.display = (estadoBloqueado === 'si') ? 'none' : 'block';
+                validarValorMinimo();
                 if (window.__checkRequired) window.__checkRequired();
                 return;
             }
 
-            if (esGarantiaIngreso()) {
+            if (esGarantiaIngreso() || esCortesiaIngreso()) {
                 if (!bloqueoGarantiaActivo && !esPendiente(inpValor.value) && inpValor.value !== '0.00') {
                     valorAntesGarantia = inpValor.value;
                 }
@@ -1926,8 +2000,11 @@
                 if (wrapMonto) wrapMonto.style.display = 'block';
                 if (aviso) {
                     aviso.style.display = 'block';
-                    aviso.textContent = 'Ingreso por garantía: el valor acordado queda bloqueado en $0.00. Si hay un cobro, regístralo en la salida.';
+                    aviso.textContent = esCortesiaIngreso()
+                        ? 'Ingreso de cortesía: el valor acordado queda bloqueado en $0.00 y no generará ningún cobro.'
+                        : 'Ingreso por garantía: el valor acordado queda bloqueado en $0.00. Si hay un cobro, regístralo en la salida.';
                 }
+                validarValorMinimo();
                 if (window.__checkRequired) window.__checkRequired();
                 return;
             }
@@ -1946,6 +2023,7 @@
                 if (aviso) aviso.style.display = 'none';
                 var labelCompra = document.getElementById('label-valor-acordado');
                 if (labelCompra) labelCompra.textContent = 'Valor a pagar (USD)';
+                validarValorMinimo();
                 if (window.__checkRequired) window.__checkRequired();
                 return;
             }
@@ -1961,6 +2039,7 @@
                 inpValor.classList.add('estado-lock-input');
                 if (wrapMonto) wrapMonto.style.display = 'none';
                 if (aviso) aviso.style.display = 'none';
+                validarValorMinimo();
                 if (window.__checkRequired) window.__checkRequired();
                 return;
             }
@@ -2024,6 +2103,7 @@
                 }
             }
 
+            validarValorMinimo();
             if (window.__checkRequired) window.__checkRequired();
         }
 
@@ -2034,6 +2114,8 @@
             if (!esGarantiaIngreso() && estadoActual() === 'si' && !esPendiente(inpValor.value)) {
                 ultimoValor = inpValor.value;
             }
+            validarValorMinimo();
+            if (window.__checkRequired) window.__checkRequired();
         });
         if (selEstadoEquipo) {
             selEstadoEquipo.addEventListener('change', actualizarValorAcordado);
@@ -2172,7 +2254,8 @@
 
         function limpiarCamposNoAplicables() {
             var esAdministrativo = estado.value === 'donado' || estado.value === 'equipo_a_comprar';
-            if (!esAdministrativo) return;
+            var esCortesia = estado.value === 'cortesia';
+            if (!esAdministrativo && !esCortesia) return;
 
             if (diagnostico && diagnostico.value !== 'no') {
                 diagnostico.value = 'no';
@@ -2183,24 +2266,28 @@
                 abono.value = '0.00';
                 abono.dispatchEvent(new Event('input', {bubbles: true}));
             }
-            var radioNo = radiosFirma.find(function (radio) { return radio.value === 'no'; });
-            if (radioNo && !radioNo.checked) {
-                radioNo.checked = true;
-                radioNo.dispatchEvent(new Event('change', {bubbles: true}));
+            if (esAdministrativo) {
+                var radioNo = radiosFirma.find(function (radio) { return radio.value === 'no'; });
+                if (radioNo && !radioNo.checked) {
+                    radioNo.checked = true;
+                    radioNo.dispatchEvent(new Event('change', {bubbles: true}));
+                }
+                if (firmaImagen) firmaImagen.value = '';
             }
-            if (firmaImagen) firmaImagen.value = '';
         }
 
         function actualizar() {
             var esCompra = estado.value === 'equipo_a_comprar';
             var esDonado = estado.value === 'donado';
+            var esCortesia = estado.value === 'cortesia';
             var esAdministrativo = esCompra || esDonado;
+            var esSinCobro = esAdministrativo || esCortesia;
 
-            mostrar(seccionDiagnostico, !esAdministrativo);
-            mostrar(seccionAbono, !esAdministrativo);
+            mostrar(seccionDiagnostico, !esSinCobro);
+            mostrar(seccionAbono, !esSinCobro);
             mostrar(seccionFirma, !esAdministrativo);
             mostrar(panelValor, !esDonado);
-            mostrar(decisionValor, !esAdministrativo);
+            mostrar(decisionValor, !esSinCobro);
             panel.style.display = esCompra ? '' : 'none';
 
             if (tituloProblema) tituloProblema.textContent = esAdministrativo ? 'Observación' : 'Problema y Reporte';
@@ -2215,8 +2302,12 @@
             }
             if (ayudaValor) {
                 ayudaValor.textContent = esCompra
-                    ? 'Este es el valor que Econotec pagará por el equipo.'
-                    : 'Ingresa el monto acordado con el cliente.';
+                    ? 'El valor a pagar debe ser igual o mayor a $1.00.'
+                    : (
+                        esCortesia
+                            ? 'Servicio de cortesía sin cobro. El valor permanece bloqueado en $0.00.'
+                            : 'El valor debe ser igual o mayor a $1.00.'
+                    );
             }
 
             limpiarCamposNoAplicables();
@@ -2590,7 +2681,10 @@
         var bloqueoGarantiaDiagnostico = false;
 
         function esGarantiaIngreso() {
-            return selEstadoEquipo && selEstadoEquipo.value === 'garantia';
+            return selEstadoEquipo && (
+                selEstadoEquipo.value === 'garantia'
+                || selEstadoEquipo.value === 'cortesia'
+            );
         }
 
         function limpiarPagoDiagnostico() {
@@ -2666,6 +2760,11 @@
                 if (wrapBancoDiag1) wrapBancoDiag1.style.display = 'none';
                 if (wrapBancoDiag2) wrapBancoDiag2.style.display = 'none';
                 if (avisoGarantiaDiag) avisoGarantiaDiag.style.display = '';
+                if (avisoGarantiaDiag) {
+                    avisoGarantiaDiag.innerHTML = selEstadoEquipo.value === 'cortesia'
+                        ? '<strong>Ingreso de cortesía</strong> El diagnóstico queda bloqueado en No y $0.00. Este servicio no generará cobros.'
+                        : '<strong>Ingreso por garantía</strong> El diagnóstico inmediato queda bloqueado en No y $0.00. Si hay un cobro, regístralo en la salida.';
+                }
                 if (window.__checkRequired) window.__checkRequired();
                 return true;
             }

@@ -309,6 +309,12 @@
     <!-- ESTADO DE LA SALIDA -->
     <div class="section-header">ESTADO DE LA SALIDA</div>
     <div class="estado-grid">
+        {% if salida.estado_reparacion == 'cortesia' %}
+        <div class="checkbox-item-l activo">
+            <span class="check-box">X</span>
+            SALIDA DE CORTESÍA
+        </div>
+        {% else %}
         <div class="checkbox-item-l {% if salida.estado_reparacion == 'pendiente_retiro' %}activo{% endif %}">
             <span class="check-box">{% if salida.estado_reparacion == 'pendiente_retiro' %}X{% endif %}</span>
             ⏳ REPARADO — PENDIENTE DE RETIRO
@@ -341,6 +347,7 @@
             <span class="check-box">{% if salida.estado_reparacion == 'garantia_fallos_adicionales' %}X{% endif %}</span>
             🛡 GARANTÍA + FALLOS ADICIONALES
         </div>
+        {% endif %}
     </div>
 
     <!-- PROBLEMA REPORTADO (del ingreso) -->
@@ -384,6 +391,7 @@
     </div>
     {% endif %}
 
+    {% if salida.estado_reparacion != 'cortesia' %}
     <!-- CIERRE ECONÓMICO -->
     <div class="section-header">CIERRE ECONÓMICO</div>
     <div class="closing-box">
@@ -420,6 +428,7 @@
             <div class="no-payments">Este equipo no registra pagos ni abonos previos.</div>
         {% endif %}
     </div>
+    {% endif %}
 
     <!-- TÉCNICO QUE GESTIONÓ LA REPARACIÓN -->
     <div style="margin-top: 14px; padding: 10px 14px; background: #fff8f3; border-radius: 6px; font-size: 11px; color: #555;">

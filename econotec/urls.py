@@ -152,6 +152,8 @@ urlpatterns = [
          views_admin.egresos_lista, name='admin_egresos_lista'),
     path('admin-panel/equipos-administrativos/',
          views_admin.admin_equipos_administrativos, name='admin_equipos_administrativos'),
+    path('admin-panel/equipos-cortesia/',
+         views_admin.admin_equipos_cortesia, name='admin_equipos_cortesia'),
     path('admin-panel/egresos/nuevo/',
          views_admin.egreso_crear, name='admin_egreso_crear'),
     path('admin-panel/egresos/<int:pk>/editar/',

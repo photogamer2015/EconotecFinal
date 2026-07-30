@@ -236,8 +236,10 @@ def ingreso_abonos(request, pk):
         'abonos': abonos,
         'salida': salida,
         'venta_con_historial_abonos': venta_con_historial_abonos,
-        'puede_registrar_abono': ingreso.sede != 'ventas' or (
-            venta_con_historial_abonos and ingreso.diferencia > Decimal('0.00')
+        'puede_registrar_abono': ingreso.estado != 'cortesia' and (
+            ingreso.sede != 'ventas' or (
+                venta_con_historial_abonos and ingreso.diferencia > Decimal('0.00')
+            )
         ),
     })
 
@@ -246,6 +248,13 @@ def ingreso_abonos(request, pk):
 def abono_crear(request, ingreso_pk):
     """Registrar un nuevo abono para un ingreso."""
     ingreso = get_object_or_404(IngresoEquipo, pk=ingreso_pk)
+
+    if ingreso.estado == 'cortesia':
+        messages.info(
+            request,
+            'Este equipo fue ingresado como cortesía y no admite pagos ni abonos.',
+        )
+        return redirect('econotec:ingreso_detalle', pk=ingreso.pk)
 
     if ingreso.sede == 'ventas':
         if not _venta_tiene_historial_abonos(ingreso):

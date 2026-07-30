@@ -3011,11 +3011,13 @@ def salida_registrar(request, ingreso_pk):
     else:
         # Saldo pendiente sugerido como valor a cobrar
         saldo = ingreso.diferencia
+        estado_salida_inicial = 'cortesia' if ingreso.estado == 'cortesia' else 'pendiente_retiro'
+        metodo_salida_inicial = 'cortesia' if ingreso.estado == 'cortesia' else 'efectivo'
         salida_inst = SalidaEquipo(ingreso=ingreso)
         form = SalidaEquipoForm(instance=salida_inst, initial={
             'fecha_salida': date.today(),
-            'estado_reparacion': 'pendiente_retiro',
-            'metodo_pago_final': 'efectivo',
+            'estado_reparacion': estado_salida_inicial,
+            'metodo_pago_final': metodo_salida_inicial,
             'valor_final_cobrado': 0,
             'tecnico_reparo': request.user if es_tecnico(request.user) else None,
         })
@@ -4219,6 +4221,8 @@ def _texto_salida_bitacora(salida):
         return f'{base} #{ingreso.codigo_equipo} lista, cliente notificado.'
     if salida.estado_reparacion in ('garantia', 'garantia_fallos_adicionales'):
         return f'{base} #{ingreso.codigo_equipo} salida por garantía.'
+    if salida.estado_reparacion == 'cortesia':
+        return f'{base} #{ingreso.codigo_equipo} salida de cortesía, sin cobro.'
     if salida.estado_reparacion == 'cliente_no_acepta':
         return f'{base} #{ingreso.codigo_equipo} cliente no quiso reparar.'
     if salida.estado_reparacion == 'no_reparable':

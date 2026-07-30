@@ -227,6 +227,8 @@ def _mensaje_estado_salida(salida):
         return 'Su equipo ya está listo para su retiro por garantía.'
     if estado == 'garantia_fallos_adicionales':
         return 'Su equipo ya está listo para su retiro por garantía con fallos adicionales pendientes.'
+    if estado == 'cortesia':
+        return 'Su equipo está listo para retiro. Salida de cortesía, sin cobro.'
     return 'Su equipo ya está listo para su retiro.'
 
 
@@ -799,6 +801,7 @@ def ingreso_pdf(request, pk):
         tipos_fila2 = [
             ('celular', 'CELULAR'), ('tablet', 'TABLET'),
             ('consola', 'CONSOLA'), ('mando', 'MANDO'),
+            ('maquina_coser', 'MAQUINA DE COSER'),
             ('otro', 'OTROS EQUIPOS'),
         ]
         _draw_checkbox_row(c, margen, y, tipos_fila1, marcado_key=ingreso.tipo_equipo)
@@ -1003,16 +1006,20 @@ def salida_pdf(request, pk):
     y -= 18
 
     # Mostrar las 5 opciones con marcado
-    estados = [
-        ('pendiente_retiro', 'Reparado — pendiente de retiro'),
-        ('retirado', 'Retirado por el cliente'),
-        ('revision', 'Revisión'),
-        ('reparado_parcial', 'Reparado parcialmente'),
-        ('no_reparable', 'No se pudo reparar'),
-        ('cliente_no_acepta', 'Cliente no quiso reparar'),
-        ('garantia', 'Salida por garantía'),
-        ('garantia_fallos_adicionales', 'Garantía + fallos adicionales'),
-    ]
+    estados = (
+        [('cortesia', 'SALIDA DE CORTESÍA')]
+        if salida.estado_reparacion == 'cortesia'
+        else [
+            ('pendiente_retiro', 'Reparado — pendiente de retiro'),
+            ('retirado', 'Retirado por el cliente'),
+            ('revision', 'Revisión'),
+            ('reparado_parcial', 'Reparado parcialmente'),
+            ('no_reparable', 'No se pudo reparar'),
+            ('cliente_no_acepta', 'Cliente no quiso reparar'),
+            ('garantia', 'Salida por garantía'),
+            ('garantia_fallos_adicionales', 'Garantía + fallos adicionales'),
+        ]
+    )
     for key, label in estados:
         c.setStrokeColor(naranja)
         c.setLineWidth(0.8)
@@ -1052,6 +1059,26 @@ def salida_pdf(request, pk):
         y = _draw_paragraph(c, margen, y, 'OBSERVACIONES DEL CIERRE',
                            salida.observaciones, max_w=500, lines=2)
         y -= 8
+
+    if salida.estado_reparacion == 'cortesia':
+        y -= 48
+        c.setStrokeColor(Color(0.4, 0.4, 0.4))
+        firma_x = margen + 145
+        _draw_static_image(c, 'firma_tecnico_recibe.png', firma_x + 52, y + 4, 112, 28)
+        c.line(firma_x, y, firma_x + 220, y)
+        c.setFillColor(naranja)
+        c.setFont('Helvetica-Bold', 8)
+        c.drawCentredString(firma_x + 110, y - 10, 'FIRMA DEL TÉCNICO')
+
+        c.showPage()
+        c.save()
+        pdf = buf.getvalue()
+        buf.close()
+        response = HttpResponse(pdf, content_type='application/pdf')
+        response['Content-Disposition'] = (
+            f'attachment; filename="salida_cortesia_{ingreso.codigo_equipo}.pdf"'
+        )
+        return response
 
     # ── Factura ──
     def _clip_factura(valor, max_len=42):

@@ -237,6 +237,8 @@ class IngresoEquipoForm(forms.ModelForm):
         ('si', 'Sí'),
         ('no', 'No / pendiente de valor'),
     ]
+    VALOR_ACORDADO_MINIMO = Decimal('1.00')
+    VALOR_ACORDADO_ERROR_MINIMO = 'El valor debe ser igual o mayor a $1.00.'
 
     FIRMA_CLIENTE_OPCIONES = [
         ('si', 'Sí'),
@@ -407,9 +409,13 @@ class IngresoEquipoForm(forms.ModelForm):
             self.estado_bloqueado_por_salida = self.salida_registrada is not None
             if self.estado_bloqueado_por_salida:
                 self.estado_bloqueado_valor = (
-                    'garantia'
-                    if self.salida_registrada.estado_reparacion in ('garantia', 'garantia_fallos_adicionales')
-                    else 'entregado'
+                    'cortesia'
+                    if self.salida_registrada.estado_reparacion == 'cortesia'
+                    else (
+                        'garantia'
+                        if self.salida_registrada.estado_reparacion in ('garantia', 'garantia_fallos_adicionales')
+                        else 'entregado'
+                    )
                 )
                 self.subestado_bloqueado_valor = {
                     'pendiente_retiro': 'pendiente_retiro',
@@ -579,7 +585,7 @@ class IngresoEquipoForm(forms.ModelForm):
         estado_equipo = ''
         if self.is_bound:
             estado_equipo = (self.data.get(self.add_prefix('estado')) or '').strip()
-        if estado_equipo == 'garantia':
+        if estado_equipo in ('garantia', 'cortesia'):
             return Decimal('0.00')
         if estado_equipo == 'donado':
             return Decimal('0.00')
@@ -596,10 +602,27 @@ class IngresoEquipoForm(forms.ModelForm):
         val = str(val).strip()
         if val in ['.', '-', '—', '_', ',']:
             return None
+        normalizado = val.replace(',', '.')
+        partes = normalizado.split('.', 1)
+        entero = partes[0]
+        decimales = partes[1] if len(partes) == 2 else ''
+        if (
+            normalizado.count('.') > 1
+            or not entero
+            or not entero.isdigit()
+            or (len(partes) == 2 and (not decimales or not decimales.isdigit()))
+            or len(decimales) > 2
+        ):
+            raise forms.ValidationError("Ingrese un monto válido o marca No / Pendiente si aún no hay valor acordado.")
+        if len(entero) > 1 and entero.startswith('0'):
+            raise forms.ValidationError(self.VALOR_ACORDADO_ERROR_MINIMO)
         try:
-            return Decimal(val.replace(',', '.'))
+            valor = Decimal(normalizado)
         except InvalidOperation:
             raise forms.ValidationError("Ingrese un monto válido o marca No / Pendiente si aún no hay valor acordado.")
+        if valor < self.VALOR_ACORDADO_MINIMO:
+            raise forms.ValidationError(self.VALOR_ACORDADO_ERROR_MINIMO)
+        return valor
 
     def clean_firma_cliente_imagen(self):
         valor = (self.cleaned_data.get('firma_cliente_imagen') or '').strip()
@@ -648,7 +671,7 @@ class IngresoEquipoForm(forms.ModelForm):
 
         if self.estado_bloqueado_por_salida:
             cleaned['valor_acordado'] = self.instance.valor_acordado
-        elif estado == 'garantia':
+        elif estado in ('garantia', 'cortesia'):
             cleaned['valor_acordado'] = Decimal('0.00')
         elif valor_acordado_estado in ('no', 'pendiente'):
             cleaned['valor_acordado'] = None
@@ -690,7 +713,7 @@ class IngresoEquipoForm(forms.ModelForm):
         if self.estado_bloqueado_por_salida:
             for nombre in self.CAMPOS_DIAGNOSTICO:
                 cleaned[nombre] = getattr(self.instance, nombre)
-        elif estado in ('garantia', 'donado', 'equipo_a_comprar'):
+        elif estado in ('garantia', 'cortesia', 'donado', 'equipo_a_comprar'):
             cleaned['diagnostico_inmediato'] = 'no'
             cleaned['valor_diagnostico'] = Decimal('0.00')
             cleaned['diagnostico_metodo'] = 'efectivo'
@@ -722,7 +745,7 @@ class IngresoEquipoForm(forms.ModelForm):
                     f'La suma del pago mixto debe ser igual al total del diagnóstico: ${diagnostico:.2f}.'
                 )
 
-        if estado_administrativo:
+        if estado_administrativo or estado == 'cortesia':
             cleaned['abono_anticipo'] = Decimal('0.00')
             cleaned['anticipo_metodo'] = 'efectivo'
             cleaned['anticipo_banco'] = ''
@@ -1231,10 +1254,47 @@ class SalidaEquipoForm(forms.ModelForm):
                 # Si el ingreso NO ES por garantía, ocultar la opción de salida por garantía
                 choices = [
                     c for c in choices
-                    if c[0] not in ('garantia', 'garantia_fallos_adicionales')
+                    if c[0] not in ('garantia', 'garantia_fallos_adicionales', 'cortesia')
                 ]
                 
         self.fields['estado_reparacion'].choices = choices
+
+        es_cortesia = bool(
+            self.instance
+            and hasattr(self.instance, 'ingreso')
+            and self.instance.ingreso
+            and self.instance.ingreso.estado == 'cortesia'
+        )
+        if es_cortesia:
+            self.fields['estado_reparacion'].choices = [
+                ('cortesia', 'Salida de cortesía'),
+            ]
+            self.initial['estado_reparacion'] = 'cortesia'
+            self.initial['valor_final_cobrado'] = Decimal('0.00')
+            self.initial['metodo_pago_final'] = 'cortesia'
+            for nombre in (
+                'valor_acordado_revision',
+                'valor_final_cobrado',
+                'metodo_pago_final',
+                'numero_recibo',
+                'banco',
+                'banco_otro',
+                'tarjeta_app',
+                'comprobante_url',
+                'monto_1',
+                'metodo_1',
+                'banco_1',
+                'monto_2',
+                'metodo_2',
+                'banco_2',
+                'factura_realizada',
+                'factura_nombres',
+                'factura_cedula',
+                'factura_correo',
+                'asesora_notificacion',
+                'mensaje_notificacion',
+            ):
+                self.fields[nombre].required = False
 
     def _limpiar_pago_pendiente(self, cleaned):
         cleaned['metodo_pago_final'] = 'sin_pago'
@@ -1249,6 +1309,19 @@ class SalidaEquipoForm(forms.ModelForm):
         cleaned['monto_2'] = None
         cleaned['metodo_2'] = ''
         cleaned['banco_2'] = ''
+
+    def _limpiar_cortesia(self, cleaned):
+        cleaned['estado_reparacion'] = 'cortesia'
+        cleaned['valor_acordado_revision'] = None
+        cleaned['valor_final_cobrado'] = Decimal('0.00')
+        self._limpiar_pago_pendiente(cleaned)
+        cleaned['metodo_pago_final'] = 'cortesia'
+        cleaned['factura_realizada'] = 'no'
+        cleaned['factura_nombres'] = ''
+        cleaned['factura_cedula'] = ''
+        cleaned['factura_correo'] = ''
+        cleaned['asesora_notificacion'] = None
+        cleaned['mensaje_notificacion'] = ''
 
     def _registrar_notificacion_pendiente(self, tipo, valor, mensaje_default):
         self.notificacion_asesora_tipo = tipo
@@ -1273,6 +1346,10 @@ class SalidaEquipoForm(forms.ModelForm):
         self.notificacion_asesora_tipo = None
         self.notificacion_asesora_valor = Decimal('0.00')
         self.notificacion_asesora_mensaje_default = ''
+
+        if self.instance and self.instance.ingreso and self.instance.ingreso.estado == 'cortesia':
+            self._limpiar_cortesia(cleaned)
+            return cleaned
         
         # Validar que no se pueda marcar como retirado si hay saldo pendiente
         if estado_reparacion == 'retirado':

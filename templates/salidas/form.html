@@ -258,14 +258,28 @@
                 <div class="val">{{ ingreso.tipo_equipo_display }} — {{ ingreso.marca }}</div>
             </div>
             <div class="item">
+                {% if ingreso.estado == 'cortesia' %}
+                <div class="lbl">Modalidad</div>
+                <div class="val" style="color:#0369a1;">Cortesía / sin cobro</div>
+                {% else %}
                 <div class="lbl">Saldo pendiente</div>
                 <div id="saldo-display" class="val" style="color: {% if ingreso.diferencia > 0 %}var(--danger){% else %}var(--success){% endif %};">{{ ingreso.diferencia|dinero_signo }}</div>
                 <div id="saldo-nota" style="font-size:10px; color:#888; margin-top:2px; display:none;">
                     Se cobra solo el diagnóstico
                 </div>
+                {% endif %}
             </div>
         </div>
     </div>
+
+    {% if ingreso.estado == 'cortesia' %}
+    <div class="form-section" style="border-left:4px solid #0284c7; background:#f0f9ff;">
+        <h3 style="color:#0369a1;">Salida de cortesía</h3>
+        <p style="margin:0; color:#075985; font-weight:700;">
+            Este ingreso fue registrado como cortesía. La salida queda automáticamente sin valor, sin pago, sin recibo y sin factura.
+        </p>
+    </div>
+    {% endif %}
 
     {% if modo == 'editar' %}
         {% comment %}
@@ -382,6 +396,7 @@
         </div>
     </div>
 
+    {% if ingreso.estado != 'cortesia' %}
     <div class="form-section" id="section-cierre-economico"{% if form.estado_reparacion.value == 'retirado' %} style="display:none;"{% endif %}>
         <h3>Cierre Económico</h3>
         
@@ -519,6 +534,7 @@
             </div>
         </div>
     </div>
+    {% endif %}
 
     <div class="form-section">
         <h3>Observaciones</h3>
@@ -531,7 +547,7 @@
     <div class="actions-bar">
         <a href="{% url 'econotec:ingreso_detalle' pk=ingreso.pk %}" class="btn btn-secondary">Cancelar</a>
         <button type="submit" id="btn-registrar" class="btn btn-primary">
-            {% if modo == 'editar' %}Guardar cambios{% else %}Registrar Equipo listo o reparado / salida{% endif %}
+            {% if modo == 'editar' %}Guardar cambios{% elif ingreso.estado == 'cortesia' %}Registrar salida de cortesía{% else %}Registrar Equipo listo o reparado / salida{% endif %}
         </button>
     </div>
 </form>

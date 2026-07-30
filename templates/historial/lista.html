@@ -114,7 +114,9 @@
                                 <td>{{ i.tipo_equipo_display }} — {{ i.marca|truncatechars:25 }}</td>
                                 <td><span class="badge badge-{{ i.estado }}">{{ i.get_estado_display }}</span></td>
                                 <td>
-                                    {% if i.estado_pago == 'Pagado' %}
+                                    {% if i.estado_pago == 'Cortesía' %}
+                                        <span class="badge badge-cortesia">Cortesía</span>
+                                    {% elif i.estado_pago == 'Pagado' %}
                                         <span class="badge badge-pagado">Pagado</span>
                                     {% elif i.estado_pago == 'Parcial' %}
                                         <span class="badge badge-parcial">Parcial</span>

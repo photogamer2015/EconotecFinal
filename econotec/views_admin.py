@@ -1251,6 +1251,106 @@ def admin_equipos_administrativos(request):
 
 
 @admin_requerido
+def admin_equipos_cortesia(request):
+    """Bandeja mensual de ingresos y salidas registrados como cortesía."""
+    hoy = date.today()
+    try:
+        year = int(request.GET.get('ano') or hoy.year)
+        month = int(request.GET.get('mes') or hoy.month)
+    except (TypeError, ValueError):
+        year, month = hoy.year, hoy.month
+    month = min(max(month, 1), 12)
+    q = (request.GET.get('q') or '').strip()
+
+    cortesias = (
+        IngresoEquipo.objects
+        .filter(estado='cortesia')
+        .filter(
+            Q(fecha_ingreso__year=year, fecha_ingreso__month=month)
+            | Q(salida__fecha_salida__year=year, salida__fecha_salida__month=month)
+        )
+        .select_related(
+            'cliente',
+            'tecnico_encargado',
+            'registrado_por',
+            'salida',
+            'salida__tecnico_reparo',
+            'salida__registrado_por',
+        )
+        .distinct()
+        .order_by('-fecha_ingreso', '-numero_equipo')
+    )
+    if q:
+        filtros = (
+            Q(marca__icontains=q)
+            | Q(modelo_serie__icontains=q)
+            | Q(serie__icontains=q)
+            | Q(cliente__nombres__icontains=q)
+            | Q(cliente__cedula__icontains=q)
+        )
+        if q.isdigit():
+            filtros |= Q(numero_equipo=int(q))
+        cortesias = cortesias.filter(filtros)
+
+    items = []
+    for ingreso in cortesias:
+        try:
+            salida = ingreso.salida
+        except SalidaEquipo.DoesNotExist:
+            salida = None
+        items.append({
+            'ingreso': ingreso,
+            'salida': salida,
+            'ingresado_en_mes': (
+                ingreso.fecha_ingreso.year == year
+                and ingreso.fecha_ingreso.month == month
+            ),
+            'salio_en_mes': bool(
+                salida
+                and salida.fecha_salida.year == year
+                and salida.fecha_salida.month == month
+            ),
+        })
+
+    page_obj, querystring = paginar_resultados(request, items)
+    anos_disp = sorted(set(
+        IngresoEquipo.objects
+        .filter(estado='cortesia')
+        .dates('fecha_ingreso', 'year')
+        .values_list('fecha_ingreso__year', flat=True)
+    ), reverse=True)
+    if year not in anos_disp:
+        anos_disp.append(year)
+        anos_disp.sort(reverse=True)
+
+    return render(request, 'admin_panel/equipos_cortesia.html', {
+        'items': page_obj.object_list,
+        'page_obj': page_obj,
+        'querystring': querystring,
+        'q': q,
+        'year': year,
+        'month': month,
+        'mes_nombre': MESES_ES[month],
+        'meses_es': MESES_ES,
+        'anos_disp': anos_disp,
+        'ingresos_mes': IngresoEquipo.objects.filter(
+            estado='cortesia',
+            fecha_ingreso__year=year,
+            fecha_ingreso__month=month,
+        ).count(),
+        'salidas_mes': SalidaEquipo.objects.filter(
+            estado_reparacion='cortesia',
+            fecha_salida__year=year,
+            fecha_salida__month=month,
+        ).count(),
+        'pendientes_salida': IngresoEquipo.objects.filter(
+            estado='cortesia',
+            salida__isnull=True,
+        ).count(),
+    })
+
+
+@admin_requerido
 def egresos_lista(request):
     cat_filtro = (request.GET.get('cat') or '').strip()
     ano_filtro = (request.GET.get('ano') or '').strip()

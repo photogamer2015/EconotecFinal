@@ -270,6 +270,26 @@
     .venta-observacion-input.is-visible {
         display: block;
     }
+    .venta-observacion-inventario {
+        display: none;
+        padding: 9px 10px;
+        border-radius: 8px;
+        border: 1px solid rgba(15, 118, 110, .18);
+        background: rgba(240, 253, 250, .78);
+        color: #0f766e;
+        font-size: 12px;
+        font-weight: 800;
+        line-height: 1.35;
+        overflow-wrap: anywhere;
+    }
+    .venta-observacion-inventario.is-visible {
+        display: block;
+    }
+    .venta-observacion-option.is-disabled {
+        opacity: .58;
+        cursor: not-allowed;
+        background: #f3f4f6;
+    }
     .venta-observacion-status {
         color: var(--text-muted);
         font-size: 11px;
@@ -1683,6 +1703,17 @@
             return normalizeObservation(item && item.observacion);
         }
 
+        function inventoryObservation(item) {
+            return normalizeObservation(item && item.observacion_inventario);
+        }
+
+        function observationMode(item) {
+            var observacion = selectedObservation(item);
+            var inventario = inventoryObservation(item);
+            if (!observacion) return 'none';
+            return inventario && observacion === inventario ? 'inventory' : 'custom';
+        }
+
         function numberValue(value) {
             return parseFloat(String(value == null ? '0' : value).replace(',', '.')) || 0;
         }
@@ -1991,13 +2022,19 @@
                 var disponible = item.disponible == null ? '' : ' · <strong>Disponible ahora:</strong> ' + esc(disponibleRestante);
                 var observacion = selectedObservation(item);
                 var observacionInventario = normalizeObservation(item.observacion_inventario);
+                var modoObservacion = observationMode(item);
                 var obsModeName = 'venta_observacion_' + index;
+                var inventarioOpcionHtml = observacionInventario
+                    ? '<label class="venta-observacion-option"><input type="radio" name="' + obsModeName + '" value="inventory" data-observation-mode="inventory" data-observation-index="' + index + '"' + (modoObservacion === 'inventory' ? ' checked' : '') + '> Usar observación de inventario</label>'
+                    : '<label class="venta-observacion-option is-disabled"><input type="radio" name="' + obsModeName + '" value="inventory" disabled> Sin observación de inventario</label>';
                 var observacionHtml = '<div class="venta-inventario-observacion" data-observation-index="' + index + '">'
                     + '<div class="venta-observacion-options">'
-                    + '<label class="venta-observacion-option"><input type="radio" name="' + obsModeName + '" value="none" data-observation-mode="none" data-observation-index="' + index + '"' + (observacion ? '' : ' checked') + '> Ninguna</label>'
-                    + '<label class="venta-observacion-option"><input type="radio" name="' + obsModeName + '" value="custom" data-observation-mode="custom" data-observation-index="' + index + '"' + (observacion ? ' checked' : '') + '> Incluir observación</label>'
+                    + '<label class="venta-observacion-option"><input type="radio" name="' + obsModeName + '" value="none" data-observation-mode="none" data-observation-index="' + index + '"' + (modoObservacion === 'none' ? ' checked' : '') + '> Ninguna</label>'
+                    + inventarioOpcionHtml
+                    + '<label class="venta-observacion-option"><input type="radio" name="' + obsModeName + '" value="custom" data-observation-mode="custom" data-observation-index="' + index + '"' + (modoObservacion === 'custom' ? ' checked' : '') + '> Incluir observación</label>'
                     + '</div>'
-                    + '<textarea class="form-input venta-observacion-input' + (observacion ? ' is-visible' : '') + '" data-observation-input data-observation-index="' + index + '" maxlength="500" placeholder="Escribe una observación opcional para este producto vendido">' + esc(observacion) + '</textarea>'
+                    + '<div class="venta-observacion-inventario' + (modoObservacion === 'inventory' ? ' is-visible' : '') + '" data-observation-inventory="' + index + '">' + (observacionInventario ? 'Observación de inventario: ' + esc(observacionInventario) : '') + '</div>'
+                    + '<textarea class="form-input venta-observacion-input' + (modoObservacion === 'custom' ? ' is-visible' : '') + '" data-observation-input data-observation-index="' + index + '" maxlength="500" placeholder="Escribe una observación opcional para este producto vendido">' + (modoObservacion === 'custom' ? esc(observacion) : '') + '</textarea>'
                     + '<small class="venta-observacion-status" data-observation-status="' + index + '"></small>'
                     + '</div>';
                 return '<article class="venta-inventario-card">'
@@ -2358,21 +2395,43 @@
             var item = selected[index];
             if (!item) return;
             var input = selectedNode.querySelector('[data-observation-input][data-observation-index="' + index + '"]');
+            var inventarioBox = selectedNode.querySelector('[data-observation-inventory="' + index + '"]');
+            var observacionInventario = inventoryObservation(item);
             if (radio.value === 'none') {
                 item.observacion = '';
                 if (input) {
                     input.value = '';
                     input.classList.remove('is-visible');
                 }
+                if (inventarioBox) inventarioBox.classList.remove('is-visible');
                 syncHidden();
                 persistObservation(index);
                 return;
             }
+            if (radio.value === 'inventory') {
+                item.observacion = observacionInventario;
+                if (input) {
+                    input.value = '';
+                    input.classList.remove('is-visible');
+                }
+                if (inventarioBox) inventarioBox.classList.toggle('is-visible', !!observacionInventario);
+                syncHidden();
+                persistObservation(index);
+                return;
+            }
+            if (inventarioBox) inventarioBox.classList.remove('is-visible');
             if (input) {
+                if (selectedObservation(item) === observacionInventario) {
+                    item.observacion = '';
+                    input.value = '';
+                } else {
+                    input.value = selectedObservation(item);
+                }
                 input.classList.add('is-visible');
                 setTimeout(function () { input.focus(); }, 30);
             }
             syncHidden();
+            persistObservation(index);
         });
         selectedNode.addEventListener('input', function (event) {
             var input = event.target.closest('[data-observation-input]');

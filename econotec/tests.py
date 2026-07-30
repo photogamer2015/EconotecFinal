@@ -563,7 +563,10 @@ class VentasTests(TestCase):
         self.assertContains(response, 'Valor desde inventario')
         self.assertContains(response, 'id_venta_valor_desde_inventario')
         self.assertContains(response, 'Ninguna')
+        self.assertContains(response, 'Usar observación de inventario')
+        self.assertContains(response, 'Sin observación de inventario')
         self.assertContains(response, 'Incluir observación')
+        self.assertContains(response, 'data-observation-inventory')
         self.assertNotContains(response, 'Detalle adicional de la venta')
 
     def test_registrar_venta_no_requiere_campos_diagnostico_ocultos(self):
@@ -615,6 +618,29 @@ class VentasTests(TestCase):
         productos_pdf = views_print._venta_productos_pdf_items(venta)
         detalles_pdf = ' · '.join(productos_pdf[0]['detalles'])
         self.assertIn('Observación: Entregar con cable USB probado.', detalles_pdf)
+
+    def test_registrar_venta_puede_usar_observacion_guardada_en_inventario(self):
+        producto = self.crear_producto_venta()
+        producto.observacion = 'Producto probado en inventario.'
+        producto.save(update_fields=['observacion'])
+
+        response = self.client.post(
+            reverse('econotec:venta_registrar'),
+            self.venta_post_data(
+                inventario_seleccionado=json.dumps([
+                    {
+                        'item_id': producto.pk,
+                        'cantidad': 1,
+                        'observacion': producto.observacion,
+                    },
+                ]),
+            ),
+        )
+
+        self.assertRedirects(response, reverse('econotec:venta_lista'))
+        venta = IngresoEquipo.objects.get(sede='ventas')
+        relacion = VentaInventarioItem.objects.get(venta=venta, inventario_item=producto)
+        self.assertEqual(relacion.observacion, 'Producto probado en inventario.')
 
     def test_registrar_venta_guarda_firma_cliente_y_pdf_usa_firma_tecnico(self):
         response = self.client.post(
@@ -1121,6 +1147,7 @@ class VentasTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, '📦 Inventario')
         self.assertContains(response, f'href="{reverse("econotec:inventario_menu")}"')
+        self.assertContains(response, 'class="top-inventory-link" title="Abrir inventario" target="_blank" rel="noopener"')
         self.assertContains(response, 'id="btn-perfil"')
         self.assertContains(response, 'Asesor')
         self.assertContains(response, 'Ver equipos que registré')
@@ -1208,7 +1235,7 @@ class VentasTests(TestCase):
         self.assertContains(response, 'Ubicación')
         self.assertContains(response, 'Acción')
         self.assertNotContains(response, 'Marca / Modelo')
-        self.assertNotContains(response, 'Observación')
+        self.assertContains(response, 'Observación')
         self.assertContains(response, 'Sin registros todavía para PC en Guayaquil.')
 
     def test_inventario_tabla_filtra_por_texto_estado_y_ubicacion(self):
@@ -1548,6 +1575,7 @@ class VentasTests(TestCase):
         self.assertContains(tabla, 'HP')
         self.assertContains(tabla, 'EliteDesk 800')
         self.assertContains(tabla, 'Guayaquil Norte')
+        self.assertContains(tabla, 'Guardar para cliente frecuente.')
         self.assertContains(tabla, 'Editar')
         self.assertContains(tabla, 'Eliminar')
         self.assertContains(tabla, 'data:image/png;base64,')
@@ -2152,6 +2180,41 @@ class VentasTests(TestCase):
 
         self.assertContains(response, 'MANDO <span class="check-box">X</span>', html=False)
         self.assertContains(response, 'Mando')
+
+    def test_tipo_equipo_maquina_coser_se_acepta_y_se_imprime(self):
+        form = IngresoEquipoForm(data=self.ingreso_form_data(
+            tipo_equipo='maquina_coser',
+            tipo_equipo_otro='',
+            marca='Singer',
+            modelo_serie='Tradition 2250',
+        ))
+
+        self.assertTrue(form.is_valid(), form.errors.as_json())
+
+        ingreso = self.crear_ingreso_reparacion(
+            tipo_equipo='maquina_coser',
+            marca='Singer',
+            modelo_serie='Tradition 2250',
+        )
+        response = self.client.get(reverse('econotec:ingreso_imprimir', kwargs={'pk': ingreso.pk}))
+
+        self.assertContains(response, 'MAQUINA DE COSER <span class="check-box">X</span>', html=False)
+        self.assertContains(response, 'Máquina de Coser')
+
+    def test_historial_muestra_maquina_coser_como_apartado_propio(self):
+        self.crear_ingreso_reparacion(
+            tipo_equipo='maquina_coser',
+            marca='Singer',
+            modelo_serie='Tradition 2250',
+        )
+
+        response = self.client.get(reverse('econotec:historial_lista'), {
+            'ano': '2026',
+            'mes': '7',
+        })
+
+        self.assertContains(response, 'Máquina de Coser')
+        self.assertContains(response, 'Singer')
 
     def test_formulario_ingreso_incluye_responsive_movil_y_firma_tactil(self):
         self.activar_sede_guayaquil()
@@ -4210,6 +4273,30 @@ class VentasTests(TestCase):
         self.assertFalse(form.is_valid())
         self.assertIn('valor_acordado', form.errors)
 
+    def test_valor_acordado_si_exige_minimo_un_dolar(self):
+        for valor in ('0.00', '0.99', '01.00'):
+            with self.subTest(valor=valor):
+                form = IngresoEquipoForm(data=self.ingreso_form_data(
+                    valor_acordado_estado='si',
+                    valor_acordado=valor,
+                ))
+
+                self.assertFalse(form.is_valid())
+                self.assertIn('valor_acordado', form.errors)
+                self.assertIn(
+                    'El valor debe ser igual o mayor a $1.00.',
+                    form.errors['valor_acordado']
+                )
+
+    def test_valor_acordado_si_acepta_un_dolar_exacto(self):
+        form = IngresoEquipoForm(data=self.ingreso_form_data(
+            valor_acordado_estado='si',
+            valor_acordado='1.00',
+        ))
+
+        self.assertTrue(form.is_valid(), form.errors.as_json())
+        self.assertEqual(form.cleaned_data['valor_acordado'], Decimal('1.00'))
+
     def test_ingreso_garantia_fuerza_valor_acordado_cero(self):
         form = IngresoEquipoForm(data=self.ingreso_form_data(
             estado='garantia',
@@ -4257,6 +4344,38 @@ class VentasTests(TestCase):
         self.assertEqual(form.cleaned_data['diagnostico_metodo'], 'efectivo')
         self.assertIsNone(form.cleaned_data['diagnostico_monto_1'])
         self.assertIsNone(form.cleaned_data['diagnostico_monto_2'])
+
+    def test_ingreso_cortesia_fuerza_todos_los_valores_a_cero(self):
+        form = IngresoEquipoForm(data=self.ingreso_form_data(
+            estado='cortesia',
+            subestado_reparacion='',
+            valor_acordado_estado='si',
+            valor_acordado='125.00',
+            diagnostico_inmediato='si',
+            valor_diagnostico='25.00',
+            diagnostico_metodo='transferencia',
+            diagnostico_banco='pichincha',
+            abono_anticipo='40.00',
+            anticipo_metodo='tarjeta',
+            anticipo_tarjeta_app='payphone',
+        ))
+
+        self.assertTrue(form.is_valid(), form.errors.as_json())
+        self.assertEqual(form.cleaned_data['valor_acordado'], Decimal('0.00'))
+        self.assertEqual(form.cleaned_data['diagnostico_inmediato'], 'no')
+        self.assertEqual(form.cleaned_data['valor_diagnostico'], Decimal('0.00'))
+        self.assertEqual(form.cleaned_data['abono_anticipo'], Decimal('0.00'))
+
+    def test_ingreso_cortesia_ignora_valor_manual_invalido(self):
+        form = IngresoEquipoForm(data=self.ingreso_form_data(
+            estado='cortesia',
+            subestado_reparacion='',
+            valor_acordado_estado='si',
+            valor_acordado='valor manipulado',
+        ))
+
+        self.assertTrue(form.is_valid(), form.errors.as_json())
+        self.assertEqual(form.cleaned_data['valor_acordado'], Decimal('0.00'))
 
     def test_ingreso_donado_limpia_firma_diagnostico_anticipo_y_valor(self):
         data = self.ingreso_form_data(
@@ -4434,6 +4553,119 @@ class VentasTests(TestCase):
         self.assertEqual(notificacion.asesora, self.vendedor)
         self.assertEqual(notificacion.valor_acordado, Decimal('75.00'))
         self.assertFalse(notificacion.leida)
+
+    def test_salida_cortesia_es_unica_y_limpia_todo_cobro(self):
+        ingreso = self.crear_ingreso_reparacion(
+            estado='cortesia',
+            subestado_reparacion='',
+            valor_acordado=Decimal('99.00'),
+            diagnostico_inmediato='si',
+            valor_diagnostico=Decimal('15.00'),
+            abono_anticipo=Decimal('20.00'),
+        )
+        ingreso.refresh_from_db()
+        self.assertEqual(ingreso.valor_acordado, Decimal('0.00'))
+        self.assertEqual(ingreso.valor_diagnostico, Decimal('0.00'))
+        self.assertEqual(ingreso.abono_anticipo, Decimal('0.00'))
+
+        response_get = self.client.get(
+            reverse('econotec:salida_registrar', kwargs={'ingreso_pk': ingreso.pk})
+        )
+        self.assertEqual(response_get.status_code, 200)
+        self.assertContains(response_get, 'Salida de cortesía')
+        self.assertNotContains(response_get, 'Cierre Económico')
+        self.assertNotContains(response_get, '¿Factura realizada?')
+
+        response = self.client.post(
+            reverse('econotec:salida_registrar', kwargs={'ingreso_pk': ingreso.pk}),
+            self.salida_post_data(
+                estado_reparacion='cortesia',
+                valor_final_cobrado='80.00',
+                metodo_pago_final='transferencia',
+                banco='pichincha',
+                numero_recibo='REC-MANIPULADO',
+                factura_realizada='si',
+                factura_nombres='No debe guardarse',
+                factura_cedula='0999999999',
+                factura_correo='factura@example.com',
+            ),
+        )
+
+        salida = SalidaEquipo.objects.get(ingreso=ingreso)
+        self.assertRedirects(
+            response,
+            reverse('econotec:salida_listo_aviso', kwargs={'pk': salida.pk}),
+        )
+        self.assertEqual(salida.estado_reparacion, 'cortesia')
+        self.assertEqual(salida.valor_final_cobrado, Decimal('0.00'))
+        self.assertEqual(salida.metodo_pago_final, 'cortesia')
+        self.assertEqual(salida.numero_recibo, '')
+        self.assertEqual(salida.factura_realizada, 'no')
+        self.assertEqual(salida.factura_nombres, '')
+        self.assertEqual(ingreso.diferencia, Decimal('0.00'))
+
+        response_print = self.client.get(
+            reverse('econotec:salida_imprimir', kwargs={'pk': salida.pk})
+        )
+        self.assertContains(response_print, 'SALIDA DE CORTESÍA')
+        self.assertNotContains(response_print, 'CIERRE ECONÓMICO')
+
+    def test_ingreso_cortesia_no_admite_abonos(self):
+        ingreso = self.crear_ingreso_reparacion(
+            estado='cortesia',
+            subestado_reparacion='',
+            valor_acordado=Decimal('0.00'),
+        )
+
+        response = self.client.get(
+            reverse('econotec:abono_crear', kwargs={'ingreso_pk': ingreso.pk})
+        )
+
+        self.assertRedirects(
+            response,
+            reverse('econotec:ingreso_detalle', kwargs={'pk': ingreso.pk}),
+        )
+        self.assertFalse(Abono.objects.filter(ingreso=ingreso).exists())
+
+    def test_admin_cortesia_muestra_ingreso_y_salida_en_apartado_propio(self):
+        self.client.force_login(self.admin)
+        ingreso_con_salida = self.crear_ingreso_reparacion(
+            fecha_ingreso=date(2026, 7, 10),
+            estado='cortesia',
+            subestado_reparacion='',
+            valor_acordado=Decimal('0.00'),
+            modelo_serie='Cortesía con salida',
+        )
+        ingreso_pendiente = self.crear_ingreso_reparacion(
+            fecha_ingreso=date(2026, 7, 11),
+            estado='cortesia',
+            subestado_reparacion='',
+            valor_acordado=Decimal('0.00'),
+            modelo_serie='Cortesía pendiente',
+        )
+        SalidaEquipo.objects.create(
+            ingreso=ingreso_con_salida,
+            fecha_salida=date(2026, 7, 20),
+            estado_reparacion='cortesia',
+            tecnico_reparo=self.usuario,
+            valor_final_cobrado=Decimal('90.00'),
+            metodo_pago_final='efectivo',
+            registrado_por=self.usuario,
+        )
+
+        response = self.client.get(
+            reverse('econotec:admin_equipos_cortesia'),
+            {'ano': '2026', 'mes': '7'},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context['ingresos_mes'], 2)
+        self.assertEqual(response.context['salidas_mes'], 1)
+        self.assertEqual(response.context['pendientes_salida'], 1)
+        self.assertContains(response, ingreso_con_salida.codigo_equipo)
+        self.assertContains(response, ingreso_pendiente.codigo_equipo)
+        self.assertContains(response, 'Salida de cortesía')
+        self.assertContains(response, 'Pendiente de registrar')
 
     def test_salida_cliente_no_acepta_revision_pendiente_notifica_asesora(self):
         ingreso = self.crear_ingreso_reparacion(valor_acordado=Decimal('40.00'))
