@@ -120,6 +120,50 @@
             font-size: 15px;
             font-weight: 900;
         }
+        .additional-value-box {
+            border: 1px solid #f2c19a;
+            border-radius: 6px;
+            background: #fff8f3;
+            padding: 9px 10px;
+            margin-bottom: 10px;
+            page-break-inside: avoid;
+        }
+        .additional-value-title {
+            color: var(--naranja);
+            font-size: 10px;
+            font-weight: 900;
+            text-transform: uppercase;
+            letter-spacing: 0.35px;
+            margin-bottom: 6px;
+        }
+        .additional-value-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 8px;
+        }
+        .additional-value-item .lbl {
+            display: block;
+            color: #666;
+            font-size: 8px;
+            font-weight: 800;
+            text-transform: uppercase;
+        }
+        .additional-value-item .val {
+            display: block;
+            color: #1f2937;
+            font-family: 'Courier New', monospace;
+            font-size: 10.5px;
+            font-weight: 900;
+            margin-top: 2px;
+        }
+        .additional-value-reason {
+            margin-top: 7px;
+            padding-top: 6px;
+            border-top: 1px dashed #e7c7ac;
+            color: #333;
+            font-size: 9.5px;
+            line-height: 1.35;
+        }
         .payments-title {
             color: #444;
             font-size: 10px;
@@ -395,6 +439,30 @@
     <!-- CIERRE ECONÓMICO -->
     <div class="section-header">CIERRE ECONÓMICO</div>
     <div class="closing-box">
+        {% if salida.tiene_valor_acordado_adicional %}
+        <div class="additional-value-box">
+            <div class="additional-value-title">Detalle del valor acordado adicional</div>
+            <div class="additional-value-grid">
+                <div class="additional-value-item">
+                    <span class="lbl">Valor acordado original</span>
+                    <span class="val">{{ ingreso.valor_acordado|dinero_signo }}</span>
+                </div>
+                <div class="additional-value-item">
+                    <span class="lbl">Valor adicional</span>
+                    <span class="val">{{ salida.valor_acordado_adicional|dinero_signo }}</span>
+                </div>
+                <div class="additional-value-item">
+                    <span class="lbl">Total acordado actualizado</span>
+                    <span class="val">{{ ingreso.valor_efectivo_a_cobrar|dinero_signo }}</span>
+                </div>
+            </div>
+            <div class="additional-value-reason">
+                <strong>Motivo acordado:</strong>
+                {{ salida.motivo_valor_acordado_adicional }}
+            </div>
+        </div>
+        {% endif %}
+
         <div class="pending-total">
             <span class="lbl">Su valor pendiente es:</span>
             <span class="val">{{ ingreso.diferencia|dinero_signo }}</span>

@@ -44,7 +44,8 @@ class IngresoEquipoAdmin(admin.ModelAdmin):
 class SalidaEquipoAdmin(admin.ModelAdmin):
     list_display = (
         'ingreso', 'fecha_salida', 'estado_reparacion',
-        'valor_final_cobrado', 'cliente_recibe_conforme', 'registrado_por',
+        'valor_final_cobrado', 'valor_acordado_adicional',
+        'cliente_recibe_conforme', 'registrado_por',
     )
     list_filter = ('estado_reparacion', 'fecha_salida', 'cliente_recibe_conforme')
     search_fields = (

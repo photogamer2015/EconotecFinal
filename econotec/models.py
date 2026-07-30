@@ -1089,7 +1089,10 @@ class IngresoEquipo(models.Model):
                 return Decimal('0.00')
 
             return _q2(self.valor_diagnostico or Decimal('0.00'))
-        return _q2(self.valor_acordado or Decimal('0.00'))
+        valor_reparacion = self.valor_acordado or Decimal('0.00')
+        if salida and salida.tiene_valor_acordado_adicional:
+            valor_reparacion += salida.valor_acordado_adicional
+        return _q2(valor_reparacion)
 
     @property
     def diferencia(self):
@@ -1556,6 +1559,25 @@ class SalidaEquipo(models.Model):
         verbose_name='Valor acordado por revisión (USD)',
         help_text='Solo aplica cuando el estado de salida es Revisión.',
     )
+    aplica_valor_acordado_adicional = models.CharField(
+        max_length=2,
+        choices=SI_NO,
+        default='no',
+        verbose_name='¿Aplica un valor acordado adicional?',
+        help_text='Solo aplica cuando el equipo queda reparado y pendiente de retiro.',
+    )
+    valor_acordado_adicional = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        verbose_name='Valor acordado adicional (USD)',
+        help_text='Valor adicional pendiente de pago acordado al finalizar la reparación.',
+    )
+    motivo_valor_acordado_adicional = models.TextField(
+        blank=True,
+        verbose_name='Motivo del valor acordado adicional',
+        help_text='Explicación del motivo por el que se acordó el valor adicional.',
+    )
     metodo_pago_final = models.CharField(
         max_length=20, choices=METODOS_PAGO_FINAL, default='efectivo',
         verbose_name='Método de pago del saldo final',
@@ -1778,6 +1800,14 @@ class SalidaEquipo(models.Model):
         if not u:
             return ''
         return (f'{u.first_name} {u.last_name}'.strip()) or u.username
+
+    @property
+    def tiene_valor_acordado_adicional(self):
+        """Indica si esta salida conserva un cargo adicional válido."""
+        return (
+            self.aplica_valor_acordado_adicional == 'si'
+            and (self.valor_acordado_adicional or Decimal('0.00')) > 0
+        )
 
     def calcular_bodegaje(self, hoy=None, umbral=None, costo_dia=None):
         """

@@ -382,6 +382,44 @@
             </div>
         </div>
 
+        <div id="wrap-valor-adicional" style="display:none; margin-top:14px; background:#fff8e1; border:1px solid #f5c451; border-radius:10px; padding:14px;">
+            <div class="form-row cols-2" style="align-items:end;">
+                <div>
+                    <label class="form-label" for="{{ form.aplica_valor_acordado_adicional.id_for_label }}" style="color:#856404;">
+                        ¿Aplica un valor acordado adicional?
+                    </label>
+                    {{ form.aplica_valor_acordado_adicional }}
+                    {{ form.aplica_valor_acordado_adicional.errors }}
+                </div>
+                <div style="color:#856404; font-size:11px; font-weight:700; line-height:1.45; padding-bottom:4px;">
+                    El valor adicional se suma al saldo pendiente y no se registra como un pago recibido.
+                </div>
+            </div>
+
+            <div id="detalle-valor-adicional" class="form-row cols-2" style="display:none; margin-top:12px; padding-top:12px; border-top:1px dashed #e4b33f;">
+                <div>
+                    <label class="form-label" for="{{ form.valor_acordado_adicional.id_for_label }}" style="color:#856404;">
+                        Valor adicional (USD) *
+                    </label>
+                    {{ form.valor_acordado_adicional }}
+                    {{ form.valor_acordado_adicional.errors }}
+                    <small style="display:block; margin-top:5px; color:#856404;">
+                        Mínimo $0.01. Puedes ingresar valores como 0.10.
+                    </small>
+                </div>
+                <div>
+                    <label class="form-label" for="{{ form.motivo_valor_acordado_adicional.id_for_label }}" style="color:#856404;">
+                        Motivo del valor adicional *
+                    </label>
+                    {{ form.motivo_valor_acordado_adicional }}
+                    {{ form.motivo_valor_acordado_adicional.errors }}
+                    <small style="display:block; margin-top:5px; color:#856404;">
+                        Este detalle aparecerá en la hoja de salida.
+                    </small>
+                </div>
+            </div>
+        </div>
+
         <div class="form-row cols-1" id="wrap-valor-revision" style="margin-top: 14px; display:none;">
             <div style="background:#fff8e1; border:1px solid #ffe08a; border-radius:8px; padding:14px;">
                 <label class="form-label" for="{{ form.valor_acordado_revision.id_for_label }}">
@@ -576,6 +614,11 @@
         var sectionCierreEconomico = document.getElementById('section-cierre-economico');
         var wrapPagoFinal = document.getElementById('wrap-pago-final');
         var wrapNumeroRecibo = document.getElementById('wrap-numero-recibo');
+        var wrapValorAdicional = document.getElementById('wrap-valor-adicional');
+        var detalleValorAdicional = document.getElementById('detalle-valor-adicional');
+        var aplicaValorAdicional = document.querySelector('[name="aplica_valor_acordado_adicional"]');
+        var inputValorAdicional = document.querySelector('[name="valor_acordado_adicional"]');
+        var motivoValorAdicional = document.querySelector('[name="motivo_valor_acordado_adicional"]');
 
         // Datos del ingreso (vienen de Django)
         var valorDiagnostico = parseFloat("{{ ingreso.valor_diagnostico|default:0 }}") || 0;
@@ -646,6 +689,36 @@
             var v = selEstado.value;
             var wrapCobrar = document.getElementById('wrap-cobrar-diagnostico');
             if (wrapCobrar) wrapCobrar.style.display = 'none';
+            var mostrarValorAdicional = v === 'pendiente_retiro';
+            var aplicaAdicional = (
+                mostrarValorAdicional
+                && aplicaValorAdicional
+                && aplicaValorAdicional.value === 'si'
+            );
+            if (wrapValorAdicional) {
+                wrapValorAdicional.style.display = mostrarValorAdicional ? 'block' : 'none';
+            }
+            if (detalleValorAdicional) {
+                detalleValorAdicional.style.display = aplicaAdicional ? 'grid' : 'none';
+            }
+            if (inputValorAdicional) {
+                if (aplicaAdicional) {
+                    inputValorAdicional.setAttribute('required', 'required');
+                    inputValorAdicional.setAttribute('min', '0.01');
+                    inputValorAdicional.setAttribute('step', '0.01');
+                } else {
+                    inputValorAdicional.removeAttribute('required');
+                    inputValorAdicional.setCustomValidity('');
+                }
+            }
+            if (motivoValorAdicional) {
+                if (aplicaAdicional) {
+                    motivoValorAdicional.setAttribute('required', 'required');
+                } else {
+                    motivoValorAdicional.removeAttribute('required');
+                    motivoValorAdicional.setCustomValidity('');
+                }
+            }
 
             // ── Lógica del saldo ──────────────────────────
             if (saldoDisplay) {
@@ -790,7 +863,13 @@
                 } else if (v === 'pendiente_retiro') {
                     if (wrapPagoFinal) wrapPagoFinal.style.display = 'none';
                     if (wrapNumeroRecibo) wrapNumeroRecibo.style.display = 'none';
-                    var saldoPendienteRetiro = Math.max(diferenciaNormal, 0);
+                    var valorAdicional = aplicaAdicional
+                        ? valorInputCobrado(inputValorAdicional)
+                        : 0;
+                    var saldoPendienteRetiro = Math.max(
+                        diferenciaNormal + valorAdicional,
+                        0
+                    );
                     saldoDisplay.textContent = '$' + saldoPendienteRetiro.toFixed(2);
                     saldoDisplay.style.color = saldoPendienteRetiro > 0 ? 'var(--danger)' : 'var(--success)';
                     if (metodoPago) metodoPago.value = 'sin_pago';
@@ -799,7 +878,19 @@
                         setNotificacionAsesora(true, 'retiro');
                         if (saldoNota) {
                             saldoNota.style.display = '';
-                            saldoNota.textContent = 'Equipo listo, pero con saldo pendiente antes del retiro.';
+                            if (valorAdicional > 0 && diferenciaNormal > 0) {
+                                saldoNota.textContent = (
+                                    'Saldo anterior: $' + diferenciaNormal.toFixed(2)
+                                    + ' + valor adicional: $' + valorAdicional.toFixed(2) + '.'
+                                );
+                            } else if (valorAdicional > 0) {
+                                saldoNota.textContent = (
+                                    'Valor adicional: $' + valorAdicional.toFixed(2)
+                                    + ' (nuevo saldo pendiente).'
+                                );
+                            } else {
+                                saldoNota.textContent = 'Equipo listo, pero con saldo pendiente antes del retiro.';
+                            }
                         }
                     } else if (saldoNota) {
                         saldoNota.style.display = 'none';
@@ -865,6 +956,13 @@
         if (inputValorRevision) {
             inputValorRevision.addEventListener('input', actualizar);
             inputValorRevision.addEventListener('change', actualizar);
+        }
+        if (aplicaValorAdicional) {
+            aplicaValorAdicional.addEventListener('change', actualizar);
+        }
+        if (inputValorAdicional) {
+            inputValorAdicional.addEventListener('input', actualizar);
+            inputValorAdicional.addEventListener('change', actualizar);
         }
         if (selEstado) {
             actualizar();

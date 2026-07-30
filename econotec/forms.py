@@ -1099,6 +1099,9 @@ class SalidaEquipoForm(forms.ModelForm):
             'fecha_salida', 'estado_reparacion', 'tecnico_reparo',
             'observaciones',
             'valor_acordado_revision',
+            'aplica_valor_acordado_adicional',
+            'valor_acordado_adicional',
+            'motivo_valor_acordado_adicional',
             'valor_final_cobrado', 'metodo_pago_final', 'numero_recibo',
             'banco', 'banco_otro', 'tarjeta_app', 'comprobante_url',
             'monto_1', 'metodo_1', 'banco_1',
@@ -1126,6 +1129,21 @@ class SalidaEquipoForm(forms.ModelForm):
                 'step': '0.01',
                 'min': '0',
                 'placeholder': 'Ej.: 20.00',
+            }),
+            'aplica_valor_acordado_adicional': forms.Select(attrs={
+                'class': 'form-input',
+            }),
+            'valor_acordado_adicional': forms.NumberInput(attrs={
+                'class': 'form-input',
+                'step': '0.01',
+                'min': '0.01',
+                'placeholder': 'Ej.: 0.10',
+                'inputmode': 'decimal',
+            }),
+            'motivo_valor_acordado_adicional': forms.TextInput(attrs={
+                'class': 'form-input',
+                'placeholder': 'Ej.: Repuesto adicional autorizado por el cliente',
+                'maxlength': '500',
             }),
             'metodo_pago_final': forms.Select(attrs={'class': 'form-input'}),
             'banco': forms.Select(attrs={'class': 'form-input', 'id': 'id_banco'}),
@@ -1162,6 +1180,14 @@ class SalidaEquipoForm(forms.ModelForm):
         self.notificacion_asesora_tipo = None
         self.notificacion_asesora_valor = Decimal('0.00')
         self.notificacion_asesora_mensaje_default = ''
+        self.fields['aplica_valor_acordado_adicional'].required = False
+        self.fields['valor_acordado_adicional'].required = False
+        self.fields['aplica_valor_acordado_adicional'].choices = [
+            ('no', 'No'),
+            ('si', 'Sí'),
+        ]
+        if not self.is_bound and not (self.instance and self.instance.pk):
+            self.initial['aplica_valor_acordado_adicional'] = 'no'
 
         if self.instance and hasattr(self.instance, 'ingreso') and self.instance.ingreso:
             self.fields['reporte_tecnico'].initial = self.instance.ingreso.reporte_tecnico
@@ -1274,6 +1300,9 @@ class SalidaEquipoForm(forms.ModelForm):
             self.initial['metodo_pago_final'] = 'cortesia'
             for nombre in (
                 'valor_acordado_revision',
+                'aplica_valor_acordado_adicional',
+                'valor_acordado_adicional',
+                'motivo_valor_acordado_adicional',
                 'valor_final_cobrado',
                 'metodo_pago_final',
                 'numero_recibo',
@@ -1313,6 +1342,7 @@ class SalidaEquipoForm(forms.ModelForm):
     def _limpiar_cortesia(self, cleaned):
         cleaned['estado_reparacion'] = 'cortesia'
         cleaned['valor_acordado_revision'] = None
+        self._limpiar_valor_acordado_adicional(cleaned)
         cleaned['valor_final_cobrado'] = Decimal('0.00')
         self._limpiar_pago_pendiente(cleaned)
         cleaned['metodo_pago_final'] = 'cortesia'
@@ -1323,17 +1353,29 @@ class SalidaEquipoForm(forms.ModelForm):
         cleaned['asesora_notificacion'] = None
         cleaned['mensaje_notificacion'] = ''
 
+    def _limpiar_valor_acordado_adicional(self, cleaned):
+        cleaned['aplica_valor_acordado_adicional'] = 'no'
+        cleaned['valor_acordado_adicional'] = Decimal('0.00')
+        cleaned['motivo_valor_acordado_adicional'] = ''
+
     def _registrar_notificacion_pendiente(self, tipo, valor, mensaje_default):
         self.notificacion_asesora_tipo = tipo
         self.notificacion_asesora_valor = valor
         self.notificacion_asesora_mensaje_default = mensaje_default
 
-    def _saldo_pendiente_despues_de_pago(self, valor_pagado_ahora):
+    def _saldo_pendiente_despues_de_pago(
+        self,
+        valor_pagado_ahora,
+        valor_acordado_adicional=Decimal('0.00'),
+    ):
         if not (self.instance and self.instance.ingreso):
             return Decimal('0.00')
 
         ingreso = self.instance.ingreso
-        valor_total = ingreso.valor_acordado or Decimal('0.00')
+        valor_total = (
+            (ingreso.valor_acordado or Decimal('0.00'))
+            + (valor_acordado_adicional or Decimal('0.00'))
+        )
         abonado_previo = ingreso.total_abonado
         if self.instance and self.instance.pk and self.instance.valor_final_cobrado:
             abonado_previo -= self.instance.valor_final_cobrado
@@ -1355,10 +1397,44 @@ class SalidaEquipoForm(forms.ModelForm):
         if estado_reparacion == 'retirado':
             if self.instance and self.instance.ingreso and self.instance.ingreso.diferencia > 0:
                 self.add_error('estado_reparacion', f'No se puede marcar como retirado porque hay un saldo pendiente de ${self.instance.ingreso.diferencia}. El cliente debe pagar todo primero.')
+            # El cargo adicional forma parte del valor histórico del trabajo y
+            # debe conservarse cuando el equipo pasa de pendiente a retirado.
+            if self.instance and self.instance.pk:
+                cleaned['aplica_valor_acordado_adicional'] = (
+                    self.instance.aplica_valor_acordado_adicional
+                )
+                cleaned['valor_acordado_adicional'] = self.instance.valor_acordado_adicional
+                cleaned['motivo_valor_acordado_adicional'] = (
+                    self.instance.motivo_valor_acordado_adicional
+                )
             cleaned['valor_final_cobrado'] = Decimal('0.00')
             cleaned['valor_acordado_revision'] = None
             self._limpiar_pago_pendiente(cleaned)
             return cleaned
+
+        valor_adicional = Decimal('0.00')
+        if estado_reparacion == 'pendiente_retiro':
+            aplica_adicional = cleaned.get('aplica_valor_acordado_adicional') or 'no'
+            if aplica_adicional == 'si':
+                valor_adicional = cleaned.get('valor_acordado_adicional') or Decimal('0.00')
+                motivo_adicional = (
+                    cleaned.get('motivo_valor_acordado_adicional') or ''
+                ).strip()
+                if valor_adicional < Decimal('0.01'):
+                    self.add_error(
+                        'valor_acordado_adicional',
+                        'Ingresa un valor adicional de al menos $0.01.',
+                    )
+                if not motivo_adicional:
+                    self.add_error(
+                        'motivo_valor_acordado_adicional',
+                        'Explica por qué se aplica el valor acordado adicional.',
+                    )
+                cleaned['motivo_valor_acordado_adicional'] = motivo_adicional
+            else:
+                self._limpiar_valor_acordado_adicional(cleaned)
+        else:
+            self._limpiar_valor_acordado_adicional(cleaned)
                 
         metodo = cleaned.get('metodo_pago_final')
         valor = cleaned.get('valor_final_cobrado') or Decimal('0.00')
@@ -1445,7 +1521,10 @@ class SalidaEquipoForm(forms.ModelForm):
                 banco = ''
                 banco_otro = ''
                 tarjeta_app = ''
-            saldo_pendiente = self._saldo_pendiente_despues_de_pago(valor)
+            saldo_pendiente = self._saldo_pendiente_despues_de_pago(
+                valor,
+                valor_adicional,
+            )
             if saldo_pendiente > 0:
                 if not cleaned.get('asesora_notificacion'):
                     self.add_error(

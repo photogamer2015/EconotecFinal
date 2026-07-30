@@ -341,6 +341,9 @@ class VentasTests(TestCase):
             'observaciones': '',
             'valor_final_cobrado': '0.00',
             'valor_acordado_revision': '',
+            'aplica_valor_acordado_adicional': 'no',
+            'valor_acordado_adicional': '0.00',
+            'motivo_valor_acordado_adicional': '',
             'metodo_pago_final': 'efectivo',
             'numero_recibo': '',
             'banco': '',
@@ -3619,6 +3622,42 @@ class VentasTests(TestCase):
         self.assertNotContains(response, 'FACTURA REALIZADA')
         self.assertNotContains(response, 'No se registró factura para esta salida.')
 
+    def test_salida_imprimir_detalla_valor_acordado_adicional(self):
+        ingreso = self.crear_ingreso_reparacion(
+            valor_acordado=Decimal('20.00'),
+            abono_anticipo=Decimal('20.00'),
+        )
+        salida = SalidaEquipo.objects.create(
+            ingreso=ingreso,
+            fecha_salida=date(2026, 7, 9),
+            estado_reparacion='pendiente_retiro',
+            tecnico_reparo=self.usuario,
+            aplica_valor_acordado_adicional='si',
+            valor_acordado_adicional=Decimal('0.10'),
+            motivo_valor_acordado_adicional='Repuesto adicional autorizado por el cliente.',
+            valor_final_cobrado=Decimal('0.00'),
+            metodo_pago_final='sin_pago',
+            registrado_por=self.usuario,
+        )
+
+        response = self.client.get(
+            reverse('econotec:salida_imprimir', kwargs={'pk': salida.pk})
+        )
+
+        self.assertContains(response, 'Detalle del valor acordado adicional')
+        self.assertContains(response, 'Valor acordado original')
+        self.assertContains(response, '$20,00')
+        self.assertContains(response, '$0,10')
+        self.assertContains(response, '$20,10')
+        self.assertContains(response, 'Repuesto adicional autorizado por el cliente.')
+        self.assertContains(response, 'Su valor pendiente es:')
+
+        pdf_response = self.client.get(
+            reverse('econotec:salida_pdf', kwargs={'pk': salida.pk})
+        )
+        self.assertEqual(pdf_response.status_code, 200)
+        self.assertEqual(pdf_response['Content-Type'], 'application/pdf')
+
     def test_salida_imprimir_detalla_pago_mixto(self):
         ingreso = self.crear_ingreso_reparacion(
             estado='entregado',
@@ -4839,6 +4878,104 @@ class VentasTests(TestCase):
         self.assertEqual(salida.metodo_pago_final, 'sin_pago')
         self.assertEqual(ingreso.diferencia, Decimal('0.00'))
         self.assertFalse(NotificacionAsesora.objects.filter(salida=salida).exists())
+
+    def test_salida_pendiente_retiro_suma_valor_adicional_al_saldo(self):
+        ingreso = self.crear_ingreso_reparacion(valor_acordado=Decimal('20.00'))
+
+        response = self.client.post(
+            reverse('econotec:salida_registrar', kwargs={'ingreso_pk': ingreso.pk}),
+            self.salida_post_data(
+                aplica_valor_acordado_adicional='si',
+                valor_acordado_adicional='0.10',
+                motivo_valor_acordado_adicional='Repuesto adicional autorizado.',
+                asesora_notificacion=str(self.vendedor.pk),
+            ),
+        )
+
+        salida = SalidaEquipo.objects.get(ingreso=ingreso)
+        self.assertRedirects(
+            response,
+            reverse('econotec:salida_listo_aviso', kwargs={'pk': salida.pk}),
+        )
+        ingreso.refresh_from_db()
+        self.assertEqual(salida.aplica_valor_acordado_adicional, 'si')
+        self.assertEqual(salida.valor_acordado_adicional, Decimal('0.10'))
+        self.assertEqual(
+            salida.motivo_valor_acordado_adicional,
+            'Repuesto adicional autorizado.',
+        )
+        self.assertEqual(ingreso.valor_efectivo_a_cobrar, Decimal('20.10'))
+        self.assertEqual(ingreso.diferencia, Decimal('20.10'))
+        notificacion = NotificacionAsesora.objects.get(salida=salida)
+        self.assertEqual(notificacion.valor_acordado, Decimal('20.10'))
+
+    def test_valor_adicional_crea_saldo_si_valor_original_ya_esta_pagado(self):
+        ingreso = self.crear_ingreso_reparacion(
+            valor_acordado=Decimal('20.00'),
+            abono_anticipo=Decimal('20.00'),
+        )
+
+        response = self.client.post(
+            reverse('econotec:salida_registrar', kwargs={'ingreso_pk': ingreso.pk}),
+            self.salida_post_data(
+                aplica_valor_acordado_adicional='si',
+                valor_acordado_adicional='0.01',
+                motivo_valor_acordado_adicional='Material adicional.',
+                asesora_notificacion=str(self.vendedor.pk),
+            ),
+        )
+
+        salida = SalidaEquipo.objects.get(ingreso=ingreso)
+        self.assertRedirects(
+            response,
+            reverse('econotec:salida_listo_aviso', kwargs={'pk': salida.pk}),
+        )
+        ingreso.refresh_from_db()
+        self.assertEqual(ingreso.diferencia, Decimal('0.01'))
+
+    def test_valor_adicional_rechaza_cero_y_exige_motivo(self):
+        ingreso = self.crear_ingreso_reparacion(valor_acordado=Decimal('20.00'))
+
+        response = self.client.post(
+            reverse('econotec:salida_registrar', kwargs={'ingreso_pk': ingreso.pk}),
+            self.salida_post_data(
+                aplica_valor_acordado_adicional='si',
+                valor_acordado_adicional='0.00',
+                motivo_valor_acordado_adicional='',
+                asesora_notificacion=str(self.vendedor.pk),
+            ),
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(SalidaEquipo.objects.filter(ingreso=ingreso).exists())
+        self.assertContains(response, 'Ingresa un valor adicional de al menos $0.01.')
+        self.assertContains(
+            response,
+            'Explica por qué se aplica el valor acordado adicional.',
+        )
+
+    def test_valor_adicional_no_aplica_fuera_de_pendiente_retiro(self):
+        ingreso = self.crear_ingreso_reparacion(valor_acordado=Decimal('20.00'))
+
+        response = self.client.post(
+            reverse('econotec:salida_registrar', kwargs={'ingreso_pk': ingreso.pk}),
+            self.salida_post_data(
+                estado_reparacion='no_reparable',
+                aplica_valor_acordado_adicional='si',
+                valor_acordado_adicional='10.00',
+                motivo_valor_acordado_adicional='No debe conservarse.',
+                metodo_pago_final='sin_pago',
+            ),
+        )
+
+        salida = SalidaEquipo.objects.get(ingreso=ingreso)
+        self.assertRedirects(
+            response,
+            reverse('econotec:salida_listo_aviso', kwargs={'pk': salida.pk}),
+        )
+        self.assertEqual(salida.aplica_valor_acordado_adicional, 'no')
+        self.assertEqual(salida.valor_acordado_adicional, Decimal('0.00'))
+        self.assertEqual(salida.motivo_valor_acordado_adicional, '')
 
     def test_salida_retirado_oculta_y_limpia_cierre_economico(self):
         ingreso = self.crear_ingreso_reparacion(

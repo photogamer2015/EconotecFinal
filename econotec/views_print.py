@@ -1113,6 +1113,36 @@ def salida_pdf(request, pk):
     c.drawString(margen, y, 'CIERRE ECONÓMICO')
     y -= 18
 
+    if salida.tiene_valor_acordado_adicional:
+        box_h = 62
+        c.setStrokeColor(naranja)
+        c.setFillColorRGB(1, 0.97, 0.94)
+        c.roundRect(margen, y - box_h, 500, box_h, 4, stroke=1, fill=1)
+        c.setFillColor(naranja)
+        c.setFont('Helvetica-Bold', 8.5)
+        c.drawString(margen + 10, y - 13, 'DETALLE DEL VALOR ACORDADO ADICIONAL')
+
+        columnas = [
+            ('VALOR ORIGINAL', ingreso.valor_acordado or Decimal('0.00'), margen + 10),
+            ('VALOR ADICIONAL', salida.valor_acordado_adicional, margen + 175),
+            ('TOTAL ACTUALIZADO', ingreso.valor_efectivo_a_cobrar, margen + 340),
+        ]
+        for etiqueta, monto, x in columnas:
+            c.setFillColor(Color(0.38, 0.38, 0.38))
+            c.setFont('Helvetica-Bold', 6.8)
+            c.drawString(x, y - 27, etiqueta)
+            c.setFillColor(black)
+            c.setFont('Helvetica-Bold', 9.2)
+            c.drawString(x, y - 39, _money_text(monto))
+
+        motivo = f'Motivo acordado: {salida.motivo_valor_acordado_adicional}'
+        motivo_lineas = simpleSplit(motivo, 'Helvetica', 7.2, 475)[:2] or ['—']
+        c.setFillColor(black)
+        c.setFont('Helvetica', 7.2)
+        for idx, linea in enumerate(motivo_lineas):
+            c.drawString(margen + 10, y - 51 - (idx * 8), linea)
+        y -= box_h + 8
+
     c.setStrokeColor(naranja)
     c.setLineWidth(0.8)
     c.roundRect(margen, y - 34, 500, 34, 4, stroke=1, fill=0)
@@ -1153,7 +1183,8 @@ def salida_pdf(request, pk):
                 lineas[-1] = f'{lineas[-1].rstrip()[:-1]}…' if len(lineas[-1].rstrip()) > 1 else '…'
             return lineas
 
-        for pago in pagos_detallados[:6]:
+        max_pagos_pdf = 4 if salida.tiene_valor_acordado_adicional else 6
+        for pago in pagos_detallados[:max_pagos_pdf]:
             fecha_lineas = [pago['fecha'].strftime('%d/%m/%Y')]
             concepto_lineas = _cell_lines(pago['concepto'], 110, max_lines=2)
             monto_lineas = [_money_text(pago['monto'])]
@@ -1179,9 +1210,13 @@ def salida_pdf(request, pk):
                 c.drawString(margen + 350, y - (idx * leading), texto)
 
             y -= (filas * leading) + 5
-        if len(pagos_detallados) > 6:
+        if len(pagos_detallados) > max_pagos_pdf:
             c.setFont('Helvetica-Oblique', 6.8)
-            c.drawString(margen, y, f'Hay {len(pagos_detallados) - 6} pago(s) adicional(es) en el historial de abonos.')
+            c.drawString(
+                margen,
+                y,
+                f'Hay {len(pagos_detallados) - max_pagos_pdf} pago(s) adicional(es) en el historial de abonos.',
+            )
             y -= 10
     else:
         c.setFillColor(black)
