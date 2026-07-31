@@ -1136,7 +1136,6 @@ class SalidaEquipoForm(forms.ModelForm):
             'valor_acordado_adicional': forms.NumberInput(attrs={
                 'class': 'form-input',
                 'step': '0.01',
-                'min': '0.01',
                 'placeholder': 'Ej.: 0.10',
                 'inputmode': 'decimal',
             }),

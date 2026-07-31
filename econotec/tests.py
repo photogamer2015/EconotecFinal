@@ -4879,6 +4879,22 @@ class VentasTests(TestCase):
         self.assertEqual(ingreso.diferencia, Decimal('0.00'))
         self.assertFalse(NotificacionAsesora.objects.filter(salida=salida).exists())
 
+    def test_salida_form_valor_adicional_oculto_no_nace_con_min_invalidante(self):
+        ingreso = self.crear_ingreso_reparacion(valor_acordado=Decimal('20.00'))
+
+        response = self.client.get(
+            reverse('econotec:salida_registrar', kwargs={'ingreso_pk': ingreso.pk})
+        )
+
+        self.assertEqual(response.status_code, 200)
+        html = response.content.decode()
+        match = re.search(
+            r'<input[^>]+name="valor_acordado_adicional"[^>]*>',
+            html,
+        )
+        self.assertIsNotNone(match)
+        self.assertNotIn('min="0.01"', match.group(0))
+
     def test_salida_pendiente_retiro_suma_valor_adicional_al_saldo(self):
         ingreso = self.crear_ingreso_reparacion(valor_acordado=Decimal('20.00'))
 

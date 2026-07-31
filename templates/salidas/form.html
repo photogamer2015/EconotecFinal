@@ -703,18 +703,23 @@
             }
             if (inputValorAdicional) {
                 if (aplicaAdicional) {
+                    inputValorAdicional.disabled = false;
                     inputValorAdicional.setAttribute('required', 'required');
                     inputValorAdicional.setAttribute('min', '0.01');
                     inputValorAdicional.setAttribute('step', '0.01');
                 } else {
+                    inputValorAdicional.disabled = true;
                     inputValorAdicional.removeAttribute('required');
+                    inputValorAdicional.removeAttribute('min');
                     inputValorAdicional.setCustomValidity('');
                 }
             }
             if (motivoValorAdicional) {
                 if (aplicaAdicional) {
+                    motivoValorAdicional.disabled = false;
                     motivoValorAdicional.setAttribute('required', 'required');
                 } else {
+                    motivoValorAdicional.disabled = true;
                     motivoValorAdicional.removeAttribute('required');
                     motivoValorAdicional.setCustomValidity('');
                 }
