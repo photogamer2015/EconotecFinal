@@ -2,7 +2,7 @@
 Vistas del Registro Administrativo: dashboard de egresos/ingresos del taller.
 Solo accesible por administradores.
 """
-from datetime import date, time
+from datetime import date, time, timedelta
 from decimal import Decimal
 from io import BytesIO
 import json
@@ -44,6 +44,9 @@ MESES_ES = [
     '', 'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
     'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre',
 ]
+
+SALIDAS_POSITIVAS_ADMIN = SALIDA_BUENA_ESTADOS
+SALIDAS_NEGATIVAS_ADMIN = SALIDA_MALA_ESTADOS
 
 
 def _ingresos_dinero_mes(year, month):
@@ -219,10 +222,193 @@ def _equipos_mes_resumen(year, month):
             'salida': salida,
             'ingresado_en_mes': ingresado_en_mes,
             'entregado_en_mes': entregado_en_mes,
-            'tecnico_nombre': _nombre_usuario(salida.tecnico_reparo) if salida and salida.tecnico_reparo else ingreso.tecnico_encargado_nombre,
+            'tecnico_ingreso_nombre': ingreso.tecnico_encargado_nombre,
         })
 
     return resumen
+
+
+def _filtrar_resumen_por_tecnico(queryset, campo, tecnico_filtro):
+    if tecnico_filtro == 'sin_asignar':
+        return queryset.filter(**{f'{campo}__isnull': True})
+    if tecnico_filtro.isdigit():
+        return queryset.filter(**{f'{campo}_id': int(tecnico_filtro)})
+    return queryset
+
+
+def _ingresos_asignados_tecnicos_mes(year, month, tecnico_filtro=''):
+    """Resume ingresos por técnico asignado, sin mezclar datos de la salida."""
+    ingresos_qs = (
+        IngresoEquipo.objects
+        .filter(
+            sede__in=SEDES_EQUIPOS,
+            fecha_ingreso__year=year,
+            fecha_ingreso__month=month,
+        )
+        .select_related('cliente', 'tecnico_encargado', 'salida')
+    )
+    ingresos_qs = _filtrar_resumen_por_tecnico(
+        ingresos_qs,
+        'tecnico_encargado',
+        tecnico_filtro,
+    )
+
+    total = ingresos_qs.count()
+    asignados = ingresos_qs.filter(tecnico_encargado__isnull=False).count()
+    sin_asignar = total - asignados
+    tecnicos = (
+        ingresos_qs
+        .exclude(tecnico_encargado__isnull=True)
+        .values('tecnico_encargado_id')
+        .distinct()
+        .count()
+    )
+
+    resumen = list(
+        ingresos_qs
+        .order_by()
+        .values(
+            'tecnico_encargado_id',
+            'tecnico_encargado__first_name',
+            'tecnico_encargado__last_name',
+            'tecnico_encargado__username',
+        )
+        .annotate(
+            total=Count('id'),
+            en_taller=Count('id', filter=Q(salida__isnull=True)),
+            con_salida=Count('id', filter=Q(salida__isnull=False)),
+        )
+        .order_by('-total', 'tecnico_encargado__first_name', 'tecnico_encargado__username')
+    )
+    for posicion, fila in enumerate(resumen, start=1):
+        nombre = 'Sin técnico asignado'
+        if fila['tecnico_encargado_id']:
+            nombre = (
+                f"{fila['tecnico_encargado__first_name']} "
+                f"{fila['tecnico_encargado__last_name']}"
+            ).strip() or fila['tecnico_encargado__username']
+        fila.update({
+            'posicion': posicion,
+            'tecnico_id': fila['tecnico_encargado_id'],
+            'tecnico_nombre': nombre,
+            'participacion': round((fila['total'] / total) * 100, 1) if total else 0,
+        })
+
+    registros = list(
+        ingresos_qs.order_by(
+            'tecnico_encargado__first_name',
+            'tecnico_encargado__username',
+            '-fecha_ingreso',
+            '-numero_equipo',
+        )
+    )
+
+    return {
+        'resumen': resumen,
+        'registros': registros,
+        'total': total,
+        'asignados': asignados,
+        'sin_asignar': sin_asignar,
+        'tecnicos': tecnicos,
+        'fecha_desde': date(year, month, 1),
+        'fecha_hasta': date(
+            year + (month == 12),
+            1 if month == 12 else month + 1,
+            1,
+        ) - timedelta(days=1),
+    }
+
+
+def _salidas_reparadas_tecnicos_mes(year, month, tecnico_filtro=''):
+    """Resume salidas por quien terminó la reparación (`tecnico_reparo`)."""
+    salidas_qs = (
+        SalidaEquipo.objects
+        .filter(
+            fecha_salida__year=year,
+            fecha_salida__month=month,
+        )
+        .select_related('ingreso', 'ingreso__cliente', 'tecnico_reparo')
+    )
+    salidas_qs = _filtrar_resumen_por_tecnico(
+        salidas_qs,
+        'tecnico_reparo',
+        tecnico_filtro,
+    )
+
+    metricas = salidas_qs.aggregate(
+        total=Count('id'),
+        positivas=Count('id', filter=Q(estado_reparacion__in=SALIDAS_POSITIVAS_ADMIN)),
+        negativas=Count('id', filter=Q(estado_reparacion__in=SALIDAS_NEGATIVAS_ADMIN)),
+        recaudado=Sum('valor_final_cobrado'),
+    )
+    total = metricas['total'] or 0
+    positivas = metricas['positivas'] or 0
+    negativas = metricas['negativas'] or 0
+
+    resumen = list(
+        salidas_qs
+        .order_by()
+        .values(
+            'tecnico_reparo_id',
+            'tecnico_reparo__first_name',
+            'tecnico_reparo__last_name',
+            'tecnico_reparo__username',
+        )
+        .annotate(
+            total=Count('id'),
+            retirados=Count('id', filter=Q(estado_reparacion='retirado')),
+            pendientes=Count('id', filter=Q(estado_reparacion='pendiente_retiro')),
+            positivas=Count('id', filter=Q(estado_reparacion__in=SALIDAS_POSITIVAS_ADMIN)),
+            negativas=Count('id', filter=Q(estado_reparacion__in=SALIDAS_NEGATIVAS_ADMIN)),
+            recaudado=Sum('valor_final_cobrado'),
+        )
+        .order_by('-positivas', '-total', 'tecnico_reparo__first_name', 'tecnico_reparo__username')
+    )
+    for posicion, fila in enumerate(resumen, start=1):
+        nombre = 'Sin técnico que reparó'
+        if fila['tecnico_reparo_id']:
+            nombre = (
+                f"{fila['tecnico_reparo__first_name']} "
+                f"{fila['tecnico_reparo__last_name']}"
+            ).strip() or fila['tecnico_reparo__username']
+        fila.update({
+            'posicion': posicion,
+            'tecnico_id': fila['tecnico_reparo_id'],
+            'tecnico_nombre': nombre,
+            'otras': fila['total'] - fila['positivas'] - fila['negativas'],
+            'efectividad': round((fila['positivas'] / fila['total']) * 100, 1) if fila['total'] else 0,
+            'recaudado': fila['recaudado'] or Decimal('0.00'),
+        })
+
+    registros = list(
+        salidas_qs.order_by(
+            'tecnico_reparo__first_name',
+            'tecnico_reparo__username',
+            '-fecha_salida',
+            '-id',
+        )
+    )
+    for salida in registros:
+        if salida.estado_reparacion in SALIDAS_POSITIVAS_ADMIN:
+            salida.clasificacion_admin = 'positive'
+            salida.clasificacion_admin_nombre = 'Positiva'
+        elif salida.estado_reparacion in SALIDAS_NEGATIVAS_ADMIN:
+            salida.clasificacion_admin = 'negative'
+            salida.clasificacion_admin_nombre = 'Negativa'
+        else:
+            salida.clasificacion_admin = 'neutral'
+            salida.clasificacion_admin_nombre = 'Otra'
+
+    return {
+        'resumen': resumen,
+        'registros': registros,
+        'total': total,
+        'positivas': positivas,
+        'negativas': negativas,
+        'otras': total - positivas - negativas,
+        'efectividad': round((positivas / total) * 100, 1) if total else 0,
+        'recaudado': metricas['recaudado'] or Decimal('0.00'),
+    }
 
 
 def _periodo_admin_request(request, metodo='GET'):
@@ -243,6 +429,44 @@ def admin_dashboard(request):
     hoy = date.today()
     year = int(request.GET.get('ano') or hoy.year)
     month = int(request.GET.get('mes') or hoy.month)
+    tecnico_resumen_filtro = (request.GET.get('tecnico_resumen') or '').strip()
+    if tecnico_resumen_filtro != 'sin_asignar' and not tecnico_resumen_filtro.isdigit():
+        tecnico_resumen_filtro = ''
+
+    User = get_user_model()
+    tecnico_ids_periodo = set(
+        IngresoEquipo.objects.filter(
+            sede__in=SEDES_EQUIPOS,
+            fecha_ingreso__year=year,
+            fecha_ingreso__month=month,
+            tecnico_encargado__isnull=False,
+        ).values_list('tecnico_encargado_id', flat=True)
+    )
+    tecnico_ids_periodo.update(
+        SalidaEquipo.objects.filter(
+            fecha_salida__year=year,
+            fecha_salida__month=month,
+            tecnico_reparo__isnull=False,
+        ).values_list('tecnico_reparo_id', flat=True)
+    )
+    tecnicos_resumen = (
+        User.objects
+        .filter(
+            Q(is_active=True, groups__name__in=GRUPOS_TECNICO)
+            | Q(pk__in=tecnico_ids_periodo)
+        )
+        .distinct()
+        .order_by('first_name', 'last_name', 'username')
+    )
+    tecnico_resumen_nombre = 'Todos los técnicos'
+    if tecnico_resumen_filtro == 'sin_asignar':
+        tecnico_resumen_nombre = 'Sin técnico asignado'
+    elif tecnico_resumen_filtro.isdigit():
+        tecnico_seleccionado = User.objects.filter(pk=int(tecnico_resumen_filtro)).first()
+        if tecnico_seleccionado:
+            tecnico_resumen_nombre = _nombre_usuario(tecnico_seleccionado)
+        else:
+            tecnico_resumen_filtro = ''
 
     dinero_in = _ingresos_dinero_mes(year, month)
     egresos_total = _egresos_mes(year, month)
@@ -257,6 +481,16 @@ def admin_dashboard(request):
         fecha_salida__year=year, fecha_salida__month=month,
     ).count()
     equipos_mes_resumen = _equipos_mes_resumen(year, month)
+    ingresos_tecnicos = _ingresos_asignados_tecnicos_mes(
+        year,
+        month,
+        tecnico_resumen_filtro,
+    )
+    salidas_tecnicos = _salidas_reparadas_tecnicos_mes(
+        year,
+        month,
+        tecnico_resumen_filtro,
+    )
 
     # Desglose por tipo de salida
     salidas_por_estado = (
@@ -386,6 +620,25 @@ def admin_dashboard(request):
         'equipos_ingresados': equipos_ingresados,
         'equipos_entregados': equipos_entregados,
         'equipos_mes_resumen': equipos_mes_resumen,
+        'ingresos_tecnicos_resumen': ingresos_tecnicos['resumen'],
+        'ingresos_tecnicos_registros': ingresos_tecnicos['registros'],
+        'ingresos_tecnicos_total': ingresos_tecnicos['total'],
+        'ingresos_tecnicos_asignados': ingresos_tecnicos['asignados'],
+        'ingresos_tecnicos_sin_asignar': ingresos_tecnicos['sin_asignar'],
+        'ingresos_tecnicos_count': ingresos_tecnicos['tecnicos'],
+        'ingresos_tecnicos_desde': ingresos_tecnicos['fecha_desde'],
+        'ingresos_tecnicos_hasta': ingresos_tecnicos['fecha_hasta'],
+        'salidas_tecnicos_resumen': salidas_tecnicos['resumen'],
+        'salidas_tecnicos_registros': salidas_tecnicos['registros'],
+        'salidas_tecnicos_total': salidas_tecnicos['total'],
+        'salidas_tecnicos_positivas': salidas_tecnicos['positivas'],
+        'salidas_tecnicos_negativas': salidas_tecnicos['negativas'],
+        'salidas_tecnicos_otras': salidas_tecnicos['otras'],
+        'salidas_tecnicos_efectividad': salidas_tecnicos['efectividad'],
+        'salidas_tecnicos_recaudado': salidas_tecnicos['recaudado'],
+        'tecnicos_resumen': tecnicos_resumen,
+        'tecnico_resumen_filtro': tecnico_resumen_filtro,
+        'tecnico_resumen_nombre': tecnico_resumen_nombre,
         'salidas_resumen': salidas_resumen,
         'egresos_por_cat': egresos_por_cat,
         'bodegaje_cobrado': bodegaje_cobrado,
@@ -866,7 +1119,7 @@ def admin_equipos_mes_exportar(request):
     headers = [
         'Codigo', 'Movimiento', 'Fecha ingreso', 'Fecha entrega', 'Cliente',
         'Cedula', 'WhatsApp', 'Tipo', 'Marca', 'Modelo / Serie', 'Sede',
-        'Tecnico', 'Estado actual', 'Estado salida', 'Valor acordado',
+        'Tecnico asignado al ingreso', 'Estado actual', 'Estado salida', 'Valor acordado',
         'Valor salida',
     ]
     ws.append(headers)
@@ -896,7 +1149,7 @@ def admin_equipos_mes_exportar(request):
             ingreso.marca,
             ingreso.modelo_serie_detalle,
             ingreso.get_sede_display(),
-            item['tecnico_nombre'],
+            item['tecnico_ingreso_nombre'],
             ingreso.get_estado_display(),
             salida.get_estado_reparacion_display() if salida else 'Sin salida',
             float(ingreso.valor_acordado or 0),
@@ -1679,7 +1932,10 @@ def _obtener_estadisticas_gamificacion():
         if hasattr(u, 'actividad') and u.actividad.fecha_reinicio_perfil:
             fecha_reinicio = u.actividad.fecha_reinicio_perfil
 
-        ingresos_qs = IngresoEquipo.objects.filter(registrado_por=u)
+        ingresos_qs = IngresoEquipo.objects.filter(
+            sede__in=SEDES_EQUIPOS,
+            tecnico_encargado=u,
+        )
         # El nivel se calcula por las salidas que el técnico REPARÓ, no por
         # las que registró ni por los ingresos (misma regla que api_perfil).
         salidas_qs = SalidaEquipo.objects.filter(tecnico_reparo=u)
@@ -1763,7 +2019,7 @@ def admin_perfiles_exportar(request, formato):
         ws.title = "Ranking Perfiles"
         
         # Headers
-        headers = ['Posición', 'Técnico / Asesor', 'Ingresos', 'Salidas Buenas', 'Salida de Producto', 'Salidas Malas', 'Puntaje Total', 'Nivel Alcanzado']
+        headers = ['Posición', 'Técnico / Asesor', 'Ingresos Asignados', 'Salidas Buenas', 'Salida de Producto', 'Salidas Malas', 'Puntaje Total', 'Nivel Alcanzado']
         for col_num, header in enumerate(headers, 1):
             cell = ws.cell(row=1, column=col_num)
             cell.value = header
@@ -1807,7 +2063,7 @@ def admin_perfiles_exportar(request, formato):
         c.setFont("Helvetica-Bold", 10)
         c.drawString(50, y, "Pos")
         c.drawString(90, y, "Usuario")
-        c.drawString(220, y, "Ingresos")
+        c.drawString(220, y, "Ing. asign.")
         c.drawString(280, y, "S. Buenas")
         c.drawString(340, y, "S. Prod.")
         c.drawString(400, y, "S. Malas")

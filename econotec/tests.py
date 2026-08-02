@@ -2048,6 +2048,75 @@ class VentasTests(TestCase):
         self.assertEqual(data['salidas_malas'], 1)
         self.assertEqual(data['total'], 0)
 
+    def test_formulario_salida_acredita_buena_y_mala_al_tecnico_seleccionado(self):
+        User = get_user_model()
+        tecnico_seleccionado = User.objects.create_user(
+            username='TecnicoResultadoSalida',
+            first_name='Tecnico',
+            last_name='Resultado',
+        )
+        tecnico_seleccionado.groups.add(Group.objects.get(name='Tecnicos'))
+        ingreso_positivo = self.crear_ingreso_reparacion(
+            tecnico_encargado=self.usuario,
+            fecha_ingreso=date(2026, 7, 15),
+            valor_acordado=Decimal('0.00'),
+        )
+        ingreso_negativo = self.crear_ingreso_reparacion(
+            tecnico_encargado=self.usuario,
+            fecha_ingreso=date(2026, 7, 16),
+            valor_acordado=Decimal('0.00'),
+        )
+
+        response_positiva = self.client.post(
+            reverse('econotec:salida_registrar', kwargs={'ingreso_pk': ingreso_positivo.pk}),
+            self.salida_post_data(
+                tecnico_reparo=str(tecnico_seleccionado.pk),
+                estado_reparacion='pendiente_retiro',
+                metodo_pago_final='sin_pago',
+            ),
+        )
+        response_negativa = self.client.post(
+            reverse('econotec:salida_registrar', kwargs={'ingreso_pk': ingreso_negativo.pk}),
+            self.salida_post_data(
+                tecnico_reparo=str(tecnico_seleccionado.pk),
+                estado_reparacion='no_reparable',
+                metodo_pago_final='sin_pago',
+            ),
+        )
+
+        salida_positiva = SalidaEquipo.objects.get(ingreso=ingreso_positivo)
+        salida_negativa = SalidaEquipo.objects.get(ingreso=ingreso_negativo)
+        self.assertEqual(response_positiva.status_code, 302)
+        self.assertEqual(response_negativa.status_code, 302)
+        self.assertEqual(salida_positiva.tecnico_reparo, tecnico_seleccionado)
+        self.assertEqual(salida_negativa.tecnico_reparo, tecnico_seleccionado)
+        self.assertEqual(salida_positiva.registrado_por, self.usuario)
+        self.assertEqual(salida_negativa.registrado_por, self.usuario)
+
+        self.client.force_login(tecnico_seleccionado)
+        perfil_tecnico = self.client.get(reverse('econotec:api_perfil')).json()
+        self.assertEqual(perfil_tecnico['salidas_buenas'], 1)
+        self.assertEqual(perfil_tecnico['salidas_malas'], 1)
+        self.assertEqual(perfil_tecnico['total'], 3)
+
+        self.client.force_login(self.usuario)
+        perfil_registrador = self.client.get(reverse('econotec:api_perfil')).json()
+        self.assertEqual(perfil_registrador['salidas_buenas'], 0)
+        self.assertEqual(perfil_registrador['salidas_malas'], 0)
+
+        from .gamificacion import SALIDA_BUENA_ESTADOS, SALIDA_MALA_ESTADOS
+        self.assertEqual(set(SALIDA_BUENA_ESTADOS), {
+            'pendiente_retiro',
+            'garantia',
+            'garantia_fallos_adicionales',
+            'retirado',
+        })
+        self.assertEqual(set(SALIDA_MALA_ESTADOS), {
+            'no_reparable',
+            'cliente_no_acepta',
+            'chatarrerizacion',
+        })
+
     def test_menu_ventas_muestra_control_de_pago_de_ventas(self):
         response = self.client.get(reverse('econotec:venta_menu'))
 
@@ -2280,6 +2349,72 @@ class VentasTests(TestCase):
         self.assertContains(response, 'Técnico de salida', count=1)
         self.assertContains(response, 'Salida Tec')
         self.assertNotContains(response, 'Entrada Tec')
+
+    def test_salida_totales_acredita_ranking_al_tecnico_que_reparo(self):
+        User = get_user_model()
+        tecnicos = Group.objects.get(name='Tecnicos')
+        tecnico_entrada = User.objects.create_user(
+            username='EntradaRanking',
+            first_name='Entrada',
+            last_name='Ranking',
+        )
+        tecnico_salida = User.objects.create_user(
+            username='SalidaRanking',
+            first_name='Salida',
+            last_name='Ranking',
+        )
+        tecnico_entrada.groups.add(tecnicos)
+        tecnico_salida.groups.add(tecnicos)
+        ingreso = self.crear_ingreso_reparacion(
+            tecnico_encargado=tecnico_entrada,
+            fecha_ingreso=date(2026, 7, 1),
+            valor_acordado=Decimal('100.00'),
+            abono_anticipo=Decimal('10.00'),
+        )
+        self.crear_venta_producto(
+            tecnico_encargado=tecnico_entrada,
+            fecha_ingreso=date(2026, 7, 2),
+            valor_acordado=Decimal('500.00'),
+        )
+        SalidaEquipo.objects.create(
+            ingreso=ingreso,
+            fecha_salida=date(2026, 7, 20),
+            estado_reparacion='pendiente_retiro',
+            tecnico_reparo=tecnico_salida,
+            valor_final_cobrado=Decimal('90.00'),
+            metodo_pago_final='efectivo',
+            registrado_por=self.usuario,
+        )
+        self.client.force_login(self.admin)
+
+        response = self.client.get(reverse('econotec:salida_totales'), {
+            'desde': '2026-07-01',
+            'hasta': '2026-07-31',
+        })
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context['total_equipos'], 1)
+        self.assertEqual(len(response.context['ranking_ingresos']), 1)
+        ranking_ingreso = response.context['ranking_ingresos'][0]
+        self.assertEqual(ranking_ingreso['tecnico_id'], tecnico_entrada.pk)
+        self.assertEqual(ranking_ingreso['nombre'], 'Entrada Ranking')
+        self.assertEqual(ranking_ingreso['num_ingresos'], 1)
+        self.assertEqual(ranking_ingreso['sin_salida'], 0)
+        self.assertEqual(ranking_ingreso['con_salida'], 1)
+        self.assertEqual(ranking_ingreso['total_acordado'], Decimal('100.00'))
+        self.assertEqual(ranking_ingreso['total_anticipo'], Decimal('10.00'))
+        self.assertEqual(len(response.context['ranking']), 1)
+        ranking = response.context['ranking'][0]
+        self.assertEqual(ranking['tecnico_id'], tecnico_salida.pk)
+        self.assertEqual(ranking['nombre'], 'Salida Ranking')
+        self.assertEqual(ranking['num_equipos'], 1)
+        self.assertEqual(ranking['salidas_positivas'], 1)
+        self.assertEqual(ranking['salidas_negativas'], 0)
+        self.assertEqual(ranking['total_recaudado'], Decimal('90.00'))
+        self.assertContains(response, 'Salida Ranking')
+        self.assertContains(response, 'Entrada Ranking')
+        self.assertContains(response, 'Ranking de Ingresos por Técnico Asignado')
+        self.assertContains(response, 'Ranking de Técnicos por Salidas Reparadas')
 
     def test_top_clientes_cuenta_equipos_reales_por_sede_sin_multiplicar(self):
         biomedics = Cliente.objects.create(
@@ -3030,6 +3165,144 @@ class VentasTests(TestCase):
 
         self.assertEqual(response.context['equipos_ingresados'], 1)
 
+    def test_admin_dashboard_separa_tecnico_de_ingreso_y_tecnico_de_salida(self):
+        User = get_user_model()
+        tecnico_salida = User.objects.create_user(
+            username='TecnicoSalidaAdmin',
+            first_name='Tecnico',
+            last_name='Salida',
+        )
+        tecnico_salida.groups.add(Group.objects.get(name='Tecnicos'))
+        ingreso_asignado = self.crear_ingreso_reparacion(
+            fecha_ingreso=date(2026, 7, 8),
+            tecnico_encargado=self.usuario,
+            modelo_serie='Ingreso asignado a Yandri',
+            registrado_por=tecnico_salida,
+        )
+        ingreso_sin_asignar = self.crear_ingreso_reparacion(
+            fecha_ingreso=date(2026, 7, 9),
+            tecnico_encargado=None,
+            modelo_serie='Ingreso pendiente de asignacion',
+        )
+        ingreso_salida_negativa = self.crear_ingreso_reparacion(
+            fecha_ingreso=date(2026, 7, 10),
+            tecnico_encargado=self.usuario,
+            modelo_serie='Ingreso con salida negativa',
+            registrado_por=tecnico_salida,
+        )
+        SalidaEquipo.objects.create(
+            ingreso=ingreso_asignado,
+            fecha_salida=date(2026, 7, 20),
+            estado_reparacion='retirado',
+            tecnico_reparo=tecnico_salida,
+            valor_final_cobrado=Decimal('25.00'),
+            metodo_pago_final='efectivo',
+            registrado_por=self.usuario,
+        )
+        SalidaEquipo.objects.create(
+            ingreso=ingreso_salida_negativa,
+            fecha_salida=date(2026, 7, 21),
+            estado_reparacion='no_reparable',
+            tecnico_reparo=tecnico_salida,
+            valor_final_cobrado=Decimal('5.00'),
+            metodo_pago_final='efectivo',
+            registrado_por=self.usuario,
+        )
+        self.client.force_login(self.admin)
+
+        response = self.client.get(
+            reverse('econotec:admin_dashboard'),
+            {'ano': '2026', 'mes': '7'},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context['ingresos_tecnicos_total'], 3)
+        self.assertEqual(response.context['ingresos_tecnicos_asignados'], 2)
+        self.assertEqual(response.context['ingresos_tecnicos_sin_asignar'], 1)
+        self.assertEqual(response.context['ingresos_tecnicos_count'], 1)
+        resumen_por_tecnico = {
+            fila['tecnico_id']: fila
+            for fila in response.context['ingresos_tecnicos_resumen']
+        }
+        self.assertEqual(resumen_por_tecnico[self.usuario.pk]['total'], 2)
+        self.assertEqual(resumen_por_tecnico[self.usuario.pk]['con_salida'], 2)
+        self.assertEqual(resumen_por_tecnico[None]['total'], 1)
+        self.assertNotIn(tecnico_salida.pk, resumen_por_tecnico)
+        registros = response.context['ingresos_tecnicos_registros']
+        self.assertEqual({registro.pk for registro in registros}, {
+            ingreso_asignado.pk,
+            ingreso_sin_asignar.pk,
+            ingreso_salida_negativa.pk,
+        })
+        salidas_por_tecnico = {
+            fila['tecnico_id']: fila
+            for fila in response.context['salidas_tecnicos_resumen']
+        }
+        self.assertNotIn(self.usuario.pk, salidas_por_tecnico)
+        self.assertEqual(salidas_por_tecnico[tecnico_salida.pk]['total'], 2)
+        self.assertEqual(salidas_por_tecnico[tecnico_salida.pk]['positivas'], 1)
+        self.assertEqual(salidas_por_tecnico[tecnico_salida.pk]['negativas'], 1)
+        self.assertEqual(salidas_por_tecnico[tecnico_salida.pk]['efectividad'], 50.0)
+        self.assertEqual(response.context['salidas_tecnicos_recaudado'], Decimal('30.00'))
+        resumen_general = next(
+            item for item in response.context['equipos_mes_resumen']
+            if item['ingreso'].pk == ingreso_asignado.pk
+        )
+        self.assertEqual(resumen_general['tecnico_ingreso_nombre'], self.usuario.username)
+        self.assertContains(response, 'Ingresos de equipos asignados a técnicos')
+        self.assertContains(response, 'No representa quién hizo la reparación')
+        self.assertContains(response, 'Técnico asignado al ingresar')
+        self.assertContains(response, 'Técnico que deseas consultar')
+        self.assertContains(response, 'Salidas por técnico que terminó la reparación')
+        self.assertContains(response, 'Salidas positivas')
+        self.assertContains(response, 'Salidas negativas')
+
+        response_tecnico_salida = self.client.get(
+            reverse('econotec:admin_dashboard'),
+            {
+                'ano': '2026',
+                'mes': '7',
+                'tecnico_resumen': str(tecnico_salida.pk),
+            },
+        )
+        self.assertEqual(response_tecnico_salida.context['tecnico_resumen_nombre'], 'Tecnico Salida')
+        self.assertEqual(response_tecnico_salida.context['ingresos_tecnicos_total'], 0)
+        self.assertEqual(response_tecnico_salida.context['salidas_tecnicos_total'], 2)
+        self.assertEqual(response_tecnico_salida.context['salidas_tecnicos_positivas'], 1)
+        self.assertEqual(response_tecnico_salida.context['salidas_tecnicos_negativas'], 1)
+
+        response_tecnico_ingreso = self.client.get(
+            reverse('econotec:admin_dashboard'),
+            {
+                'ano': '2026',
+                'mes': '7',
+                'tecnico_resumen': str(self.usuario.pk),
+            },
+        )
+        self.assertEqual(response_tecnico_ingreso.context['ingresos_tecnicos_total'], 2)
+        self.assertEqual(response_tecnico_ingreso.context['salidas_tecnicos_total'], 0)
+
+        from .views_admin import _obtener_estadisticas_gamificacion
+        perfiles = {
+            fila['usuario']: fila
+            for fila in _obtener_estadisticas_gamificacion()
+        }
+        self.assertEqual(perfiles[self.usuario.username]['ingresos'], 2)
+        self.assertEqual(perfiles['Tecnico Salida']['ingresos'], 0)
+
+        from openpyxl import load_workbook
+        export_response = self.client.get(
+            reverse('econotec:admin_equipos_mes_exportar'),
+            {'ano': '2026', 'mes': '7'},
+        )
+        worksheet = load_workbook(BytesIO(export_response.content)).active
+        self.assertEqual(worksheet.cell(row=2, column=12).value, 'Tecnico asignado al ingreso')
+        fila_ingreso = next(
+            row for row in range(3, worksheet.max_row + 1)
+            if worksheet.cell(row=row, column=1).value == ingreso_asignado.codigo_equipo
+        )
+        self.assertEqual(worksheet.cell(row=fila_ingreso, column=12).value, self.usuario.username)
+
     def test_admin_dashboard_resumen_equipos_mes_separa_periodos(self):
         self.client.force_login(self.admin)
         ingreso_julio = self.crear_ingreso_reparacion(
@@ -3621,6 +3894,47 @@ class VentasTests(TestCase):
         self.assertNotContains(response, 'FIRMA DEL CLIENTE')
         self.assertNotContains(response, 'FACTURA REALIZADA')
         self.assertNotContains(response, 'No se registró factura para esta salida.')
+
+    def test_salida_impresa_no_atribuye_reparacion_al_tecnico_del_ingreso(self):
+        User = get_user_model()
+        tecnico_ingreso = User.objects.create_user(
+            username='TecnicoSoloIngresoPdf',
+            password='test123',
+            first_name='Responsable Ingreso',
+        )
+        ingreso = self.crear_ingreso_reparacion(
+            tecnico_encargado=tecnico_ingreso,
+            estado='entregado',
+        )
+        salida = SalidaEquipo.objects.create(
+            ingreso=ingreso,
+            fecha_salida=date(2026, 7, 9),
+            estado_reparacion='retirado',
+            tecnico_reparo=None,
+            cliente_recibe_conforme='si',
+            valor_final_cobrado=Decimal('0.00'),
+            metodo_pago_final='sin_pago',
+            registrado_por=self.usuario,
+        )
+
+        response = self.client.get(
+            reverse('econotec:salida_imprimir', kwargs={'pk': salida.pk})
+        )
+
+        self.assertContains(response, '— Sin técnico registrado —', count=2)
+        self.assertNotContains(response, 'Responsable Ingreso')
+
+        with patch('econotec.views_print._draw_label_value') as draw_label:
+            pdf_response = self.client.get(
+                reverse('econotec:salida_pdf', kwargs={'pk': salida.pk})
+            )
+
+        self.assertEqual(pdf_response.status_code, 200)
+        etiqueta_tecnico = next(
+            call for call in draw_label.call_args_list
+            if len(call.args) > 3 and call.args[3] == 'Técnico que reparó:'
+        )
+        self.assertEqual(etiqueta_tecnico.args[4], '— Sin técnico registrado —')
 
     def test_salida_imprimir_detalla_valor_acordado_adicional(self):
         ingreso = self.crear_ingreso_reparacion(

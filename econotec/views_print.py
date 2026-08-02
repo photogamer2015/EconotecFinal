@@ -964,7 +964,9 @@ def salida_pdf(request, pk):
     )
     ingreso = salida.ingreso
     cliente = ingreso.cliente
-    tecnico_nombre = salida.tecnico_reparo_nombre or ingreso.tecnico_encargado_nombre
+    # La responsabilidad de la salida nunca se hereda del técnico asignado
+    # al ingreso. Los registros históricos incompletos se muestran sin técnico.
+    tecnico_nombre = salida.tecnico_reparo_nombre or '— Sin técnico registrado —'
     pagos_detallados = _pagos_detallados_salida(salida)
     mensaje_estado = _mensaje_estado_salida(salida)
     buf = BytesIO()

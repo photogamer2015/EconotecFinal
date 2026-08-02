@@ -348,7 +348,7 @@
     <div class="field-line"><span class="label">WhatsApp:</span><span class="value">{{ cliente.whatsapp }}</span></div>
     <div class="field-line"><span class="label">Equipo:</span><span class="value">{{ ingreso.tipo_equipo_display }} — {{ ingreso.marca }} {{ ingreso.modelo_serie_detalle }}</span></div>
     <div class="field-line"><span class="label">Fecha de Ingreso:</span><span class="value">{{ ingreso.fecha_ingreso|date:"d/m/Y" }}</span></div>
-    <div class="field-line"><span class="label">Técnico que reparó:</span><span class="value">{{ salida.tecnico_reparo_nombre|default:ingreso.tecnico_encargado_nombre }}</span></div>
+    <div class="field-line"><span class="label">Técnico que reparó:</span><span class="value">{{ salida.tecnico_reparo_nombre|default:"— Sin técnico registrado —" }}</span></div>
 
     <!-- ESTADO DE LA SALIDA -->
     <div class="section-header">ESTADO DE LA SALIDA</div>
@@ -501,7 +501,7 @@
     <!-- TÉCNICO QUE GESTIONÓ LA REPARACIÓN -->
     <div style="margin-top: 14px; padding: 10px 14px; background: #fff8f3; border-radius: 6px; font-size: 11px; color: #555;">
         <strong>Técnico responsable:</strong>
-        {{ salida.tecnico_reparo_nombre|default:ingreso.tecnico_encargado_nombre|default:"— Sin asignar —" }}
+        {{ salida.tecnico_reparo_nombre|default:"— Sin técnico registrado —" }}
     </div>
 
     <!-- FIRMAS -->

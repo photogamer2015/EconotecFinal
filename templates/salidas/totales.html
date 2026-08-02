@@ -20,6 +20,26 @@
         padding-bottom: 8px;
         border-bottom: 2px solid var(--primary);
     }
+    .rank-card.ingress-rank {
+        border-top: 5px solid #0f766e;
+    }
+    .rank-card.ingress-rank h3 {
+        color: #0f766e;
+        border-bottom-color: #0f766e;
+    }
+    .rank-section-note {
+        margin: -6px 0 16px;
+        color: var(--text-muted);
+        font-size: 12px;
+        font-weight: 700;
+        line-height: 1.45;
+    }
+    .rank-section-note strong { color: var(--text-main); }
+    .ranking-table.ingress-table thead tr { background: #0f766e !important; }
+    .ranking-table.ingress-table a { color: #0f766e; }
+    [data-theme="dark"] .rank-card.ingress-rank { border-color: #2dd4bf; }
+    [data-theme="dark"] .rank-card.ingress-rank h3,
+    [data-theme="dark"] .ranking-table.ingress-table a { color: #5eead4; }
     .stats-row {
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
@@ -61,6 +81,9 @@
     .pos-1 { background: linear-gradient(90deg, #fff8e1, transparent); }
     .pos-2 { background: linear-gradient(90deg, #f5f5f5, transparent); }
     .pos-3 { background: linear-gradient(90deg, #fff3e0, transparent); }
+    [data-theme="dark"] .pos-1 { background: linear-gradient(90deg, rgba(255, 193, 7, 0.16), transparent); }
+    [data-theme="dark"] .pos-2 { background: linear-gradient(90deg, rgba(158, 158, 158, 0.14), transparent); }
+    [data-theme="dark"] .pos-3 { background: linear-gradient(90deg, rgba(205, 127, 50, 0.14), transparent); }
 
     .medal {
         display: inline-block;
@@ -106,7 +129,7 @@
 </div>
 
 <h2 class="page-title">🏆 Ranking de <span class="accent">Técnicos</span></h2>
-<p class="page-subtitle">Equipos atendidos, retiros positivos y dinero generado por cada técnico.</p>
+<p class="page-subtitle">Ingresos asignados y salidas reparadas, separados según la responsabilidad registrada en cada etapa.</p>
 
 <form method="get" class="filter-bar">
     <div>
@@ -147,9 +170,89 @@
     </div>
 </div>
 
-<!-- Ranking principal -->
+<!-- Ranking de ingresos por técnico encargado -->
+<div class="rank-card ingress-rank">
+    <h3>Ranking de Ingresos por Técnico Asignado</h3>
+    <p class="rank-section-note">
+        Cuenta el <strong>técnico encargado registrado al ingresar el equipo</strong>.
+        No representa quién hizo o terminó la reparación.
+    </p>
+
+    {% if ranking_ingresos %}
+    <div style="overflow-x:auto;">
+        <table class="ranking-table ingress-table" style="width:100%; min-width: 900px; border-collapse: collapse; font-size: 13px;">
+            <thead>
+                <tr style="background: #0f766e; color: white;">
+                    <th style="padding: 12px; text-align: center;">Pos.</th>
+                    <th style="padding: 12px; text-align: left;">Técnico asignado al ingreso</th>
+                    <th style="padding: 12px; text-align: center;">Ingresos</th>
+                    <th style="padding: 12px; text-align: center;">Sin salida registrada</th>
+                    <th style="padding: 12px; text-align: center;">Con salida registrada</th>
+                    <th style="padding: 12px; text-align: left;">Participación</th>
+                    <th style="padding: 12px; text-align: right;">Acordado</th>
+                    <th style="padding: 12px; text-align: right;">Anticipos</th>
+                    <th style="padding: 12px; text-align: center;">Acción</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for r in ranking_ingresos %}
+                {% widthratio r.num_ingresos total_equipos 100 as participacion_barra %}
+                <tr class="pos-{{ forloop.counter }}" style="border-bottom: 1px solid #f0f0f0;">
+                    <td style="padding: 12px; text-align: center;">
+                        {% if forloop.counter == 1 %}
+                            <span class="medal gold">1</span>
+                        {% elif forloop.counter == 2 %}
+                            <span class="medal silver">2</span>
+                        {% elif forloop.counter == 3 %}
+                            <span class="medal bronze">3</span>
+                        {% else %}
+                            <span class="medal normal">{{ forloop.counter }}</span>
+                        {% endif %}
+                    </td>
+                    <td style="padding: 12px;">
+                        {% if r.sin_asignar %}
+                            <strong style="color: #888; font-style: italic;">— Sin asignar —</strong>
+                            <br><small style="color:#bbb; font-size:10px;">Ingreso sin técnico encargado</small>
+                        {% else %}
+                            <strong style="color: var(--secondary);">{{ r.nombre }}</strong>
+                        {% endif %}
+                    </td>
+                    <td style="padding: 12px; text-align: center; font-weight: 800; color: #0f766e; font-size: 16px;">{{ r.num_ingresos }}</td>
+                    <td style="padding: 12px; text-align: center; font-weight: 700;">{{ r.sin_salida }}</td>
+                    <td style="padding: 12px; text-align: center; color: var(--success); font-weight: 700;">{{ r.con_salida }}</td>
+                    <td style="padding: 12px;">
+                        <div class="efectividad-bar">
+                            <div class="bar"><div class="fill" style="width: {{ participacion_barra }}%;"></div></div>
+                            <span class="num">{{ r.participacion|floatformat:1 }}%</span>
+                        </div>
+                    </td>
+                    <td style="padding: 12px; text-align: right; font-weight: 700;">{{ r.total_acordado|dinero_signo }}</td>
+                    <td style="padding: 12px; text-align: right; color: var(--success); font-weight: 800;">{{ r.total_anticipo|dinero_signo }}</td>
+                    <td style="padding: 12px; text-align: center;">
+                        {% if not r.sin_asignar %}
+                            <a href="{% url 'econotec:ingreso_lista' %}?sede=todas&tecnico={{ r.tecnico_id }}{% if filtros.desde %}&fecha_desde={{ filtros.desde }}{% endif %}{% if filtros.hasta %}&fecha_hasta={{ filtros.hasta }}{% endif %}" class="btn btn-secondary" style="padding: 6px 12px; font-size: 11px;">Ver ingresos</a>
+                        {% endif %}
+                    </td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="empty-state">
+        <h3>No hay ingresos de equipos para mostrar</h3>
+        <p>No existen ingresos de reparación en el período seleccionado.</p>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Ranking principal de salidas -->
 <div class="rank-card">
-    <h3>Ranking de Técnicos por Equipos Atendidos</h3>
+    <h3>Ranking de Técnicos por Salidas Reparadas</h3>
+    <p class="rank-section-note">
+        Cuenta exclusivamente al <strong>técnico que reparó registrado en la salida</strong>.
+        El técnico asignado al ingreso no interviene en esta tabla.
+    </p>
 
     {% if ranking %}
     <div style="overflow-x:auto;">
@@ -158,9 +261,9 @@
                 <tr style="background: var(--primary); color: white;">
                     <th style="padding: 12px; text-align: center;">Pos.</th>
                     <th style="padding: 12px; text-align: left;">Técnico</th>
-                    <th style="padding: 12px; text-align: center;">Equipos</th>
-                    <th style="padding: 12px; text-align: center;">Entregados</th>
-                    <th style="padding: 12px; text-align: center;">Pendientes</th>
+                    <th style="padding: 12px; text-align: center;">Salidas</th>
+                    <th style="padding: 12px; text-align: center;">Retirados</th>
+                    <th style="padding: 12px; text-align: center;">Pend. retiro</th>
                     <th style="padding: 12px; text-align: center;">Salidas +</th>
                     <th style="padding: 12px; text-align: center;">Salidas −</th>
                     <th style="padding: 12px; text-align: left;">Efectividad</th>
@@ -186,7 +289,7 @@
                     <td style="padding: 12px;">
                         {% if r.sin_asignar %}
                             <strong style="color: #888; font-style: italic;">— Sin asignar —</strong>
-                            <br><small style="color:#bbb; font-size:10px;">Equipos sin técnico encargado</small>
+                            <br><small style="color:#bbb; font-size:10px;">Salidas sin técnico que reparó</small>
                         {% else %}
                             <strong style="color: var(--secondary);">{{ r.nombre }}</strong>
                         {% endif %}
@@ -216,7 +319,7 @@
                     <td style="padding: 12px; text-align: right; color: var(--success); font-weight: 800;">{{ r.total_recaudado|dinero_signo }}</td>
                     <td style="padding: 12px; text-align: center;">
                         {% if not r.sin_asignar %}
-                            <a href="{% url 'econotec:ingreso_lista' %}?tecnico={{ r.tecnico_id }}" class="btn btn-secondary" style="padding: 6px 12px; font-size: 11px;">Ver detalle</a>
+                            <a href="{% url 'econotec:salida_lista' %}?tecnico_salida={{ r.tecnico_id }}{% if filtros.desde %}&fecha_desde={{ filtros.desde }}{% endif %}{% if filtros.hasta %}&fecha_hasta={{ filtros.hasta }}{% endif %}" class="btn btn-secondary" style="padding: 6px 12px; font-size: 11px;">Ver detalle</a>
                         {% endif %}
                     </td>
                 </tr>

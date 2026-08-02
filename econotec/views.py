@@ -3332,12 +3332,8 @@ from .permisos import ranking_requerido as _ranking_requerido
 @_ranking_requerido
 def salida_totales(request):
     """
-    Ranking de técnicos: cuántos equipos atendió cada uno como
-    *técnico encargado* (responsable directo de la reparación), cuántos
-    terminó positivamente (retirados/garantía), cuánto dinero generó, etc.
-
-    El ranking SE AGRUPA POR `tecnico_encargado` — el técnico responsable
-    del equipo — no por el usuario que digitó la solicitud en el sistema.
+    Ranking de técnicos por salidas: cuenta al técnico que reparó el equipo,
+    registrado en `SalidaEquipo.tecnico_reparo`.
 
     Filtros opcionales por rango de fechas.
     """
@@ -3346,51 +3342,95 @@ def salida_totales(request):
     desde = (request.GET.get('desde') or '').strip()
     hasta = (request.GET.get('hasta') or '').strip()
 
-    # Base: ingresos en el rango. La métrica se calcula sobre ingresos
-    # (cada equipo cuenta para el técnico ENCARGADO, no para el que registró).
-    qs_ing = IngresoEquipo.objects.select_related('tecnico_encargado')
+    estados_positivos = SALIDA_BUENA_ESTADOS
+    estados_negativos = SALIDA_MALA_ESTADOS
+
+    # Base de ingresos de equipos. Las ventas de productos no pertenecen al
+    # ranking de técnicos responsables de un ingreso de reparación.
+    qs_ing = IngresoEquipo.objects.filter(
+        sede__in=SEDES_EQUIPOS,
+    ).select_related('tecnico_encargado')
     if desde:
         qs_ing = qs_ing.filter(fecha_ingreso__gte=desde)
     if hasta:
         qs_ing = qs_ing.filter(fecha_ingreso__lte=hasta)
 
-    # Agrupar por técnico encargado
-    from django.db.models import Count, Sum, Q
-    ranking = (
+    total_ingresos_ranking = qs_ing.count()
+    ranking_ingresos_qs = (
         qs_ing
-        .values('tecnico_encargado_id', 'tecnico_encargado__first_name',
-                'tecnico_encargado__last_name', 'tecnico_encargado__username')
+        .order_by()
+        .values(
+            'tecnico_encargado_id',
+            'tecnico_encargado__first_name',
+            'tecnico_encargado__last_name',
+            'tecnico_encargado__username',
+        )
         .annotate(
-            num_equipos=Count('id'),
+            num_ingresos=Count('id'),
+            sin_salida=Count('id', filter=Q(salida__isnull=True)),
+            con_salida=Count('id', filter=Q(salida__isnull=False)),
             total_acordado=Sum('valor_acordado'),
             total_anticipo=Sum('abono_anticipo'),
-            entregados=Count('id', filter=Q(estado='entregado')),
-            pendientes=Count('id', filter=Q(estado__in=[
-                'ingresado', 'en_reparacion'
-            ])),
+        )
+        .order_by('-num_ingresos', '-total_acordado')
+    )
+    ranking_ingresos = []
+    for posicion, row in enumerate(ranking_ingresos_qs, start=1):
+        tid = row['tecnico_encargado_id']
+        nombre = (
+            f"{row['tecnico_encargado__first_name'] or ''} "
+            f"{row['tecnico_encargado__last_name'] or ''}"
+        ).strip() or row['tecnico_encargado__username'] or '— Sin asignar —'
+        ranking_ingresos.append({
+            'posicion': posicion,
+            'tecnico_id': tid,
+            'nombre': nombre,
+            'sin_asignar': tid is None,
+            'num_ingresos': row['num_ingresos'],
+            'sin_salida': row['sin_salida'],
+            'con_salida': row['con_salida'],
+            'participacion': round(
+                (row['num_ingresos'] / total_ingresos_ranking) * 100,
+                1,
+            ) if total_ingresos_ranking else 0,
+            'total_acordado': row['total_acordado'] or D('0.00'),
+            'total_anticipo': row['total_anticipo'] or D('0.00'),
+        })
+
+    # Base del ranking: salidas en el rango. La productividad se atribuye al
+    # técnico que reparó en la salida, no al técnico encargado del ingreso.
+    salidas_ranking_qs = SalidaEquipo.objects.select_related('ingreso', 'tecnico_reparo')
+    if desde:
+        salidas_ranking_qs = salidas_ranking_qs.filter(fecha_salida__gte=desde)
+    if hasta:
+        salidas_ranking_qs = salidas_ranking_qs.filter(fecha_salida__lte=hasta)
+
+    ranking = (
+        salidas_ranking_qs
+        .values('tecnico_reparo_id', 'tecnico_reparo__first_name',
+                'tecnico_reparo__last_name', 'tecnico_reparo__username')
+        .annotate(
+            num_equipos=Count('id'),
+            total_acordado=Sum('ingreso__valor_acordado'),
+            total_anticipo=Sum('ingreso__abono_anticipo'),
+            entregados=Count('id', filter=Q(estado_reparacion='retirado')),
+            pendientes=Count('id', filter=Q(estado_reparacion='pendiente_retiro')),
         )
         .order_by('-num_equipos', '-total_acordado')
     )
 
-    # Por cada técnico calcular sus salidas positivas (retirados, garantía, parciales)
     ranking_list = []
     for row in ranking:
-        tid = row['tecnico_encargado_id']
+        tid = row['tecnico_reparo_id']
         nombre = (
-            f"{row['tecnico_encargado__first_name'] or ''} {row['tecnico_encargado__last_name'] or ''}".strip()
-            or row['tecnico_encargado__username']
+            f"{row['tecnico_reparo__first_name'] or ''} {row['tecnico_reparo__last_name'] or ''}".strip()
+            or row['tecnico_reparo__username']
             or '— Sin asignar —'
         )
 
-        # Salidas asociadas a equipos de este técnico encargado
-        # Usamos select_related para evitar querys extra al pedir salida.ingreso.valor_acordado
-        sal_qs = SalidaEquipo.objects.filter(ingreso__tecnico_encargado_id=tid).select_related('ingreso')
-        if desde:
-            sal_qs = sal_qs.filter(fecha_salida__gte=desde)
-        if hasta:
-            sal_qs = sal_qs.filter(fecha_salida__lte=hasta)
+        sal_qs = salidas_ranking_qs.filter(tecnico_reparo_id=tid)
 
-        total_salidas = sal_qs.count()
+        total_salidas = row['num_equipos']
         
         salidas_positivas = 0
         salidas_negativas = 0
@@ -3403,9 +3443,9 @@ def salida_totales(request):
             estado = salida.estado_reparacion
             
             # Conteo de salidas
-            if estado in ['pendiente_retiro', 'garantia', 'garantia_fallos_adicionales', 'retirado']:
+            if estado in estados_positivos:
                 salidas_positivas += 1
-            elif estado in ['no_reparable', 'cliente_no_acepta', 'chatarrerizacion']:
+            elif estado in estados_negativos:
                 salidas_negativas += 1
                 
             # Cobrado
@@ -3454,15 +3494,7 @@ def salida_totales(request):
         sal_global = sal_global.filter(fecha_salida__lte=hasta)
     total_salidas_global = sal_global.count()
     total_positivas_global = sal_global.filter(
-        estado_reparacion__in=[
-            'pendiente_retiro',
-            'garantia',
-            'garantia_fallos_adicionales',
-            'retirado',
-            'cliente_no_acepta',
-            'no_reparable',
-            'revision',
-        ]
+        estado_reparacion__in=estados_positivos
     ).count()
     cobrado_final_global = sal_global.aggregate(s=Sum('valor_final_cobrado'))['s'] or D('0.00')
 
@@ -3484,6 +3516,7 @@ def salida_totales(request):
     } for t in por_tipo]
 
     return render(request, 'salidas/totales.html', {
+        'ranking_ingresos': ranking_ingresos,
         'ranking': ranking_list,
         'por_tipo': por_tipo_list,
         'total_equipos': total_equipos,
@@ -4443,10 +4476,10 @@ def api_perfil(request):
     #
     # IMPORTANTE (regla del negocio): el NIVEL del técnico se calcula SOLO por
     # las SALIDAS que él reparó (campo `tecnico_reparo`), NO por los ingresos.
-    # Quien marca la salida asume la responsabilidad del resultado:
+    # El técnico seleccionado en la salida asume la responsabilidad del resultado:
     #   • salida buena  → suma
     #   • salida mala    → resta
-    #   • garantía       → resta doble
+    #   • garantía       → cuenta como salida positiva
     # Los ingresos se siguen mostrando como dato informativo, pero ya NO cuentan
     # para subir de nivel.
     ingresos_qs = IngresoEquipo.objects.filter(registrado_por=user)
@@ -4475,7 +4508,7 @@ def api_perfil(request):
         estado_reparacion__in=SALIDA_MALA_ESTADOS
     ).count()
     
-    # Salidas por garantía (restan 2 puntos)
+    # Compatibilidad histórica: las garantías ya están incluidas como buenas.
     salidas_garantia = salidas_qs.filter(
         estado_reparacion__in=SALIDA_GARANTIA_ESTADOS
     ).count()

@@ -332,8 +332,9 @@ class IngresoEquipo(models.Model):
         null=True, blank=True,
         related_name='ingresos_como_tecnico',
         limit_choices_to={'is_active': True},
-        verbose_name='Técnico Encargado',
-        help_text='Técnico responsable de este equipo. Cuenta para su ranking de productividad.',
+        verbose_name='Técnico asignado al ingreso',
+        help_text='Técnico responsable asignado cuando el equipo ingresa. '
+                  'Este dato no define quién realizó la reparación.',
     )
     fecha_ingreso = models.DateField(
         verbose_name='Fecha de Ingreso',
@@ -1514,8 +1515,8 @@ class SalidaEquipo(models.Model):
     )
 
     # ── Técnico que REPARÓ el equipo (se declara en la salida) ───────────
-    # Es el responsable real de la reparación: quien marca la salida asume la
-    # responsabilidad de lo que se hizo. Este técnico —NO el que hizo el
+    # Es el responsable real de la reparación: el técnico seleccionado en la
+    # salida asume el resultado. Este técnico —NO el que hizo el
     # ingreso— es el que suma/resta puntos y sube de nivel según el resultado
     # (salida buena = suma, salida mala = resta). Es obligatorio en el
     # formulario; se deja nullable a nivel de BD solo para no romper salidas
@@ -1528,7 +1529,7 @@ class SalidaEquipo(models.Model):
         limit_choices_to={'is_active': True},
         verbose_name='Técnico que reparó',
         help_text='Técnico responsable de la reparación. Este dato define quién '
-                  'suma puntos por esta salida en el perfil.',
+                  'recibe el resultado positivo o negativo de la salida.',
     )
 
     # ── Observaciones (opcionales, casi siempre vacío en retiros normales)

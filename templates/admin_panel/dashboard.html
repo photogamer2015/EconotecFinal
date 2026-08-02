@@ -264,6 +264,358 @@
         background: rgba(249, 118, 24, 0.08);
     }
 
+    .productivity-panel {
+        margin: 4px 0 28px;
+        padding: 16px 18px;
+        border: 1px solid #e5e7eb;
+        border-left: 5px solid #111827;
+        border-radius: 8px;
+        background: var(--card-bg);
+        box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 14px;
+    }
+    .productivity-panel h3 {
+        margin: 0;
+        color: var(--text-main);
+        font-size: 16px;
+    }
+    .productivity-panel p {
+        margin: 4px 0 0;
+        color: var(--text-muted);
+        font-size: 13px;
+        font-weight: 600;
+    }
+    .productivity-actions {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+    .assignment-section {
+        margin: 0 0 28px;
+        padding: 0;
+        border: 1px solid #bae6e8;
+        border-top: 5px solid #0f766e;
+        border-radius: 8px;
+        background: var(--card-bg);
+        box-shadow: 0 3px 12px rgba(15, 118, 110, 0.08);
+        overflow: hidden;
+    }
+    .assignment-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 22px;
+        padding: 20px;
+        background: #f0fdfa;
+        border-bottom: 1px solid #ccfbf1;
+    }
+    .assignment-kicker {
+        display: block;
+        margin-bottom: 6px;
+        color: #0f766e;
+        font-size: 11px;
+        font-weight: 900;
+        text-transform: uppercase;
+    }
+    .assignment-head h3 {
+        margin: 0;
+        color: #134e4a;
+        font-size: 20px;
+    }
+    .assignment-head p {
+        max-width: 760px;
+        margin: 6px 0 0;
+        color: #475569;
+        font-size: 13px;
+        font-weight: 600;
+        line-height: 1.45;
+    }
+    .assignment-period {
+        flex: 0 0 auto;
+        padding: 8px 11px;
+        border: 1px solid #99f6e4;
+        border-radius: 6px;
+        background: #ffffff;
+        color: #115e59;
+        font-size: 12px;
+        font-weight: 900;
+        white-space: nowrap;
+    }
+    .assignment-metrics {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(130px, 1fr));
+        gap: 1px;
+        background: #dbe4e6;
+        border-bottom: 1px solid #dbe4e6;
+    }
+    .assignment-metric {
+        min-width: 0;
+        padding: 15px 18px;
+        background: var(--card-bg);
+    }
+    .assignment-metric span {
+        display: block;
+        color: var(--text-muted);
+        font-size: 10px;
+        font-weight: 900;
+        text-transform: uppercase;
+    }
+    .assignment-metric strong {
+        display: block;
+        margin-top: 4px;
+        color: var(--text-main);
+        font-size: 22px;
+    }
+    .assignment-metric.alert strong { color: #b45309; }
+    .assignment-body { padding: 18px 20px 20px; }
+    .assignment-table-wrap {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+    .assignment-table {
+        width: 100%;
+        min-width: 780px;
+        border-collapse: separate;
+        border-spacing: 0;
+    }
+    .assignment-table th,
+    .assignment-table td {
+        padding: 11px 12px;
+        border-bottom: 1px solid #e5e7eb;
+        text-align: left;
+        vertical-align: middle;
+        font-size: 12px;
+    }
+    .assignment-table th {
+        background: #134e4a;
+        color: #ffffff;
+        font-size: 10px;
+        font-weight: 900;
+        text-transform: uppercase;
+        white-space: nowrap;
+    }
+    .assignment-table th:first-child { border-top-left-radius: 6px; }
+    .assignment-table th:last-child { border-top-right-radius: 6px; }
+    .assignment-table tbody tr:hover { background: rgba(15, 118, 110, 0.045); }
+    .assignment-table a {
+        color: #0f766e;
+        font-weight: 900;
+        text-decoration: none;
+    }
+    .assignment-table small {
+        display: block;
+        margin-top: 3px;
+        color: var(--text-muted);
+        font-size: 10px;
+        font-weight: 700;
+    }
+    .assignment-rank {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 27px;
+        height: 27px;
+        border-radius: 50%;
+        background: #ccfbf1;
+        color: #115e59;
+        font-weight: 900;
+    }
+    .assignment-number {
+        font-size: 16px;
+        font-weight: 900;
+        color: var(--text-main);
+    }
+    .assignment-progress {
+        width: 108px;
+        height: 7px;
+        margin-top: 5px;
+        border-radius: 4px;
+        background: #e5e7eb;
+        overflow: hidden;
+    }
+    .assignment-progress span {
+        display: block;
+        height: 100%;
+        border-radius: inherit;
+        background: #14b8a6;
+    }
+    .assignment-records {
+        margin-top: 18px;
+        border: 1px solid #d1d5db;
+        border-radius: 7px;
+        overflow: hidden;
+    }
+    .assignment-records summary {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 13px 14px;
+        background: #f8fafc;
+        color: var(--text-main);
+        cursor: pointer;
+        list-style: none;
+        font-size: 13px;
+        font-weight: 900;
+    }
+    .assignment-records summary::-webkit-details-marker { display: none; }
+    .assignment-records summary::after {
+        content: '+';
+        color: #0f766e;
+        font-size: 20px;
+        line-height: 1;
+    }
+    .assignment-records[open] summary::after { content: '\2212'; }
+    .assignment-records-content { padding: 14px; }
+    .assignment-empty {
+        padding: 24px 16px;
+        border: 1px dashed #99f6e4;
+        border-radius: 7px;
+        background: #f0fdfa;
+        color: #115e59;
+        text-align: center;
+        font-size: 13px;
+        font-weight: 800;
+    }
+    [data-theme="dark"] .productivity-panel,
+    [data-theme="dark"] .assignment-section {
+        border-color: rgba(255,255,255,0.14);
+    }
+    [data-theme="dark"] .assignment-head,
+    [data-theme="dark"] .assignment-empty {
+        background: rgba(15, 118, 110, 0.12);
+        border-color: rgba(45, 212, 191, 0.2);
+    }
+    [data-theme="dark"] .assignment-head h3,
+    [data-theme="dark"] .assignment-head p { color: var(--text-main); }
+    [data-theme="dark"] .assignment-kicker,
+    [data-theme="dark"] .assignment-period,
+    [data-theme="dark"] .assignment-table a { color: #5eead4; }
+    [data-theme="dark"] .assignment-period,
+    [data-theme="dark"] .assignment-records summary { background: var(--card-bg); }
+    [data-theme="dark"] .assignment-table td,
+    [data-theme="dark"] .assignment-records { border-color: rgba(255,255,255,0.12); }
+
+    .technician-filter-panel {
+        margin: 0 0 18px;
+        padding: 16px 18px;
+        border: 1px solid #d1d5db;
+        border-radius: 8px;
+        background: var(--card-bg);
+        box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+    }
+    .technician-filter-form {
+        display: flex;
+        align-items: flex-end;
+        flex-wrap: wrap;
+        gap: 10px;
+    }
+    .technician-filter-field {
+        flex: 1 1 300px;
+        max-width: 470px;
+    }
+    .technician-filter-field .form-input { width: 100%; }
+    .technician-filter-actions {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+    .technician-filter-context {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 8px 18px;
+        margin-top: 13px;
+        padding-top: 13px;
+        border-top: 1px solid #e5e7eb;
+        color: var(--text-muted);
+        font-size: 11px;
+        font-weight: 800;
+    }
+    .technician-filter-context strong { color: var(--text-main); }
+    .role-key {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+    }
+    .role-key::before {
+        content: '';
+        width: 9px;
+        height: 9px;
+        border-radius: 50%;
+        background: #14b8a6;
+        flex: 0 0 auto;
+    }
+    .role-key.output::before { background: #f97316; }
+    .completion-section {
+        border-color: #fed7aa;
+        border-top-color: #ea580c;
+        box-shadow: 0 3px 12px rgba(234, 88, 12, 0.08);
+    }
+    .completion-section .assignment-head {
+        background: #fff7ed;
+        border-bottom-color: #ffedd5;
+    }
+    .completion-section .assignment-kicker { color: #c2410c; }
+    .completion-section .assignment-head h3 { color: #9a3412; }
+    .completion-section .assignment-period {
+        border-color: #fdba74;
+        color: #9a3412;
+    }
+    .completion-section .assignment-table th { background: #9a3412; }
+    .completion-section .assignment-table a { color: #c2410c; }
+    .completion-section .assignment-progress span { background: #f97316; }
+    .completion-section .assignment-rank {
+        background: #ffedd5;
+        color: #9a3412;
+    }
+    .completion-metrics {
+        grid-template-columns: repeat(5, minmax(120px, 1fr));
+    }
+    .completion-metric-positive strong { color: #15803d; }
+    .completion-metric-negative strong { color: #dc2626; }
+    .result-badge {
+        display: inline-flex;
+        align-items: center;
+        padding: 4px 8px;
+        border-radius: 999px;
+        font-size: 10px;
+        font-weight: 900;
+        white-space: nowrap;
+    }
+    .result-badge.positive { background: #dcfce7; color: #166534; }
+    .result-badge.negative { background: #fee2e2; color: #991b1b; }
+    .result-badge.neutral { background: #f3f4f6; color: #4b5563; }
+    .count-positive,
+    .count-negative {
+        display: inline-flex;
+        min-width: 30px;
+        justify-content: center;
+        padding: 4px 8px;
+        border-radius: 999px;
+        font-weight: 900;
+    }
+    .count-positive { background: #dcfce7; color: #166534; }
+    .count-negative { background: #fee2e2; color: #991b1b; }
+    [data-theme="dark"] .technician-filter-panel,
+    [data-theme="dark"] .technician-filter-context { border-color: rgba(255,255,255,0.14); }
+    [data-theme="dark"] .completion-section { border-color: rgba(249, 115, 22, 0.35); }
+    [data-theme="dark"] .completion-section .assignment-head {
+        background: rgba(154, 52, 18, 0.16);
+        border-color: rgba(249, 115, 22, 0.24);
+    }
+    [data-theme="dark"] .completion-section .assignment-head h3,
+    [data-theme="dark"] .completion-section .assignment-head p { color: var(--text-main); }
+    [data-theme="dark"] .completion-section .assignment-kicker,
+    [data-theme="dark"] .completion-section .assignment-period,
+    [data-theme="dark"] .completion-section .assignment-table a { color: #fdba74; }
+
     .breakdown-grid {
         display: grid;
         grid-template-columns: 1fr 1fr;
@@ -420,6 +772,71 @@
         border-top-color: rgba(255,255,255,0.14);
     }
     @media (max-width: 760px) {
+        .technician-filter-panel { padding: 14px; }
+        .technician-filter-field { max-width: none; }
+        .technician-filter-actions,
+        .technician-filter-actions .btn { width: 100%; }
+        .technician-filter-actions .btn { justify-content: center; }
+        .completion-metrics { grid-template-columns: 1fr 1fr; }
+        .completion-metrics .assignment-metric:last-child { grid-column: 1 / -1; }
+        .productivity-panel,
+        .assignment-head {
+            align-items: stretch;
+        }
+        .productivity-actions,
+        .productivity-actions .btn {
+            width: 100%;
+        }
+        .productivity-actions .btn { justify-content: center; }
+        .assignment-head {
+            display: grid;
+            grid-template-columns: 1fr;
+            padding: 17px 14px;
+        }
+        .assignment-period {
+            width: fit-content;
+            white-space: normal;
+        }
+        .assignment-metrics {
+            grid-template-columns: 1fr 1fr;
+        }
+        .assignment-body { padding: 14px; }
+        .assignment-table-wrap { overflow: visible; }
+        .assignment-table { min-width: 0; }
+        .assignment-table,
+        .assignment-table tbody,
+        .assignment-table tr,
+        .assignment-table td {
+            display: block;
+            width: 100%;
+        }
+        .assignment-table thead { display: none; }
+        .assignment-table tr {
+            margin-bottom: 10px;
+            border: 1px solid #d1d5db;
+            border-radius: 7px;
+            background: var(--card-bg);
+            overflow: hidden;
+        }
+        .assignment-table td {
+            display: grid;
+            grid-template-columns: 116px minmax(0, 1fr);
+            gap: 10px;
+            padding: 9px 11px;
+            border-bottom: 1px dashed #d1d5db;
+            overflow-wrap: anywhere;
+        }
+        .assignment-table td:last-child { border-bottom: 0; }
+        .assignment-table td::before {
+            content: attr(data-label);
+            color: var(--text-muted);
+            font-size: 10px;
+            font-weight: 900;
+            text-transform: uppercase;
+        }
+        .assignment-records-content { padding: 10px; }
+        [data-theme="dark"] .assignment-table tr,
+        [data-theme="dark"] .assignment-table td { border-color: rgba(255,255,255,0.12); }
         .equipos-mes-card {
             padding: 16px 14px;
         }
@@ -544,18 +961,320 @@
     <a href="{% url 'econotec:admin_export_reporte' %}?ano={{ year }}&mes={{ month }}" class="btn btn-success">📊 Reporte mes</a>
 </form>
 
-<!-- Panel de Gamificación y Perfiles -->
-<div class="filter-bar" style="margin-top: 15px; background: #fff; padding: 15px; border-radius: 8px; border: 1px solid #e5e7eb; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
+<!-- Productividad de salidas y perfiles -->
+<div class="productivity-panel">
     <div>
-        <h3 style="margin: 0; font-size: 16px; color: #111827;">🏆 Ranking de Productividad (Gamificación)</h3>
-        <p style="margin: 0; font-size: 13px; color: #6b7280;">Exporta o reinicia a cero el progreso actual de los técnicos y asesores.</p>
+        <h3>🏆 Ranking de Productividad (Gamificación)</h3>
+        <p>El puntaje de las salidas corresponde al técnico que reparó. Los ingresos asignados se muestran por separado abajo.</p>
     </div>
-    <div style="display: flex; gap: 8px; align-items: center;">
+    <div class="productivity-actions">
         <a href="{% url 'econotec:admin_perfiles_exportar' formato='pdf' %}" class="btn btn-secondary" style="background: #dc2626; color: white; border: none;">📄 Exportar PDF</a>
         <a href="{% url 'econotec:admin_perfiles_exportar' formato='excel' %}" class="btn btn-secondary" style="background: #16a34a; color: white; border: none;">📊 Exportar Excel</a>
         <button type="button" class="btn btn-primary" style="background: #111827; border: none;" onclick="confirmarReinicioPerfiles()">🔄 Reiniciar Perfiles</button>
     </div>
 </div>
+
+<!-- Selector común para responsabilidades de ingreso y salida -->
+<section class="technician-filter-panel" id="resumen-tecnicos">
+    <form method="get" action="{% url 'econotec:admin_dashboard' %}#resumen-tecnicos" class="technician-filter-form">
+        <input type="hidden" name="ano" value="{{ year }}">
+        <input type="hidden" name="mes" value="{{ month }}">
+        <div class="technician-filter-field">
+            <label for="tecnico-resumen" class="form-label">Técnico que deseas consultar</label>
+            <select name="tecnico_resumen" id="tecnico-resumen" class="form-input">
+                <option value="" {% if not tecnico_resumen_filtro %}selected{% endif %}>Todos los técnicos</option>
+                {% for tecnico in tecnicos_resumen %}
+                    <option value="{{ tecnico.pk }}" {% if tecnico_resumen_filtro == tecnico.pk|stringformat:"s" %}selected{% endif %}>
+                        {{ tecnico.get_full_name|default:tecnico.username }}
+                    </option>
+                {% endfor %}
+                <option value="sin_asignar" {% if tecnico_resumen_filtro == "sin_asignar" %}selected{% endif %}>Sin técnico asignado</option>
+            </select>
+        </div>
+        <div class="technician-filter-actions">
+            <button type="submit" class="btn btn-primary">Ver técnico</button>
+            {% if tecnico_resumen_filtro %}
+                <a href="{% url 'econotec:admin_dashboard' %}?ano={{ year }}&mes={{ month }}#resumen-tecnicos" class="btn btn-secondary">Mostrar todos</a>
+            {% endif %}
+        </div>
+    </form>
+    <div class="technician-filter-context">
+        <span>Mostrando: <strong>{{ tecnico_resumen_nombre }}</strong></span>
+        <span class="role-key">Ingreso = técnico asignado al recibir</span>
+        <span class="role-key output">Salida = técnico que terminó la reparación</span>
+    </div>
+</section>
+
+<!-- Ingresos asignados: usa únicamente tecnico_encargado del ingreso -->
+<section class="assignment-section" id="ingresos-tecnicos">
+    <div class="assignment-head">
+        <div>
+            <span class="assignment-kicker">Responsabilidad al ingresar</span>
+            <h3>Ingresos de equipos asignados a técnicos</h3>
+            <p>
+                Esta sección cuenta al técnico encargado registrado cuando el equipo ingresó.
+                No representa quién hizo la reparación ni modifica el ranking de salidas.
+            </p>
+        </div>
+        <div class="assignment-period">{{ mes_nombre }} {{ year }}</div>
+    </div>
+
+    <div class="assignment-metrics">
+        <div class="assignment-metric">
+            <span>Ingresos del mes</span>
+            <strong>{{ ingresos_tecnicos_total }}</strong>
+        </div>
+        <div class="assignment-metric">
+            <span>Con técnico asignado</span>
+            <strong>{{ ingresos_tecnicos_asignados }}</strong>
+        </div>
+        <div class="assignment-metric">
+            <span>Técnicos con ingresos</span>
+            <strong>{{ ingresos_tecnicos_count }}</strong>
+        </div>
+        <div class="assignment-metric{% if ingresos_tecnicos_sin_asignar %} alert{% endif %}">
+            <span>Sin técnico asignado</span>
+            <strong>{{ ingresos_tecnicos_sin_asignar }}</strong>
+        </div>
+    </div>
+
+    <div class="assignment-body">
+        {% if ingresos_tecnicos_resumen %}
+        <div class="assignment-table-wrap">
+            <table class="assignment-table">
+                <thead>
+                    <tr>
+                        <th>Posición</th>
+                        <th>Técnico asignado al ingresar</th>
+                        <th>Ingresos</th>
+                        <th>Sin salida registrada</th>
+                        <th>Con salida registrada</th>
+                        <th>Participación</th>
+                        <th>Registros</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for fila in ingresos_tecnicos_resumen %}
+                    {% widthratio fila.total ingresos_tecnicos_total 100 as participacion_barra %}
+                    <tr>
+                        <td data-label="Posición"><span class="assignment-rank">{{ fila.posicion }}</span></td>
+                        <td data-label="Técnico al ingreso">
+                            <strong>{{ fila.tecnico_nombre }}</strong>
+                            {% if not fila.tecnico_id %}<small>Requiere asignación</small>{% endif %}
+                        </td>
+                        <td data-label="Ingresos"><span class="assignment-number">{{ fila.total }}</span></td>
+                        <td data-label="Sin salida">{{ fila.en_taller }}</td>
+                        <td data-label="Con salida">{{ fila.con_salida }}</td>
+                        <td data-label="Participación">
+                            <strong>{{ fila.participacion|floatformat:1 }}%</strong>
+                            <div class="assignment-progress" aria-hidden="true"><span style="width: {{ participacion_barra }}%;"></span></div>
+                        </td>
+                        <td data-label="Registros">
+                            {% if fila.tecnico_id %}
+                                <a href="{% url 'econotec:ingreso_lista' %}?sede=todas&tecnico={{ fila.tecnico_id }}&fecha_desde={{ ingresos_tecnicos_desde|date:'Y-m-d' }}&fecha_hasta={{ ingresos_tecnicos_hasta|date:'Y-m-d' }}">Ver equipos</a>
+                            {% else %}
+                                <a href="#registros-ingresos-tecnicos" onclick="document.getElementById('registros-ingresos-tecnicos').open = true;">Ver abajo</a>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <details class="assignment-records" id="registros-ingresos-tecnicos">
+            <summary>Registros individuales de ingresos ({{ ingresos_tecnicos_total }})</summary>
+            <div class="assignment-records-content">
+                <div class="assignment-table-wrap">
+                    <table class="assignment-table">
+                        <thead>
+                            <tr>
+                                <th>Código</th>
+                                <th>Fecha</th>
+                                <th>Sede</th>
+                                <th>Cliente</th>
+                                <th>Equipo</th>
+                                <th>Técnico asignado al ingresar</th>
+                                <th>Estado actual</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for ingreso in ingresos_tecnicos_registros %}
+                            <tr>
+                                <td data-label="Código"><a href="{% url 'econotec:ingreso_detalle' ingreso.pk %}">{{ ingreso.codigo_equipo }}</a></td>
+                                <td data-label="Fecha">{{ ingreso.fecha_ingreso|date:"d/m/Y" }}</td>
+                                <td data-label="Sede">{{ ingreso.sede_display_corto }}</td>
+                                <td data-label="Cliente">
+                                    <strong>{{ ingreso.cliente.nombres }}</strong>
+                                    <small>{{ ingreso.cliente.cedula }}</small>
+                                </td>
+                                <td data-label="Equipo">
+                                    <strong>{{ ingreso.tipo_equipo_display }}</strong>
+                                    <small>{{ ingreso.marca }} {{ ingreso.modelo_serie_detalle }}</small>
+                                </td>
+                                <td data-label="Técnico al ingreso">
+                                    <strong>{{ ingreso.tecnico_encargado_nombre|default:"Sin técnico asignado" }}</strong>
+                                </td>
+                                <td data-label="Estado actual">
+                                    <span class="estado-chip pending">{{ ingreso.estado_visual_display }}</span>
+                                    {% if ingreso.subestado_visual_display %}<small>{{ ingreso.subestado_visual_display }}</small>{% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </details>
+        {% else %}
+            <div class="assignment-empty">
+                No hay ingresos de equipos registrados en {{ mes_nombre }} {{ year }}{% if tecnico_resumen_filtro %} para {{ tecnico_resumen_nombre }}{% endif %}.
+            </div>
+        {% endif %}
+    </div>
+</section>
+
+<!-- Salidas reparadas: usa únicamente tecnico_reparo de la salida -->
+<section class="assignment-section completion-section" id="salidas-tecnicos">
+    <div class="assignment-head">
+        <div>
+            <span class="assignment-kicker">Responsabilidad al finalizar</span>
+            <h3>Salidas por técnico que terminó la reparación</h3>
+            <p>
+                Esta sección usa exclusivamente el técnico registrado en la salida.
+                Las asignaciones hechas al ingresar el equipo no intervienen en estos resultados.
+            </p>
+        </div>
+        <div class="assignment-period">{{ mes_nombre }} {{ year }}</div>
+    </div>
+
+    <div class="assignment-metrics completion-metrics">
+        <div class="assignment-metric">
+            <span>Salidas del mes</span>
+            <strong>{{ salidas_tecnicos_total }}</strong>
+        </div>
+        <div class="assignment-metric completion-metric-positive">
+            <span>Salidas positivas</span>
+            <strong>{{ salidas_tecnicos_positivas }}</strong>
+        </div>
+        <div class="assignment-metric completion-metric-negative">
+            <span>Salidas negativas</span>
+            <strong>{{ salidas_tecnicos_negativas }}</strong>
+        </div>
+        <div class="assignment-metric">
+            <span>Efectividad</span>
+            <strong>{{ salidas_tecnicos_efectividad|floatformat:1 }}%</strong>
+        </div>
+        <div class="assignment-metric">
+            <span>Recaudado en salida</span>
+            <strong>{{ salidas_tecnicos_recaudado|dinero_signo }}</strong>
+        </div>
+    </div>
+
+    <div class="assignment-body">
+        {% if salidas_tecnicos_resumen %}
+        <div class="assignment-table-wrap">
+            <table class="assignment-table">
+                <thead>
+                    <tr>
+                        <th>Posición</th>
+                        <th>Técnico que reparó</th>
+                        <th>Salidas</th>
+                        <th>Retirados</th>
+                        <th>Pend. retiro</th>
+                        <th>Positivas</th>
+                        <th>Negativas</th>
+                        <th>Otras</th>
+                        <th>Efectividad</th>
+                        <th>Recaudado</th>
+                        <th>Registros</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for fila in salidas_tecnicos_resumen %}
+                    {% widthratio fila.positivas fila.total 100 as efectividad_barra %}
+                    <tr>
+                        <td data-label="Posición"><span class="assignment-rank">{{ fila.posicion }}</span></td>
+                        <td data-label="Técnico que reparó">
+                            <strong>{{ fila.tecnico_nombre }}</strong>
+                            {% if not fila.tecnico_id %}<small>Salida sin responsable registrado</small>{% endif %}
+                        </td>
+                        <td data-label="Salidas"><span class="assignment-number">{{ fila.total }}</span></td>
+                        <td data-label="Retirados">{{ fila.retirados }}</td>
+                        <td data-label="Pend. retiro">{{ fila.pendientes }}</td>
+                        <td data-label="Positivas"><span class="count-positive">{{ fila.positivas }}</span></td>
+                        <td data-label="Negativas"><span class="count-negative">{{ fila.negativas }}</span></td>
+                        <td data-label="Otras">{{ fila.otras }}</td>
+                        <td data-label="Efectividad">
+                            <strong>{{ fila.efectividad|floatformat:1 }}%</strong>
+                            <div class="assignment-progress" aria-hidden="true"><span style="width: {{ efectividad_barra }}%;"></span></div>
+                        </td>
+                        <td data-label="Recaudado"><strong>{{ fila.recaudado|dinero_signo }}</strong></td>
+                        <td data-label="Registros">
+                            {% if fila.tecnico_id %}
+                                <a href="{% url 'econotec:salida_lista' %}?tecnico_salida={{ fila.tecnico_id }}&fecha_desde={{ ingresos_tecnicos_desde|date:'Y-m-d' }}&fecha_hasta={{ ingresos_tecnicos_hasta|date:'Y-m-d' }}">Ver salidas</a>
+                            {% else %}
+                                <a href="#registros-salidas-tecnicos" onclick="document.getElementById('registros-salidas-tecnicos').open = true;">Ver abajo</a>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <details class="assignment-records" id="registros-salidas-tecnicos">
+            <summary>Registros individuales de salidas ({{ salidas_tecnicos_total }})</summary>
+            <div class="assignment-records-content">
+                <div class="assignment-table-wrap">
+                    <table class="assignment-table">
+                        <thead>
+                            <tr>
+                                <th>Código</th>
+                                <th>Fecha</th>
+                                <th>Cliente</th>
+                                <th>Equipo</th>
+                                <th>Técnico que reparó</th>
+                                <th>Clasificación</th>
+                                <th>Resultado final</th>
+                                <th>Recaudado</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for salida in salidas_tecnicos_registros %}
+                            <tr>
+                                <td data-label="Código"><a href="{% url 'econotec:ingreso_detalle' salida.ingreso.pk %}">{{ salida.ingreso.codigo_equipo }}</a></td>
+                                <td data-label="Fecha">{{ salida.fecha_salida|date:"d/m/Y" }}</td>
+                                <td data-label="Cliente">
+                                    <strong>{{ salida.ingreso.cliente.nombres }}</strong>
+                                    <small>{{ salida.ingreso.cliente.cedula }}</small>
+                                </td>
+                                <td data-label="Equipo">
+                                    <strong>{{ salida.ingreso.tipo_equipo_display }}</strong>
+                                    <small>{{ salida.ingreso.marca }} {{ salida.ingreso.modelo_serie_detalle }}</small>
+                                </td>
+                                <td data-label="Técnico que reparó">
+                                    <strong>{{ salida.tecnico_reparo_nombre|default:"Sin técnico registrado" }}</strong>
+                                </td>
+                                <td data-label="Clasificación">
+                                    <span class="result-badge {{ salida.clasificacion_admin }}">{{ salida.clasificacion_admin_nombre }}</span>
+                                </td>
+                                <td data-label="Resultado final">{{ salida.get_estado_reparacion_display }}</td>
+                                <td data-label="Recaudado"><strong>{{ salida.valor_final_cobrado|dinero_signo }}</strong></td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </details>
+        {% else %}
+            <div class="assignment-empty">
+                No hay salidas registradas en {{ mes_nombre }} {{ year }}{% if tecnico_resumen_filtro %} para {{ tecnico_resumen_nombre }}{% endif %}.
+            </div>
+        {% endif %}
+    </div>
+</section>
 
 <!-- Balance principal -->
 <div class="balance-grid">
@@ -633,7 +1352,7 @@
                             <th>Ingreso</th>
                             <th>Cliente</th>
                             <th>Equipo</th>
-                            <th>Técnico</th>
+                            <th>Técnico asignado al ingresar</th>
                             <th>Estado actual</th>
                             <th>Entrega</th>
                             <th>Valor</th>
@@ -658,7 +1377,7 @@
                                 <strong>{{ item.ingreso.tipo_equipo_display }}</strong>
                                 <small>{{ item.ingreso.marca }} {{ item.ingreso.modelo_serie_detalle }}</small>
                             </td>
-                            <td data-label="Técnico">{{ item.tecnico_nombre|default:"—" }}</td>
+                            <td data-label="Técnico al ingreso">{{ item.tecnico_ingreso_nombre|default:"— Sin asignar —" }}</td>
                             <td data-label="Estado actual">
                                 <span class="estado-chip pending">{{ item.ingreso.get_estado_display }}</span>
                             </td>
