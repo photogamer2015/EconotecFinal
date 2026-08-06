@@ -156,6 +156,63 @@ class LoginCaptchaTests(TestCase):
             self.usuario_sin_correo.pk,
         )
 
+    def test_qr_inventario_exige_login_y_regresa_al_producto(self):
+        item = InventarioItem.objects.create(
+            sede='guayaquil',
+            categoria='impresora',
+            tipo='impresora-laser',
+            producto='Tinta de prueba QR',
+            marca='Epson',
+            modelo='544',
+            estado='disponible',
+            cantidad=1,
+            ubicacion='guayaquil_norte',
+            registrado_por=self.usuario,
+        )
+        detalle_url = reverse(
+            'econotec:inventario_detalle_item',
+            kwargs={'codigo': item.codigo},
+        )
+        imprimir_url = reverse(
+            'econotec:inventario_qr_imprimir',
+            kwargs={'codigo': item.codigo},
+        )
+
+        response = self.client.get(detalle_url)
+        imprimir_response = self.client.get(imprimir_url)
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, f'{reverse("login")}?next={detalle_url}')
+        self.assertEqual(imprimir_response.status_code, 302)
+        self.assertEqual(
+            imprimir_response.url,
+            f'{reverse("login")}?next={imprimir_url}',
+        )
+
+        login_page = self.client.get(response.url)
+        self.assertContains(login_page, f'name="next" value="{detalle_url}"')
+        respuesta_captcha = str(self.client.session[CAPTCHA_SESSION_KEY])
+
+        response = self.client.post(reverse('login'), {
+            'username': self.usuario.username,
+            'password': 'testpass123',
+            'sede': 'guayaquil',
+            'captcha_respuesta': respuesta_captcha,
+            'next': detalle_url,
+        })
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, reverse('login_2fa'))
+
+        codigo = re.search(r'\b(\d{6})\b', mail.outbox[0].body).group(1)
+        response = self.client.post(reverse('login_2fa'), {'codigo': codigo})
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, detalle_url)
+        detalle = self.client.get(response.url)
+        self.assertEqual(detalle.status_code, 200)
+        self.assertContains(detalle, item.codigo)
+        self.assertContains(detalle, 'Tinta de prueba QR')
+
     def test_registro_correo_verificado_guarda_email_y_entra(self):
         respuesta = self._captcha_answer()
         self.client.post(reverse('login'), {
@@ -1183,7 +1240,70 @@ class VentasTests(TestCase):
         self.assertContains(response, 'Celular')
         self.assertContains(response, 'Tablet')
         self.assertContains(response, 'Mando')
+        self.assertContains(response, 'Otros equipos/materiales')
+        self.assertContains(response, 'inventario/otros-equipos-materiales.png')
+        self.assertContains(
+            response,
+            reverse('econotec:inventario_categoria', kwargs={
+                'sede': '__sede__',
+                'categoria': 'otros-equipos-materiales',
+            }),
+        )
         self.assertNotContains(response, 'Venta de Producto')
+
+    def test_inventario_otros_equipos_materiales_usa_flujo_completo(self):
+        categoria_url = reverse('econotec:inventario_categoria', kwargs={
+            'sede': 'guayaquil',
+            'categoria': 'otros-equipos-materiales',
+        })
+        tabla_url = reverse('econotec:inventario_tabla', kwargs={
+            'sede': 'guayaquil',
+            'categoria': 'otros-equipos-materiales',
+            'tipo': 'otros-equipos-materiales',
+        })
+        registrar_url = reverse('econotec:inventario_registrar', kwargs={
+            'sede': 'guayaquil',
+            'categoria': 'otros-equipos-materiales',
+            'tipo': 'otros-equipos-materiales',
+        })
+
+        categoria = self.client.get(categoria_url)
+        self.assertRedirects(categoria, tabla_url)
+
+        formulario = self.client.get(registrar_url)
+        self.assertEqual(formulario.status_code, 200)
+        self.assertContains(formulario, 'Ingresar')
+        self.assertContains(formulario, 'Otros equipos/materiales')
+        self.assertContains(formulario, 'Producto')
+        self.assertContains(formulario, 'Ubicación')
+
+        response = self.client.post(registrar_url, {
+            'producto': 'Kit de herramientas',
+            'marca': 'Genérica',
+            'modelo': 'Técnico',
+            'serie': '',
+            'estado': 'disponible',
+            'causa_no_disponible': '',
+            'cantidad': '4',
+            'costo': '12.50',
+            'ubicacion': 'guayaquil_norte',
+            'observacion': 'Material para el taller.',
+        })
+
+        item = InventarioItem.objects.get(producto='Kit de herramientas')
+        self.assertEqual(item.categoria, 'otros-equipos-materiales')
+        self.assertEqual(item.tipo, 'otros-equipos-materiales')
+        self.assertTrue(item.codigo.startswith('INV-GYE-OTRO-'))
+        self.assertRedirects(response, tabla_url)
+
+        tabla = self.client.get(tabla_url)
+        self.assertContains(tabla, 'Kit de herramientas')
+        self.assertContains(tabla, 'Material para el taller.')
+        self.assertContains(tabla, 'data:image/png;base64,')
+        self.assertContains(tabla, reverse(
+            'econotec:inventario_detalle_item',
+            kwargs={'codigo': item.codigo},
+        ))
 
     def test_inventario_categoria_con_subtipos_muestra_opciones(self):
         response = self.client.get(reverse('econotec:inventario_categoria', kwargs={
@@ -1587,6 +1707,119 @@ class VentasTests(TestCase):
         self.assertContains(tabla, reverse('econotec:inventario_editar', kwargs={'codigo': item.codigo}))
         self.assertContains(tabla, reverse('econotec:inventario_eliminar', kwargs={'codigo': item.codigo}))
 
+    def test_inventario_rechaza_producto_y_modelo_duplicados_sin_importar_formato(self):
+        existente = InventarioItem.objects.create(
+            sede='guayaquil',
+            categoria='impresora',
+            tipo='impresora-laser',
+            producto='Tarjeta lógica',
+            marca='Epson',
+            modelo='Láser-t32',
+            estado='disponible',
+            cantidad=34,
+            ubicacion='guayaquil_norte',
+            registrado_por=self.usuario,
+        )
+        registrar_url = reverse('econotec:inventario_registrar', kwargs={
+            'sede': 'guayaquil',
+            'categoria': 'impresora',
+            'tipo': 'impresora-laser',
+        })
+
+        response = self.client.post(registrar_url, {
+            'producto': '  TARJETA   LOGICA  ',
+            'marca': 'Epson',
+            'modelo': '  LASER-T32  ',
+            'serie': '',
+            'estado': 'disponible',
+            'causa_no_disponible': '',
+            'cantidad': '1',
+            'costo': '10.00',
+            'ubicacion': 'guayaquil_norte',
+            'observacion': '',
+        })
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(InventarioItem.objects.count(), 1)
+        self.assertIn('modelo', response.context['form'].errors)
+        self.assertContains(response, existente.codigo)
+        self.assertContains(response, 'ya está registrado con el mismo modelo')
+        self.assertContains(response, 'Edita ese registro o actualiza su cantidad')
+
+    def test_inventario_permite_otro_producto_con_el_mismo_modelo(self):
+        InventarioItem.objects.create(
+            sede='guayaquil',
+            categoria='impresora',
+            tipo='impresora-inyeccion',
+            producto='Tinta cyan',
+            marca='Genérica',
+            modelo='1 litro',
+            estado='disponible',
+            cantidad=1,
+            ubicacion='guayaquil_norte',
+            registrado_por=self.usuario,
+        )
+        registrar_url = reverse('econotec:inventario_registrar', kwargs={
+            'sede': 'guayaquil',
+            'categoria': 'impresora',
+            'tipo': 'impresora-inyeccion',
+        })
+
+        response = self.client.post(registrar_url, {
+            'producto': 'Tinta magenta',
+            'marca': 'Genérica',
+            'modelo': '1 LITRO',
+            'serie': '',
+            'estado': 'disponible',
+            'causa_no_disponible': '',
+            'cantidad': '1',
+            'costo': '15.00',
+            'ubicacion': 'guayaquil_norte',
+            'observacion': '',
+        })
+
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(InventarioItem.objects.filter(producto='Tinta magenta').exists())
+
+    def test_inventario_editar_el_mismo_registro_no_es_duplicado(self):
+        item = InventarioItem.objects.create(
+            sede='guayaquil',
+            categoria='impresora',
+            tipo='impresora-laser',
+            producto='Tarjeta lógica',
+            marca='Epson',
+            modelo='Laser-t32',
+            estado='disponible',
+            cantidad=34,
+            costo=Decimal('10.00'),
+            ubicacion='guayaquil_norte',
+            registrado_por=self.usuario,
+        )
+        editar_url = reverse(
+            'econotec:inventario_editar',
+            kwargs={'codigo': item.codigo},
+        )
+
+        response = self.client.post(editar_url, {
+            'producto': 'TARJETA LÓGICA',
+            'marca': 'Epson',
+            'modelo': 'LASER-T32',
+            'serie': '',
+            'estado': 'disponible',
+            'causa_no_disponible': '',
+            'cantidad': '35',
+            'costo': '10.00',
+            'ubicacion': 'guayaquil_norte',
+            'observacion': '',
+        })
+
+        self.assertRedirects(response, reverse(
+            'econotec:inventario_detalle_item',
+            kwargs={'codigo': item.codigo},
+        ))
+        item.refresh_from_db()
+        self.assertEqual(item.cantidad, 35)
+
     def test_inventario_detalle_y_qr_imprimible_muestran_datos(self):
         item = InventarioItem.objects.create(
             sede='guayaquil',
@@ -1805,7 +2038,7 @@ class VentasTests(TestCase):
         item.refresh_from_db()
         self.assertEqual(item.cantidad, 0)
 
-    def test_inventario_cantidad_requiere_sesion_y_qr_publico_no_modifica(self):
+    def test_inventario_detalle_y_cantidad_requieren_sesion_y_no_modifican(self):
         item = InventarioItem.objects.create(
             sede='quito',
             categoria='tablet',
@@ -1829,10 +2062,8 @@ class VentasTests(TestCase):
         self.client.logout()
 
         detalle = self.client.get(detalle_url)
-        self.assertEqual(detalle.status_code, 200)
-        self.assertNotContains(detalle, 'aria-label="Restar una unidad"')
-        self.assertNotContains(detalle, 'aria-label="Sumar una unidad"')
-        self.assertNotContains(detalle, 'Guardar cambios')
+        self.assertEqual(detalle.status_code, 302)
+        self.assertEqual(detalle.url, f'{reverse("login")}?next={detalle_url}')
 
         response = self.client.post(cantidad_url, {'cantidad': '10'})
         self.assertEqual(response.status_code, 302)

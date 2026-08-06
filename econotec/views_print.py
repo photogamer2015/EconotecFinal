@@ -493,6 +493,12 @@ PDF_INVENTARIO_CATEGORIAS = {
     'celular': {'nombre': 'Celular', 'tipos': {'celular': 'Celular'}},
     'tablet': {'nombre': 'Tablet', 'tipos': {'tablet': 'Tablet'}},
     'mando': {'nombre': 'Mando', 'tipos': {'mando': 'Mando'}},
+    'otros-equipos-materiales': {
+        'nombre': 'Otros equipos/materiales',
+        'tipos': {
+            'otros-equipos-materiales': 'Otros equipos/materiales',
+        },
+    },
 }
 
 

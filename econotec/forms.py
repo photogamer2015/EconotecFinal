@@ -3,6 +3,7 @@ Formularios de Econotec.
 """
 import base64
 import binascii
+import unicodedata
 
 from django import forms
 from django.contrib.auth import get_user_model
@@ -56,6 +57,17 @@ def _queryset_asesores():
 # Inventario
 # ─────────────────────────────────────────────────────────
 
+def _normalizar_identidad_inventario(valor):
+    """Compara nombres/modelos sin depender de mayúsculas, acentos o espacios."""
+    texto = ' '.join(str(valor or '').strip().casefold().split())
+    texto = unicodedata.normalize('NFD', texto)
+    return ''.join(
+        caracter
+        for caracter in texto
+        if unicodedata.category(caracter) != 'Mn'
+    )
+
+
 class InventarioItemForm(forms.ModelForm):
     class Meta:
         model = InventarioItem
@@ -108,8 +120,18 @@ class InventarioItemForm(forms.ModelForm):
             }),
         }
 
-    def __init__(self, *args, sede_slug='', **kwargs):
+    def __init__(
+        self,
+        *args,
+        sede_slug='',
+        categoria_slug='',
+        tipo_slug='',
+        **kwargs,
+    ):
         super().__init__(*args, **kwargs)
+        self.sede_slug = sede_slug or getattr(self.instance, 'sede', '')
+        self.categoria_slug = categoria_slug or getattr(self.instance, 'categoria', '')
+        self.tipo_slug = tipo_slug or getattr(self.instance, 'tipo', '')
         self.fields['serie'].required = False
         self.fields['observacion'].required = False
         for field_name, field in self.fields.items():
@@ -151,6 +173,43 @@ class InventarioItemForm(forms.ModelForm):
                 )
         else:
             cleaned_data['causa_no_disponible'] = ''
+
+        producto = cleaned_data.get('producto')
+        modelo = cleaned_data.get('modelo')
+        producto_normalizado = _normalizar_identidad_inventario(producto)
+        modelo_normalizado = _normalizar_identidad_inventario(modelo)
+        if (
+            producto_normalizado
+            and modelo_normalizado
+            and self.sede_slug
+            and self.categoria_slug
+            and self.tipo_slug
+        ):
+            candidatos = InventarioItem.objects.filter(
+                sede=self.sede_slug,
+                categoria=self.categoria_slug,
+                tipo=self.tipo_slug,
+            ).only('pk', 'codigo', 'producto', 'modelo', 'ubicacion')
+            if self.instance and self.instance.pk:
+                candidatos = candidatos.exclude(pk=self.instance.pk)
+
+            duplicado = next((
+                item
+                for item in candidatos
+                if (
+                    _normalizar_identidad_inventario(item.producto) == producto_normalizado
+                    and _normalizar_identidad_inventario(item.modelo) == modelo_normalizado
+                )
+            ), None)
+            if duplicado:
+                self.add_error(
+                    'modelo',
+                    (
+                        'Este producto ya está registrado con el mismo modelo '
+                        f'como {duplicado.codigo} en {duplicado.get_ubicacion_display()}. '
+                        'Edita ese registro o actualiza su cantidad.'
+                    ),
+                )
         return cleaned_data
 
 

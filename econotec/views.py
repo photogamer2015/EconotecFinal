@@ -591,6 +591,12 @@ INVENTARIO_CATEGORIAS = {
             ('mando', 'Mando'),
         ),
     },
+    'otros-equipos-materiales': {
+        'nombre': 'Otros equipos/materiales',
+        'tipos': (
+            ('otros-equipos-materiales', 'Otros equipos/materiales'),
+        ),
+    },
 }
 
 
@@ -700,6 +706,7 @@ def _inventario_contexto_base(sede_slug, categoria_slug, tipo_slug):
 
 def _inventario_item_contexto(request, item, box_size=8):
     from .qr_utils import qr_data_uri
+    from qrcode.constants import ERROR_CORRECT_H
 
     detalle_url = reverse('econotec:inventario_detalle_item', kwargs={'codigo': item.codigo})
     qr_url = request.build_absolute_uri(detalle_url)
@@ -713,7 +720,15 @@ def _inventario_item_contexto(request, item, box_size=8):
         'tipo': tipo_info,
         'detalle_url': detalle_url,
         'detalle_url_absoluta': qr_url,
-        'qr_data_uri': qr_data_uri(qr_url, box_size=box_size, border=2),
+        # El logo central cubre parte de la matriz. La corrección alta permite
+        # que cámaras móviles recuperen el enlace, y el margen de 4 módulos es
+        # la zona silenciosa estándar necesaria al mostrar o imprimir el QR.
+        'qr_data_uri': qr_data_uri(
+            qr_url,
+            box_size=box_size,
+            border=4,
+            error_correction=ERROR_CORRECT_H,
+        ),
         'puede_gestionar_inventario': _puede_gestionar_inventario(request.user),
     }
 
@@ -977,7 +992,12 @@ def inventario_registrar(request, sede, categoria, tipo):
         return redirect('econotec:inventario_categoria', sede=sede_slug, categoria=categoria_slug)
 
     if request.method == 'POST':
-        form = InventarioItemForm(request.POST, sede_slug=sede_slug)
+        form = InventarioItemForm(
+            request.POST,
+            sede_slug=sede_slug,
+            categoria_slug=categoria_slug,
+            tipo_slug=tipo_slug,
+        )
         if form.is_valid():
             item = form.save(commit=False)
             item.sede = sede_slug
@@ -993,10 +1013,15 @@ def inventario_registrar(request, sede, categoria, tipo):
                 tipo=tipo_slug,
             )
     else:
-        form = InventarioItemForm(sede_slug=sede_slug, initial={
-            'cantidad': 1,
-            'estado': 'disponible',
-        })
+        form = InventarioItemForm(
+            sede_slug=sede_slug,
+            categoria_slug=categoria_slug,
+            tipo_slug=tipo_slug,
+            initial={
+                'cantidad': 1,
+                'estado': 'disponible',
+            },
+        )
 
     return render(request, 'inventario/form.html', {
         'form': form,
@@ -1027,13 +1052,24 @@ def inventario_editar(request, codigo):
         return redirect('econotec:inventario_menu')
 
     if request.method == 'POST':
-        form = InventarioItemForm(request.POST, instance=item, sede_slug=item.sede)
+        form = InventarioItemForm(
+            request.POST,
+            instance=item,
+            sede_slug=item.sede,
+            categoria_slug=item.categoria,
+            tipo_slug=item.tipo,
+        )
         if form.is_valid():
             form.save()
             messages.success(request, 'Producto de inventario actualizado.')
             return redirect('econotec:inventario_detalle_item', codigo=item.codigo)
     else:
-        form = InventarioItemForm(instance=item, sede_slug=item.sede)
+        form = InventarioItemForm(
+            instance=item,
+            sede_slug=item.sede,
+            categoria_slug=item.categoria,
+            tipo_slug=item.tipo,
+        )
 
     return render(request, 'inventario/form.html', {
         'form': form,
@@ -1048,6 +1084,7 @@ def inventario_editar(request, codigo):
     })
 
 
+@login_required
 def inventario_detalle_item(request, codigo):
     item = get_object_or_404(InventarioItem, codigo=codigo)
     return render(request, 'inventario/detalle.html', _inventario_item_contexto(request, item, box_size=6))
@@ -1117,6 +1154,7 @@ def inventario_eliminar(request, codigo):
     return redirect('econotec:inventario_tabla', **tabla_kwargs)
 
 
+@login_required
 def inventario_qr_imprimir(request, codigo):
     item = get_object_or_404(InventarioItem, codigo=codigo)
     return render(request, 'inventario/imprimir_qr.html', _inventario_item_contexto(request, item, box_size=8))
