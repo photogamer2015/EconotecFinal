@@ -4129,6 +4129,112 @@ class VentasTests(TestCase):
         self.assertEqual(pdf_response.status_code, 200)
         self.assertEqual(pdf_response['Content-Type'], 'application/pdf')
 
+    def test_salida_factura_imprimir_usa_plantilla_propia(self):
+        ingreso = self.crear_ingreso_reparacion(
+            estado='entregado',
+            valor_acordado=Decimal('100.00'),
+            abono_anticipo=Decimal('40.00'),
+            marca='Sony',
+            modelo_serie='Playstation 5',
+        )
+        salida = SalidaEquipo.objects.create(
+            ingreso=ingreso,
+            fecha_salida=date(2026, 7, 9),
+            estado_reparacion='retirado',
+            cliente_recibe_conforme='si',
+            valor_final_cobrado=Decimal('60.00'),
+            metodo_pago_final='efectivo',
+            factura_realizada='si',
+            factura_nombres='Yandri Guevara',
+            factura_cedula='1207342716',
+            factura_correo='factura@example.com',
+            registrado_por=self.usuario,
+        )
+
+        response = self.client.get(
+            reverse('econotec:salida_factura_imprimir', kwargs={'pk': salida.pk})
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Comprobante de Compra/Venta')
+        self.assertContains(response, 'Fecha de emisión:')
+        self.assertContains(response, 'Bienes/Servicios')
+        self.assertContains(response, 'Servicio técnico y reparación')
+        self.assertContains(response, 'Subtotal 0%:')
+        self.assertContains(response, 'Total:')
+        self.assertContains(response, '$100,00')
+        self.assertContains(response, 'Pagado:')
+        self.assertContains(response, 'Teléfonos:')
+        self.assertContains(response, 'Firma del técnico')
+        self.assertNotContains(response, '098 075 8747')
+        self.assertNotContains(response, 'ACTA DE SALIDA DE EQUIPO')
+        self.assertNotContains(response, 'ESTADO DE LA SALIDA')
+        self.assertNotContains(response, 'Firma del cliente')
+
+        pdf_response = self.client.get(
+            reverse('econotec:salida_factura_pdf', kwargs={'pk': salida.pk})
+        )
+        self.assertEqual(pdf_response.status_code, 200)
+        self.assertEqual(pdf_response['Content-Type'], 'application/pdf')
+        self.assertEqual(
+            pdf_response['Content-Disposition'],
+            f'attachment; filename="factura_{ingreso.codigo_equipo}.pdf"',
+        )
+
+    def test_salida_factura_imprimir_incluye_firma_cliente_si_existe(self):
+        ingreso = self.crear_ingreso_reparacion(
+            estado='entregado',
+            firma_cliente=True,
+            firma_cliente_imagen=self.FIRMA_PNG_DATA_URI,
+        )
+        salida = SalidaEquipo.objects.create(
+            ingreso=ingreso,
+            fecha_salida=date(2026, 7, 9),
+            estado_reparacion='retirado',
+            cliente_recibe_conforme='si',
+            valor_final_cobrado=Decimal('25.00'),
+            metodo_pago_final='efectivo',
+            factura_realizada='si',
+            factura_nombres='Yandri Guevara',
+            factura_cedula='1207342716',
+            factura_correo='factura@example.com',
+            registrado_por=self.usuario,
+        )
+
+        response = self.client.get(
+            reverse('econotec:salida_factura_imprimir', kwargs={'pk': salida.pk})
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Firma del técnico')
+        self.assertContains(response, 'Firma del cliente')
+        self.assertContains(response, self.FIRMA_PNG_DATA_URI)
+
+        pdf_response = self.client.get(
+            reverse('econotec:salida_factura_pdf', kwargs={'pk': salida.pk})
+        )
+        self.assertEqual(pdf_response.status_code, 200)
+        self.assertEqual(pdf_response['Content-Type'], 'application/pdf')
+
+    def test_salida_factura_imprimir_no_genera_documento_si_no_hay_factura(self):
+        ingreso = self.crear_ingreso_reparacion(estado='entregado')
+        salida = SalidaEquipo.objects.create(
+            ingreso=ingreso,
+            fecha_salida=date(2026, 7, 9),
+            estado_reparacion='retirado',
+            cliente_recibe_conforme='si',
+            valor_final_cobrado=Decimal('25.00'),
+            metodo_pago_final='efectivo',
+            factura_realizada='no',
+            registrado_por=self.usuario,
+        )
+
+        response = self.client.get(
+            reverse('econotec:salida_factura_imprimir', kwargs={'pk': salida.pk})
+        )
+
+        self.assertEqual(response.status_code, 404)
+
     def test_salida_imprimir_muestra_saldo_pagos_y_solo_firma_tecnico(self):
         ingreso = self.crear_ingreso_reparacion(
             valor_acordado=Decimal('35.00'),
@@ -4341,6 +4447,22 @@ class VentasTests(TestCase):
         self.assertContains(response, 'Facturas <span class="accent">Realizadas</span>')
         self.assertContains(response, salida_facturada.ingreso.codigo_equipo)
         self.assertContains(response, 'factura@example.com')
+        self.assertContains(
+            response,
+            reverse('econotec:salida_factura_imprimir', kwargs={'pk': salida_facturada.pk}),
+        )
+        self.assertContains(
+            response,
+            reverse('econotec:salida_factura_pdf', kwargs={'pk': salida_facturada.pk}),
+        )
+        self.assertNotContains(
+            response,
+            reverse('econotec:salida_imprimir', kwargs={'pk': salida_facturada.pk}),
+        )
+        self.assertNotContains(
+            response,
+            reverse('econotec:salida_pdf', kwargs={'pk': salida_facturada.pk}),
+        )
         self.assertNotContains(response, 'Todas las salidas')
         self.assertNotContains(response, 'Factura realizada: No')
         self.assertNotContains(response, ingreso_sin_factura.codigo_equipo)

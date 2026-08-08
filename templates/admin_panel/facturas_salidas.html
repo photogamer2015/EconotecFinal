@@ -148,8 +148,8 @@
                 </td>
                 <td class="row-actions">
                     <a href="{% url 'econotec:salida_editar' pk=s.pk %}" class="btn btn-sm btn-secondary">Editar</a>
-                    <a href="{% url 'econotec:salida_imprimir' pk=s.pk %}" target="_blank" class="btn btn-sm btn-info">Imprimir</a>
-                    <a href="{% url 'econotec:salida_pdf' pk=s.pk %}" class="btn btn-sm btn-primary">PDF</a>
+                    <a href="{% url 'econotec:salida_factura_imprimir' pk=s.pk %}" target="_blank" class="btn btn-sm btn-info">Imprimir</a>
+                    <a href="{% url 'econotec:salida_factura_pdf' pk=s.pk %}" class="btn btn-sm btn-primary">PDF</a>
                 </td>
             </tr>
         {% endfor %}

@@ -97,6 +97,10 @@ urlpatterns = [
     path('salidas/<int:pk>/eliminar/', views.salida_eliminar, name='salida_eliminar'),
     path('salidas/<int:pk>/imprimir/', views_print.salida_imprimir, name='salida_imprimir'),
     path('salidas/<int:pk>/pdf/', views_print.salida_pdf, name='salida_pdf'),
+    path('salidas/<int:pk>/factura/imprimir/',
+         views_print.salida_factura_imprimir, name='salida_factura_imprimir'),
+    path('salidas/<int:pk>/factura/pdf/',
+         views_print.salida_factura_pdf, name='salida_factura_pdf'),
 
     # ── Clientes ───────────────────────────────────────────
     path('clientes/', views.cliente_lista, name='cliente_lista'),

@@ -14,6 +14,7 @@ import binascii
 
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, render
+from django.utils import timezone
 
 from .models import IngresoEquipo, SalidaEquipo
 from .permisos import tecnico_requerido
@@ -87,6 +88,167 @@ def salida_imprimir(request, pk):
         'mensaje_estado_salida': _mensaje_estado_salida(salida),
         'pagos_detallados': _pagos_detallados_salida(salida),
     })
+
+
+def _salida_facturada_or_404(pk):
+    return get_object_or_404(
+        SalidaEquipo.objects.select_related('ingreso', 'ingreso__cliente', 'tecnico_reparo', 'registrado_por')
+        .prefetch_related('ingreso__abonos'),
+        pk=pk,
+        factura_realizada='si',
+    )
+
+
+def _q_money(valor):
+    valor = valor if valor is not None else Decimal('0.00')
+    return Decimal(valor).quantize(Decimal('0.01'))
+
+
+def _money_text_es(valor):
+    valor = _q_money(valor)
+    texto = f'{valor:,.2f}'
+    texto = texto.replace(',', '\x00').replace('.', ',').replace('\x00', '.')
+    return f'${texto}'
+
+
+def _numero_factura_salida(salida):
+    ingreso = salida.ingreso
+    if ingreso.numero_factura:
+        return ingreso.numero_factura
+    if salida.numero_recibo:
+        return salida.numero_recibo
+    return f'FAC-{salida.pk:04d}'
+
+
+def _descripcion_equipo_factura(ingreso):
+    partes = [
+        ingreso.tipo_equipo_display,
+        ingreso.marca,
+        ingreso.modelo_serie_detalle,
+    ]
+    return ' '.join(str(p).strip() for p in partes if str(p or '').strip())
+
+
+def _factura_items_salida(salida):
+    ingreso = salida.ingreso
+    equipo = _descripcion_equipo_factura(ingreso) or ingreso.codigo_equipo
+    items = []
+
+    def agregar(descripcion, precio, detalle='', codigo=''):
+        precio = _q_money(precio)
+        if precio <= 0:
+            return
+        items.append({
+            'descripcion': descripcion,
+            'detalle': detalle,
+            'codigo': codigo,
+            'cantidad': 1,
+            'precio_unitario': precio,
+            'total': precio,
+        })
+
+    if salida.estado_reparacion == 'revision':
+        agregar(
+            f'Revisión técnica - Equipo {ingreso.codigo_equipo}',
+            ingreso.valor_efectivo_a_cobrar,
+            equipo,
+            ingreso.codigo_equipo,
+        )
+    elif ingreso.reparacion_cancelada:
+        agregar(
+            f'Revisión / diagnóstico técnico - Equipo {ingreso.codigo_equipo}',
+            ingreso.valor_efectivo_a_cobrar,
+            equipo,
+            ingreso.codigo_equipo,
+        )
+    else:
+        agregar(
+            f'Servicio técnico y reparación - Equipo {ingreso.codigo_equipo}',
+            ingreso.valor_acordado or ingreso.valor_efectivo_a_cobrar,
+            equipo,
+            ingreso.codigo_equipo,
+        )
+        if salida.tiene_valor_acordado_adicional:
+            agregar(
+                'Valor adicional acordado',
+                salida.valor_acordado_adicional,
+                salida.motivo_valor_acordado_adicional,
+                'ADIC',
+            )
+
+    bodegaje_cobrado = sum(
+        (
+            abono.bodegaje_monto_aplicado or Decimal('0.00')
+            for abono in ingreso.abonos.all()
+            if abono.bodegaje_decision == 'si'
+        ),
+        Decimal('0.00'),
+    )
+    if bodegaje_cobrado <= 0 and salida.bodegaje_aplicado_al_pago:
+        bodegaje_cobrado = salida.bodegaje_monto_congelado or Decimal('0.00')
+    agregar('Bodegaje aplicado', bodegaje_cobrado, 'Cargo por días de bodegaje cobrados al cliente.', 'BOD')
+
+    if not items:
+        items.append({
+            'descripcion': f'Servicio registrado - Equipo {ingreso.codigo_equipo}',
+            'detalle': equipo,
+            'codigo': ingreso.codigo_equipo,
+            'cantidad': 1,
+            'precio_unitario': Decimal('0.00'),
+            'total': Decimal('0.00'),
+        })
+    return items
+
+
+def _usuario_nombre(user):
+    if not user or not getattr(user, 'is_authenticated', False):
+        return '—'
+    return (f'{user.first_name} {user.last_name}'.strip()) or user.username
+
+
+def _factura_salida_contexto(salida, usuario=None):
+    ingreso = salida.ingreso
+    cliente = ingreso.cliente
+    items = _factura_items_salida(salida)
+    pagos_detallados = _pagos_detallados_salida(salida)
+    total_facturado = _q_money(sum((item['total'] for item in items), Decimal('0.00')))
+    total_pagado = _q_money(sum((pago['monto'] for pago in pagos_detallados), Decimal('0.00')))
+    saldo_factura = _q_money(total_facturado - total_pagado)
+    registrado_por = salida.registrado_por
+
+    return {
+        'salida': salida,
+        'ingreso': ingreso,
+        'cliente': cliente,
+        'numero_factura': _numero_factura_salida(salida),
+        'factura_cliente_nombre': salida.factura_nombres or cliente.nombres,
+        'factura_cliente_cedula': salida.factura_cedula or cliente.cedula,
+        'factura_cliente_correo': salida.factura_correo or cliente.correo,
+        'factura_cliente_sector': cliente.sector_display,
+        'factura_items': items,
+        'pagos_detallados': pagos_detallados,
+        'total_facturado': total_facturado,
+        'total_pagado': total_pagado,
+        'saldo_factura': saldo_factura,
+        'saldo_factura_abs': abs(saldo_factura),
+        'saldo_factura_negativo': saldo_factura < 0,
+        'factura_estado_label': 'Pendiente' if saldo_factura > 0 else 'Pagado',
+        'fecha_impresion': timezone.localtime(timezone.now()),
+        'usuario_impresion_nombre': _usuario_nombre(usuario),
+        'bodega_factura': ingreso.sede_display_corto,
+        'descripcion_factura': ' / '.join(item['descripcion'] for item in items),
+        'firma_cliente_disponible': bool(ingreso.firma_cliente and ingreso.firma_cliente_imagen),
+        'registrado_por_nombre': (
+            (f'{registrado_por.first_name} {registrado_por.last_name}'.strip() or registrado_por.username)
+            if registrado_por else '—'
+        ),
+    }
+
+
+@tecnico_requerido
+def salida_factura_imprimir(request, pk):
+    salida = _salida_facturada_or_404(pk)
+    return render(request, 'facturas/salida_imprimir.html', _factura_salida_contexto(salida, request.user))
 
 
 def _money_text(valor):
@@ -1251,5 +1413,193 @@ def salida_pdf(request, pk):
     response = HttpResponse(pdf, content_type='application/pdf')
     response['Content-Disposition'] = (
         f'attachment; filename="salida_equipo_{ingreso.codigo_equipo}.pdf"'
+    )
+    return response
+
+
+@tecnico_requerido
+def salida_factura_pdf(request, pk):
+    """Genera el PDF comercial de factura, separado del Acta de Salida."""
+    from reportlab.lib.colors import Color
+    from reportlab.lib.utils import simpleSplit
+
+    salida = _salida_facturada_or_404(pk)
+    ctx = _factura_salida_contexto(salida, request.user)
+    ingreso = ctx['ingreso']
+    cliente = ctx['cliente']
+    buf = BytesIO()
+    c, width, height = _setup_pdf(buf, f'Factura {ctx["numero_factura"]} {ingreso.codigo_equipo}')
+
+    brand = Color(*ECO_NARANJA)
+    tinta = Color(0.14, 0.10, 0.10)
+    muted = Color(0.42, 0.45, 0.52)
+    rojo_logo = Color(0.76, 0.22, 0.07)
+    line_color = Color(0.20, 0.20, 0.20)
+
+    margin_x = 42
+    right_x = width - margin_x
+
+    def draw_text(x, y, text, font='Helvetica', size=9, color=tinta):
+        c.setFillColor(color)
+        c.setFont(font, size)
+        c.drawString(x, y, str(text or ''))
+
+    def draw_right(x, y, text, font='Helvetica', size=9, color=tinta):
+        c.setFillColor(color)
+        c.setFont(font, size)
+        c.drawRightString(x, y, str(text or ''))
+
+    def draw_wrapped(x, y, text, max_w, font='Helvetica', size=8.5, leading=10, max_lines=3):
+        lines = simpleSplit(str(text or '-'), font, size, max_w)[:max_lines] or ['-']
+        c.setFillColor(tinta)
+        c.setFont(font, size)
+        for idx, line in enumerate(lines):
+            c.drawString(x, y - (idx * leading), line)
+        return len(lines)
+
+    def draw_info_row(x, y, label, value, label_w=125, value_w=250):
+        draw_text(x, y, label, 'Helvetica-Bold', 9)
+        lines = simpleSplit(str(value or 'N/A'), 'Helvetica', 9, value_w)[:2] or ['N/A']
+        c.setFont('Helvetica', 9)
+        c.setFillColor(tinta)
+        for idx, line in enumerate(lines):
+            c.drawString(x + label_w, y - (idx * 11), line)
+        return y - max(17, len(lines) * 11)
+
+    # Encabezado
+    _draw_static_image(c, 'logo.jpg', margin_x + 28, height - 86, 54, 54)
+    draw_right(right_x, height - 48, 'ECONOTEC - REPARACIÓN DE TECNOLOGÍA', 'Helvetica-Bold', 10.5, rojo_logo)
+    draw_right(right_x, height - 66, f'Usuario: {ctx["usuario_impresion_nombre"]}', 'Helvetica', 9)
+    draw_right(right_x, height - 82, f'Fecha de impresión: {ctx["fecha_impresion"].strftime("%d/%m/%Y %H:%M")}', 'Helvetica', 9)
+    c.setStrokeColor(line_color)
+    c.setLineWidth(0.8)
+    c.line(margin_x, height - 101, right_x, height - 101)
+
+    draw_right(
+        (width / 2) + 145,
+        height - 154,
+        f'Comprobante de Compra/Venta: {ctx["numero_factura"]}',
+        'Helvetica-Bold',
+        15,
+    )
+
+    # Datos del comprobante
+    y = height - 218
+    y_left = y
+    y_left = draw_info_row(margin_x + 4, y_left, 'Fecha de emisión:', salida.fecha_salida.strftime('%d/%m/%Y'))
+    y_left = draw_info_row(margin_x + 4, y_left, 'Documento:', ctx['numero_factura'])
+    y_left = draw_info_row(
+        margin_x + 4,
+        y_left,
+        'Cliente:',
+        f'{ctx["factura_cliente_nombre"]} - RUC/C.I.: {ctx["factura_cliente_cedula"]}',
+    )
+    y_left = draw_info_row(margin_x + 4, y_left, 'Teléfonos:', cliente.whatsapp or 'N/A')
+    y_left = draw_info_row(margin_x + 4, y_left, 'Estado:', ctx['factura_estado_label'])
+    y_left = draw_info_row(margin_x + 4, y_left, 'Bodega:', ctx['bodega_factura'])
+    y_left = draw_info_row(margin_x + 4, y_left, 'Dirección:', ctx['factura_cliente_sector'] or 'N/A')
+
+    y_right = y
+    y_right = draw_info_row(margin_x + 330, y_right, 'Vencimiento:', '0 días', label_w=120, value_w=120)
+    y_right = draw_info_row(margin_x + 330, y_right, 'Equipo:', ingreso.codigo_equipo, label_w=120, value_w=120)
+    y_right = draw_info_row(margin_x + 330, y_right, 'Registró salida:', ctx['registrado_por_nombre'], label_w=120, value_w=120)
+    y_right = draw_info_row(margin_x + 330, y_right, 'Correo:', ctx['factura_cliente_correo'] or 'N/A', label_w=120, value_w=120)
+
+    y = min(y_left, y_right) - 26
+
+    # Tabla de bienes/servicios
+    draw_text(margin_x + 4, y, 'Bienes/Servicios', 'Helvetica-BoldOblique', 11)
+    c.setLineWidth(1)
+    c.line(margin_x + 4, y - 3, margin_x + 105, y - 3)
+    y -= 22
+
+    table_x = margin_x + 4
+    widths = [58, 54, 132, 112, 64, 72]
+    headers = ['Cantidad', 'Código', 'Bien/Servicio', 'Detalle', 'Precio', 'Subtotal']
+    row_h = 20
+    c.setStrokeColor(line_color)
+    c.setLineWidth(0.6)
+    c.rect(table_x, y - row_h, sum(widths), row_h, stroke=1, fill=0)
+    cur_x = table_x
+    for idx, header in enumerate(headers):
+        if idx:
+            c.line(cur_x, y, cur_x, y - row_h)
+        draw_text(cur_x + 6, y - 14, header, 'Helvetica-Bold', 8.2)
+        cur_x += widths[idx]
+    y -= row_h
+
+    for item in ctx['factura_items']:
+        servicio_lines = simpleSplit(str(item['descripcion']), 'Helvetica', 8.4, widths[2] - 12)[:3] or ['-']
+        detalle_lines = simpleSplit(str(item.get('detalle') or '-'), 'Helvetica', 8.4, widths[3] - 12)[:3] or ['-']
+        item_row_h = max(38, (max(len(servicio_lines), len(detalle_lines)) * 10) + 14)
+        if y - item_row_h < 190:
+            c.showPage()
+            y = height - 70
+        c.rect(table_x, y - item_row_h, sum(widths), item_row_h, stroke=1, fill=0)
+        cur_x = table_x
+        for w in widths[:-1]:
+            cur_x += w
+            c.line(cur_x, y, cur_x, y - item_row_h)
+        draw_text(table_x + 6, y - 16, f'{item["cantidad"]}.00 Unid.', 'Helvetica', 8.4)
+        draw_text(table_x + widths[0] + 6, y - 16, item.get('codigo') or '-', 'Helvetica', 8.4)
+        draw_wrapped(table_x + widths[0] + widths[1] + 6, y - 16, item['descripcion'], widths[2] - 12, size=8.4)
+        draw_wrapped(table_x + widths[0] + widths[1] + widths[2] + 6, y - 16, item.get('detalle') or '-', widths[3] - 12, size=8.4)
+        draw_right(table_x + sum(widths[:-1]) - 8, y - 16, _money_text_es(item['precio_unitario']), 'Helvetica', 8.4)
+        draw_right(table_x + sum(widths) - 8, y - 16, _money_text_es(item['total']), 'Helvetica', 8.4)
+        y -= item_row_h
+
+    y -= 32
+    draw_text(margin_x + 4, y, 'Descripción:', 'Helvetica-Bold', 9.2)
+    draw_wrapped(margin_x + 88, y, ctx['descripcion_factura'], 255, size=9, max_lines=3)
+
+    totals_x = right_x - 150
+    totals_y = y + 2
+    total_rows = [
+        ('Subtotal 15%:', '$0,00'),
+        ('Subtotal 5%:', '$0,00'),
+        ('Subtotal 0%:', _money_text_es(ctx['total_facturado'])),
+        ('IVA 15%:', '$0,00'),
+        ('IVA 5%:', '$0,00'),
+        ('Total:', _money_text_es(ctx['total_facturado'])),
+        ('Pagado:', _money_text_es(ctx['total_pagado'])),
+        ('Saldo a favor:' if ctx['saldo_factura_negativo'] else 'Saldo:', _money_text_es(ctx['saldo_factura_abs'])),
+    ]
+    for label, value in total_rows:
+        draw_right(totals_x + 92, totals_y, label, 'Helvetica-Bold', 9)
+        draw_right(totals_x + 150, totals_y, value, 'Helvetica', 9)
+        totals_y -= 15
+
+    # Firmas: técnico siempre, cliente solo si existe firma capturada.
+    sig_y = 95
+    sig_w = 190
+    if ctx['firma_cliente_disponible']:
+        tech_x = margin_x + 4
+        client_x = right_x - sig_w
+    else:
+        tech_x = margin_x + 4
+        client_x = None
+
+    _draw_static_image(c, 'firma_tecnico_recibe.png', tech_x + 48, sig_y + 9, 96, 28)
+    c.setStrokeColor(line_color)
+    c.setLineWidth(0.8)
+    c.line(tech_x, sig_y, tech_x + sig_w, sig_y)
+    draw_text(tech_x, sig_y - 18, 'Firma del técnico', 'Helvetica-Bold', 9.2)
+
+    if client_x is not None:
+        _draw_signature_image(c, ingreso.firma_cliente_imagen, client_x + 35, sig_y + 7, 120, 32)
+        c.line(client_x, sig_y, client_x + sig_w, sig_y)
+        draw_text(client_x, sig_y - 18, 'Firma del cliente', 'Helvetica-Bold', 9.2)
+
+    draw_right(width / 2 + 125, 38, 'Documento comercial generado desde el sistema Econotec.', 'Helvetica', 7.5, muted)
+
+    c.showPage()
+    c.save()
+
+    pdf = buf.getvalue()
+    buf.close()
+
+    response = HttpResponse(pdf, content_type='application/pdf')
+    response['Content-Disposition'] = (
+        f'attachment; filename="factura_{ingreso.codigo_equipo}.pdf"'
     )
     return response
