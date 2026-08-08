@@ -392,21 +392,17 @@
             </table>
         </section>
 
-        <section class="signatures{% if not firma_cliente_disponible %} single{% endif %}">
+        <section class="signatures">
             <div class="signature-box">
                 <div class="signature-image-wrap">
                     <img src="{% static 'firma_tecnico_recibe.png' %}" alt="Firma del técnico">
                 </div>
                 <div class="signature-line">Firma del técnico</div>
             </div>
-            {% if firma_cliente_disponible %}
             <div class="signature-box">
-                <div class="signature-image-wrap">
-                    <img src="{{ ingreso.firma_cliente_imagen }}" alt="Firma del cliente">
-                </div>
+                <div class="signature-image-wrap"></div>
                 <div class="signature-line">Firma del cliente</div>
             </div>
-            {% endif %}
         </section>
 
         <div class="small-note">Documento comercial generado desde el sistema Econotec.</div>

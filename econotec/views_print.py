@@ -1569,15 +1569,11 @@ def salida_factura_pdf(request, pk):
         draw_right(totals_x + 150, totals_y, value, 'Helvetica', 9)
         totals_y -= 15
 
-    # Firmas: técnico siempre, cliente solo si existe firma capturada.
+    # Firmas del comprobante: técnico con imagen fija, cliente solo con línea.
     sig_y = 95
     sig_w = 190
-    if ctx['firma_cliente_disponible']:
-        tech_x = margin_x + 4
-        client_x = right_x - sig_w
-    else:
-        tech_x = margin_x + 4
-        client_x = None
+    tech_x = margin_x + 4
+    client_x = right_x - sig_w
 
     _draw_static_image(c, 'firma_tecnico_recibe.png', tech_x + 48, sig_y + 9, 96, 28)
     c.setStrokeColor(line_color)
@@ -1585,10 +1581,8 @@ def salida_factura_pdf(request, pk):
     c.line(tech_x, sig_y, tech_x + sig_w, sig_y)
     draw_text(tech_x, sig_y - 18, 'Firma del técnico', 'Helvetica-Bold', 9.2)
 
-    if client_x is not None:
-        _draw_signature_image(c, ingreso.firma_cliente_imagen, client_x + 35, sig_y + 7, 120, 32)
-        c.line(client_x, sig_y, client_x + sig_w, sig_y)
-        draw_text(client_x, sig_y - 18, 'Firma del cliente', 'Helvetica-Bold', 9.2)
+    c.line(client_x, sig_y, client_x + sig_w, sig_y)
+    draw_text(client_x, sig_y - 18, 'Firma del cliente', 'Helvetica-Bold', 9.2)
 
     draw_right(width / 2 + 125, 38, 'Documento comercial generado desde el sistema Econotec.', 'Helvetica', 7.5, muted)
 

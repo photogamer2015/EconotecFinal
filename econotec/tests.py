@@ -4166,10 +4166,10 @@ class VentasTests(TestCase):
         self.assertContains(response, 'Pagado:')
         self.assertContains(response, 'Teléfonos:')
         self.assertContains(response, 'Firma del técnico')
+        self.assertContains(response, 'Firma del cliente')
         self.assertNotContains(response, '098 075 8747')
         self.assertNotContains(response, 'ACTA DE SALIDA DE EQUIPO')
         self.assertNotContains(response, 'ESTADO DE LA SALIDA')
-        self.assertNotContains(response, 'Firma del cliente')
 
         pdf_response = self.client.get(
             reverse('econotec:salida_factura_pdf', kwargs={'pk': salida.pk})
@@ -4181,7 +4181,7 @@ class VentasTests(TestCase):
             f'attachment; filename="factura_{ingreso.codigo_equipo}.pdf"',
         )
 
-    def test_salida_factura_imprimir_incluye_firma_cliente_si_existe(self):
+    def test_salida_factura_imprimir_muestra_linea_firma_cliente_sin_imagen(self):
         ingreso = self.crear_ingreso_reparacion(
             estado='entregado',
             firma_cliente=True,
@@ -4208,13 +4208,15 @@ class VentasTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Firma del técnico')
         self.assertContains(response, 'Firma del cliente')
-        self.assertContains(response, self.FIRMA_PNG_DATA_URI)
+        self.assertNotContains(response, self.FIRMA_PNG_DATA_URI)
 
-        pdf_response = self.client.get(
-            reverse('econotec:salida_factura_pdf', kwargs={'pk': salida.pk})
-        )
+        with patch('econotec.views_print._draw_signature_image') as draw_signature:
+            pdf_response = self.client.get(
+                reverse('econotec:salida_factura_pdf', kwargs={'pk': salida.pk})
+            )
         self.assertEqual(pdf_response.status_code, 200)
         self.assertEqual(pdf_response['Content-Type'], 'application/pdf')
+        draw_signature.assert_not_called()
 
     def test_salida_factura_imprimir_no_genera_documento_si_no_hay_factura(self):
         ingreso = self.crear_ingreso_reparacion(estado='entregado')
