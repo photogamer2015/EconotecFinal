@@ -179,9 +179,12 @@
             {{ form.fecha.errors }}
         </div>
         <div id="wrap-monto-principal">
-            <label class="form-label always-req">Monto (USD) <span class="req-star">*</span></label>
+            <label class="form-label always-req"><span id="monto-principal-label">Monto (USD)</span> <span class="req-star">*</span></label>
             {{ form.monto }}
             {{ form.monto.errors }}
+            <div id="monto-principal-helper" class="helper-text hidden">
+                Este es el total que debes distribuir entre Monto 1 y Monto 2.
+            </div>
         </div>
     </div>
 
@@ -271,46 +274,39 @@
             <div class="form-grid">
                 <div>
                     <label class="form-label" id="label-monto-1">Monto 1 (USD) <span class="req-star">*</span></label>
-                    <input type="number" name="abono_monto_1" id="abono_monto_1" class="form-input" step="0.01" min="0.01">
+                    {{ form.abono_monto_1 }}
+                    {{ form.abono_monto_1.errors }}
                 </div>
                 <div>
                     <label class="form-label" id="label-metodo-1">Método de pago 1 <span class="req-star">*</span></label>
-                    <select name="abono_metodo_1" id="abono_metodo_1" class="form-input">
-                        <option value="efectivo">Efectivo</option>
-                        <option value="transferencia">Transferencia bancaria</option>
-                        <option value="tarjeta">Tarjeta de crédito / Débito</option>
-                    </select>
+                    {{ form.abono_metodo_1 }}
+                    {{ form.abono_metodo_1.errors }}
                 </div>
             </div>
             <div id="wrap_abono_banco_1" class="hidden" style="margin-top: 10px;">
                 <label class="form-label" id="label-banco-1">Banco 1 <span class="req-star">*</span></label>
-                <select name="abono_banco_1" id="abono_banco_1" class="form-input">
-                    {% for value, label in form.fields.banco.choices %}
-                    <option value="{{ value }}">{{ label }}</option>
-                    {% endfor %}
-                </select>
+                {{ form.abono_banco_1 }}
+                {{ form.abono_banco_1.errors }}
             </div>
             <div class="form-grid" style="margin-top:14px;">
                 <div>
                     <label class="form-label" id="label-monto-2">Monto 2 (USD) <span class="req-star">*</span></label>
-                    <input type="number" name="abono_monto_2" id="abono_monto_2" class="form-input" step="0.01" min="0.01">
+                    {{ form.abono_monto_2 }}
+                    {{ form.abono_monto_2.errors }}
                 </div>
                 <div>
                     <label class="form-label" id="label-metodo-2">Método de pago 2 <span class="req-star">*</span></label>
-                    <select name="abono_metodo_2" id="abono_metodo_2" class="form-input">
-                        <option value="efectivo" selected>Efectivo</option>
-                        <option value="transferencia">Transferencia bancaria</option>
-                        <option value="tarjeta">Tarjeta de crédito / Débito</option>
-                    </select>
+                    {{ form.abono_metodo_2 }}
+                    {{ form.abono_metodo_2.errors }}
                 </div>
             </div>
             <div id="wrap_abono_banco_2" class="hidden" style="margin-top: 10px;">
                 <label class="form-label" id="label-banco-2">Banco 2 <span class="req-star">*</span></label>
-                <select name="abono_banco_2" id="abono_banco_2" class="form-input">
-                    {% for value, label in form.fields.banco.choices %}
-                    <option value="{{ value }}">{{ label }}</option>
-                    {% endfor %}
-                </select>
+                {{ form.abono_banco_2 }}
+                {{ form.abono_banco_2.errors }}
+            </div>
+            <div id="resumen-pago-mixto" class="monto-resumen" aria-live="polite">
+                <span id="resumen-pago-mixto-texto"></span>
             </div>
         </div>
     </div>
@@ -427,6 +423,8 @@
 
     // Elementos de pago mixto
     const wrapMontoPrincipal = document.getElementById('wrap-monto-principal');
+    const montoPrincipalLabel = document.getElementById('monto-principal-label');
+    const montoPrincipalHelper = document.getElementById('monto-principal-helper');
     const wrapPagoMixto = document.getElementById('wrap_pago_mixto');
     const abonoMonto1 = document.getElementById('abono_monto_1');
     const abonoMonto2 = document.getElementById('abono_monto_2');
@@ -436,6 +434,8 @@
     const wrapAbonoBanco2 = document.getElementById('wrap_abono_banco_2');
     const abonoBanco1 = document.getElementById('abono_banco_1');
     const abonoBanco2 = document.getElementById('abono_banco_2');
+    const resumenPagoMixto = document.getElementById('resumen-pago-mixto');
+    const resumenPagoMixtoTexto = document.getElementById('resumen-pago-mixto-texto');
 
     // Helpers
     function setRequired(input, label, requerido) {
@@ -462,7 +462,7 @@
     function isRequiredFieldComplete(input) {
         if (!input || input.disabled || !input.required || !isVisible(input)) return true;
         if (input.type === 'checkbox' || input.type === 'radio') return input.checked;
-        return String(input.value || '').trim() !== '';
+        return String(input.value || '').trim() !== '' && input.checkValidity();
     }
 
     function updateSubmitState() {
@@ -495,6 +495,8 @@
         hide(wrapComprobante);
         hide(wrapPagoMixto);
         show(wrapMontoPrincipal);
+        hide(montoPrincipalHelper);
+        if (montoPrincipalLabel) montoPrincipalLabel.textContent = 'Monto (USD)';
         
         setRequired(banco, labelBanco, false);
         setRequired(bancoOtro, labelBancoOtro, false);
@@ -504,10 +506,7 @@
         setRequired(abonoMonto2, null, false);
         setRequired(abonoBanco1, null, false);
         setRequired(abonoBanco2, null, false);
-        
-        if (monto) {
-            monto.readOnly = false;
-        }
+        if (abonoMonto2) abonoMonto2.setCustomValidity('');
 
         if (v === 'transferencia') {
             show(wrapBanco);
@@ -521,15 +520,20 @@
             setRequired(tarjetaApp, labelTarjetaApp, true);
         } else if (v === 'mixto') {
             show(wrapPagoMixto);
-            hide(wrapMontoPrincipal);
-            
-            if (monto) {
-                monto.readOnly = true;
-                actualizarSumaMixto();
-            }
+            show(wrapMontoPrincipal);
+            show(montoPrincipalHelper);
+            if (montoPrincipalLabel) montoPrincipalLabel.textContent = 'Monto total a dividir (USD)';
             
             setRequired(abonoMonto1, null, true);
             setRequired(abonoMonto2, null, true);
+            if (
+                abonoMonto1 && abonoMonto2
+                && !abonoMonto1.value && !abonoMonto2.value
+            ) {
+                sincronizarPartesConTotal();
+            } else {
+                actualizarValidacionMixto();
+            }
             actualizarBancosMixto();
         }
         updateSubmitState();
@@ -556,16 +560,52 @@
         updateSubmitState();
     }
     
-    function actualizarSumaMixto() {
-        if (!monto || metodo.value !== 'mixto') return;
-        var v1 = parseFloat(abonoMonto1.value) || 0;
-        var v2 = parseFloat(abonoMonto2.value) || 0;
-        monto.value = (v1 + v2).toFixed(2);
-        
-        // Trigger bodegaje update by dispatching event if bodegaje exists
-        if (monto) {
-            monto.dispatchEvent(new Event('input'));
+    function centavos(valor) {
+        const numero = parseFloat(valor);
+        return Number.isFinite(numero) ? Math.round(numero * 100) : 0;
+    }
+
+    function sincronizarPartesConTotal() {
+        if (!monto || !abonoMonto1 || !abonoMonto2 || metodo.value !== 'mixto') return;
+        const total = centavos(monto.value);
+        if (total <= 1) {
+            abonoMonto1.value = '';
+            abonoMonto2.value = '';
+        } else {
+            const parte1 = Math.ceil(total / 2);
+            const parte2 = total - parte1;
+            abonoMonto1.value = (parte1 / 100).toFixed(2);
+            abonoMonto2.value = (parte2 / 100).toFixed(2);
         }
+        actualizarValidacionMixto();
+    }
+
+    function actualizarValidacionMixto() {
+        if (!monto || !abonoMonto1 || !abonoMonto2 || !resumenPagoMixtoTexto) return;
+        if (metodo.value !== 'mixto') {
+            abonoMonto2.setCustomValidity('');
+            hide(resumenPagoMixto);
+            return;
+        }
+
+        const total = centavos(monto.value);
+        const suma = centavos(abonoMonto1.value) + centavos(abonoMonto2.value);
+        const diferencia = total - suma;
+        const coincide = total > 0 && suma === total;
+        abonoMonto2.setCustomValidity(
+            coincide ? '' : 'La suma de Monto 1 y Monto 2 debe coincidir con el monto total.'
+        );
+        resumenPagoMixtoTexto.textContent = coincide
+            ? '✅ Total a dividir: $' + (total / 100).toFixed(2) +
+              ' · Suma de las partes: $' + (suma / 100).toFixed(2)
+            : '⚠️ Total a dividir: $' + (total / 100).toFixed(2) +
+              ' · Suma: $' + (suma / 100).toFixed(2) +
+              ' · Diferencia: $' + (Math.abs(diferencia) / 100).toFixed(2);
+        if (resumenPagoMixto) {
+            resumenPagoMixto.style.color = coincide ? 'var(--success)' : 'var(--danger)';
+            show(resumenPagoMixto);
+        }
+        updateSubmitState();
     }
 
     function actualizarBancoOtro() {
@@ -587,12 +627,20 @@
     if (abonoMetodo2) abonoMetodo2.addEventListener('change', actualizarBancosMixto);
     
     if (abonoMonto1) {
-        abonoMonto1.addEventListener('input', actualizarSumaMixto);
-        abonoMonto1.addEventListener('change', actualizarSumaMixto);
+        abonoMonto1.addEventListener('input', actualizarValidacionMixto);
+        abonoMonto1.addEventListener('change', actualizarValidacionMixto);
     }
     if (abonoMonto2) {
-        abonoMonto2.addEventListener('input', actualizarSumaMixto);
-        abonoMonto2.addEventListener('change', actualizarSumaMixto);
+        abonoMonto2.addEventListener('input', actualizarValidacionMixto);
+        abonoMonto2.addEventListener('change', actualizarValidacionMixto);
+    }
+    if (monto) {
+        monto.addEventListener('input', function() {
+            if (metodo && metodo.value === 'mixto') sincronizarPartesConTotal();
+        });
+        monto.addEventListener('change', function() {
+            if (metodo && metodo.value === 'mixto') sincronizarPartesConTotal();
+        });
     }
 
     // ──────── FACTURA ────────
@@ -657,6 +705,7 @@
         } else {
             hide(resumenBod);
         }
+        if (metodo && metodo.value === 'mixto') sincronizarPartesConTotal();
         updateSubmitState();
     }
     if (decision) decision.addEventListener('change', actualizarBodegaje);

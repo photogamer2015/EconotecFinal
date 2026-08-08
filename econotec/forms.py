@@ -905,10 +905,66 @@ class IngresoEquipoForm(forms.ModelForm):
 # ─────────────────────────────────────────────────────────
 
 class AbonoForm(forms.ModelForm):
+    METODOS_PAGO_MIXTO = [
+        (codigo, etiqueta)
+        for codigo, etiqueta in Abono.METODOS_PAGO
+        if codigo != 'mixto'
+    ]
+    BANCOS_PAGO_MIXTO = [('', '— Selecciona un banco —'), *Abono.BANCOS]
+
+    abono_monto_1 = forms.DecimalField(
+        required=False,
+        min_value=Decimal('0.01'),
+        max_digits=10,
+        decimal_places=2,
+        label='Monto 1 (USD)',
+        widget=forms.NumberInput(attrs={
+            'class': 'form-input', 'step': '0.01', 'min': '0.01',
+            'id': 'abono_monto_1',
+        }),
+    )
+    abono_metodo_1 = forms.ChoiceField(
+        required=False,
+        choices=METODOS_PAGO_MIXTO,
+        label='Método de pago 1',
+        widget=forms.Select(attrs={'class': 'form-input', 'id': 'abono_metodo_1'}),
+    )
+    abono_banco_1 = forms.ChoiceField(
+        required=False,
+        choices=BANCOS_PAGO_MIXTO,
+        label='Banco 1',
+        widget=forms.Select(attrs={'class': 'form-input', 'id': 'abono_banco_1'}),
+    )
+    abono_monto_2 = forms.DecimalField(
+        required=False,
+        min_value=Decimal('0.01'),
+        max_digits=10,
+        decimal_places=2,
+        label='Monto 2 (USD)',
+        widget=forms.NumberInput(attrs={
+            'class': 'form-input', 'step': '0.01', 'min': '0.01',
+            'id': 'abono_monto_2',
+        }),
+    )
+    abono_metodo_2 = forms.ChoiceField(
+        required=False,
+        choices=METODOS_PAGO_MIXTO,
+        label='Método de pago 2',
+        widget=forms.Select(attrs={'class': 'form-input', 'id': 'abono_metodo_2'}),
+    )
+    abono_banco_2 = forms.ChoiceField(
+        required=False,
+        choices=BANCOS_PAGO_MIXTO,
+        label='Banco 2',
+        widget=forms.Select(attrs={'class': 'form-input', 'id': 'abono_banco_2'}),
+    )
+
     class Meta:
         model = Abono
         fields = [
             'fecha', 'monto', 'metodo',
+            'abono_monto_1', 'abono_metodo_1', 'abono_banco_1',
+            'abono_monto_2', 'abono_metodo_2', 'abono_banco_2',
             'banco', 'banco_otro', 'tarjeta_app', 'comprobante_url',
             'numero_recibo', 'observaciones',
             # Factura
@@ -1062,6 +1118,52 @@ class AbonoForm(forms.ModelForm):
             cleaned['banco_otro'] = ''
             cleaned['comprobante_url'] = ''
             cleaned['tarjeta_app'] = ''
+
+        # ── Pago mixto: las dos partes son obligatorias y deben sumar
+        # exactamente el monto total que el usuario decidió abonar. ──
+        elif metodo == 'mixto':
+            cleaned['banco'] = ''
+            cleaned['banco_otro'] = ''
+            cleaned['comprobante_url'] = ''
+            cleaned['tarjeta_app'] = ''
+
+            monto_total = cleaned.get('monto')
+            monto_1 = cleaned.get('abono_monto_1')
+            monto_2 = cleaned.get('abono_monto_2')
+            metodo_1 = cleaned.get('abono_metodo_1')
+            metodo_2 = cleaned.get('abono_metodo_2')
+
+            if monto_1 is None:
+                self.add_error('abono_monto_1', 'Ingresa el valor de la primera parte.')
+            if monto_2 is None:
+                self.add_error('abono_monto_2', 'Ingresa el valor de la segunda parte.')
+            if not metodo_1:
+                self.add_error('abono_metodo_1', 'Selecciona el primer método de pago.')
+            if not metodo_2:
+                self.add_error('abono_metodo_2', 'Selecciona el segundo método de pago.')
+
+            if metodo_1 == 'transferencia' and not cleaned.get('abono_banco_1'):
+                self.add_error('abono_banco_1', 'Selecciona el banco del primer pago.')
+            if metodo_2 == 'transferencia' and not cleaned.get('abono_banco_2'):
+                self.add_error('abono_banco_2', 'Selecciona el banco del segundo pago.')
+
+            if (
+                monto_total is not None
+                and monto_1 is not None
+                and monto_2 is not None
+                and monto_1 + monto_2 != monto_total
+            ):
+                self.add_error(
+                    'abono_monto_2',
+                    f'La suma de las dos partes debe ser exactamente ${monto_total:.2f}.',
+                )
+        else:
+            cleaned['abono_monto_1'] = None
+            cleaned['abono_metodo_1'] = ''
+            cleaned['abono_banco_1'] = ''
+            cleaned['abono_monto_2'] = None
+            cleaned['abono_metodo_2'] = ''
+            cleaned['abono_banco_2'] = ''
 
         # ── Validación: factura realizada = Sí → datos obligatorios ──
         factura_realizada = cleaned.get('factura_realizada')

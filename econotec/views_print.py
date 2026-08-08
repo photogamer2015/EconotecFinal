@@ -882,12 +882,12 @@ def ingreso_pdf(request, pk):
 
         c.setFillColor(naranja)
         c.setFont('Helvetica-Bold', 9)
-        c.drawString(margen + 215, y, 'Abono/Anticipo:')
+        c.drawString(margen + 215, y, 'Total abonado:')
         c.setStrokeColor(Color(0.6, 0.6, 0.6))
         c.line(margen + 310, y - 1, margen + 395, y - 1)
         c.setFillColor(black)
         c.setFont('Helvetica', 9)
-        c.drawString(margen + 314, y + 1, f'$ {ingreso.abono_anticipo:.2f}')
+        c.drawString(margen + 314, y + 1, f'$ {ingreso.total_abonado:.2f}')
 
         c.setFillColor(naranja)
         c.setFont('Helvetica-Bold', 9)

@@ -2464,6 +2464,38 @@ class VentasTests(TestCase):
         self.assertEqual(pdf_response.status_code, 200)
         self.assertEqual(pdf_response['Content-Type'], 'application/pdf')
 
+    def test_hoja_ingreso_regenerada_muestra_abonos_posteriores(self):
+        ingreso = self.crear_ingreso_reparacion(
+            valor_acordado=Decimal('100.00'),
+            abono_anticipo=Decimal('10.00'),
+        )
+        Abono.objects.create(
+            ingreso=ingreso,
+            fecha=date(2026, 7, 10),
+            monto=Decimal('25.00'),
+            registrado_por=self.usuario,
+        )
+
+        response = self.client.get(
+            reverse('econotec:ingreso_imprimir', kwargs={'pk': ingreso.pk})
+        )
+
+        self.assertContains(response, 'Total abonado:')
+        self.assertContains(response, '$35,00')
+        self.assertContains(response, '$65,00')
+
+        from reportlab.pdfgen.canvas import Canvas
+        with patch.object(Canvas, 'drawString', autospec=True) as draw_string:
+            pdf_response = self.client.get(
+                reverse('econotec:ingreso_pdf', kwargs={'pk': ingreso.pk})
+            )
+
+        textos_pdf = [call.args[3] for call in draw_string.call_args_list]
+        self.assertEqual(pdf_response.status_code, 200)
+        self.assertEqual(pdf_response['Content-Type'], 'application/pdf')
+        self.assertIn('$ 35.00', textos_pdf)
+        self.assertIn('$ 65.00', textos_pdf)
+
     def test_tipo_equipo_mando_se_acepta_y_se_imprime(self):
         form = IngresoEquipoForm(data=self.ingreso_form_data(
             tipo_equipo='mando',
@@ -4777,6 +4809,111 @@ class VentasTests(TestCase):
 
         response = self.client.get(reverse('econotec:pagos_ventas_lista'))
         self.assertContains(response, 'Ver abono / Historial')
+
+    def test_formulario_abono_mixto_conserva_el_monto_total_a_dividir(self):
+        ingreso = self.crear_ingreso_reparacion(
+            valor_acordado=Decimal('5.00'),
+            abono_anticipo=Decimal('0.00'),
+        )
+
+        response = self.client.get(
+            reverse('econotec:abono_crear', kwargs={'ingreso_pk': ingreso.pk})
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Monto total a dividir (USD)')
+        self.assertContains(response, 'id="id_monto"')
+        self.assertContains(response, 'value="5.00"')
+        self.assertContains(response, 'id="abono_monto_1"')
+        self.assertContains(response, 'id="abono_monto_2"')
+        self.assertContains(response, 'resumen-pago-mixto')
+
+    def test_abono_mixto_guarda_dos_partes_que_suman_el_total(self):
+        ingreso = self.crear_ingreso_reparacion(
+            valor_acordado=Decimal('5.00'),
+            abono_anticipo=Decimal('0.00'),
+        )
+
+        response = self.client.post(
+            reverse('econotec:abono_crear', kwargs={'ingreso_pk': ingreso.pk}),
+            {
+                'fecha': '2026-08-20',
+                'monto': '5.00',
+                'metodo': 'mixto',
+                'abono_monto_1': '2.50',
+                'abono_metodo_1': 'efectivo',
+                'abono_banco_1': '',
+                'abono_monto_2': '2.50',
+                'abono_metodo_2': 'transferencia',
+                'abono_banco_2': 'pichincha',
+                'banco': '',
+                'banco_otro': '',
+                'tarjeta_app': '',
+                'comprobante_url': '',
+                'numero_recibo': '',
+                'observaciones': 'Pago dividido.',
+                'factura_realizada': 'no',
+                'factura_nombres': '',
+                'factura_cedula': '',
+                'factura_correo': '',
+                'bodegaje_decision': 'na',
+                'bodegaje_monto_aplicado': '0.00',
+            },
+        )
+
+        self.assertRedirects(
+            response,
+            reverse('econotec:ingreso_abonos', kwargs={'pk': ingreso.pk}),
+        )
+        partes = list(ingreso.abonos.order_by('pk'))
+        self.assertEqual(len(partes), 2)
+        self.assertEqual([parte.monto for parte in partes], [Decimal('2.50'), Decimal('2.50')])
+        self.assertEqual([parte.metodo for parte in partes], ['efectivo', 'transferencia'])
+        self.assertEqual(partes[1].banco, 'pichincha')
+        self.assertIn('Parte 1 de 2', partes[0].observaciones)
+        self.assertIn('Parte 2 de 2', partes[1].observaciones)
+        self.assertEqual(ingreso.total_abonado, Decimal('5.00'))
+        self.assertEqual(ingreso.diferencia, Decimal('0.00'))
+
+    def test_abono_mixto_rechaza_partes_que_no_suman_el_total(self):
+        ingreso = self.crear_ingreso_reparacion(
+            valor_acordado=Decimal('5.00'),
+            abono_anticipo=Decimal('0.00'),
+        )
+
+        response = self.client.post(
+            reverse('econotec:abono_crear', kwargs={'ingreso_pk': ingreso.pk}),
+            {
+                'fecha': '2026-08-20',
+                'monto': '5.00',
+                'metodo': 'mixto',
+                'abono_monto_1': '2.00',
+                'abono_metodo_1': 'efectivo',
+                'abono_banco_1': '',
+                'abono_monto_2': '2.00',
+                'abono_metodo_2': 'efectivo',
+                'abono_banco_2': '',
+                'banco': '',
+                'banco_otro': '',
+                'tarjeta_app': '',
+                'comprobante_url': '',
+                'numero_recibo': '',
+                'observaciones': '',
+                'factura_realizada': 'no',
+                'factura_nombres': '',
+                'factura_cedula': '',
+                'factura_correo': '',
+                'bodegaje_decision': 'na',
+                'bodegaje_monto_aplicado': '0.00',
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(
+            response,
+            'La suma de las dos partes debe ser exactamente $5.00.',
+        )
+        self.assertFalse(ingreso.abonos.exists())
 
     def test_ingreso_permite_detalle_simple_en_reparacion(self):
         form = IngresoEquipoForm(data={

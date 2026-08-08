@@ -7,6 +7,7 @@ from decimal import Decimal
 from io import BytesIO
 
 from django.contrib import messages
+from django.db import transaction
 from django.db.models import Sum
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -276,24 +277,29 @@ def abono_crear(request, ingreso_pk):
             abono = form.save(commit=False)
             
             if abono.metodo == 'mixto':
-                monto_1 = request.POST.get('abono_monto_1')
-                metodo_1 = request.POST.get('abono_metodo_1')
-                banco_1 = request.POST.get('abono_banco_1')
-                
-                monto_2 = request.POST.get('abono_monto_2')
-                metodo_2 = request.POST.get('abono_metodo_2')
-                banco_2 = request.POST.get('abono_banco_2')
-                
+                monto_1 = form.cleaned_data['abono_monto_1']
+                metodo_1 = form.cleaned_data['abono_metodo_1']
+                banco_1 = form.cleaned_data.get('abono_banco_1') or ''
+                monto_2 = form.cleaned_data['abono_monto_2']
+                metodo_2 = form.cleaned_data['abono_metodo_2']
+                banco_2 = form.cleaned_data.get('abono_banco_2') or ''
                 obs_base = abono.observaciones or ''
-                
-                if monto_1 and Decimal(monto_1) > 0:
+
+                # Las dos partes se guardan juntas o no se guarda ninguna.
+                # AbonoForm ya comprobó que su suma coincide con el total.
+                with transaction.atomic():
                     a1 = Abono(
-                        ingreso=ingreso, fecha=abono.fecha, monto=Decimal(monto_1),
+                        ingreso=ingreso, fecha=abono.fecha, monto=monto_1,
                         metodo=metodo_1, banco=banco_1 if metodo_1 == 'transferencia' else '',
                         bodegaje_decision=abono.bodegaje_decision,
                         bodegaje_monto_aplicado=abono.bodegaje_monto_aplicado,
-                        observaciones=('Pago Mixto (Parte 1). ' + obs_base).strip(),
-                        registrado_por=request.user
+                        numero_recibo=abono.numero_recibo,
+                        observaciones=('Pago Mixto (Parte 1 de 2). ' + obs_base).strip(),
+                        factura_realizada=abono.factura_realizada,
+                        factura_nombres=abono.factura_nombres,
+                        factura_cedula=abono.factura_cedula,
+                        factura_correo=abono.factura_correo,
+                        registrado_por=request.user,
                     )
                     a1.save()
                     registrar_bitacora(
@@ -304,15 +310,14 @@ def abono_crear(request, ingreso_pk):
                         abono=a1,
                         dedupe_key=f'abono:{a1.pk}:creado',
                     )
-                
-                if monto_2 and Decimal(monto_2) > 0:
+
                     a2 = Abono(
-                        ingreso=ingreso, fecha=abono.fecha, monto=Decimal(monto_2),
+                        ingreso=ingreso, fecha=abono.fecha, monto=monto_2,
                         metodo=metodo_2, banco=banco_2 if metodo_2 == 'transferencia' else '',
                         bodegaje_decision='na',
                         bodegaje_monto_aplicado=0,
-                        observaciones=('Pago Mixto (Parte 2). ' + obs_base).strip(),
-                        registrado_por=request.user
+                        observaciones=('Pago Mixto (Parte 2 de 2). ' + obs_base).strip(),
+                        registrado_por=request.user,
                     )
                     a2.save()
                     registrar_bitacora(
@@ -323,8 +328,12 @@ def abono_crear(request, ingreso_pk):
                         abono=a2,
                         dedupe_key=f'abono:{a2.pk}:creado',
                     )
-                    
-                messages.success(request, f'Abono mixto registrado exitosamente.')
+
+                messages.success(
+                    request,
+                    f'Abono mixto registrado por ${abono.monto:.2f} '
+                    f'(${monto_1:.2f} + ${monto_2:.2f}).',
+                )
                 return redirect('econotec:ingreso_abonos', pk=ingreso.pk)
             else:
                 abono.ingreso = ingreso
