@@ -228,6 +228,7 @@
 <script>
 document.addEventListener('DOMContentLoaded', function () {
     const tieneSaldoPendiente = {% if ingreso.diferencia > 0 %}true{% else %}false{% endif %};
+    const salidaYaConfirmada = {% if salida_ya_confirmada %}true{% else %}false{% endif %};
     const saldoPendiente = '{{ ingreso.diferencia|dinero_signo|escapejs }}';
     const codigoEquipo = '{{ ingreso.codigo_equipo|escapejs }}';
     const urlEquiposFinalizados = '{% url "econotec:salida_lista" %}';
@@ -236,6 +237,54 @@ document.addEventListener('DOMContentLoaded', function () {
     const montoBodegaje = {{ ingreso.bodegaje_pendiente|default:0|stringformat:'.2f' }};
     const diasBodegaje = {{ ingreso.bodegaje_dias_pendiente|default:0 }};
     const formularioSalida = document.getElementById('confirmar-salida-oficina-form');
+    const csrfToken = formularioSalida.querySelector('[name="csrfmiddlewaretoken"]').value;
+
+    {% if mostrar_guia_saldo_pendiente %}
+    const urlOcultarGuiaSaldo = '{% url "econotec:salida_ocultar_guia_saldo_pendiente" %}';
+
+    function confirmarOcultarGuia(indice) {
+        Swal.fire({
+            icon: 'question',
+            title: '¿Está seguro?',
+            text: 'Si selecciona Sí, la Guía rápida no volverá a mostrarse para su usuario.',
+            showCancelButton: true,
+            confirmButtonText: 'Sí',
+            cancelButtonText: 'No',
+            confirmButtonColor: '#c62828',
+            cancelButtonColor: '#6b7280',
+            focusCancel: true,
+            allowOutsideClick: false,
+            allowEscapeKey: false,
+            showLoaderOnConfirm: true,
+            preConfirm: function () {
+                return fetch(urlOcultarGuiaSaldo, {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    headers: {
+                        'X-CSRFToken': csrfToken,
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                }).then(function (respuesta) {
+                    if (!respuesta.ok) throw new Error('No se pudo guardar la preferencia.');
+                    return respuesta.json();
+                }).catch(function () {
+                    Swal.showValidationMessage('No se pudo guardar. Inténtelo nuevamente.');
+                });
+            }
+        }).then(function (resultado) {
+            if (resultado.isConfirmed) {
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Preferencia guardada',
+                    text: 'La Guía rápida no volverá a mostrarse para su usuario.',
+                    confirmButtonText: 'OK',
+                    confirmButtonColor: '#f97618'
+                });
+            } else {
+                paginaTutorial(indice);
+            }
+        });
+    }
 
     function paginaTutorial(indice) {
         const paginas = [
@@ -268,16 +317,22 @@ document.addEventListener('DOMContentLoaded', function () {
                             return '<span style="height:7px;flex:1;border-radius:8px;background:' + (i <= indice ? '#f97618' : '#e5e7eb') + ';"></span>';
                         }).join('') +
                     '</div>' +
+                    '<label for="no-mostrar-guia-saldo" style="display:flex;align-items:center;gap:9px;margin-top:20px;cursor:pointer;font-size:14px;font-weight:700;color:#4b5563;">' +
+                        '<input id="no-mostrar-guia-saldo" type="checkbox" style="width:18px;height:18px;accent-color:#f97618;cursor:pointer;">' +
+                        '<span>No quiero que se muestre de nuevo</span>' +
+                    '</label>' +
                 '</div>',
-            showCancelButton: true,
             showDenyButton: true,
             confirmButtonText: esUltima ? 'OK' : 'Siguiente →',
             denyButtonText: 'Ingresar saldo pendiente',
-            cancelButtonText: 'Omitir',
             confirmButtonColor: '#f97618',
             denyButtonColor: '#2e7d32',
-            cancelButtonColor: '#6b7280',
-            allowOutsideClick: false
+            allowOutsideClick: false,
+            didOpen: function () {
+                document.getElementById('no-mostrar-guia-saldo').addEventListener('change', function (evento) {
+                    if (evento.target.checked) confirmarOcultarGuia(indice);
+                });
+            }
         }).then(function (resultado) {
             if (resultado.isDenied) {
                 window.location.assign(urlRegistrarPago);
@@ -286,6 +341,7 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         });
     }
+    {% endif %}
 
     if (tieneSaldoPendiente) {
         Swal.fire({
@@ -298,7 +354,23 @@ document.addEventListener('DOMContentLoaded', function () {
             confirmButtonColor: '#f97618',
             allowOutsideClick: false
         }).then(function (resultado) {
+            {% if mostrar_guia_saldo_pendiente %}
             if (resultado.isConfirmed) paginaTutorial(0);
+            {% endif %}
+        });
+        return;
+    }
+
+    if (salidaYaConfirmada) {
+        Swal.fire({
+            icon: 'success',
+            title: 'Cambios guardados',
+            html:
+                '<p style="line-height:1.55;margin-bottom:10px;">El equipo <b>' + codigoEquipo + '</b> se guardó correctamente.</p>' +
+                '<p style="font-size:16px;font-weight:800;">Su salida de la oficina ya está confirmada.</p>',
+            confirmButtonText: 'OK',
+            confirmButtonColor: '#2e7d32',
+            allowOutsideClick: false
         });
         return;
     }

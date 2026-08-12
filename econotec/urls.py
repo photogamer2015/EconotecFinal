@@ -36,6 +36,11 @@ urlpatterns = [
 
     # ── Salida: aviso post-creación + cierre del caso ──────
     path('salidas/<int:pk>/aviso/', views.salida_listo_aviso, name='salida_listo_aviso'),
+    path(
+        'salidas/guia-saldo-pendiente/ocultar/',
+        views.salida_ocultar_guia_saldo_pendiente,
+        name='salida_ocultar_guia_saldo_pendiente',
+    ),
     path('salidas/<int:pk>/marcar-retirada/',
          views.salida_marcar_retirada, name='salida_marcar_retirada'),
     path('salidas/<int:pk>/deshacer-retiro/',

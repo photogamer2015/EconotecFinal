@@ -2182,6 +2182,10 @@ class UsuarioActividad(models.Model):
     ultima_conexion = models.DateTimeField(auto_now=True)
     fecha_reinicio_perfil = models.DateTimeField(null=True, blank=True)
     perfil_color_asesor = models.CharField(max_length=7, default='#0d47a1')
+    ocultar_guia_saldo_pendiente = models.BooleanField(
+        default=False,
+        verbose_name='No volver a mostrar la guía de saldo pendiente',
+    )
 
     def __str__(self):
         return f'Actividad de {self.user.username}'

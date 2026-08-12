@@ -5482,6 +5482,19 @@ class VentasTests(TestCase):
         self.assertContains(aviso_pagado, 'Sí, está en la oficina')
         self.assertContains(aviso_pagado, 'No, ya salió')
 
+        salida_pagada.fecha_retiro_real = date(2026, 7, 18)
+        salida_pagada.save(update_fields=['fecha_retiro_real'])
+        session = self.client.session
+        session['confirmar_ubicacion_salida_id'] = salida_pagada.pk
+        session.save()
+        aviso_ya_retirado = self.client.get(
+            reverse('econotec:salida_listo_aviso', kwargs={'pk': salida_pagada.pk}),
+        )
+        self.assertTrue(aviso_ya_retirado.context['mostrar_confirmacion_guardado'])
+        self.assertTrue(aviso_ya_retirado.context['salida_ya_confirmada'])
+        self.assertContains(aviso_ya_retirado, 'Cambios guardados')
+        self.assertContains(aviso_ya_retirado, 'Su salida de la oficina ya está confirmada.')
+
         ingreso_pendiente = self.crear_ingreso_reparacion(
             valor_acordado=Decimal('25.00'),
         )
@@ -5505,7 +5518,12 @@ class VentasTests(TestCase):
         self.assertContains(aviso_pendiente, '📖 Guía rápida')
         self.assertContains(aviso_pendiente, 'Siguiente →')
         self.assertContains(aviso_pendiente, 'Ingresar saldo pendiente')
-        self.assertContains(aviso_pendiente, 'Omitir')
+        self.assertContains(aviso_pendiente, 'No quiero que se muestre de nuevo')
+        self.assertContains(aviso_pendiente, 'type="checkbox"')
+        self.assertContains(aviso_pendiente, '¿Está seguro?')
+        self.assertContains(aviso_pendiente, "confirmButtonText: 'Sí'")
+        self.assertContains(aviso_pendiente, "cancelButtonText: 'No'")
+        self.assertNotContains(aviso_pendiente, 'Omitir')
         self.assertContains(
             aviso_pendiente,
             reverse('econotec:abono_crear', kwargs={'ingreso_pk': ingreso_pendiente.pk}),
@@ -5523,6 +5541,49 @@ class VentasTests(TestCase):
         )
         salida_pendiente.refresh_from_db()
         self.assertIsNone(salida_pendiente.fecha_retiro_real)
+
+    def test_ocultar_guia_saldo_pendiente_se_guarda_por_usuario(self):
+        ingreso = self.crear_ingreso_reparacion(valor_acordado=Decimal('25.00'))
+        salida = SalidaEquipo.objects.create(
+            ingreso=ingreso,
+            fecha_salida=date(2026, 7, 18),
+            estado_reparacion='pendiente_retiro',
+            tecnico_reparo=self.usuario,
+            valor_final_cobrado=Decimal('0.00'),
+            metodo_pago_final='sin_pago',
+            registrado_por=self.usuario,
+        )
+
+        guardar = self.client.post(
+            reverse('econotec:salida_ocultar_guia_saldo_pendiente'),
+        )
+
+        self.assertEqual(guardar.status_code, 200)
+        self.assertJSONEqual(guardar.content, {'ok': True})
+        actividad = UsuarioActividad.objects.get(user=self.usuario)
+        self.assertTrue(actividad.ocultar_guia_saldo_pendiente)
+
+        session = self.client.session
+        session['confirmar_ubicacion_salida_id'] = salida.pk
+        session.save()
+        aviso_mismo_usuario = self.client.get(
+            reverse('econotec:salida_listo_aviso', kwargs={'pk': salida.pk}),
+        )
+        self.assertContains(aviso_mismo_usuario, 'Este equipo tiene un saldo pendiente')
+        self.assertNotContains(aviso_mismo_usuario, '📖 Guía rápida')
+        self.assertNotContains(aviso_mismo_usuario, 'No quiero que se muestre de nuevo')
+
+        otro_usuario = get_user_model().objects.create_user(username='OtroTecnico')
+        otro_usuario.groups.add(Group.objects.get(name='Tecnicos'))
+        self.client.force_login(otro_usuario)
+        session = self.client.session
+        session['confirmar_ubicacion_salida_id'] = salida.pk
+        session.save()
+        aviso_otro_usuario = self.client.get(
+            reverse('econotec:salida_listo_aviso', kwargs={'pk': salida.pk}),
+        )
+        self.assertContains(aviso_otro_usuario, '📖 Guía rápida')
+        self.assertContains(aviso_otro_usuario, 'No quiero que se muestre de nuevo')
 
     def test_salida_garantia_fallos_adicionales_deja_valor_pendiente_y_notifica_asesora(self):
         ingreso = self.crear_ingreso_reparacion(

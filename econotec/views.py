@@ -3729,15 +3729,29 @@ def salida_listo_aviso(request, pk):
         'confirmar_ubicacion_salida_id',
         None,
     )
+    actividad, _ = UsuarioActividad.objects.get_or_create(user=request.user)
     return render(request, 'salidas/listo_aviso.html', {
         'salida': salida,
         'ingreso': salida.ingreso,
         'wa_link': whatsapp_link_equipo_listo(salida),
-        'mostrar_confirmacion_guardado': (
-            confirmacion_pendiente == salida.pk
-            and not salida.cliente_ya_retiro
-        ),
+        'mostrar_guia_saldo_pendiente': not actividad.ocultar_guia_saldo_pendiente,
+        # Después de cada Guardar se muestra una confirmación una sola vez.
+        # Si el equipo ya salió, la plantilla informa ese estado en lugar de
+        # volver a preguntar algo que podría contradecir la fecha de retiro.
+        'mostrar_confirmacion_guardado': confirmacion_pendiente == salida.pk,
+        'salida_ya_confirmada': salida.cliente_ya_retiro,
     })
+
+
+@tecnico_requerido
+@require_POST
+def salida_ocultar_guia_saldo_pendiente(request):
+    """Guarda, para el usuario actual, que la guía no debe mostrarse otra vez."""
+    actividad, _ = UsuarioActividad.objects.get_or_create(user=request.user)
+    if not actividad.ocultar_guia_saldo_pendiente:
+        actividad.ocultar_guia_saldo_pendiente = True
+        actividad.save(update_fields=['ocultar_guia_saldo_pendiente'])
+    return JsonResponse({'ok': True})
 
 
 @tecnico_requerido
