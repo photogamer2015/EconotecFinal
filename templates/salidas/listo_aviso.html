@@ -1,7 +1,7 @@
 {% extends 'base.html' %}
 {% load econotec_extras %}
 
-{% block title %}Salida registrada — Econotec{% endblock %}
+{% block title %}Equipo finalizado — Econotec{% endblock %}
 
 {% block content %}
 <style>
@@ -134,15 +134,15 @@
         <div class="icono">✅</div>
         <h2>
             {% if salida.estado_reparacion == 'retirado' or salida.cliente_ya_retiro %}
-                ¡Equipo retirado por el cliente!
+                ¡Salida del equipo de la oficina confirmada!
             {% elif salida.estado_reparacion == 'cortesia' %}
-                ¡Salida de cortesía registrada!
+                ¡Equipo de cortesía finalizado!
             {% elif salida.estado_reparacion == 'revision' %}
-                ¡Salida registrada en revisión!
+                ¡Equipo finalizado en revisión!
             {% elif salida.estado_reparacion == 'no_reparable' or salida.estado_reparacion == 'cliente_no_acepta' %}
-                ¡Listo equipo para su salida!
+                ¡Equipo finalizado y listo para retiro!
             {% else %}
-                ¡Listo equipo reparado para su salida!
+                ¡Equipo reparado y listo para retiro!
             {% endif %}
         </h2>
         <p class="subt">Equipo {{ ingreso.codigo_equipo }}</p>
@@ -151,7 +151,7 @@
             <div class="row"><span>Cliente:</span><strong>{{ ingreso.cliente.nombres }}</strong></div>
             <div class="row"><span>Equipo:</span><strong>{{ ingreso.tipo_equipo_display }} {{ ingreso.marca }}</strong></div>
             <div class="row"><span>Estado:</span><strong>{{ salida.get_estado_reparacion_display }}</strong></div>
-            <div class="row"><span>Fecha de salida:</span><strong>{{ salida.fecha_salida|date:"d/m/Y" }}</strong></div>
+            <div class="row"><span>Fecha de finalización:</span><strong>{{ salida.fecha_salida|date:"d/m/Y" }}</strong></div>
             {% if salida.garantia_dias %}
                 <div class="row"><span>Garantía:</span><strong>{{ salida.garantia_dias }} día{{ salida.garantia_dias|pluralize }}</strong></div>
             {% endif %}
@@ -188,16 +188,16 @@
             </div>
 
             <div class="pasos">
-                <h4>📎 ¿Quieres adjuntar la hoja de salida?</h4>
+                <h4>📎 ¿Quieres adjuntar el acta del equipo?</h4>
                 <ol>
-                    <li>Descarga el <strong>PDF de la hoja de salida</strong> (botón abajo).</li>
+                    <li>Descarga el <strong>acta del equipo en PDF</strong> (botón abajo).</li>
                     <li>Haz clic en el botón verde de WhatsApp para abrir el chat del cliente.</li>
                     <li>En el chat, adjunta el PDF descargado junto con el mensaje.</li>
                 </ol>
             </div>
         {% else %}
             <div class="info-no-wa">
-                ℹ️ El cliente no tiene un número de WhatsApp registrado o la salida no es positiva,
+                ℹ️ El cliente no tiene un número de WhatsApp registrado o la finalización no permite el aviso,
                 por lo que no se puede generar un mensaje automático. Puedes editar los datos del
                 cliente para agregarle el número.
             </div>
@@ -205,14 +205,136 @@
 
         <div class="acciones-finales">
             <a class="a-info" href="{% url 'econotec:salida_pdf' pk=salida.pk %}" target="_blank">
-                📄 Descargar hoja de salida (PDF)
+                📄 Descargar acta del equipo (PDF)
             </a>
             <a class="a-info" href="{% url 'econotec:salida_imprimir' pk=salida.pk %}" target="_blank">
                 🖨 Imprimir
             </a>
-            <a class="a-primary" href="{% url 'econotec:salida_lista' %}">Ir a lista de salidas</a>
+            <a class="a-primary" href="{% url 'econotec:salida_lista' %}">Ir a equipos finalizados</a>
             <a class="a-secondary" href="{% url 'econotec:bienvenida' %}">Volver al inicio</a>
         </div>
     </div>
 </div>
+
+{% if mostrar_confirmacion_guardado %}
+<form id="confirmar-salida-oficina-form"
+      method="post"
+      action="{% url 'econotec:salida_marcar_retirada' pk=salida.pk %}"
+      style="display:none;">
+    {% csrf_token %}
+    <input type="hidden" name="aplicar_bodegaje" value="">
+</form>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const tieneSaldoPendiente = {% if ingreso.diferencia > 0 %}true{% else %}false{% endif %};
+    const saldoPendiente = '{{ ingreso.diferencia|dinero_signo|escapejs }}';
+    const codigoEquipo = '{{ ingreso.codigo_equipo|escapejs }}';
+    const urlEquiposFinalizados = '{% url "econotec:salida_lista" %}';
+    const urlRegistrarPago = '{% url "econotec:abono_crear" ingreso_pk=ingreso.pk %}';
+    const tieneBodegaje = {% if ingreso.bodegaje_pendiente > 0 %}true{% else %}false{% endif %};
+    const montoBodegaje = {{ ingreso.bodegaje_pendiente|default:0|stringformat:'.2f' }};
+    const diasBodegaje = {{ ingreso.bodegaje_dias_pendiente|default:0 }};
+    const formularioSalida = document.getElementById('confirmar-salida-oficina-form');
+
+    function paginaTutorial(indice) {
+        const paginas = [
+            {
+                titulo: 'Registra el saldo pendiente',
+                texto: 'Entra a <b>Pago Directo</b> y registra el valor recibido. El saldo actual es <b>' + saldoPendiente + '</b>.'
+            },
+            {
+                titulo: 'Verifica que el saldo quede pagado',
+                texto: 'Antes de entregar el equipo, confirma que el saldo mostrado sea <b>$0,00</b>. Mientras exista deuda, el equipo permanecerá en la lista de finalizados dentro de la oficina.'
+            },
+            {
+                titulo: 'Confirma la salida de la oficina',
+                texto: 'Cuando el pago esté completo y el equipo haya salido, usa el botón <b>Confirmar salida de la oficina</b>. Entonces pasará a <b>Salidas físicas confirmadas</b>.'
+            }
+        ];
+        const pagina = paginas[indice];
+        const esUltima = indice === paginas.length - 1;
+
+        Swal.fire({
+            icon: 'info',
+            title: '📖 Guía rápida',
+            html:
+                '<div style="text-align:left;line-height:1.55;">' +
+                    '<div style="font-size:12px;font-weight:800;color:#f97618;margin-bottom:8px;">PASO ' + (indice + 1) + ' DE ' + paginas.length + '</div>' +
+                    '<div style="font-size:18px;font-weight:800;margin-bottom:8px;">' + pagina.titulo + '</div>' +
+                    '<div style="font-size:14px;color:#4b5563;">' + pagina.texto + '</div>' +
+                    '<div style="display:flex;gap:6px;margin-top:16px;">' +
+                        paginas.map(function (_, i) {
+                            return '<span style="height:7px;flex:1;border-radius:8px;background:' + (i <= indice ? '#f97618' : '#e5e7eb') + ';"></span>';
+                        }).join('') +
+                    '</div>' +
+                '</div>',
+            showCancelButton: true,
+            showDenyButton: true,
+            confirmButtonText: esUltima ? 'OK' : 'Siguiente →',
+            denyButtonText: 'Ingresar saldo pendiente',
+            cancelButtonText: 'Omitir',
+            confirmButtonColor: '#f97618',
+            denyButtonColor: '#2e7d32',
+            cancelButtonColor: '#6b7280',
+            allowOutsideClick: false
+        }).then(function (resultado) {
+            if (resultado.isDenied) {
+                window.location.assign(urlRegistrarPago);
+            } else if (resultado.isConfirmed && !esUltima) {
+                paginaTutorial(indice + 1);
+            }
+        });
+    }
+
+    if (tieneSaldoPendiente) {
+        Swal.fire({
+            icon: 'warning',
+            title: 'Este equipo tiene un saldo pendiente',
+            html:
+                '<div style="font-size:28px;font-weight:900;color:#c62828;margin:10px 0;">' + saldoPendiente + '</div>' +
+                '<p style="line-height:1.5;">El equipo quedó finalizado, pero <b>no puede salir de la oficina</b> hasta registrar el pago completo.</p>',
+            confirmButtonText: 'OK',
+            confirmButtonColor: '#f97618',
+            allowOutsideClick: false
+        }).then(function (resultado) {
+            if (resultado.isConfirmed) paginaTutorial(0);
+        });
+        return;
+    }
+
+    Swal.fire({
+        icon: 'success',
+        title: 'Equipo finalizado',
+        html:
+            '<p style="line-height:1.55;margin-bottom:10px;">El equipo <b>' + codigoEquipo + '</b> fue finalizado correctamente.</p>' +
+            '<p style="font-size:17px;font-weight:800;">¿El equipo se encuentra aquí en la oficina?</p>',
+        showDenyButton: true,
+        confirmButtonText: 'Sí, está en la oficina',
+        denyButtonText: 'No, ya salió',
+        confirmButtonColor: '#2e7d32',
+        denyButtonColor: '#7c3aed',
+        allowOutsideClick: false,
+        allowEscapeKey: false
+    }).then(function (resultado) {
+        if (resultado.isConfirmed) {
+            window.location.assign(urlEquiposFinalizados);
+        } else if (resultado.isDenied) {
+            if (tieneBodegaje) {
+                confirmarCierre(
+                    { preventDefault: function () {} },
+                    formularioSalida,
+                    codigoEquipo,
+                    true,
+                    montoBodegaje,
+                    diasBodegaje
+                );
+            } else {
+                formularioSalida.submit();
+            }
+        }
+    });
+});
+</script>
+{% endif %}
 {% endblock %}

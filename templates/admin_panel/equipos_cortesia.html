@@ -117,7 +117,7 @@
 <div class="courtesy-head">
     <div>
         <h2 class="page-title">Equipos de <span class="accent">Cortesía</span></h2>
-        <p class="page-subtitle">Ingresos y salidas sin cobro — {{ mes_nombre }} {{ year }}</p>
+        <p class="page-subtitle">Ingresos y equipos finalizados sin cobro — {{ mes_nombre }} {{ year }}</p>
     </div>
     <a href="{% url 'econotec:admin_dashboard' %}?ano={{ year }}&mes={{ month }}" class="btn btn-secondary">Volver al administrativo</a>
 </div>
@@ -128,11 +128,11 @@
         <div class="value">{{ ingresos_mes }}</div>
     </div>
     <div class="courtesy-stat">
-        <div class="label">Salidas del mes</div>
+        <div class="label">Finalizados del mes</div>
         <div class="value">{{ salidas_mes }}</div>
     </div>
     <div class="courtesy-stat">
-        <div class="label">Pendientes de salida</div>
+        <div class="label">Pendientes de finalizar</div>
         <div class="value">{{ pendientes_salida }}</div>
     </div>
 </div>
@@ -186,11 +186,11 @@
             </div>
             <div>
                 {% if item.salida %}
-                <strong>Salida de cortesía</strong>
+                <strong>Equipo de cortesía finalizado</strong>
                 <small>{{ item.salida.fecha_salida|date:"d/m/Y" }}</small>
-                <span class="courtesy-status done">{% if item.salio_en_mes %}Salió este mes{% else %}Salida registrada{% endif %}</span>
+                <span class="courtesy-status done">{% if item.salio_en_mes %}Finalizado este mes{% else %}Finalización registrada{% endif %}</span>
                 {% else %}
-                <strong>Sin salida</strong>
+                <strong>Sin finalizar</strong>
                 <small>Pendiente de registrar</small>
                 <span class="courtesy-status">Pendiente</span>
                 {% endif %}
@@ -198,10 +198,10 @@
             <div class="courtesy-actions">
                 <a href="{% url 'econotec:ingreso_detalle' pk=item.ingreso.pk %}" class="btn btn-sm btn-secondary">Ver ingreso</a>
                 {% if item.salida %}
-                <a href="{% url 'econotec:salida_editar' pk=item.salida.pk %}" class="btn btn-sm btn-secondary">Ver salida</a>
+                <a href="{% url 'econotec:salida_editar' pk=item.salida.pk %}" class="btn btn-sm btn-secondary">Ver finalización</a>
                 <a href="{% url 'econotec:salida_pdf' pk=item.salida.pk %}" class="btn btn-sm btn-primary">PDF</a>
                 {% else %}
-                <a href="{% url 'econotec:salida_registrar' ingreso_pk=item.ingreso.pk %}" class="btn btn-sm btn-primary">Registrar salida</a>
+                <a href="{% url 'econotec:salida_registrar' ingreso_pk=item.ingreso.pk %}" class="btn btn-sm btn-primary">Finalizar equipo</a>
                 {% endif %}
             </div>
         </div>
@@ -209,7 +209,7 @@
     {% endfor %}
 </div>
 {% else %}
-<div class="courtesy-empty">No hay ingresos ni salidas de cortesía para este período.</div>
+<div class="courtesy-empty">No hay ingresos ni equipos finalizados de cortesía para este período.</div>
 {% endif %}
 
 {% include 'includes/paginacion.html' with page_obj=page_obj querystring=querystring page_param='pagina' aria_label='Paginación de equipos de cortesía' %}

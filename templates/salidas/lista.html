@@ -1,7 +1,7 @@
 {% extends 'base.html' %}
 {% load econotec_extras %}
 
-{% block title %}Salidas — Econotec{% endblock %}
+{% block title %}{% if lista_salidas_confirmadas %}Salidas físicas confirmadas{% else %}Equipos finalizados{% endif %} — Econotec{% endblock %}
 
 {% block content %}
 <style>
@@ -17,42 +17,385 @@
     .wa-mini:hover { background: #1da851; }
     .ret-pill {
         background: #2e7d32; color: white;
+        display: inline-flex; align-items: center;
         padding: 3px 9px; border-radius: 10px;
-        font-size: 10px; font-weight: 700;
+        font-size: 10px; font-weight: 700; line-height: 1.35;
     }
     .pendiente-pill {
         background: #ffe0b2; color: #b54400;
-        padding: 3px 9px; border-radius: 10px;
-        font-size: 10px; font-weight: 700;
+        display: inline-flex; align-items: center; gap: 5px;
+        padding: 6px 11px; border-radius: 999px;
+        font-size: 11px; font-weight: 800;
     }
     [data-theme="dark"] .pendiente-pill { background: rgba(249,118,24,0.25); color: #fbbf73; }
-    .cerrar-btn {
-        background: #d2861b; color: white;
-        padding: 4px 10px; border-radius: 5px;
-        font-size: 11px; font-weight: 700;
-        border: none; cursor: pointer;
+    .office-exit-cell { min-width: 285px; }
+    .office-exit-content {
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
+        gap: 8px;
+        width: 100%;
     }
-    .cerrar-btn:hover { background: #7a450d; }
+    .office-exit-content .cerrar-form {
+        display: block;
+        width: 100%;
+        margin: 0;
+    }
+    .cerrar-btn {
+        width: 100%; min-height: 52px;
+        display: flex; align-items: center; justify-content: flex-start;
+        gap: 10px;
+        background: linear-gradient(135deg, #e8951b, #c9770c); color: white;
+        padding: 9px 14px; border-radius: 11px;
+        font-family: inherit; text-align: left;
+        border: 1px solid rgba(122, 69, 13, 0.26); cursor: pointer;
+        box-shadow: 0 5px 12px rgba(210, 134, 27, 0.24);
+        transition: transform .15s ease, box-shadow .15s ease, background .15s ease;
+    }
+    .cerrar-btn:hover {
+        background: linear-gradient(135deg, #d88712, #a95f08);
+        box-shadow: 0 7px 16px rgba(122, 69, 13, 0.28);
+        transform: translateY(-1px);
+    }
+    .cerrar-btn:focus-visible {
+        outline: 3px solid rgba(249, 118, 24, 0.32);
+        outline-offset: 3px;
+    }
+    .cerrar-btn-icon {
+        display: inline-flex; align-items: center; justify-content: center;
+        flex: 0 0 34px; width: 34px; height: 34px;
+        border-radius: 9px; background: rgba(255,255,255,.18);
+        font-size: 18px;
+    }
+    .cerrar-btn-copy { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+    .cerrar-btn-copy strong { font-size: 14px; line-height: 1.2; }
+    .cerrar-btn-copy small { font-size: 11px; line-height: 1.25; color: rgba(255,255,255,.9); }
+    .cerrar-btn.is-bloqueado {
+        background: linear-gradient(135deg, #9ca3af, #7b818b);
+        border-color: rgba(75, 85, 99, .28);
+        box-shadow: none;
+    }
+    .cerrar-btn.is-bloqueado:hover {
+        background: linear-gradient(135deg, #9299a4, #717780);
+    }
     .bod-mini {
         font-size: 11px; color: #d7642f; font-weight: 700;
         display: block; margin-top: 2px;
+    }
+    .undo-exit-form { margin: 0; display: inline-flex; }
+    .undo-exit-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 32px;
+        min-width: 32px;
+        height: 32px;
+        min-height: 32px;
+        margin: 0;
+        padding: 0;
+        border-radius: 9px;
+        font-size: 12px;
+    }
+    [data-theme="dark"] .cerrar-btn {
+        border-color: rgba(251, 191, 36, .28);
+        box-shadow: 0 5px 14px rgba(0, 0, 0, .28);
+    }
+    .salida-guide {
+        margin: 0 0 18px;
+        padding: 18px;
+        overflow: hidden;
+        border: 1px solid rgba(124, 58, 237, .22);
+        border-left: 5px solid #7c3aed;
+        border-radius: 14px;
+        background:
+            radial-gradient(circle at 100% 0, rgba(124, 58, 237, .10), transparent 34%),
+            var(--card-bg);
+        box-shadow: 0 8px 22px rgba(76, 29, 149, .08);
+    }
+    .salida-guide-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        margin-bottom: 15px;
+    }
+    .salida-guide-title {
+        display: flex;
+        align-items: center;
+        gap: 11px;
+        min-width: 0;
+    }
+    .salida-guide-title-icon {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        flex: 0 0 40px;
+        width: 40px;
+        height: 40px;
+        border-radius: 11px;
+        background: #ede9fe;
+        color: #6d28d9;
+        font-size: 21px;
+    }
+    .salida-guide-title h3 {
+        margin: 0 0 3px;
+        color: var(--text-main);
+        font-size: 17px;
+        line-height: 1.2;
+    }
+    .salida-guide-title p {
+        margin: 0;
+        color: var(--text-muted);
+        font-size: 12px;
+        line-height: 1.4;
+    }
+    .salida-guide-link {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 7px;
+        flex: 0 0 auto;
+        min-height: 42px;
+        padding: 9px 14px;
+        border-radius: 10px;
+        background: #7c3aed;
+        color: white;
+        font-size: 12px;
+        font-weight: 850;
+        text-decoration: none;
+        box-shadow: 0 5px 12px rgba(124, 58, 237, .20);
+        transition: transform .15s ease, background .15s ease;
+    }
+    .salida-guide-link:hover {
+        background: #6d28d9;
+        color: white;
+        transform: translateY(-1px);
+    }
+    .salida-guide-steps {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 10px;
+        margin: 0;
+        padding: 0;
+        list-style: none;
+    }
+    .salida-guide-step {
+        position: relative;
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        min-width: 0;
+        padding: 12px;
+        border: 1px solid var(--border-color);
+        border-radius: 11px;
+        background: rgba(255, 255, 255, .46);
+    }
+    .salida-guide-number {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        flex: 0 0 28px;
+        width: 28px;
+        height: 28px;
+        border-radius: 999px;
+        background: #7c3aed;
+        color: white;
+        font-size: 12px;
+        font-weight: 900;
+    }
+    .salida-guide-step strong {
+        display: block;
+        margin-bottom: 3px;
+        color: var(--text-main);
+        font-size: 12px;
+        line-height: 1.25;
+    }
+    .salida-guide-step span:last-child {
+        color: var(--text-muted);
+        font-size: 11px;
+        line-height: 1.4;
+    }
+    [data-theme="dark"] .salida-guide-title-icon {
+        background: rgba(124, 58, 237, .28);
+        color: #c4b5fd;
+    }
+    [data-theme="dark"] .salida-guide-step {
+        background: rgba(255, 255, 255, .035);
+    }
+
+    @media (max-width: 820px) {
+        .salida-guide-head {
+            align-items: stretch;
+            flex-direction: column;
+        }
+        .salida-guide-link { width: 100%; }
+        .salida-guide-steps { grid-template-columns: minmax(0, 1fr); }
+    }
+
+    @media (max-width: 1280px) {
+        .toolbar .salidas-filter-form {
+            display: grid !important;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            width: 100%;
+            gap: 10px;
+        }
+        .salidas-filter-form > input[name="q"] { grid-column: 1 / -1; }
+        .salidas-filter-form > *,
+        .salidas-filter-form .date-range-filter,
+        .salidas-filter-form .form-input,
+        .salidas-filter-form .btn {
+            width: 100% !important;
+            min-width: 0 !important;
+            max-width: none !important;
+        }
+        .salidas-filter-form > .btn[type="submit"] { grid-column: 1 / -1; }
+    }
+
+    @media (max-width: 700px) {
+        .toolbar .salidas-filter-form { grid-template-columns: minmax(0, 1fr); }
+        .salidas-filter-form > input[name="q"],
+        .salidas-filter-form > .btn[type="submit"] { grid-column: auto; }
+    }
+
+    @media (max-width: 480px) {
+        .salida-guide { padding: 14px; }
+        .salida-guide-title { align-items: flex-start; }
+        .salida-guide-title h3 { font-size: 16px; }
+        .salida-guide-step { padding: 11px; }
+    }
+
+    /* En tablet la lista se convierte en tarjetas; en celular usa una sola columna. */
+    @media (max-width: 1280px), (hover: none) and (pointer: coarse) {
+        .salidas-table,
+        .salidas-table tbody {
+            display: block;
+            width: 100%;
+            min-width: 0 !important;
+        }
+        .salidas-table thead { display: none; }
+        .salidas-table tbody {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 14px;
+            padding: 14px;
+        }
+        .salidas-table tbody tr {
+            display: flex;
+            flex-direction: column;
+            min-width: 0;
+            overflow: hidden;
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 14px;
+            box-shadow: 0 5px 14px rgba(31, 41, 55, .07);
+        }
+        .salidas-table tbody tr:hover { background: var(--card-bg); }
+        .salidas-table tbody td {
+            display: block;
+            width: 100%;
+            min-width: 0;
+            padding: 10px 12px;
+            white-space: normal !important;
+            overflow-wrap: anywhere;
+        }
+        .salidas-table .office-exit-cell > div {
+            flex-wrap: wrap;
+            white-space: normal !important;
+        }
+        .salidas-table .ret-pill { white-space: normal; }
+        .salidas-table .undo-exit-btn {
+            width: 42px;
+            min-width: 42px;
+            height: 42px;
+            min-height: 42px;
+        }
+        .salidas-table tbody td::before {
+            content: attr(data-label);
+            display: block;
+            margin-bottom: 5px;
+            color: var(--text-muted);
+            font-size: 10px;
+            font-weight: 850;
+            letter-spacing: .05em;
+            text-transform: uppercase;
+        }
+        .salidas-table .office-exit-cell {
+            order: 2;
+            margin-top: auto;
+            padding-top: 13px;
+            background: rgba(249, 118, 24, .045);
+        }
+        .salidas-table .row-actions {
+            order: 3;
+            display: flex;
+            flex-wrap: wrap;
+            align-items: stretch;
+            gap: 7px;
+        }
+        .salidas-table .row-actions::before { flex: 0 0 100%; }
+        .salidas-table .row-actions > * {
+            flex: 1 1 140px;
+            margin: 0;
+            min-height: 42px;
+            white-space: normal;
+        }
+        .salidas-table .wa-mini {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            flex: 0 0 46px;
+            font-size: 17px;
+        }
+        .cerrar-btn { min-height: 58px; }
+        .cerrar-btn-copy strong { font-size: 15px; }
+        .cerrar-btn-copy small { font-size: 12px; }
+    }
+
+    @media (max-width: 700px) {
+        .salidas-table tbody {
+            grid-template-columns: minmax(0, 1fr);
+            gap: 12px;
+            padding: 10px;
+        }
+        .salidas-table .row-actions > * { flex-basis: 100%; width: 100%; }
+        .salidas-table .wa-mini { flex-basis: 100%; }
+        .cerrar-btn { min-height: 62px; padding: 11px 13px; }
+        .cerrar-btn-icon { flex-basis: 38px; width: 38px; height: 38px; }
+    }
+
+    @media (max-width: 380px) {
+        .salidas-table tbody { padding: 8px; }
+        .salidas-table tbody td { padding: 9px 10px; }
+        .cerrar-btn { gap: 8px; padding: 10px; }
+        .cerrar-btn-copy strong { font-size: 14px; }
+        .cerrar-btn-copy small { font-size: 11px; }
     }
 </style>
 
 <div class="crumb">
     <a href="{% url 'econotec:bienvenida' %}">Inicio</a> /
-    <a href="{% url 'econotec:salida_menu' %}">Salidas</a> / Lista
+    {% if lista_salidas_confirmadas %}
+        Salidas físicas confirmadas
+    {% else %}
+        <a href="{% url 'econotec:salida_menu' %}">Equipo listo / finalizado</a> /
+        Lista de equipos finalizados
+    {% endif %}
 </div>
 
-<h2 class="page-title">Equipo reparado <span class="accent">/ Salidas Registrada</span></h2>
-<p class="page-subtitle">{{ total }} actas en total.</p>
+{% if lista_salidas_confirmadas %}
+<h2 class="page-title">Salidas físicas <span class="accent">confirmadas</span></h2>
+<p class="page-subtitle">{{ total }} equipo{{ total|pluralize }} con salida física confirmada.</p>
+{% else %}
+<h2 class="page-title">Lista de equipos <span class="accent">finalizados</span></h2>
+<p class="page-subtitle">{{ total }} equipo{{ total|pluralize }} finalizado{{ total|pluralize }} aún en la oficina.</p>
+{% endif %}
 
 <div class="toolbar">
-    <form method="get" style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
+    <form method="get" class="salidas-filter-form" style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
         <input type="text" name="q" value="{{ q }}" placeholder="Buscar por N°, cliente, marca…" class="form-input">
         {% include 'includes/filtro_fecha_rango.html' %}
         <select name="estado" class="form-input" style="max-width:220px;">
-            <option value="">— Estado de reparación —</option>
+            <option value="">{% if lista_salidas_confirmadas %}— Estado de salida física —{% else %}— Estado de reparación —{% endif %}</option>
             {% for value, label in estados %}
                 <option value="{{ value }}" {% if estado_filtro == value %}selected{% endif %}>{{ label }}</option>
             {% endfor %}
@@ -78,18 +421,58 @@
     </form>
 </div>
 
+{% if lista_salidas_confirmadas %}
+<section class="salida-guide" aria-labelledby="salida-guide-heading">
+    <div class="salida-guide-head">
+        <div class="salida-guide-title">
+            <span class="salida-guide-title-icon" aria-hidden="true">📖</span>
+            <div>
+                <h3 id="salida-guide-heading">¿Cómo registrar la salida física de un equipo?</h3>
+                <p>La confirmación se realiza desde la lista de equipos que todavía constan dentro de la oficina.</p>
+            </div>
+        </div>
+        <a href="{% url 'econotec:salida_lista' %}" class="salida-guide-link">
+            Ir a Lista de equipos finalizados →
+        </a>
+    </div>
+    <ol class="salida-guide-steps">
+        <li class="salida-guide-step">
+            <span class="salida-guide-number">1</span>
+            <span>
+                <strong>Abre Lista de equipos finalizados</strong>
+                Allí aparecen los equipos que aún se encuentran físicamente en la oficina.
+            </span>
+        </li>
+        <li class="salida-guide-step">
+            <span class="salida-guide-number">2</span>
+            <span>
+                <strong>Localiza el equipo entregado</strong>
+                Verifica que el saldo esté pagado y que el equipo realmente haya salido.
+            </span>
+        </li>
+        <li class="salida-guide-step">
+            <span class="salida-guide-number">3</span>
+            <span>
+                <strong>Pulsa Confirmar salida de la oficina</strong>
+                Al confirmar, el equipo aparecerá automáticamente en esta lista.
+            </span>
+        </li>
+    </ol>
+</section>
+{% endif %}
+
 {% if salidas %}
 <div class="table-wrap">
-    <table>
+    <table class="salidas-table">
         <thead>
             <tr>
                 <th>Equipo N°</th>
-                <th>Fecha Salida</th>
+                <th>Fecha de finalización</th>
                 <th>Cliente</th>
                 <th>Equipo</th>
                 <th>Técnico / Registró</th>
                 <th>Estado</th>
-                <th>Retiro</th>
+                <th>Salida de la oficina</th>
                 <th>Cobrado</th>
                 <th>Saldo</th>
                 <th>Acciones</th>
@@ -98,30 +481,30 @@
         <tbody>
         {% for s in salidas %}
             <tr>
-                <td><strong style="color: var(--primary);">{{ s.ingreso.codigo_equipo }}</strong></td>
-                <td>{{ s.fecha_salida|date:"d/m/Y" }}</td>
-                <td>{{ s.ingreso.cliente.nombres }}</td>
-                <td>{{ s.ingreso.tipo_equipo_display }} — {{ s.ingreso.marca|truncatechars:25 }}</td>
-                <td style="white-space: nowrap; font-size: 12px;">
+                <td data-label="Equipo N°"><strong style="color: var(--primary);">{{ s.ingreso.codigo_equipo }}</strong></td>
+                <td data-label="Fecha de finalización">{{ s.fecha_salida|date:"d/m/Y" }}</td>
+                <td data-label="Cliente">{{ s.ingreso.cliente.nombres }}</td>
+                <td data-label="Equipo">{{ s.ingreso.tipo_equipo_display }} — {{ s.ingreso.marca|truncatechars:25 }}</td>
+                <td data-label="Técnico / Registró" style="white-space: nowrap; font-size: 12px;">
                     {% if s.tecnico_reparo %}
                         <span title="Técnico que reparó">🔧 <strong>{{ s.tecnico_reparo.first_name|default:s.tecnico_reparo.username }}</strong></span>
                     {% else %}
                         <span style="color: var(--text-muted);">🔧 —</span>
                     {% endif %}
                     <br>
-                    <span style="color: var(--text-muted);" title="Quién registró la salida">
+                    <span style="color: var(--text-muted);" title="Quién registró la finalización">
                         📝 {{ s.registrado_por.first_name|default:s.registrado_por.username|default:"—" }}
                     </span>
                 </td>
-                <td><span class="badge badge-{{ s.estado_reparacion }}">{{ s.get_estado_reparacion_display }}</span></td>
-                <td>
+                <td data-label="Estado"><span class="badge badge-{{ s.estado_reparacion }}">{{ s.get_estado_reparacion_display }}</span></td>
+                <td class="office-exit-cell" data-label="Salida de la oficina">
                     {% if s.cliente_ya_retiro %}
                         <div style="display: flex; gap: 4px; align-items: center; white-space: nowrap;">
-                            <span class="ret-pill">✅ Retirado {{ s.fecha_retiro_real|date:"d/m/Y" }}</span>
+                            <span class="ret-pill">✅ Salió de la oficina {{ s.fecha_retiro_real|date:"d/m/Y" }}</span>
                             {% if es_admin %}
-                            <form method="post" action="{% url 'econotec:salida_deshacer_retiro' pk=s.pk %}" onsubmit="confirmDelete(event, this, '¿Seguro que deseas DESHACER el retiro de este equipo? Volverá a estar listo para entrega en el local.', 'Sí, deshacer', 'Cancelar');" style="margin:0; display:inline-block;">
+                            <form method="post" action="{% url 'econotec:salida_deshacer_retiro' pk=s.pk %}" class="undo-exit-form" onsubmit="confirmDelete(event, this, '¿Seguro que deseas DESHACER la salida física de este equipo? Volverá a constar dentro de la oficina.', 'Sí, deshacer', 'Cancelar');">
                                 {% csrf_token %}
-                                <button type="submit" class="btn btn-sm btn-danger" style="padding: 2px 6px; font-size: 11px; margin:0;" title="Deshacer Retiro">✖</button>
+                                <button type="submit" class="btn btn-sm btn-danger undo-exit-btn" title="Deshacer salida de la oficina" aria-label="Deshacer salida de la oficina">✖</button>
                             </form>
                             {% endif %}
                         </div>
@@ -132,37 +515,46 @@
                             </span>
                         {% endif %}
                     {% elif s.pendiente_de_retiro_fisico %}
-                        <span class="pendiente-pill">⏳ Sin retirar</span>
-                        <form method="post" action="{% url 'econotec:salida_marcar_retirada' pk=s.pk %}"
-                              class="cerrar-form" style="margin-top: 4px;"
-                              onsubmit="{% if s.ingreso.diferencia > 0 %}event.preventDefault(); Swal.fire({icon: 'error', title: 'Saldo Pendiente', text: 'No se puede retirar. El cliente tiene un saldo pendiente de {{ s.ingreso.diferencia|dinero_signo }}. Debe pagar todo antes de retirar el equipo.', confirmButtonColor: '#d33'}); return false;{% else %}confirmarCierre(event, this, '{{ s.ingreso.codigo_equipo }}', {% if s.ingreso.bodegaje_pendiente > 0 %}true{% else %}false{% endif %}, {{ s.ingreso.bodegaje_pendiente|default:0|stringformat:'.2f' }}, {{ s.ingreso.bodegaje_dias_pendiente|default:0 }});{% endif %}">
-                            {% csrf_token %}
-                            <input type="hidden" name="aplicar_bodegaje" id="aplicar_{{ s.pk }}" value="">
-                            <span >Da clic -></span>
-                            <button type="submit" class="cerrar-btn" {% if s.ingreso.diferencia > 0 %}style="background: #9e9e9e; cursor: not-allowed;" title="Saldo pendiente: {{ s.ingreso.diferencia|dinero_signo }}"{% endif %}> Cliente retiró su equipo? click /si</button>
-                            
-                        </form>
+                        <div class="office-exit-content">
+                            <span class="pendiente-pill">⏳ Aún en la oficina</span>
+                            <form method="post" action="{% url 'econotec:salida_marcar_retirada' pk=s.pk %}"
+                                  class="cerrar-form"
+                                  onsubmit="{% if s.ingreso.diferencia > 0 %}event.preventDefault(); Swal.fire({icon: 'error', title: 'Saldo Pendiente', text: 'No se puede retirar. El cliente tiene un saldo pendiente de {{ s.ingreso.diferencia|dinero_signo }}. Debe pagar todo antes de retirar el equipo.', confirmButtonColor: '#d33'}); return false;{% else %}confirmarCierre(event, this, '{{ s.ingreso.codigo_equipo }}', {% if s.ingreso.bodegaje_pendiente > 0 %}true{% else %}false{% endif %}, {{ s.ingreso.bodegaje_pendiente|default:0|stringformat:'.2f' }}, {{ s.ingreso.bodegaje_dias_pendiente|default:0 }});{% endif %}">
+                                {% csrf_token %}
+                                <input type="hidden" name="aplicar_bodegaje" id="aplicar_{{ s.pk }}" value="">
+                                <button type="submit"
+                                        class="cerrar-btn{% if s.ingreso.diferencia > 0 %} is-bloqueado{% endif %}"
+                                        aria-label="Confirmar que el equipo {{ s.ingreso.codigo_equipo }} salió de la oficina"
+                                        {% if s.ingreso.diferencia > 0 %}title="Saldo pendiente: {{ s.ingreso.diferencia|dinero_signo }}"{% endif %}>
+                                    <span class="cerrar-btn-icon" aria-hidden="true">{% if s.ingreso.diferencia > 0 %}💳{% else %}🚚{% endif %}</span>
+                                    <span class="cerrar-btn-copy">
+                                        <strong>Confirmar salida de la oficina</strong>
+                                        <small>{% if s.ingreso.diferencia > 0 %}Primero debe pagarse el saldo pendiente{% else %}El equipo ya salió · Clic aquí{% endif %}</small>
+                                    </span>
+                                </button>
+                            </form>
+                        </div>
                     {% else %}
                         <span style="color: var(--text-muted); font-size: 11px;">N/A</span>
                     {% endif %}
                 </td>
-                <td>
+                <td data-label="Cobrado">
                     {{ s.ingreso.total_abonado|dinero_signo }}
                     {% if s.ingreso.resumen_metodos_pago %}
                         <br><small style="color: var(--text-muted); font-size: 10px;">{{ s.ingreso.resumen_metodos_pago }}</small>
                     {% endif %}
                 </td>
-                <td>
+                <td data-label="Saldo">
                     <span style="color: {% if s.ingreso.diferencia > 0 %}var(--danger){% else %}var(--success){% endif %}; font-weight: bold;">
                         {{ s.ingreso.diferencia|dinero_signo }}
                     </span>
                 </td>
-                <td class="row-actions">
+                <td class="row-actions" data-label="Acciones">
                     {% if s.pendiente_de_retiro_fisico and not s.cliente_ya_retiro %}
                         <a href="{% url 'econotec:salida_listo_aviso' pk=s.pk %}" class="wa-mini" title="Avisar por WhatsApp">💬</a>
                     {% endif %}
                     <a href="{% url 'econotec:ingreso_abonos' pk=s.ingreso.pk %}" class="btn btn-sm btn-secondary">Ver Abonos / Pagos</a>
-                    <a href="{% url 'econotec:salida_editar' pk=s.pk %}" class="btn btn-sm btn-secondary">Editar Salida</a>
+                    <a href="{% url 'econotec:salida_editar' pk=s.pk %}" class="btn btn-sm btn-secondary">Editar finalización</a>
                     <a href="{% url 'econotec:salida_imprimir' pk=s.pk %}" target="_blank" class="btn btn-sm btn-info">🖨 </a>
                     <a href="{% url 'econotec:salida_pdf' pk=s.pk %}" class="btn btn-sm btn-primary"> Descargar 📄</a>
                 </td>
@@ -175,9 +567,18 @@
 {% else %}
 <div class="empty-state">
     <div class="icon">📤</div>
-    <h3>No hay salidas registradas</h3>
-    <p>Las salidas se registran desde el detalle de cada equipo.</p>
+    {% if lista_salidas_confirmadas %}
+    <h3>No hay salidas físicas confirmadas</h3>
+    <p>Los equipos aparecerán aquí cuando se confirme que salieron de la oficina.</p>
+    {% else %}
+    <h3>No hay equipos finalizados en la oficina</h3>
+    <p>La finalización se registra desde el detalle de cada equipo.</p>
+    {% endif %}
 </div>
 {% endif %}
-    {% include 'includes/paginacion.html' with page_obj=page_obj querystring=querystring page_param='pagina' aria_label='Paginación de salidas registradas' %}
+    {% if lista_salidas_confirmadas %}
+        {% include 'includes/paginacion.html' with page_obj=page_obj querystring=querystring page_param='pagina' aria_label='Paginación de salidas físicas confirmadas' %}
+    {% else %}
+        {% include 'includes/paginacion.html' with page_obj=page_obj querystring=querystring page_param='pagina' aria_label='Paginación de equipos finalizados' %}
+    {% endif %}
 {% endblock %}

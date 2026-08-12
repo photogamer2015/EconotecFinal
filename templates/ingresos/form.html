@@ -1118,14 +1118,14 @@
         </div>
         {% if ing_form.estado_bloqueado_por_salida %}
         <div id="diagnostico-salida-lock" class="estado-salida-lock">
-            <strong>Salida registrada</strong>
-            Ya se hizo una salida{% if ing_form.salida_registrada.fecha_salida %} el {{ ing_form.salida_registrada.fecha_salida|date:"d/m/Y" }}{% endif %}.
+            <strong>Equipo finalizado</strong>
+            La finalización se registró{% if ing_form.salida_registrada.fecha_salida %} el {{ ing_form.salida_registrada.fecha_salida|date:"d/m/Y" }}{% endif %}.
             El diagnóstico inmediato y su método de pago quedan bloqueados tal cual fueron registrados.
         </div>
         {% endif %}
         <div id="diagnostico-garantia-lock" class="estado-salida-lock" style="display:none;">
             <strong>Ingreso por garantía</strong>
-            El diagnóstico inmediato queda bloqueado en No y $0.00. Si hay un cobro, regístralo en la salida.
+            El diagnóstico inmediato queda bloqueado en No y $0.00. Si hay un cobro, regístralo al finalizar el equipo.
         </div>
         <div id="wrap_pago_diagnostico" style="display:none; margin-top:14px; background:#f5f7fa; padding:15px; border-radius:8px; border:1px solid #e1e4e8;">
             <h4 style="margin-top:0; margin-bottom:10px; color:#333; font-size:14px;">MÉTODO DE PAGO DEL DIAGNÓSTICO</h4>
@@ -1214,7 +1214,7 @@
                     {{ ing_form.valor_acordado }}
                     {{ ing_form.valor_acordado.errors }}
                     {% if ing_form.estado_bloqueado_por_salida %}
-                    <small class="valor-acordado-ayuda">El valor acordado queda tal cual fue registrado antes de la salida.</small>
+                    <small class="valor-acordado-ayuda">El valor acordado queda tal cual fue registrado antes de finalizar el equipo.</small>
                     {% else %}
                     <small id="ayuda-valor-acordado" class="valor-acordado-ayuda">El valor debe ser igual o mayor a $1.00.</small>
                     {% endif %}
@@ -1225,8 +1225,8 @@
                 </div>
                 {% if ing_form.estado_bloqueado_por_salida %}
                 <div id="valor-salida-lock" class="estado-salida-lock">
-                    <strong>Salida registrada</strong>
-                    Ya se hizo una salida{% if ing_form.salida_registrada.fecha_salida %} el {{ ing_form.salida_registrada.fecha_salida|date:"d/m/Y" }}{% endif %}.
+                    <strong>Equipo finalizado</strong>
+                    La finalización se registró{% if ing_form.salida_registrada.fecha_salida %} el {{ ing_form.salida_registrada.fecha_salida|date:"d/m/Y" }}{% endif %}.
                     El valor acordado de este ingreso queda bloqueado y no se puede modificar.
                 </div>
                 {% endif %}
@@ -1237,9 +1237,9 @@
                 {{ ing_form.estado.errors }}
                 {% if ing_form.estado_bloqueado_por_salida %}
                 <div id="estado-salida-lock" class="estado-salida-lock">
-                    <strong>Salida registrada</strong>
-                    Ya se hizo una salida{% if ing_form.salida_registrada.fecha_salida %} el {{ ing_form.salida_registrada.fecha_salida|date:"d/m/Y" }}{% endif %}.
-                    El estado de este ingreso queda bloqueado; si necesitas cambiar el cierre, hazlo desde la salida registrada.
+                    <strong>Equipo finalizado</strong>
+                    La finalización se registró{% if ing_form.salida_registrada.fecha_salida %} el {{ ing_form.salida_registrada.fecha_salida|date:"d/m/Y" }}{% endif %}.
+                    El estado de este ingreso queda bloqueado; si necesitas cambiar el cierre, hazlo desde la finalización registrada.
                 </div>
                 {% endif %}
             </div>
@@ -1247,7 +1247,7 @@
 
         <div id="wrap_compra_administrativa" style="display:none; margin-top:18px; padding:16px; border:2px solid #0f766e; border-radius:10px; background:#f0fdfa;">
             <h4 style="margin:0 0 6px; color:#115e59;">🧾 Compra de equipo — Registro administrativo</h4>
-            <p style="margin:0 0 14px; color:#0f766e; font-size:12px; font-weight:700;">El valor indicado arriba será el valor a pagar y se generará/actualizará automáticamente un egreso. Este equipo no tendrá salida de reparación.</p>
+            <p style="margin:0 0 14px; color:#0f766e; font-size:12px; font-weight:700;">El valor indicado arriba será el valor a pagar y se generará/actualizará automáticamente un egreso. Este equipo no usa el flujo de finalización de reparación.</p>
             <div class="form-row cols-2">
                 <div><label class="form-label">Método de pago *</label>{{ ing_form.compra_metodo_pago }}{{ ing_form.compra_metodo_pago.errors }}</div>
                 <div><label class="form-label">Comprobante (opcional)</label>{{ ing_form.compra_comprobante_url }}{{ ing_form.compra_comprobante_url.errors }}</div>

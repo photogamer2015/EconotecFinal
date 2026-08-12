@@ -257,8 +257,8 @@
                         </div>
                     {% endif %}
                     {% if i.salida %}
-                        <div class="salida-registrada-badge" title="Este equipo ya tiene una salida registrada">
-                            ✅ Salida registrada
+                        <div class="salida-registrada-badge" title="Este equipo ya está finalizado">
+                            ✅ Equipo finalizado
                             <small>{{ i.salida.fecha_salida|date:"d/m/Y" }}</small>
                         </div>
                     {% endif %}
@@ -277,7 +277,7 @@
                 <td class="row-actions">
                     <a href="{% url 'econotec:ingreso_detalle' pk=i.pk %}" class="btn btn-sm btn-primary">Ver Detalles</a>
                     {% if es_admin and i.salida %}
-                        <a href="{% url 'econotec:salida_editar' pk=i.salida.pk %}" class="btn btn-sm btn-secondary">Ver detalle de salida</a>
+                        <a href="{% url 'econotec:salida_editar' pk=i.salida.pk %}" class="btn btn-sm btn-secondary">Ver finalización</a>
                     {% endif %}
                     <a href="{% url 'econotec:ingreso_pdf' pk=i.pk %}" class="btn btn-sm btn-secondary" title="Descargar PDF">Descargar 📄</a>
                 </td>

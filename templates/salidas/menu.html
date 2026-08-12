@@ -1,22 +1,22 @@
 {% extends 'base.html' %}
 
-{% block title %}Equipo listo o reparado / salida de equipo — Econotec{% endblock %}
+{% block title %}Equipo listo / finalizado — Econotec{% endblock %}
 
 {% block content %}
 <div class="crumb">
-    <a href="{% url 'econotec:bienvenida' %}">Inicio</a> / Equipo listo o reparado / salida de equipo
+    <a href="{% url 'econotec:bienvenida' %}">Inicio</a> / Equipo listo / finalizado
 </div>
 
-<h2 class="page-title">Equipo listo o reparado <span class="accent">/ salida de equipo</span></h2>
-<p class="page-subtitle">Cierra reparaciones y entrega los equipos al cliente.</p>
+<h2 class="page-title">Equipo listo <span class="accent">/ finalizado</span></h2>
+<p class="page-subtitle">Registra el resultado del trabajo. La salida física de la oficina se confirma después.</p>
 
 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px;">
     <a href="{% url 'econotec:salida_lista' %}" class="card-box" style="text-decoration:none; color:inherit; border-left: 5px solid #1f2937;">
         <div style="display:flex; align-items:center; gap:14px;">
             <div style="font-size:38px;">📋</div>
             <div>
-                <h3 style="color: #1f2937; font-size:18px; margin-bottom:4px;">Ver lista de equipo reparado / salida</h3>
-                <p style="color:#666; font-size:13px;">{{ total }} actas de salida registradas.</p>
+                <h3 style="color: #1f2937; font-size:18px; margin-bottom:4px;">Lista de equipos finalizados</h3>
+                <p style="color:#666; font-size:15px; line-height:1.4;"><strong style="font-size:17px; color:#1f2937;">{{ total }}</strong> equipo{{ total|pluralize }} finalizado{{ total|pluralize }} aún en la oficina.</p>
             </div>
         </div>
     </a>
@@ -26,22 +26,11 @@
             <div style="font-size:38px;">🧾</div>
             <div>
                 <h3 style="color: #0d47a1; font-size:18px; margin-bottom:4px;">Facturas Realizadas</h3>
-                <p style="color:#666; font-size:13px;">{{ facturas_realizadas }} salida{{ facturas_realizadas|pluralize:"s" }} con factura registrada{{ facturas_realizadas|pluralize:"s" }}.</p>
+                <p style="color:#666; font-size:15px; line-height:1.4;"><strong style="font-size:17px; color:#0d47a1;">{{ facturas_realizadas }}</strong> equipo{{ facturas_realizadas|pluralize }} finalizado{{ facturas_realizadas|pluralize }} con factura.</p>
             </div>
         </div>
     </a>
 
-    {% if request.user.is_superuser %}
-    <a href="{% url 'econotec:salida_totales' %}" class="card-box" style="text-decoration:none; color:inherit; border-left: 5px solid var(--success);">
-        <div style="display:flex; align-items:center; gap:14px;">
-            <div style="font-size:38px;">🏆</div>
-            <div>
-                <h3 style="color: var(--success); font-size:18px; margin-bottom:4px;">Ranking de Técnicos</h3>
-                <p style="color:#666; font-size:13px;">Salidas reparadas, retiros positivos y dinero generado por cada técnico.</p>
-            </div>
-        </div>
-    </a>
-    {% endif %}
 </div>
 
 

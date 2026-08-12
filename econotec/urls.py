@@ -87,6 +87,12 @@ urlpatterns = [
 
     # ── Salida de equipos (cierre / entrega) ───────────────
     path('salidas/', views.salida_lista, name='salida_lista'),
+    path(
+        'salidas/salidas-fisicas-confirmadas/',
+        views.salida_lista,
+        {'solo_fuera_oficina': True},
+        name='salida_retiros_lista',
+    ),
     path('salidas/menu/', views.salida_menu, name='salida_menu'),
     path('salidas/totales/', views.salida_totales, name='salida_totales'),
     path('salidas/facturas/',

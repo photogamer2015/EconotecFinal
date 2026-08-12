@@ -141,7 +141,7 @@ def asesor_requerido(view_func):
 
 
 def ranking_requerido(view_func):
-    """Solo Admin y Técnico — para el Ranking de Técnicos."""
+    """Solo administradores — para el Ranking de Técnicos."""
     @wraps(view_func)
     @login_required
     def _wrapped(request, *args, **kwargs):

@@ -1453,7 +1453,7 @@ class SalidaEquipoForm(forms.ModelForm):
         )
         if es_cortesia:
             self.fields['estado_reparacion'].choices = [
-                ('cortesia', 'Salida de cortesía'),
+                ('cortesia', 'Equipo de cortesía finalizado'),
             ]
             self.initial['estado_reparacion'] = 'cortesia'
             self.initial['valor_final_cobrado'] = Decimal('0.00')

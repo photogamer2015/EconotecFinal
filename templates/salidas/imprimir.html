@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Acta de Salida {{ ingreso.codigo_equipo }} — Econotec</title>
+    <title>Acta de Equipo Finalizado {{ ingreso.codigo_equipo }} — Econotec</title>
     {% load static econotec_extras %}
     <style>
         @page { size: A4; margin: 14mm 14mm 12mm 14mm; }
@@ -329,7 +329,7 @@
         <div class="header-center">
             <img src="{% static 'logo.jpg' %}" alt="Econotec" class="logo-circle-print">
             <div class="brand-text">ECONOTEC</div>
-            <div class="doc-title">ACTA DE SALIDA DE EQUIPO</div>
+            <div class="doc-title">ACTA DE EQUIPO FINALIZADO</div>
             <div class="branch-info">
                 <strong>Guayaquil:</strong> Sauces 8 Mz 454F Solar 6, Primer Piso Oficina 2<br>
                 <strong>Quito:</strong> Sector Centro Norte: La Mariscal - Calles 18 de Septiembre y Av. Amazonas<br>
@@ -337,7 +337,7 @@
             </div>
         </div>
         <div class="corner-box">
-            <span class="lbl">FECHA</span>
+            <span class="lbl">FECHA FINAL</span>
             <span class="val" style="font-size:13px;">{{ salida.fecha_salida|date:"d/m/Y" }}</span>
         </div>
     </div>
@@ -350,13 +350,13 @@
     <div class="field-line"><span class="label">Fecha de Ingreso:</span><span class="value">{{ ingreso.fecha_ingreso|date:"d/m/Y" }}</span></div>
     <div class="field-line"><span class="label">Técnico que reparó:</span><span class="value">{{ salida.tecnico_reparo_nombre|default:"— Sin técnico registrado —" }}</span></div>
 
-    <!-- ESTADO DE LA SALIDA -->
-    <div class="section-header">ESTADO DE LA SALIDA</div>
+    <!-- RESULTADO FINAL DEL EQUIPO -->
+    <div class="section-header">RESULTADO FINAL DEL EQUIPO</div>
     <div class="estado-grid">
         {% if salida.estado_reparacion == 'cortesia' %}
         <div class="checkbox-item-l activo">
             <span class="check-box">X</span>
-            SALIDA DE CORTESÍA
+            EQUIPO DE CORTESÍA FINALIZADO
         </div>
         {% else %}
         <div class="checkbox-item-l {% if salida.estado_reparacion == 'pendiente_retiro' %}activo{% endif %}">
@@ -365,7 +365,7 @@
         </div>
         <div class="checkbox-item-l {% if salida.estado_reparacion == 'retirado' %}activo{% endif %}">
             <span class="check-box">{% if salida.estado_reparacion == 'retirado' %}X{% endif %}</span>
-            ✅ RETIRADO POR EL CLIENTE
+            ✅ SALIÓ DE LA OFICINA
         </div>
         <div class="checkbox-item-l {% if salida.estado_reparacion == 'revision' %}activo{% endif %}">
             <span class="check-box">{% if salida.estado_reparacion == 'revision' %}X{% endif %}</span>
@@ -385,11 +385,11 @@
         </div>
         <div class="checkbox-item-l {% if salida.estado_reparacion == 'garantia' %}activo{% endif %}">
             <span class="check-box">{% if salida.estado_reparacion == 'garantia' %}X{% endif %}</span>
-            🛡 SALIDA POR GARANTÍA
+            🛡 GARANTÍA FINALIZADA
         </div>
         <div class="checkbox-item-l {% if salida.estado_reparacion == 'garantia_fallos_adicionales' %}activo{% endif %}">
             <span class="check-box">{% if salida.estado_reparacion == 'garantia_fallos_adicionales' %}X{% endif %}</span>
-            🛡 GARANTÍA + FALLOS ADICIONALES
+            🛡 GARANTÍA FINALIZADA + FALLOS ADICIONALES
         </div>
         {% endif %}
     </div>

@@ -365,7 +365,7 @@ def _pagos_detallados_salida(salida):
             detalle = ' · '.join(part for part in [detalle, f'Recibo: {salida.numero_recibo}'] if part)
         pagos.append({
             'fecha': salida.fecha_salida,
-            'concepto': 'Pago en salida',
+            'concepto': 'Pago al finalizar',
             'monto': salida.valor_final_cobrado,
             'metodo': salida.get_metodo_pago_final_display(),
             'detalle': detalle or '—',
@@ -378,7 +378,7 @@ def _mensaje_estado_salida(salida):
     estado = salida.estado_reparacion
     if salida.cliente_ya_retiro or estado == 'retirado':
         fecha = salida.fecha_retiro_real or salida.fecha_salida
-        return f'Su equipo fue retirado por el cliente el {fecha.strftime("%d/%m/%Y")}.'
+        return f'Su equipo salió de la oficina el {fecha.strftime("%d/%m/%Y")}.'
     if estado == 'revision':
         return 'Su equipo está listo para su retiro en estado de revisión. Debe cancelar el saldo pendiente antes de retirarlo.'
     if estado == 'no_reparable':
@@ -390,7 +390,7 @@ def _mensaje_estado_salida(salida):
     if estado == 'garantia_fallos_adicionales':
         return 'Su equipo ya está listo para su retiro por garantía con fallos adicionales pendientes.'
     if estado == 'cortesia':
-        return 'Su equipo está listo para retiro. Salida de cortesía, sin cobro.'
+        return 'Su equipo de cortesía está finalizado y listo para retiro, sin cobro.'
     return 'Su equipo ya está listo para su retiro.'
 
 
@@ -1124,7 +1124,7 @@ def ingreso_pdf(request, pk):
 
 @tecnico_requerido
 def salida_pdf(request, pk):
-    """Genera el PDF del Acta de Salida del equipo."""
+    """Genera el PDF del acta de equipo finalizado."""
     salida = get_object_or_404(
         SalidaEquipo.objects.select_related('ingreso', 'ingreso__cliente', 'tecnico_reparo')
         .prefetch_related('ingreso__abonos'),
@@ -1138,13 +1138,13 @@ def salida_pdf(request, pk):
     pagos_detallados = _pagos_detallados_salida(salida)
     mensaje_estado = _mensaje_estado_salida(salida)
     buf = BytesIO()
-    c, width, height = _setup_pdf(buf, f'Acta de Salida {ingreso.codigo_equipo}')
+    c, width, height = _setup_pdf(buf, f'Equipo Finalizado {ingreso.codigo_equipo}')
 
-    body_y = _draw_header_econotec(c, width, height, 'ACTA DE SALIDA DE EQUIPO')
+    body_y = _draw_header_econotec(c, width, height, 'ACTA DE EQUIPO FINALIZADO')
 
     # Cajas equipo y fecha
     _draw_box_field(c, 40, height - 95, 90, 32, 'EQUIPO', ingreso.codigo_equipo)
-    _draw_box_field(c, width - 130, height - 95, 90, 32, 'FECHA',
+    _draw_box_field(c, width - 130, height - 95, 90, 32, 'FECHA FINAL',
                    salida.fecha_salida.strftime('%d/%m/%Y'))
 
     margen = 50
@@ -1172,22 +1172,22 @@ def salida_pdf(request, pk):
     # ── Estado de la reparación (destacado) ──
     c.setFillColor(naranja)
     c.setFont('Helvetica-Bold', 11)
-    c.drawString(margen, y, 'ESTADO DE LA SALIDA')
+    c.drawString(margen, y, 'RESULTADO FINAL DEL EQUIPO')
     y -= 18
 
     # Mostrar las 5 opciones con marcado
     estados = (
-        [('cortesia', 'SALIDA DE CORTESÍA')]
+        [('cortesia', 'EQUIPO DE CORTESÍA FINALIZADO')]
         if salida.estado_reparacion == 'cortesia'
         else [
             ('pendiente_retiro', 'Reparado — pendiente de retiro'),
-            ('retirado', 'Retirado por el cliente'),
+            ('retirado', 'Salió de la oficina'),
             ('revision', 'Revisión'),
             ('reparado_parcial', 'Reparado parcialmente'),
             ('no_reparable', 'No se pudo reparar'),
             ('cliente_no_acepta', 'Cliente no quiso reparar'),
-            ('garantia', 'Salida por garantía'),
-            ('garantia_fallos_adicionales', 'Garantía + fallos adicionales'),
+            ('garantia', 'Garantía finalizada'),
+            ('garantia_fallos_adicionales', 'Garantía finalizada + fallos adicionales'),
         ]
     )
     for key, label in estados:
@@ -1246,7 +1246,7 @@ def salida_pdf(request, pk):
         buf.close()
         response = HttpResponse(pdf, content_type='application/pdf')
         response['Content-Disposition'] = (
-            f'attachment; filename="salida_cortesia_{ingreso.codigo_equipo}.pdf"'
+            f'attachment; filename="equipo_finalizado_cortesia_{ingreso.codigo_equipo}.pdf"'
         )
         return response
 
@@ -1412,7 +1412,7 @@ def salida_pdf(request, pk):
 
     response = HttpResponse(pdf, content_type='application/pdf')
     response['Content-Disposition'] = (
-        f'attachment; filename="salida_equipo_{ingreso.codigo_equipo}.pdf"'
+        f'attachment; filename="equipo_finalizado_{ingreso.codigo_equipo}.pdf"'
     )
     return response
 

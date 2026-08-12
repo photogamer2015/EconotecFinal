@@ -237,7 +237,7 @@
 
 <div class="crumb">
     <a href="{% url 'econotec:bienvenida' %}">Inicio</a> /
-    <a href="{% url 'econotec:salida_lista' %}">Salidas</a> / {{ titulo }}
+    <a href="{% url 'econotec:salida_lista' %}">Equipos finalizados</a> / {{ titulo }}
 </div>
 
 <form method="post" class="form-card">
@@ -274,9 +274,9 @@
 
     {% if ingreso.estado == 'cortesia' %}
     <div class="form-section" style="border-left:4px solid #0284c7; background:#f0f9ff;">
-        <h3 style="color:#0369a1;">Salida de cortesía</h3>
+        <h3 style="color:#0369a1;">Finalización de cortesía</h3>
         <p style="margin:0; color:#075985; font-weight:700;">
-            Este ingreso fue registrado como cortesía. La salida queda automáticamente sin valor, sin pago, sin recibo y sin factura.
+            Este ingreso fue registrado como cortesía. La finalización queda automáticamente sin valor, sin pago, sin recibo y sin factura.
         </p>
     </div>
     {% endif %}
@@ -294,7 +294,7 @@
                     {% if salida.estado_reparacion == 'retirado' or salida.cliente_ya_retiro %}
                         💬 Enviar confirmación de retiro al cliente
                     {% else %}
-                        📄 Enviar hoja de salida al cliente
+                        📄 Enviar acta del equipo al cliente
                     {% endif %}
                 </h3>
                 <p>
@@ -303,7 +303,7 @@
                         Abre WhatsApp con un mensaje profesional de confirmación y agradecimiento.
                     {% else %}
                         El equipo está marcado como <strong>reparado / listo para entrega</strong>.
-                        Descarga la hoja de salida en PDF y envíasela al cliente por WhatsApp
+                        Descarga el acta del equipo en PDF y envíasela al cliente por WhatsApp
                         como respaldo de la entrega.
                     {% endif %}
                 </p>
@@ -330,7 +330,7 @@
             <div id="envio-pdf-card-sinwa" class="envio-pdf-card-sinwa">
                 ℹ️ El equipo está marcado como entregado, pero el cliente
                 <strong>no tiene WhatsApp registrado</strong>, así que no podemos generar
-                el enlace automático. Aun así puedes descargar el PDF de la hoja de salida:
+                el enlace automático. Aun así puedes descargar el acta del equipo en PDF:
                 <br>
                 <a href="{% url 'econotec:salida_pdf' pk=salida.pk %}" target="_blank">
                     📄 Descargar PDF de la hoja
@@ -353,10 +353,10 @@
     </div>
 
     <div class="form-section">
-        <h3>Estado de la Salida</h3>
+        <h3>Finalización del equipo</h3>
         <div class="form-row cols-2">
             <div>
-                <label class="form-label">Fecha de salida *</label>
+                <label class="form-label">Fecha de finalización *</label>
                 {{ form.fecha_salida }}
                 {{ form.fecha_salida.errors }}
             </div>
@@ -375,9 +375,9 @@
                 {{ form.tecnico_reparo }}
                 {{ form.tecnico_reparo.errors }}
                 <p class="form-help" style="margin-top: 6px; color: #856404; background:#fff3cd; padding:8px 10px; border-radius:8px; border:1px solid #ffeeba;">
-                    <b>Importante:</b> el técnico seleccionado aquí recibe el resultado de esta salida
+                    <b>Importante:</b> el técnico seleccionado aquí recibe el resultado de este trabajo
                     en su ranking y perfil, aunque otra persona registre el formulario.
-                    Salida positiva = suma; salida negativa = resta. Es obligatorio seleccionarlo.
+                    Resultado positivo = suma; resultado negativo = resta. Es obligatorio seleccionarlo.
                 </p>
             </div>
         </div>
@@ -414,7 +414,7 @@
                     {{ form.motivo_valor_acordado_adicional }}
                     {{ form.motivo_valor_acordado_adicional.errors }}
                     <small style="display:block; margin-top:5px; color:#856404;">
-                        Este detalle aparecerá en la hoja de salida.
+                        Este detalle aparecerá en el acta del equipo.
                     </small>
                 </div>
             </div>
@@ -585,7 +585,7 @@
     <div class="actions-bar">
         <a href="{% url 'econotec:ingreso_detalle' pk=ingreso.pk %}" class="btn btn-secondary">Cancelar</a>
         <button type="submit" id="btn-registrar" class="btn btn-primary">
-            {% if modo == 'editar' %}Guardar cambios{% elif ingreso.estado == 'cortesia' %}Registrar salida de cortesía{% else %}Registrar Equipo listo o reparado / salida{% endif %}
+            {% if modo == 'editar' %}Guardar cambios{% elif ingreso.estado == 'cortesia' %}Finalizar equipo de cortesía{% else %}Registrar equipo listo / finalizado{% endif %}
         </button>
     </div>
 </form>
@@ -645,7 +645,7 @@
                     revision: {
                         titulo: 'Notificar a asesora por revisión pendiente',
                         ayuda: 'La asesora verá esta notificación en su apartado y el valor quedará como saldo pendiente para cobrar antes del retiro.',
-                        placeholder: 'Ej.: Salida en revisión. Cobrar el valor acordado antes del retiro.'
+                        placeholder: 'Ej.: Equipo finalizado en revisión. Cobrar el valor acordado antes del retiro.'
                     },
                     retiro: {
                         titulo: 'Notificar a asesora: equipo listo con saldo pendiente',
@@ -809,7 +809,7 @@
                     saldoDisplay.style.color = 'var(--success)';
                     if (saldoNota) {
                         saldoNota.style.display = '';
-                        saldoNota.textContent = 'Salida por garantía (sin cobro).';
+                        saldoNota.textContent = 'Garantía finalizada (sin cobro).';
                     }
                     if (inputCobrado) {
                         inputCobrado.value = '0';

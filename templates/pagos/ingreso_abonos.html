@@ -253,7 +253,7 @@
                     {% if salida.registrado_por %}📝 {{ salida.registrado_por.first_name|default:salida.registrado_por.username }}<br>{{ salida.creado|date:"d/m/Y H:i" }}{% else %}—{% endif %}
                 </td>
                 <td class="row-actions">
-                    <a href="{% url 'econotec:salida_pdf' pk=salida.pk %}" class="btn btn-sm btn-info" target="_blank" title="Ver Acta de Salida">📄 Acta</a>
+                    <a href="{% url 'econotec:salida_pdf' pk=salida.pk %}" class="btn btn-sm btn-info" target="_blank" title="Ver acta de equipo finalizado">📄 Acta</a>
                 </td>
             </tr>
         {% endif %}

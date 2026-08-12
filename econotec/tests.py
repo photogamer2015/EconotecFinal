@@ -2606,6 +2606,10 @@ class VentasTests(TestCase):
         self.assertContains(response, 'id="btn-toggle-bodegaje"')
         self.assertContains(response, 'aria-controls="alerta-bodegaje-body"')
         self.assertContains(response, 'function toggleDashboardBodegaje')
+        self.assertContains(response, 'salida-oficina-btn is-bloqueado')
+        self.assertContains(response, '💳')
+        self.assertContains(response, 'Saldo pendiente')
+        self.assertContains(response, 'Debe pagar $25,00')
 
         response = self.client.get(reverse('econotec:alertas_bodegaje'))
 
@@ -3099,7 +3103,7 @@ class VentasTests(TestCase):
         self.assertEqual(response.context['total'], 1)
         self.assertContains(response, ingreso_julio.codigo_equipo)
         self.assertNotContains(response, ingreso_junio.codigo_equipo)
-        self.assertContains(response, 'Fecha salida: 01/07/2026 - 31/07/2026')
+        self.assertContains(response, 'Fecha de finalización: 01/07/2026 - 31/07/2026')
 
     def test_estado_visual_muestra_pendiente_retiro_si_salida_esta_pendiente(self):
         ingreso = self.crear_ingreso_reparacion(
@@ -3178,7 +3182,7 @@ class VentasTests(TestCase):
         )
 
         self.assertContains(response, 'Pendiente de retiro')
-        self.assertContains(response, 'Salida registrada')
+        self.assertContains(response, 'Equipo finalizado')
         self.assertContains(response, 'El diagnóstico inmediato y su método de pago quedan bloqueados')
         self.assertContains(response, 'El valor acordado de este ingreso queda bloqueado')
         self.assertContains(response, '100.00')
@@ -3363,7 +3367,7 @@ class VentasTests(TestCase):
         response = self.client.get(reverse('econotec:bienvenida'))
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'Total de ingreso de equipo y salidas')
+        self.assertContains(response, 'Total de ingresos y equipos finalizados')
         self.assertContains(response, 'Sedes G / U')
         self.assertContains(response, '<details class="movement-summary"', html=False)
         self.assertContains(response, "abrirModalDashboard('ingresos_sede_guayaquil')")
@@ -3456,10 +3460,14 @@ class VentasTests(TestCase):
         SalidaEquipo.objects.create(
             ingreso=ingreso_asignado,
             fecha_salida=date(2026, 7, 20),
+            fecha_retiro_real=date(2026, 7, 22),
             estado_reparacion='retirado',
             tecnico_reparo=tecnico_salida,
             valor_final_cobrado=Decimal('25.00'),
             metodo_pago_final='efectivo',
+            bodegaje_dias_congelado=5,
+            bodegaje_monto_congelado=Decimal('5.00'),
+            bodegaje_aplicado_al_pago=True,
             registrado_por=self.usuario,
         )
         SalidaEquipo.objects.create(
@@ -3505,8 +3513,18 @@ class VentasTests(TestCase):
         self.assertEqual(salidas_por_tecnico[tecnico_salida.pk]['total'], 2)
         self.assertEqual(salidas_por_tecnico[tecnico_salida.pk]['positivas'], 1)
         self.assertEqual(salidas_por_tecnico[tecnico_salida.pk]['negativas'], 1)
+        self.assertEqual(salidas_por_tecnico[tecnico_salida.pk]['retirados'], 1)
+        self.assertEqual(salidas_por_tecnico[tecnico_salida.pk]['pendientes'], 1)
         self.assertEqual(salidas_por_tecnico[tecnico_salida.pk]['efectividad'], 50.0)
         self.assertEqual(response.context['salidas_tecnicos_recaudado'], Decimal('30.00'))
+        self.assertEqual(response.context['salidas_fisicas_admin_total'], 1)
+        self.assertEqual(response.context['salidas_fisicas_admin_con_bodegaje'], 1)
+        self.assertEqual(response.context['salidas_fisicas_admin_bodegaje_cobrado'], 1)
+        self.assertEqual(response.context['salidas_fisicas_admin_bodegaje_total'], Decimal('5.00'))
+        self.assertEqual(
+            [salida.ingreso_id for salida in response.context['salidas_fisicas_admin_registros']],
+            [ingreso_asignado.pk],
+        )
         resumen_general = next(
             item for item in response.context['equipos_mes_resumen']
             if item['ingreso'].pk == ingreso_asignado.pk
@@ -3516,9 +3534,16 @@ class VentasTests(TestCase):
         self.assertContains(response, 'No representa quién hizo la reparación')
         self.assertContains(response, 'Técnico asignado al ingresar')
         self.assertContains(response, 'Técnico que deseas consultar')
-        self.assertContains(response, 'Salidas por técnico que terminó la reparación')
-        self.assertContains(response, 'Salidas positivas')
-        self.assertContains(response, 'Salidas negativas')
+        self.assertContains(response, 'Equipos finalizados por técnico que terminó la reparación')
+        self.assertContains(response, 'Equipos finalizados del mes')
+        self.assertContains(response, 'Resultados positivos')
+        self.assertContains(response, 'Resultados negativos')
+        self.assertContains(response, 'Salidas físicas confirmadas')
+        self.assertContains(response, 'Ver lista completa →')
+        self.assertContains(response, reverse('econotec:salida_retiros_lista'))
+        self.assertContains(response, 'Fecha de salida física')
+        self.assertContains(response, '✅ Salió de la oficina')
+        self.assertNotContains(response, 'Salidas por técnico que terminó la reparación')
 
         response_tecnico_salida = self.client.get(
             reverse('econotec:admin_dashboard'),
@@ -4120,6 +4145,11 @@ class VentasTests(TestCase):
         response = self.client.get(reverse('econotec:salida_imprimir', kwargs={'pk': salida.pk}))
 
         self.assertContains(response, 'FACTURA REALIZADA')
+        self.assertContains(response, 'ACTA DE EQUIPO FINALIZADO')
+        self.assertContains(response, 'RESULTADO FINAL DEL EQUIPO')
+        self.assertContains(response, 'SALIÓ DE LA OFICINA')
+        self.assertNotContains(response, 'ACTA DE SALIDA DE EQUIPO')
+        self.assertNotContains(response, 'ESTADO DE LA SALIDA')
         self.assertContains(response, 'Nombres / Razón Social')
         self.assertContains(response, 'Yandri Guevara')
         self.assertContains(response, '1207342716')
@@ -4128,6 +4158,10 @@ class VentasTests(TestCase):
         pdf_response = self.client.get(reverse('econotec:salida_pdf', kwargs={'pk': salida.pk}))
         self.assertEqual(pdf_response.status_code, 200)
         self.assertEqual(pdf_response['Content-Type'], 'application/pdf')
+        self.assertEqual(
+            pdf_response['Content-Disposition'],
+            f'attachment; filename="equipo_finalizado_{ingreso.codigo_equipo}.pdf"',
+        )
 
     def test_salida_factura_imprimir_usa_plantilla_propia(self):
         ingreso = self.crear_ingreso_reparacion(
@@ -4389,12 +4423,67 @@ class VentasTests(TestCase):
             registrado_por=self.usuario,
         )
 
+        lista_finalizados = self.client.get(reverse('econotec:salida_lista'))
+        self.assertContains(lista_finalizados, ingreso.codigo_equipo)
+        self.assertContains(lista_finalizados, 'Confirmar salida de la oficina')
+        self.assertContains(lista_finalizados, 'El equipo ya salió · Clic aquí')
+        self.assertContains(lista_finalizados, '🚚')
+        self.assertContains(lista_finalizados, 'class="salidas-table"')
+        self.assertContains(lista_finalizados, '⏳ Reparado — pendiente de retiro')
+        self.assertContains(lista_finalizados, 'class="salidas-filter-form"')
+        self.assertNotContains(lista_finalizados, 'id="salida-guide-heading"')
+
         response = self.client.post(reverse('econotec:salida_marcar_retirada', kwargs={'pk': salida.pk}))
 
-        self.assertRedirects(response, reverse('econotec:salida_lista'))
+        self.assertRedirects(response, reverse('econotec:salida_retiros_lista'))
         salida.refresh_from_db()
         self.assertEqual(salida.estado_reparacion, 'retirado')
         self.assertEqual(salida.fecha_retiro_real, date.today())
+
+        lista_finalizados = self.client.get(reverse('econotec:salida_lista'))
+        lista_salidas_fisicas = self.client.get(reverse('econotec:salida_retiros_lista'))
+        inicio = self.client.get(reverse('econotec:bienvenida'))
+
+        self.assertNotContains(lista_finalizados, ingreso.codigo_equipo)
+        self.assertContains(lista_salidas_fisicas, ingreso.codigo_equipo)
+        self.assertTrue(lista_salidas_fisicas.context['lista_salidas_confirmadas'])
+        self.assertContains(lista_salidas_fisicas, 'Salidas físicas')
+        self.assertContains(lista_salidas_fisicas, '¿Cómo registrar la salida física de un equipo?')
+        self.assertContains(lista_salidas_fisicas, 'Ir a Lista de equipos finalizados →')
+        self.assertContains(lista_salidas_fisicas, 'Abre Lista de equipos finalizados')
+        self.assertContains(lista_salidas_fisicas, 'Pulsa Confirmar salida de la oficina')
+        self.assertContains(lista_salidas_fisicas, reverse('econotec:salida_lista'))
+        self.assertContains(lista_salidas_fisicas, '— Estado de salida física —')
+        self.assertContains(lista_salidas_fisicas, '✅ Salió de la oficina')
+        self.assertNotContains(lista_salidas_fisicas, '⏳ Reparado — pendiente de retiro')
+        self.assertEqual(
+            lista_salidas_fisicas.context['estados'],
+            [('retirado', '✅ Salió de la oficina')],
+        )
+
+        filtro_invalido = self.client.get(
+            reverse('econotec:salida_retiros_lista'),
+            {'estado': 'pendiente_retiro'},
+        )
+        self.assertEqual(filtro_invalido.context['estado_filtro'], '')
+        self.assertEqual(filtro_invalido.context['total'], 1)
+        self.assertContains(inicio, 'Salidas físicas confirmadas')
+        self.assertContains(inicio, reverse('econotec:salida_retiros_lista'))
+        self.assertEqual(inicio.context['stats']['salidas_fisicas_confirmadas'], 1)
+
+        self.client.force_login(self.admin)
+        response_deshacer = self.client.post(
+            reverse('econotec:salida_deshacer_retiro', kwargs={'pk': salida.pk}),
+        )
+        self.assertRedirects(response_deshacer, reverse('econotec:salida_lista'))
+
+        salida.refresh_from_db()
+        self.assertIsNone(salida.fecha_retiro_real)
+        self.assertContains(self.client.get(reverse('econotec:salida_lista')), ingreso.codigo_equipo)
+        self.assertNotContains(
+            self.client.get(reverse('econotec:salida_retiros_lista')),
+            ingreso.codigo_equipo,
+        )
 
     def test_salida_facturas_lista_muestra_solo_facturas_realizadas(self):
         User = get_user_model()
@@ -4544,9 +4633,31 @@ class VentasTests(TestCase):
 
         self.assertContains(response, 'Facturas Realizadas')
         self.assertContains(response, reverse('econotec:salida_facturas_lista'))
-        self.assertContains(response, '1 salida con factura registrada.')
+        self.assertEqual(response.context['facturas_realizadas'], 1)
+        self.assertContains(response, 'equipo finalizado con factura.')
+        self.assertContains(response, 'Lista de equipos finalizados')
+        self.assertNotContains(response, 'Salidas físicas confirmadas')
+        self.assertNotContains(response, 'Ranking de Técnicos')
+        self.assertNotContains(response, reverse('econotec:salida_retiros_lista'))
+        self.assertNotContains(response, reverse('econotec:salida_totales'))
         self.assertNotContains(response, 'Buscar salidas por fecha')
         self.assertNotContains(response, 'Buscar facturas por fecha')
+
+        inicio_tecnico = self.client.get(reverse('econotec:bienvenida'))
+        self.assertContains(inicio_tecnico, 'Salidas físicas confirmadas')
+        self.assertContains(inicio_tecnico, reverse('econotec:salida_retiros_lista'))
+        self.assertNotContains(inicio_tecnico, reverse('econotec:salida_totales'))
+
+        self.client.force_login(self.admin)
+        inicio_admin = self.client.get(reverse('econotec:bienvenida'))
+        self.assertContains(inicio_admin, 'Ranking de Técnicos')
+        self.assertContains(inicio_admin, reverse('econotec:salida_totales'))
+        self.assertContains(
+            inicio_admin,
+            f'<a href="{reverse("econotec:salida_totales")}" class="card-box card-box-ranking">',
+            html=False,
+        )
+        self.assertContains(inicio_admin, 'Solo Admin')
 
     def test_busqueda_pagos_ignora_tildes_y_mayusculas(self):
         self.cliente_existente.nombres = 'Yandri Guevará'
@@ -5330,7 +5441,7 @@ class VentasTests(TestCase):
         self.assertContains(response, 'btn-salida-bloqueada')
         self.assertContains(
             response,
-            'Por favor registra un valor acordado para registrar la salida.'
+            'Por favor registra un valor acordado para finalizar el equipo.'
         )
 
     def test_no_permite_registrar_salida_sin_valor_acordado(self):
@@ -5345,6 +5456,73 @@ class VentasTests(TestCase):
             reverse('econotec:ingreso_detalle', kwargs={'pk': ingreso.pk})
         )
         self.assertFalse(SalidaEquipo.objects.filter(ingreso=ingreso).exists())
+
+    def test_aviso_post_finalizacion_muestra_confirmacion_o_tutorial_segun_saldo(self):
+        ingreso_pagado = self.crear_ingreso_reparacion(
+            valor_acordado=Decimal('0.00'),
+        )
+        salida_pagada = SalidaEquipo.objects.create(
+            ingreso=ingreso_pagado,
+            fecha_salida=date(2026, 7, 17),
+            estado_reparacion='pendiente_retiro',
+            tecnico_reparo=self.usuario,
+            valor_final_cobrado=Decimal('0.00'),
+            metodo_pago_final='sin_pago',
+            registrado_por=self.usuario,
+        )
+        session = self.client.session
+        session['confirmar_ubicacion_salida_id'] = salida_pagada.pk
+        session.save()
+
+        aviso_pagado = self.client.get(
+            reverse('econotec:salida_listo_aviso', kwargs={'pk': salida_pagada.pk}),
+        )
+        self.assertTrue(aviso_pagado.context['mostrar_confirmacion_guardado'])
+        self.assertContains(aviso_pagado, '¿El equipo se encuentra aquí en la oficina?')
+        self.assertContains(aviso_pagado, 'Sí, está en la oficina')
+        self.assertContains(aviso_pagado, 'No, ya salió')
+
+        ingreso_pendiente = self.crear_ingreso_reparacion(
+            valor_acordado=Decimal('25.00'),
+        )
+        salida_pendiente = SalidaEquipo.objects.create(
+            ingreso=ingreso_pendiente,
+            fecha_salida=date(2026, 7, 18),
+            estado_reparacion='pendiente_retiro',
+            tecnico_reparo=self.usuario,
+            valor_final_cobrado=Decimal('0.00'),
+            metodo_pago_final='sin_pago',
+            registrado_por=self.usuario,
+        )
+        session = self.client.session
+        session['confirmar_ubicacion_salida_id'] = salida_pendiente.pk
+        session.save()
+
+        aviso_pendiente = self.client.get(
+            reverse('econotec:salida_listo_aviso', kwargs={'pk': salida_pendiente.pk}),
+        )
+        self.assertContains(aviso_pendiente, 'Este equipo tiene un saldo pendiente')
+        self.assertContains(aviso_pendiente, '📖 Guía rápida')
+        self.assertContains(aviso_pendiente, 'Siguiente →')
+        self.assertContains(aviso_pendiente, 'Ingresar saldo pendiente')
+        self.assertContains(aviso_pendiente, 'Omitir')
+        self.assertContains(
+            aviso_pendiente,
+            reverse('econotec:abono_crear', kwargs={'ingreso_pk': ingreso_pendiente.pk}),
+        )
+        lista_con_saldo = self.client.get(reverse('econotec:salida_lista'))
+        self.assertContains(lista_con_saldo, '💳')
+        self.assertContains(lista_con_saldo, 'Primero debe pagarse el saldo pendiente')
+
+        rechazo = self.client.post(
+            reverse('econotec:salida_marcar_retirada', kwargs={'pk': salida_pendiente.pk}),
+        )
+        self.assertRedirects(
+            rechazo,
+            reverse('econotec:salida_listo_aviso', kwargs={'pk': salida_pendiente.pk}),
+        )
+        salida_pendiente.refresh_from_db()
+        self.assertIsNone(salida_pendiente.fecha_retiro_real)
 
     def test_salida_garantia_fallos_adicionales_deja_valor_pendiente_y_notifica_asesora(self):
         ingreso = self.crear_ingreso_reparacion(
@@ -5417,7 +5595,7 @@ class VentasTests(TestCase):
             reverse('econotec:salida_registrar', kwargs={'ingreso_pk': ingreso.pk})
         )
         self.assertEqual(response_get.status_code, 200)
-        self.assertContains(response_get, 'Salida de cortesía')
+        self.assertContains(response_get, 'Finalización de cortesía')
         self.assertNotContains(response_get, 'Cierre Económico')
         self.assertNotContains(response_get, '¿Factura realizada?')
 
@@ -5452,7 +5630,7 @@ class VentasTests(TestCase):
         response_print = self.client.get(
             reverse('econotec:salida_imprimir', kwargs={'pk': salida.pk})
         )
-        self.assertContains(response_print, 'SALIDA DE CORTESÍA')
+        self.assertContains(response_print, 'EQUIPO DE CORTESÍA FINALIZADO')
         self.assertNotContains(response_print, 'CIERRE ECONÓMICO')
 
     def test_ingreso_cortesia_no_admite_abonos(self):
@@ -5509,7 +5687,7 @@ class VentasTests(TestCase):
         self.assertEqual(response.context['pendientes_salida'], 1)
         self.assertContains(response, ingreso_con_salida.codigo_equipo)
         self.assertContains(response, ingreso_pendiente.codigo_equipo)
-        self.assertContains(response, 'Salida de cortesía')
+        self.assertContains(response, 'Equipo de cortesía finalizado')
         self.assertContains(response, 'Pendiente de registrar')
 
     def test_salida_cliente_no_acepta_revision_pendiente_notifica_asesora(self):
@@ -5833,7 +6011,10 @@ class VentasTests(TestCase):
             ),
         )
 
-        self.assertRedirects(response, reverse('econotec:salida_lista'))
+        self.assertRedirects(
+            response,
+            reverse('econotec:salida_listo_aviso', kwargs={'pk': salida.pk}),
+        )
         salida.refresh_from_db()
         self.assertEqual(salida.valor_final_cobrado, Decimal('0.00'))
         self.assertEqual(salida.metodo_pago_final, 'sin_pago')
@@ -5857,8 +6038,8 @@ class VentasTests(TestCase):
 
                 response = self.client.get(reverse('econotec:salida_listo_aviso', kwargs={'pk': salida.pk}))
 
-                self.assertContains(response, '¡Listo equipo para su salida!')
-                self.assertNotContains(response, '¡Listo equipo reparado para su salida!')
+                self.assertContains(response, '¡Equipo finalizado y listo para retiro!')
+                self.assertNotContains(response, '¡Equipo reparado y listo para retiro!')
 
     def test_whatsapp_retirado_usa_mensaje_de_cierre_sin_bodegaje(self):
         ingreso = self.crear_ingreso_reparacion(
@@ -6306,7 +6487,7 @@ class VentasTests(TestCase):
         self.assertNotContains(response, 'Actualizar valor')
         self.assertContains(response, 'name="valor_pendiente_reporte"')
         self.assertContains(response, 'Reportar por qué está pendiente el valor acordado')
-        self.assertContains(response, 'Registrar equipo listo o reparado')
+        self.assertContains(response, 'Registrar equipo listo / finalizado')
         self.assertContains(response, 'id="btn-perfil-movil"')
         self.assertContains(response, 'Ver perfil')
         self.assertContains(response, 'id="perfil-mobile-modal"')
@@ -6484,7 +6665,7 @@ class VentasTests(TestCase):
             {'sede': 'todas'},
         )
 
-        self.assertNotContains(response, 'Ver detalle de salida')
+        self.assertNotContains(response, 'Ver finalización')
 
     def test_lista_ingresos_muestra_boton_detalle_salida_solo_admin(self):
         User = get_user_model()
@@ -6511,7 +6692,7 @@ class VentasTests(TestCase):
             {'sede': 'todas'},
         )
 
-        self.assertContains(response, 'Ver detalle de salida')
+        self.assertContains(response, 'Ver finalización')
         self.assertContains(
             response,
             reverse('econotec:salida_editar', kwargs={'pk': salida.pk})

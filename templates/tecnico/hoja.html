@@ -843,10 +843,10 @@
                         readonly
                     >
                     <div class="field-help">
-                        Este valor es solo lectura en la hoja móvil. Se edita desde el sistema principal. Para registrar salida debe existir un valor real.
+                        Este valor es solo lectura en la hoja móvil. Se edita desde el sistema principal. Para finalizar el equipo debe existir un valor real.
                     </div>
                     <div class="valor-error" id="valor-error">
-                        Para registrar la salida, primero ingresa un valor acordado real.
+                        Para finalizar el equipo, primero ingresa un valor acordado real.
                     </div>
 
                     {% if ingreso.valor_acordado is not None %}
@@ -878,7 +878,7 @@
                             </div>
                             {% if valor_acordado_bloqueado %}
                                 <div class="valor-paid-lock">
-                                    Ya está pagado todo. El valor acordado queda bloqueado y puedes registrar la salida.
+                                    Ya está pagado todo. El valor acordado queda bloqueado y puedes finalizar el equipo.
                                 </div>
                             {% endif %}
                         </div>
@@ -930,15 +930,15 @@
             </div>
 
             <div class="salida-section">
-                <div class="salida-title">📤 Registrar equipo listo o reparado</div>
+                <div class="salida-title">✅ Registrar equipo listo / finalizado</div>
                 <div class="salida-help">
-                    Cuando el trabajo esté terminado, guarda el reporte y abre el formulario completo de salida para elegir si fue con solución, sin solución o si el cliente no quiso reparar.
+                    Cuando el trabajo esté terminado, guarda el reporte y abre el formulario de finalización para indicar si fue con solución, sin solución o si el cliente no quiso reparar.
                 </div>
                 <div class="salida-blocked" id="salida-blocked">
-                    Registra un valor acordado antes de abrir el formulario de salida.
+                    Registra un valor acordado antes de abrir el formulario de finalización.
                 </div>
                 <button type="submit" name="accion" value="registrar_salida" id="btn-ir-salida" class="btn btn-salida">
-                    📤 Registrar equipo listo o reparado
+                    ✅ Registrar equipo listo / finalizado
                 </button>
             </div>
 
@@ -1190,7 +1190,7 @@
             if (salidaBlocked) salidaBlocked.classList.toggle('show', valorPendiente());
             if (salidaBtn) salidaBtn.classList.toggle('blocked', valorPendiente());
             if (valorInput) {
-                valorInput.setCustomValidity(bloqueado ? 'Registra un valor acordado para registrar la salida.' : '');
+                valorInput.setCustomValidity(bloqueado ? 'Registra un valor acordado para finalizar el equipo.' : '');
             }
             if (bloqueado && mostrar && valorInput) {
                 setValorOpen(true);

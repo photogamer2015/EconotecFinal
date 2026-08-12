@@ -320,7 +320,7 @@ def _ingresos_asignados_tecnicos_mes(year, month, tecnico_filtro=''):
 
 
 def _salidas_reparadas_tecnicos_mes(year, month, tecnico_filtro=''):
-    """Resume salidas por quien terminó la reparación (`tecnico_reparo`)."""
+    """Resume equipos finalizados por quien terminó la reparación."""
     salidas_qs = (
         SalidaEquipo.objects
         .filter(
@@ -356,8 +356,8 @@ def _salidas_reparadas_tecnicos_mes(year, month, tecnico_filtro=''):
         )
         .annotate(
             total=Count('id'),
-            retirados=Count('id', filter=Q(estado_reparacion='retirado')),
-            pendientes=Count('id', filter=Q(estado_reparacion='pendiente_retiro')),
+            retirados=Count('id', filter=Q(fecha_retiro_real__isnull=False)),
+            pendientes=Count('id', filter=Q(fecha_retiro_real__isnull=True)),
             positivas=Count('id', filter=Q(estado_reparacion__in=SALIDAS_POSITIVAS_ADMIN)),
             negativas=Count('id', filter=Q(estado_reparacion__in=SALIDAS_NEGATIVAS_ADMIN)),
             recaudado=Sum('valor_final_cobrado'),
@@ -490,6 +490,41 @@ def admin_dashboard(request):
         year,
         month,
         tecnico_resumen_filtro,
+    )
+
+    # Apartado independiente: salida física real de la oficina. Se filtra
+    # por la fecha de retiro, no por la fecha en que terminó la reparación.
+    salidas_fisicas_admin_qs = (
+        SalidaEquipo.objects
+        .filter(
+            fecha_retiro_real__year=year,
+            fecha_retiro_real__month=month,
+        )
+        .select_related('ingreso', 'ingreso__cliente', 'tecnico_reparo')
+    )
+    salidas_fisicas_admin_qs = _filtrar_resumen_por_tecnico(
+        salidas_fisicas_admin_qs,
+        'tecnico_reparo',
+        tecnico_resumen_filtro,
+    )
+    salidas_fisicas_admin_total = salidas_fisicas_admin_qs.count()
+    salidas_fisicas_admin_con_bodegaje = salidas_fisicas_admin_qs.filter(
+        bodegaje_monto_congelado__gt=0,
+    ).count()
+    salidas_fisicas_admin_bodegaje_cobrado = salidas_fisicas_admin_qs.filter(
+        bodegaje_monto_congelado__gt=0,
+        bodegaje_aplicado_al_pago=True,
+    ).count()
+    salidas_fisicas_admin_bodegaje_total = (
+        salidas_fisicas_admin_qs.aggregate(s=Sum('bodegaje_monto_congelado'))['s']
+        or Decimal('0.00')
+    )
+    salidas_fisicas_admin_registros = list(
+        salidas_fisicas_admin_qs.order_by(
+            '-fecha_retiro_real',
+            '-fecha_salida',
+            '-id',
+        )[:5]
     )
 
     # Desglose por tipo de salida
@@ -636,6 +671,11 @@ def admin_dashboard(request):
         'salidas_tecnicos_otras': salidas_tecnicos['otras'],
         'salidas_tecnicos_efectividad': salidas_tecnicos['efectividad'],
         'salidas_tecnicos_recaudado': salidas_tecnicos['recaudado'],
+        'salidas_fisicas_admin_total': salidas_fisicas_admin_total,
+        'salidas_fisicas_admin_con_bodegaje': salidas_fisicas_admin_con_bodegaje,
+        'salidas_fisicas_admin_bodegaje_cobrado': salidas_fisicas_admin_bodegaje_cobrado,
+        'salidas_fisicas_admin_bodegaje_total': salidas_fisicas_admin_bodegaje_total,
+        'salidas_fisicas_admin_registros': salidas_fisicas_admin_registros,
         'tecnicos_resumen': tecnicos_resumen,
         'tecnico_resumen_filtro': tecnico_resumen_filtro,
         'tecnico_resumen_nombre': tecnico_resumen_nombre,

@@ -580,6 +580,46 @@
     }
     .completion-metric-positive strong { color: #15803d; }
     .completion-metric-negative strong { color: #dc2626; }
+    .physical-exit-section {
+        border-color: #ddd6fe;
+        border-top-color: #7c3aed;
+        box-shadow: 0 3px 12px rgba(124, 58, 237, 0.08);
+    }
+    .physical-exit-section .assignment-head {
+        background: #f5f3ff;
+        border-bottom-color: #ede9fe;
+    }
+    .physical-exit-section .assignment-kicker { color: #6d28d9; }
+    .physical-exit-section .assignment-head h3 { color: #5b21b6; }
+    .physical-exit-section .assignment-period {
+        border-color: #c4b5fd;
+        color: #5b21b6;
+    }
+    .physical-exit-section .assignment-table th { background: #6d28d9; }
+    .physical-exit-section .assignment-table a { color: #6d28d9; }
+    .physical-exit-metrics {
+        grid-template-columns: repeat(4, minmax(130px, 1fr));
+    }
+    .physical-exit-actions {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 9px;
+    }
+    .physical-exit-link {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 42px;
+        padding: 9px 14px;
+        border-radius: 8px;
+        background: #6d28d9;
+        color: #fff !important;
+        font-size: 12px;
+        font-weight: 900;
+        text-decoration: none;
+    }
+    .physical-exit-link:hover { background: #5b21b6; }
     .result-badge {
         display: inline-flex;
         align-items: center;
@@ -615,6 +655,16 @@
     [data-theme="dark"] .completion-section .assignment-kicker,
     [data-theme="dark"] .completion-section .assignment-period,
     [data-theme="dark"] .completion-section .assignment-table a { color: #fdba74; }
+    [data-theme="dark"] .physical-exit-section { border-color: rgba(139, 92, 246, 0.38); }
+    [data-theme="dark"] .physical-exit-section .assignment-head {
+        background: rgba(91, 33, 182, 0.17);
+        border-color: rgba(139, 92, 246, 0.26);
+    }
+    [data-theme="dark"] .physical-exit-section .assignment-head h3,
+    [data-theme="dark"] .physical-exit-section .assignment-head p { color: var(--text-main); }
+    [data-theme="dark"] .physical-exit-section .assignment-kicker,
+    [data-theme="dark"] .physical-exit-section .assignment-period,
+    [data-theme="dark"] .physical-exit-section .assignment-table a { color: #c4b5fd; }
 
     .breakdown-grid {
         display: grid;
@@ -779,6 +829,9 @@
         .technician-filter-actions .btn { justify-content: center; }
         .completion-metrics { grid-template-columns: 1fr 1fr; }
         .completion-metrics .assignment-metric:last-child { grid-column: 1 / -1; }
+        .physical-exit-metrics { grid-template-columns: 1fr 1fr; }
+        .physical-exit-actions,
+        .physical-exit-actions .physical-exit-link { width: 100%; }
         .productivity-panel,
         .assignment-head {
             align-items: stretch;
@@ -920,6 +973,7 @@
         <a href="{% url 'econotec:admin_egresos_lista' %}" class="btn btn-secondary">Ver Egresos</a>
         <a href="{% url 'econotec:admin_equipos_administrativos' %}" class="btn btn-secondary" style="background:#0f766e; color:#fff; border-color:#0f766e;">🎁 Donados / Compras</a>
         <a href="{% url 'econotec:admin_equipos_cortesia' %}?ano={{ year }}&mes={{ month }}" class="btn btn-secondary" style="background:#0369a1; color:#fff; border-color:#0369a1;">Equipos de cortesía</a>
+        <a href="{% url 'econotec:salida_retiros_lista' %}?fecha_desde={{ ingresos_tecnicos_desde|date:'Y-m-d' }}&fecha_hasta={{ ingresos_tecnicos_hasta|date:'Y-m-d' }}" class="btn btn-secondary" style="background:#6d28d9; color:#fff; border-color:#6d28d9;">🚚 Salidas físicas confirmadas</a>
         <a href="{% url 'econotec:admin_bitacoras_tecnicos' %}" class="btn btn-secondary">Bitácoras Técnicos</a>
         <a href="{% url 'econotec:admin_ventas_inventario' %}?ano={{ year }}&mes={{ month }}" class="btn btn-secondary" style="background:#0f766e; color:#fff; border-color:#0f766e;">Ventas e Inventario</a>
         <a href="{% url 'econotec:salida_facturas_lista' %}?ano={{ year }}&mes={{ month }}" class="btn btn-secondary">Facturas Salidas</a>
@@ -965,7 +1019,7 @@
 <div class="productivity-panel">
     <div>
         <h3>🏆 Ranking de Productividad (Gamificación)</h3>
-        <p>El puntaje de las salidas corresponde al técnico que reparó. Los ingresos asignados se muestran por separado abajo.</p>
+        <p>El puntaje de los equipos finalizados corresponde al técnico que terminó la reparación. Los ingresos asignados se muestran por separado abajo.</p>
     </div>
     <div class="productivity-actions">
         <a href="{% url 'econotec:admin_perfiles_exportar' formato='pdf' %}" class="btn btn-secondary" style="background: #dc2626; color: white; border: none;">📄 Exportar PDF</a>
@@ -1001,7 +1055,7 @@
     <div class="technician-filter-context">
         <span>Mostrando: <strong>{{ tecnico_resumen_nombre }}</strong></span>
         <span class="role-key">Ingreso = técnico asignado al recibir</span>
-        <span class="role-key output">Salida = técnico que terminó la reparación</span>
+        <span class="role-key output">Equipo finalizado = técnico que terminó la reparación</span>
     </div>
 </section>
 
@@ -1013,7 +1067,7 @@
             <h3>Ingresos de equipos asignados a técnicos</h3>
             <p>
                 Esta sección cuenta al técnico encargado registrado cuando el equipo ingresó.
-                No representa quién hizo la reparación ni modifica el ranking de salidas.
+                No representa quién hizo la reparación ni modifica el ranking de equipos finalizados.
             </p>
         </div>
         <div class="assignment-period">{{ mes_nombre }} {{ year }}</div>
@@ -1134,14 +1188,14 @@
     </div>
 </section>
 
-<!-- Salidas reparadas: usa únicamente tecnico_reparo de la salida -->
+<!-- Equipos finalizados: usa únicamente tecnico_reparo de la finalización -->
 <section class="assignment-section completion-section" id="salidas-tecnicos">
     <div class="assignment-head">
         <div>
             <span class="assignment-kicker">Responsabilidad al finalizar</span>
-            <h3>Salidas por técnico que terminó la reparación</h3>
+            <h3>Equipos finalizados por técnico que terminó la reparación</h3>
             <p>
-                Esta sección usa exclusivamente el técnico registrado en la salida.
+                Esta sección usa exclusivamente el técnico registrado al finalizar el equipo.
                 Las asignaciones hechas al ingresar el equipo no intervienen en estos resultados.
             </p>
         </div>
@@ -1150,15 +1204,15 @@
 
     <div class="assignment-metrics completion-metrics">
         <div class="assignment-metric">
-            <span>Salidas del mes</span>
+            <span>Equipos finalizados del mes</span>
             <strong>{{ salidas_tecnicos_total }}</strong>
         </div>
         <div class="assignment-metric completion-metric-positive">
-            <span>Salidas positivas</span>
+            <span>Resultados positivos</span>
             <strong>{{ salidas_tecnicos_positivas }}</strong>
         </div>
         <div class="assignment-metric completion-metric-negative">
-            <span>Salidas negativas</span>
+            <span>Resultados negativos</span>
             <strong>{{ salidas_tecnicos_negativas }}</strong>
         </div>
         <div class="assignment-metric">
@@ -1166,7 +1220,7 @@
             <strong>{{ salidas_tecnicos_efectividad|floatformat:1 }}%</strong>
         </div>
         <div class="assignment-metric">
-            <span>Recaudado en salida</span>
+            <span>Recaudado al finalizar</span>
             <strong>{{ salidas_tecnicos_recaudado|dinero_signo }}</strong>
         </div>
     </div>
@@ -1179,9 +1233,9 @@
                     <tr>
                         <th>Posición</th>
                         <th>Técnico que reparó</th>
-                        <th>Salidas</th>
-                        <th>Retirados</th>
-                        <th>Pend. retiro</th>
+                        <th>Finalizados</th>
+                        <th>Fuera de oficina</th>
+                        <th>En oficina</th>
                         <th>Positivas</th>
                         <th>Negativas</th>
                         <th>Otras</th>
@@ -1197,11 +1251,11 @@
                         <td data-label="Posición"><span class="assignment-rank">{{ fila.posicion }}</span></td>
                         <td data-label="Técnico que reparó">
                             <strong>{{ fila.tecnico_nombre }}</strong>
-                            {% if not fila.tecnico_id %}<small>Salida sin responsable registrado</small>{% endif %}
+                            {% if not fila.tecnico_id %}<small>Finalización sin responsable registrado</small>{% endif %}
                         </td>
-                        <td data-label="Salidas"><span class="assignment-number">{{ fila.total }}</span></td>
-                        <td data-label="Retirados">{{ fila.retirados }}</td>
-                        <td data-label="Pend. retiro">{{ fila.pendientes }}</td>
+                        <td data-label="Finalizados"><span class="assignment-number">{{ fila.total }}</span></td>
+                        <td data-label="Fuera de oficina">{{ fila.retirados }}</td>
+                        <td data-label="En oficina">{{ fila.pendientes }}</td>
                         <td data-label="Positivas"><span class="count-positive">{{ fila.positivas }}</span></td>
                         <td data-label="Negativas"><span class="count-negative">{{ fila.negativas }}</span></td>
                         <td data-label="Otras">{{ fila.otras }}</td>
@@ -1212,7 +1266,7 @@
                         <td data-label="Recaudado"><strong>{{ fila.recaudado|dinero_signo }}</strong></td>
                         <td data-label="Registros">
                             {% if fila.tecnico_id %}
-                                <a href="{% url 'econotec:salida_lista' %}?tecnico_salida={{ fila.tecnico_id }}&fecha_desde={{ ingresos_tecnicos_desde|date:'Y-m-d' }}&fecha_hasta={{ ingresos_tecnicos_hasta|date:'Y-m-d' }}">Ver salidas</a>
+                                <a href="{% url 'econotec:salida_lista' %}?tecnico_salida={{ fila.tecnico_id }}&fecha_desde={{ ingresos_tecnicos_desde|date:'Y-m-d' }}&fecha_hasta={{ ingresos_tecnicos_hasta|date:'Y-m-d' }}">Ver equipos finalizados</a>
                             {% else %}
                                 <a href="#registros-salidas-tecnicos" onclick="document.getElementById('registros-salidas-tecnicos').open = true;">Ver abajo</a>
                             {% endif %}
@@ -1224,7 +1278,7 @@
         </div>
 
         <details class="assignment-records" id="registros-salidas-tecnicos">
-            <summary>Registros individuales de salidas ({{ salidas_tecnicos_total }})</summary>
+            <summary>Registros individuales de equipos finalizados ({{ salidas_tecnicos_total }})</summary>
             <div class="assignment-records-content">
                 <div class="assignment-table-wrap">
                     <table class="assignment-table">
@@ -1270,8 +1324,95 @@
         </details>
         {% else %}
             <div class="assignment-empty">
-                No hay salidas registradas en {{ mes_nombre }} {{ year }}{% if tecnico_resumen_filtro %} para {{ tecnico_resumen_nombre }}{% endif %}.
+                No hay equipos finalizados en {{ mes_nombre }} {{ year }}{% if tecnico_resumen_filtro %} para {{ tecnico_resumen_nombre }}{% endif %}.
             </div>
+        {% endif %}
+    </div>
+</section>
+
+<!-- Apartado administrativo independiente de la finalización técnica -->
+<section class="assignment-section physical-exit-section" id="salidas-fisicas-admin">
+    <div class="assignment-head">
+        <div>
+            <span class="assignment-kicker">Movimiento físico de equipos</span>
+            <h3>Salidas físicas confirmadas</h3>
+            <p>
+                Lista separada de los equipos que realmente salieron de la oficina.
+                Este movimiento no cambia quién recibe el resultado de la reparación.
+            </p>
+        </div>
+        <div class="physical-exit-actions">
+            <div class="assignment-period">{{ mes_nombre }} {{ year }}</div>
+            <a class="physical-exit-link" href="{% url 'econotec:salida_retiros_lista' %}?fecha_desde={{ ingresos_tecnicos_desde|date:'Y-m-d' }}&fecha_hasta={{ ingresos_tecnicos_hasta|date:'Y-m-d' }}{% if tecnico_resumen_filtro and tecnico_resumen_filtro != 'sin_asignar' %}&tecnico_salida={{ tecnico_resumen_filtro }}{% endif %}">
+                Ver lista completa →
+            </a>
+        </div>
+    </div>
+
+    <div class="assignment-metrics physical-exit-metrics">
+        <div class="assignment-metric">
+            <span>Salidas físicas del mes</span>
+            <strong>{{ salidas_fisicas_admin_total }}</strong>
+        </div>
+        <div class="assignment-metric">
+            <span>Con bodegaje</span>
+            <strong>{{ salidas_fisicas_admin_con_bodegaje }}</strong>
+        </div>
+        <div class="assignment-metric completion-metric-positive">
+            <span>Bodegajes cobrados</span>
+            <strong>{{ salidas_fisicas_admin_bodegaje_cobrado }}</strong>
+        </div>
+        <div class="assignment-metric">
+            <span>Bodegaje registrado</span>
+            <strong>{{ salidas_fisicas_admin_bodegaje_total|dinero_signo }}</strong>
+        </div>
+    </div>
+
+    <div class="assignment-body">
+        {% if salidas_fisicas_admin_registros %}
+        <div class="assignment-table-wrap">
+            <table class="assignment-table">
+                <thead>
+                    <tr>
+                        <th>Equipo</th>
+                        <th>Fecha de salida física</th>
+                        <th>Cliente</th>
+                        <th>Técnico que finalizó</th>
+                        <th>Bodegaje</th>
+                        <th>Estado físico</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for salida in salidas_fisicas_admin_registros %}
+                    <tr>
+                        <td data-label="Equipo">
+                            <a href="{% url 'econotec:ingreso_detalle' salida.ingreso.pk %}">{{ salida.ingreso.codigo_equipo }}</a>
+                            <small>{{ salida.ingreso.tipo_equipo_display }} — {{ salida.ingreso.marca }}</small>
+                        </td>
+                        <td data-label="Fecha de salida física"><strong>{{ salida.fecha_retiro_real|date:"d/m/Y" }}</strong></td>
+                        <td data-label="Cliente">{{ salida.ingreso.cliente.nombres }}</td>
+                        <td data-label="Técnico que finalizó">{{ salida.tecnico_reparo_nombre|default:"Sin técnico registrado" }}</td>
+                        <td data-label="Bodegaje">
+                            {% if salida.bodegaje_monto_congelado and salida.bodegaje_monto_congelado > 0 %}
+                                <strong>{{ salida.bodegaje_monto_congelado|dinero_signo }}</strong>
+                                <small>{% if salida.bodegaje_aplicado_al_pago %}Cobrado{% else %}No cobrado{% endif %}</small>
+                            {% else %}
+                                Sin bodegaje
+                            {% endif %}
+                        </td>
+                        <td data-label="Estado físico"><span class="result-badge positive">✅ Salió de la oficina</span></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% if salidas_fisicas_admin_total > 5 %}
+            <p class="rank-section-note" style="margin:14px 0 0;">Se muestran las 5 salidas físicas más recientes del período. Usa “Ver lista completa” para consultar todas.</p>
+        {% endif %}
+        {% else %}
+        <div class="assignment-empty">
+            No hay salidas físicas confirmadas en {{ mes_nombre }} {{ year }}{% if tecnico_resumen_filtro %} para {{ tecnico_resumen_nombre }}{% endif %}.
+        </div>
         {% endif %}
     </div>
 </section>

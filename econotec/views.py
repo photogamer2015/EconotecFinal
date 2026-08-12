@@ -206,6 +206,10 @@ def bienvenida(request):
         'salidas_mes': SalidaEquipo.objects.filter(
             fecha_salida__year=ano_actual, fecha_salida__month=mes_actual,
         ).count(),
+        'salidas_fisicas_confirmadas': SalidaEquipo.objects.filter(
+            ingreso__sede__in=SEDES_EQUIPOS,
+            fecha_retiro_real__isnull=False,
+        ).count(),
         'total_clientes': Cliente.objects.count(),
         'pendientes_retiro': ingresos_equipos.filter(
             estado__in=['ingresado', 'en_reparacion'],
@@ -278,9 +282,7 @@ def bienvenida(request):
     equipos_top = equipos_stats[:5]
 
     # ── Alertas: dos tipos independientes ────────────────────────
-    es_admin_user = request.user.is_superuser or request.user.groups.filter(
-        name__in=['Administradores', 'Admin']
-    ).exists()
+    es_admin_user = es_admin(request.user)
 
     # 1. Equipos demorados en diagnóstico (4+ días sin diagnosticar)
     demorados_qs = equipos_demorados_qs(usuario=None)
@@ -468,13 +470,13 @@ def dashboard_details(request, tipo):
             filas.append([sal.ingreso.codigo_equipo, sal.ingreso.cliente.nombres, sal.ingreso.tipo_equipo_display, 'Terminado', 'Listo (Pendiente Retiro)', btn])
 
     elif tipo == 'salidas_mes':
-        titulo = f"Salidas del Mes ({hoy.strftime('%B %Y').capitalize()})"
+        titulo = f"Equipos Finalizados del Mes ({hoy.strftime('%B %Y').capitalize()})"
         link_ver_todos = "/salidas/"
         qs = SalidaEquipo.objects.select_related('ingreso__cliente').filter(
             ingreso__sede__in=SEDES_EQUIPOS,
             fecha_salida__year=ano_actual, fecha_salida__month=mes_actual
         ).order_by('-fecha_salida')
-        columnas = ['Código', 'Cliente', 'Equipo', 'Fecha Salida', 'Estado Reparación', 'Acción']
+        columnas = ['Código', 'Cliente', 'Equipo', 'Fecha de finalización', 'Resultado', 'Acción']
         for sal in qs:
             btn = f'<a href="/salidas/{sal.pk}/imprimir/" class="badge badge-entregado" style="text-decoration:none; padding: 4px 8px;">Ver PDF</a>'
             filas.append([sal.ingreso.codigo_equipo, sal.ingreso.cliente.nombres, sal.ingreso.tipo_equipo_display, sal.fecha_salida.strftime('%d/%m/%Y'), sal.get_estado_reparacion_display(), btn])
@@ -482,14 +484,14 @@ def dashboard_details(request, tipo):
     elif tipo.startswith('salidas_sede_'):
         sede = tipo.replace('salidas_sede_', '', 1)
         sede_nombre, sede_codigo = sedes_dashboard.get(sede, ('Sede', ''))
-        titulo = f"Salidas de Equipo {sede_nombre} ({sede_codigo})"
+        titulo = f"Equipos Finalizados {sede_nombre} ({sede_codigo})"
         qs = (
             SalidaEquipo.objects
             .select_related('ingreso', 'ingreso__cliente', 'tecnico_reparo')
             .filter(ingreso__sede=sede)
             .order_by('-fecha_salida', '-creado')
         )
-        columnas = ['Código', 'Cliente', 'Equipo', 'Fecha', 'Técnico', 'Estado salida', 'Cobrado', 'Acción']
+        columnas = ['Código', 'Cliente', 'Equipo', 'Fecha', 'Técnico', 'Resultado', 'Cobrado', 'Acción']
         for sal in qs:
             btn = f'<a href="/salidas/{sal.pk}/imprimir/" class="badge badge-entregado" style="text-decoration:none; padding: 4px 8px;">Ver PDF</a>'
             filas.append([
@@ -1519,7 +1521,7 @@ def ingreso_editar(request, pk):
             if estado_nuevo == 'entregado' and valor_acordado_nuevo is None:
                 ing_form.add_error(
                     'valor_acordado',
-                    'Por favor registra un valor acordado para registrar la salida.'
+                    'Por favor registra un valor acordado para finalizar el equipo.'
                 )
                 return render(request, 'ingresos/form.html', {
                     'cli_form': cli_form,
@@ -1573,7 +1575,7 @@ def ingreso_editar(request, pk):
                     messages.success(
                         request,
                         f'✅ Equipo {ingreso.codigo_equipo} actualizado. '
-                        f'Salida registrada automáticamente: {etiqueta}.'
+                        f'Equipo finalizado automáticamente: {etiqueta}.'
                     )
                 else:
                     messages.success(request, f'Equipo {ingreso.codigo_equipo} actualizado.')
@@ -1752,12 +1754,12 @@ def ingreso_lista(request):
         ('espera_repuesto', '   ↳ En reparación - Repuestos'),
         ('entregado', 'Entregado al cliente (Ingreso)'),
         ('garantia', 'Garantía (Ingreso)'),
-        ('con_salida', 'Salida registrada (Todos)'),
+        ('con_salida', 'Equipo finalizado (Todos)'),
         ('salida_pendiente_retiro', '   ↳ Reparado - pendiente de retiro'),
         ('salida_entregado_cliente', '   ↳ Entregado / retirado por cliente'),
         ('salida_cliente_no_acepta', '   ↳ Cliente no quiso reparar'),
         ('salida_no_reparable', '   ↳ No se pudo reparar'),
-        ('salida_garantia', '   ↳ Salida por garantía'),
+        ('salida_garantia', '   ↳ Garantía finalizada'),
     ]
 
     total = total_resultados(qs)
@@ -1891,8 +1893,8 @@ def ingreso_eliminar(request, pk):
     if hasattr(ingreso, 'salida'):
         messages.error(
             request,
-            f'No se puede eliminar el equipo #{numero}: ya tiene una salida registrada. '
-            'Elimina primero la salida.'
+            f'No se puede eliminar el equipo #{numero}: ya está finalizado. '
+            'Elimina primero la finalización.'
         )
         return redirect('econotec:ingreso_detalle', pk=ingreso.pk)
     if hasattr(ingreso, 'egreso_compra'):
@@ -2916,7 +2918,7 @@ def _render_venta_lista(request, filtro_pago='completo'):
 @tecnico_requerido
 def salida_menu(request):
     """Menú de salidas."""
-    total = SalidaEquipo.objects.count()
+    total = SalidaEquipo.objects.filter(fecha_retiro_real__isnull=True).count()
     listos_para_entregar = SalidaEquipo.objects.filter(
         estado_reparacion='pendiente_retiro',
     ).count()
@@ -2931,8 +2933,8 @@ def salida_menu(request):
 
 
 @tecnico_requerido
-def salida_lista(request):
-    """Listado de salidas con filtros por estado y sede."""
+def salida_lista(request, solo_fuera_oficina=False):
+    """Lista separada de equipos en oficina o con salida física confirmada."""
     q = (request.GET.get('q') or '').strip()
     estado = (request.GET.get('estado') or '').strip()
     sede_filtro = (request.GET.get('sede') or '').strip().lower()
@@ -2940,9 +2942,38 @@ def salida_lista(request):
     tecnico_salida_filtro = (request.GET.get('tecnico_salida') or '').strip()
     fecha_desde, fecha_hasta, fecha_preset = obtener_rango_fecha(request)
 
-    qs = (SalidaEquipo.objects
-          .select_related('ingreso', 'ingreso__cliente', 'registrado_por', 'tecnico_reparo')
-          .order_by('-fecha_salida', '-creado'))
+    # Cada lista ofrece únicamente estados coherentes con su etapa física.
+    # Dentro de la oficina se conservan los resultados de finalización;
+    # fuera de la oficina solo corresponde el estado de salida confirmada.
+    if solo_fuera_oficina:
+        estados_filtro = [
+            e for e in SalidaEquipo.ESTADO_REPARACION
+            if e[0] == 'retirado'
+        ]
+    else:
+        estados_filtro = [
+            e for e in SalidaEquipo.ESTADO_REPARACION
+            if e[0] not in ('retirado', 'chatarrerizacion')
+        ]
+    estados_validos = {valor for valor, _etiqueta in estados_filtro}
+    if estado not in estados_validos:
+        estado = ''
+
+    qs = SalidaEquipo.objects.select_related(
+        'ingreso', 'ingreso__cliente', 'registrado_por', 'tecnico_reparo',
+    )
+    if solo_fuera_oficina:
+        qs = qs.filter(fecha_retiro_real__isnull=False).order_by(
+            '-fecha_retiro_real', '-fecha_salida', '-creado',
+        )
+        campo_fecha_filtro = 'fecha_retiro_real'
+        etiqueta_fecha_filtro = 'Fecha de salida física'
+    else:
+        qs = qs.filter(fecha_retiro_real__isnull=True).order_by(
+            '-fecha_salida', '-creado',
+        )
+        campo_fecha_filtro = 'fecha_salida'
+        etiqueta_fecha_filtro = 'Fecha de finalización'
 
     if estado:
         qs = qs.filter(estado_reparacion=estado)
@@ -2953,7 +2984,7 @@ def salida_lista(request):
     if tecnico_salida_filtro:
         qs = qs.filter(tecnico_reparo_id=tecnico_salida_filtro)
 
-    qs = aplicar_rango_fecha(qs, 'fecha_salida', fecha_desde, fecha_hasta)
+    qs = aplicar_rango_fecha(qs, campo_fecha_filtro, fecha_desde, fecha_hasta)
 
     qs = filtrar_objetos_normalizado(qs, q, texto_salida_busqueda)
 
@@ -2963,8 +2994,6 @@ def salida_lista(request):
     from .forms import _queryset_tecnicos
     tecnicos_solo = _queryset_tecnicos()
 
-    # Excluir 'chatarrerizacion' del filtro de vistas públicas
-    estados_filtro = [e for e in SalidaEquipo.ESTADO_REPARACION if e[0] != 'chatarrerizacion']
     total = total_resultados(qs)
     page_obj, querystring = paginar_resultados(request, qs)
 
@@ -2981,12 +3010,13 @@ def salida_lista(request):
         'tecnicos_solo': tecnicos_solo,
         'estados': estados_filtro,
         'total': total,
+        'lista_salidas_confirmadas': solo_fuera_oficina,
     }
     context.update(contexto_rango_fecha(
         fecha_desde,
         fecha_hasta,
         fecha_preset,
-        etiqueta='Fecha salida',
+        etiqueta=etiqueta_fecha_filtro,
     ))
     return render(request, 'salidas/lista.html', context)
 
@@ -3001,14 +3031,14 @@ def salida_registrar(request, ingreso_pk):
         messages.warning(
             request,
             f'El equipo {ingreso.codigo_equipo} está en "{ingreso.get_estado_display()}" '
-            'y se gestiona directamente desde el Registro Administrativo. No tiene salida de reparación.'
+            'y se gestiona directamente desde el Registro Administrativo. No usa la finalización de reparación.'
         )
         return redirect('econotec:ingreso_detalle', pk=ingreso.pk)
 
     if hasattr(ingreso, 'salida'):
         messages.info(
             request,
-            f'El equipo {ingreso.codigo_equipo} ya tiene salida registrada. '
+            f'El equipo {ingreso.codigo_equipo} ya está finalizado. '
             'Puedes editarla aquí.'
         )
         return redirect('econotec:salida_editar', pk=ingreso.salida.pk)
@@ -3016,7 +3046,7 @@ def salida_registrar(request, ingreso_pk):
     if ingreso.valor_acordado is None:
         messages.warning(
             request,
-            'Por favor registra un valor acordado para registrar la salida.'
+            'Por favor registra un valor acordado para finalizar el equipo.'
         )
         return redirect('econotec:ingreso_detalle', pk=ingreso.pk)
 
@@ -3038,14 +3068,13 @@ def salida_registrar(request, ingreso_pk):
             )
             messages.success(
                 request,
-                f'Salida del equipo {ingreso.codigo_equipo} registrada como '
+                f'Equipo {ingreso.codigo_equipo} finalizado como '
                 f'"{salida.get_estado_reparacion_display()}".'
             )
-            # Si la salida es positiva, redirigir a la pantalla de "salida creada"
-            # con el botón de WhatsApp para avisar al cliente.
-            if salida.pendiente_de_retiro_fisico:
-                return redirect('econotec:salida_listo_aviso', pk=salida.pk)
-            return redirect('econotec:salida_lista')
+            # La pantalla siguiente confirma, una sola vez, si el equipo sigue
+            # dentro de la oficina o si su salida física ya ocurrió.
+            request.session['confirmar_ubicacion_salida_id'] = salida.pk
+            return redirect('econotec:salida_listo_aviso', pk=salida.pk)
     else:
         # Saldo pendiente sugerido como valor a cobrar
         saldo = ingreso.diferencia
@@ -3064,7 +3093,7 @@ def salida_registrar(request, ingreso_pk):
         'form': form,
         'ingreso': ingreso,
         'modo': 'registrar',
-        'titulo': f'Registrar Salida — Equipo {ingreso.codigo_equipo}',
+        'titulo': f'Finalizar Equipo — {ingreso.codigo_equipo}',
     })
 
 
@@ -3092,12 +3121,13 @@ def salida_editar(request, pk):
                 registrar_bitacora(
                     request.user,
                     'salida_editada',
-                    f'Salida actualizada en #{salida.ingreso.codigo_equipo}: {salida.get_estado_reparacion_display()}.',
+                    f'Finalización actualizada en #{salida.ingreso.codigo_equipo}: {salida.get_estado_reparacion_display()}.',
                     ingreso=salida.ingreso,
                     salida=salida,
                 )
-            messages.success(request, 'Salida actualizada correctamente.')
-            return redirect('econotec:salida_lista')
+            messages.success(request, 'Finalización actualizada correctamente.')
+            request.session['confirmar_ubicacion_salida_id'] = salida.pk
+            return redirect('econotec:salida_listo_aviso', pk=salida.pk)
     else:
         form = SalidaEquipoForm(instance=salida)
     return render(request, 'salidas/form.html', {
@@ -3105,7 +3135,7 @@ def salida_editar(request, pk):
         'ingreso': salida.ingreso,
         'salida': salida,
         'modo': 'editar',
-        'titulo': f'Editar Salida — Equipo {salida.ingreso.codigo_equipo}',
+        'titulo': f'Editar Finalización — Equipo {salida.ingreso.codigo_equipo}',
         # Si la salida ya está marcada como positiva (retirado/garantía/parcial)
         # y el cliente tiene WhatsApp, generamos el link para reenviar el aviso
         # junto con el PDF de la hoja de salida.
@@ -3231,7 +3261,7 @@ def salida_eliminar(request, pk):
     ingreso.save(update_fields=['estado'])
     messages.success(
         request,
-        f'Salida del equipo {ingreso.codigo_equipo} eliminada. '
+        f'Finalización del equipo {ingreso.codigo_equipo} eliminada. '
         'El equipo vuelve a estado "Pendiente de retiro".'
     )
     return redirect('econotec:salida_lista')
@@ -3695,10 +3725,18 @@ def salida_listo_aviso(request, pk):
         SalidaEquipo.objects.select_related('ingreso', 'ingreso__cliente'),
         pk=pk,
     )
+    confirmacion_pendiente = request.session.pop(
+        'confirmar_ubicacion_salida_id',
+        None,
+    )
     return render(request, 'salidas/listo_aviso.html', {
         'salida': salida,
         'ingreso': salida.ingreso,
         'wa_link': whatsapp_link_equipo_listo(salida),
+        'mostrar_confirmacion_guardado': (
+            confirmacion_pendiente == salida.pk
+            and not salida.cliente_ya_retiro
+        ),
     })
 
 
@@ -3718,9 +3756,18 @@ def salida_marcar_retirada(request, pk):
     if salida.cliente_ya_retiro:
         messages.info(
             request,
-            f'El equipo {salida.ingreso.codigo_equipo} ya estaba marcado como retirado.'
+            f'El equipo {salida.ingreso.codigo_equipo} ya consta fuera de la oficina.'
         )
-        return redirect('econotec:salida_lista')
+        return redirect('econotec:salida_retiros_lista')
+
+    saldo_pendiente = salida.ingreso.diferencia
+    if saldo_pendiente > 0:
+        messages.error(
+            request,
+            f'El equipo {salida.ingreso.codigo_equipo} tiene un saldo pendiente de '
+            f'${saldo_pendiente:.2f}. Debe pagarse antes de confirmar la salida de la oficina.'
+        )
+        return redirect('econotec:salida_listo_aviso', pk=salida.pk)
 
     bod = salida.calcular_bodegaje()
     aplicar = request.POST.get('aplicar_bodegaje') == 'on'
@@ -3789,25 +3836,25 @@ def salida_marcar_retirada(request, pk):
         if aplicar:
             messages.success(
                 request,
-                f'Equipo {salida.ingreso.codigo_equipo} marcado como retirado. '
+                f'Salida de la oficina confirmada para el equipo {salida.ingreso.codigo_equipo}. '
                 f'Se cobraron ${bod["monto"]} de bodegaje ({bod["dias"]} días).'
             )
         else:
             messages.success(
                 request,
-                f'Equipo {salida.ingreso.codigo_equipo} marcado como retirado. '
+                f'Salida de la oficina confirmada para el equipo {salida.ingreso.codigo_equipo}. '
                 f'Bodegaje de ${bod["monto"]} ({bod["dias"]} días) NO cobrado al cliente.'
             )
     else:
         messages.success(
             request,
-            f'Equipo {salida.ingreso.codigo_equipo} marcado como retirado.'
+            f'Salida de la oficina confirmada para el equipo {salida.ingreso.codigo_equipo}.'
         )
 
     next_url = request.POST.get('next') or request.GET.get('next')
     if next_url:
         return redirect(next_url)
-    return redirect('econotec:salida_lista')
+    return redirect('econotec:salida_retiros_lista')
 
 
 @admin_requerido
@@ -3821,7 +3868,7 @@ def salida_deshacer_retiro(request, pk):
     if not salida.cliente_ya_retiro:
         messages.info(
             request,
-            f'El equipo {salida.ingreso.codigo_equipo} no estaba marcado como retirado.'
+            f'El equipo {salida.ingreso.codigo_equipo} no tenía confirmada la salida de la oficina.'
         )
         return redirect('econotec:salida_lista')
 
@@ -3840,7 +3887,7 @@ def salida_deshacer_retiro(request, pk):
     ])
     messages.success(
         request,
-        f'Deshecho: El equipo {salida.ingreso.codigo_equipo} vuelve a estar físicamente en el local.'
+        f'Deshecho: el equipo {salida.ingreso.codigo_equipo} vuelve a constar dentro de la oficina.'
     )
     return redirect('econotec:salida_lista')
 

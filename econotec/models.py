@@ -1475,10 +1475,10 @@ class SalidaEquipo(models.Model):
         ('revision', '🔎 Revisión'),
         ('cliente_no_acepta', '🚫 Cliente no quiso reparar'),
         ('no_reparable', '❌ No se pudo reparar'),
-        ('garantia', '🛡 Salida por garantía'),
-        ('garantia_fallos_adicionales', '🛡 Salida + fallos adicionales'),
-        ('cortesia', 'Salida de cortesía'),
-        ('retirado', '✅ Retirado por el cliente'),
+        ('garantia', '🛡 Garantía finalizada'),
+        ('garantia_fallos_adicionales', '🛡 Garantía finalizada + fallos adicionales'),
+        ('cortesia', 'Equipo de cortesía finalizado'),
+        ('retirado', '✅ Salió de la oficina'),
         ('chatarrerizacion', '♻️ Chatarrerización'),
     ]
 
@@ -1499,19 +1499,19 @@ class SalidaEquipo(models.Model):
     ingreso = models.OneToOneField(
         IngresoEquipo, on_delete=models.PROTECT,
         related_name='salida',
-        verbose_name='Equipo entregado',
+        verbose_name='Equipo finalizado',
     )
 
     # ── Fechas ───────────────────────────────────────────
     fecha_salida = models.DateField(
-        verbose_name='Fecha de entrega al cliente',
+        verbose_name='Fecha de finalización',
     )
 
     # ── Estado del trabajo (LO MÁS IMPORTANTE) ───────────
     estado_reparacion = models.CharField(
         max_length=30, choices=ESTADO_REPARACION,
-        verbose_name='Estado de la salida',
-        help_text='¿Cómo termina este equipo? La opción más común es "Retirado / Entregado conforme".'
+        verbose_name='Resultado final del equipo',
+        help_text='¿Cómo termina este equipo? La opción más común es "Reparado — pendiente de retiro".'
     )
 
     # ── Técnico que REPARÓ el equipo (se declara en la salida) ───────────
@@ -1529,7 +1529,7 @@ class SalidaEquipo(models.Model):
         limit_choices_to={'is_active': True},
         verbose_name='Técnico que reparó',
         help_text='Técnico responsable de la reparación. Este dato define quién '
-                  'recibe el resultado positivo o negativo de la salida.',
+                  'recibe el resultado positivo o negativo de la finalización.',
     )
 
     # ── Observaciones (opcionales, casi siempre vacío en retiros normales)
@@ -1549,7 +1549,7 @@ class SalidaEquipo(models.Model):
     valor_final_cobrado = models.DecimalField(
         max_digits=10, decimal_places=2,
         default=Decimal('0.00'),
-        verbose_name='Valor cobrado en esta salida (USD)',
+        verbose_name='Valor cobrado al finalizar (USD)',
         help_text='Si ya está totalmente pagado, puedes dejar 0.'
     )
     valor_acordado_revision = models.DecimalField(
@@ -1725,8 +1725,8 @@ class SalidaEquipo(models.Model):
     actualizado = models.DateTimeField(auto_now=True)
 
     class Meta:
-        verbose_name = 'Salida de equipo'
-        verbose_name_plural = 'Salidas de equipos'
+        verbose_name = 'Equipo finalizado'
+        verbose_name_plural = 'Equipos finalizados'
         ordering = ['-fecha_salida', '-creado']
 
     @property

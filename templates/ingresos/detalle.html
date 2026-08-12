@@ -686,12 +686,12 @@
                 <h3>Servicio de cortesía</h3>
                 <div class="big-num" style="background:#e0f2fe; color:#0369a1;">SIN COBRO</div>
                 <div style="text-align:center; font-size:13px; color:#075985; margin-top:8px;">
-                    Valor acordado $0.00. La salida se registrará únicamente como Salida de cortesía.
+                    Valor acordado $0.00. El equipo se registrará únicamente como finalizado de cortesía.
                 </div>
             {% elif ingreso.estado == 'donado' %}
                 <h3>🎁 Equipo donado</h3>
                 <div class="big-num" style="background:#ecfdf5; color:#15803d;">GRATIS</div>
-                <div style="text-align:center; font-size:13px; color:#166534; margin-top:8px;">No genera pago, egreso ni salida de reparación.</div>
+                <div style="text-align:center; font-size:13px; color:#166534; margin-top:8px;">No genera pago, egreso ni cobro por reparación.</div>
             {% else %}
                 <h3>🧾 Compra administrativa</h3>
                 <div class="big-num" style="background:#f0fdfa; color:#0f766e;">{{ ingreso.valor_acordado|dinero_signo }}</div>
@@ -856,15 +856,15 @@
 
                 {% if ingreso.sede != 'ventas' %}
                     {% if salida %}
-                        <a href="{% url 'econotec:salida_editar' pk=salida.pk %}" class="btn btn-warning">📤 Editar Salida</a>
-                        <a href="{% url 'econotec:salida_pdf' pk=salida.pk %}" class="btn btn-primary">📄 PDF Salida</a>
+                        <a href="{% url 'econotec:salida_editar' pk=salida.pk %}" class="btn btn-warning">✅ Editar finalización</a>
+                        <a href="{% url 'econotec:salida_pdf' pk=salida.pk %}" class="btn btn-primary">📄 PDF del equipo</a>
                     {% else %}
                         {% if ingreso.valor_acordado is None %}
                             <button type="button" class="btn btn-salida-bloqueada" onclick="alertaValorAcordadoPendiente()">
-                                📤 Registrar equipo reparado / Salida
+                                ✅ Registrar equipo listo / finalizado
                             </button>
                         {% else %}
-                            <a href="{% url 'econotec:salida_registrar' ingreso_pk=ingreso.pk %}" class="btn btn-primary">📤 Registrar equipo reparado / Salida</a>
+                            <a href="{% url 'econotec:salida_registrar' ingreso_pk=ingreso.pk %}" class="btn btn-primary">✅ Registrar equipo listo / finalizado</a>
                         {% endif %}
                     {% endif %}
                 {% endif %}
@@ -883,8 +883,8 @@
 
         {% if salida %}
         <div class="info-card" style="margin-top:18px; border-left:4px solid var(--success);">
-            <h3>📤 Salida Registrada</h3>
-            <div class="field-row"><span class="label">Fecha</span><span class="value">{{ salida.fecha_salida|date:"d/m/Y" }}</span></div>
+            <h3>✅ Equipo finalizado</h3>
+            <div class="field-row"><span class="label">Fecha de finalización</span><span class="value">{{ salida.fecha_salida|date:"d/m/Y" }}</span></div>
             <div class="field-row"><span class="label">Estado</span><span class="value"><span class="badge badge-{{ salida.estado_reparacion }}">{{ salida.get_estado_reparacion_display }}</span></span></div>
             <div class="field-row"><span class="label">Cobrado</span><span class="value">{{ salida.valor_final_cobrado|dinero_signo }}</span></div>
             <div class="field-row">
@@ -912,7 +912,7 @@
 
 <script>
     function alertaValorAcordadoPendiente() {
-        var mensaje = 'Por favor registra un valor acordado para registrar la salida.';
+        var mensaje = 'Por favor registra un valor acordado para finalizar el equipo.';
         if (typeof Swal !== 'undefined') {
             Swal.fire({
                 icon: 'warning',
