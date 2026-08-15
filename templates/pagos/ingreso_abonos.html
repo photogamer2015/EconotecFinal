@@ -3,6 +3,173 @@
 
 {% block title %}{% if ingreso.sede == 'ventas' and venta_con_historial_abonos %}Abonos Venta{% elif ingreso.sede == 'ventas' %}Pago Venta{% else %}Abonos Equipo{% endif %} {{ ingreso.codigo_equipo }} — Econotec{% endblock %}
 
+{% block extra_head %}
+<style>
+    .valor-acordado-card {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    .valor-acordado-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 10px;
+    }
+
+    .valor-acordado-label {
+        color: #888;
+        font-size: 11px;
+        font-weight: 800;
+        letter-spacing: 0;
+        line-height: 1.25;
+        text-transform: uppercase;
+    }
+
+    .btn-editar-valor-acordado {
+        align-items: center;
+        background: rgba(249, 118, 24, 0.08);
+        border: 1px solid rgba(249, 118, 24, 0.24);
+        border-radius: 8px;
+        color: var(--primary);
+        cursor: pointer;
+        display: inline-flex;
+        font-size: 12px;
+        font-weight: 800;
+        justify-content: center;
+        line-height: 1;
+        min-height: 30px;
+        padding: 8px 10px;
+        text-align: center;
+        white-space: nowrap;
+    }
+
+    .btn-editar-valor-acordado:hover {
+        background: rgba(249, 118, 24, 0.14);
+        border-color: rgba(249, 118, 24, 0.38);
+    }
+
+    .valor-acordado-modal {
+        align-items: center;
+        background: rgba(15, 23, 42, 0.55);
+        display: none;
+        inset: 0;
+        justify-content: center;
+        overflow-y: auto;
+        padding: 18px;
+        position: fixed;
+        z-index: 10020;
+    }
+
+    .valor-acordado-modal.show {
+        display: flex;
+    }
+
+    .valor-acordado-dialog {
+        background: var(--card-bg, #fff);
+        border-radius: 14px;
+        box-sizing: border-box;
+        box-shadow: 0 24px 70px rgba(15, 23, 42, 0.28);
+        color: var(--text-main);
+        max-height: calc(100dvh - 36px);
+        max-width: 460px;
+        overflow-y: auto;
+        padding: 24px;
+        width: min(100%, 460px);
+    }
+
+    .valor-acordado-dialog h3 {
+        color: var(--text-main);
+        font-size: 22px;
+        line-height: 1.2;
+        margin: 0 0 8px;
+    }
+
+    .valor-acordado-dialog p {
+        color: var(--text-muted);
+        font-size: 14px;
+        line-height: 1.45;
+        margin: 0 0 16px;
+    }
+
+    .valor-acordado-field label {
+        color: var(--text-main);
+        display: block;
+        font-size: 13px;
+        font-weight: 800;
+        margin-bottom: 7px;
+    }
+
+    .valor-acordado-field .form-input {
+        font-size: 18px;
+        font-weight: 800;
+        max-width: 100%;
+        width: 100%;
+    }
+
+    .valor-acordado-actions {
+        display: flex;
+        gap: 10px;
+        justify-content: flex-end;
+        margin-top: 20px;
+    }
+
+    .valor-acordado-actions .btn {
+        margin: 0;
+        min-height: 42px;
+    }
+
+    @media (max-width: 768px) {
+        .valor-acordado-dialog {
+            width: min(100%, 440px);
+        }
+    }
+
+    @media (max-width: 600px) {
+        .valor-acordado-modal {
+            align-items: flex-start;
+            padding: max(14px, env(safe-area-inset-top)) 12px max(14px, env(safe-area-inset-bottom));
+        }
+
+        .valor-acordado-dialog {
+            border-radius: 12px;
+            margin: 18px 0;
+            max-height: calc(100dvh - 28px);
+            padding: 20px;
+        }
+
+        .valor-acordado-actions {
+            flex-direction: column-reverse;
+        }
+
+        .valor-acordado-actions .btn {
+            width: 100%;
+        }
+    }
+
+    @media (max-width: 420px) {
+        .valor-acordado-head {
+            align-items: stretch;
+            flex-direction: column;
+        }
+
+        .btn-editar-valor-acordado {
+            min-height: 38px;
+            width: 100%;
+        }
+
+        .valor-acordado-dialog h3 {
+            font-size: 19px;
+        }
+
+        .valor-acordado-dialog p {
+            font-size: 13px;
+        }
+    }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="crumb">
     <a href="{% url 'econotec:bienvenida' %}">Inicio</a> /
@@ -44,11 +211,18 @@
 
 <!-- Resumen de pagos -->
 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 24px;">
-    <div class="card-box" style="border-left: 4px solid var(--primary); padding: 16px;">
-        <div style="font-size: 11px; color: #888; text-transform: uppercase;">
-            {% if ingreso.salida.estado_reparacion == 'revision' %}Valor revisión{% else %}Valor acordado{% endif %}
+    <div class="card-box valor-acordado-card" style="border-left: 4px solid var(--primary); padding: 16px;">
+        <div class="valor-acordado-head">
+            <div class="valor-acordado-label">
+                {% if ingreso.salida.estado_reparacion == 'revision' %}Valor revisión{% else %}Valor acordado de este equipo{% endif %}
+            </div>
+            {% if puede_editar_valor_acordado %}
+                <button type="button" id="btn-editar-valor-acordado" class="btn-editar-valor-acordado" data-open-valor-acordado>
+                    Editar
+                </button>
+            {% endif %}
         </div>
-        <div style="font-size: 22px; font-weight: 800; color: var(--secondary); margin-top: 4px;">
+        <div style="font-size: 22px; font-weight: 800; color: var(--secondary);">
             {% if ingreso.salida.estado_reparacion == 'revision' %}{{ ingreso.valor_efectivo_a_cobrar|dinero_signo }}{% else %}{{ ingreso.valor_acordado|dinero_signo }}{% endif %}
         </div>
     </div>
@@ -270,5 +444,148 @@
         <a href="{% url 'econotec:abono_crear' ingreso_pk=ingreso.pk %}" class="btn btn-primary">+ Registrar primer abono</a>
     {% endif %}
 </div>
+{% endif %}
+
+{% if puede_editar_valor_acordado %}
+<div class="valor-acordado-modal" id="valor-acordado-modal" aria-hidden="true">
+    <div class="valor-acordado-dialog" role="dialog" aria-modal="true" aria-labelledby="valor-acordado-title">
+        <h3 id="valor-acordado-title">Editar valor acordado</h3>
+        <p>Actualiza solo el valor acordado de este equipo. El saldo se recalculará al guardar.</p>
+
+        <form method="post" action="{% url 'econotec:ingreso_valor_acordado_editar' pk=ingreso.pk %}" id="valor-acordado-form" novalidate>
+            {% csrf_token %}
+            <div class="valor-acordado-field">
+                <label for="id_valor_acordado_pago">Valor acordado de este equipo</label>
+                <input
+                    type="text"
+                    name="valor_acordado"
+                    id="id_valor_acordado_pago"
+                    class="form-input"
+                    inputmode="decimal"
+                    autocomplete="off"
+                    required
+                    placeholder="Ej.: 20.00"
+                    data-original="{{ ingreso.valor_acordado|default_if_none:0|stringformat:'.2f' }}"
+                    value="{{ ingreso.valor_acordado|default_if_none:0|stringformat:'.2f' }}"
+                >
+            </div>
+            <div class="valor-acordado-actions">
+                <button type="button" class="btn btn-secondary" id="valor-acordado-cancelar">Cancelar</button>
+                <button type="submit" class="btn btn-primary" id="valor-acordado-aceptar">Aceptar</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="valor-acordado-modal" id="valor-acordado-confirm-modal" aria-hidden="true">
+    <div class="valor-acordado-dialog" role="dialog" aria-modal="true" aria-labelledby="valor-acordado-confirm-title">
+        <h3 id="valor-acordado-confirm-title">¿Está seguro que quieres guardar los cambios?</h3>
+        <p>Se actualizará el valor acordado y el saldo pendiente de este equipo.</p>
+        <div class="valor-acordado-actions">
+            <button type="button" class="btn btn-secondary" id="valor-acordado-confirm-no">No</button>
+            <button type="button" class="btn btn-primary" id="valor-acordado-confirm-si">Sí</button>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+{% if puede_editar_valor_acordado %}
+<script>
+    (function() {
+        var btnAbrir = document.getElementById('btn-editar-valor-acordado');
+        var modalEditar = document.getElementById('valor-acordado-modal');
+        var modalConfirmar = document.getElementById('valor-acordado-confirm-modal');
+        var form = document.getElementById('valor-acordado-form');
+        var input = document.getElementById('id_valor_acordado_pago');
+        var btnCancelar = document.getElementById('valor-acordado-cancelar');
+        var btnNo = document.getElementById('valor-acordado-confirm-no');
+        var btnSi = document.getElementById('valor-acordado-confirm-si');
+
+        if (!btnAbrir || !modalEditar || !modalConfirmar || !form || !input || !btnCancelar || !btnNo || !btnSi) {
+            return;
+        }
+
+        function abrirModal(modal) {
+            modal.classList.add('show');
+            modal.setAttribute('aria-hidden', 'false');
+        }
+
+        function cerrarModal(modal) {
+            modal.classList.remove('show');
+            modal.setAttribute('aria-hidden', 'true');
+        }
+
+        function enfocarInput() {
+            window.setTimeout(function() {
+                input.focus();
+                input.select();
+            }, 80);
+        }
+
+        function restablecerValor() {
+            input.value = input.getAttribute('data-original') || input.value;
+            input.setCustomValidity('');
+        }
+
+        function formularioValido() {
+            if (typeof form.reportValidity === 'function') {
+                return form.reportValidity();
+            }
+            return input.value.trim() !== '';
+        }
+
+        btnAbrir.addEventListener('click', function() {
+            abrirModal(modalEditar);
+            enfocarInput();
+        });
+
+        btnCancelar.addEventListener('click', function() {
+            restablecerValor();
+            cerrarModal(modalEditar);
+        });
+
+        form.addEventListener('submit', function(event) {
+            event.preventDefault();
+            if (!formularioValido()) {
+                return;
+            }
+            cerrarModal(modalEditar);
+            abrirModal(modalConfirmar);
+        });
+
+        btnNo.addEventListener('click', function() {
+            cerrarModal(modalConfirmar);
+            abrirModal(modalEditar);
+            enfocarInput();
+        });
+
+        btnSi.addEventListener('click', function() {
+            btnSi.disabled = true;
+            form.submit();
+        });
+
+        [modalEditar, modalConfirmar].forEach(function(modal) {
+            modal.addEventListener('click', function(event) {
+                if (event.target === modal) {
+                    cerrarModal(modal);
+                }
+            });
+        });
+
+        document.addEventListener('keydown', function(event) {
+            if (event.key !== 'Escape') {
+                return;
+            }
+            if (modalConfirmar.classList.contains('show')) {
+                cerrarModal(modalConfirmar);
+            } else if (modalEditar.classList.contains('show')) {
+                restablecerValor();
+                cerrarModal(modalEditar);
+            }
+        });
+    })();
+</script>
 {% endif %}
 {% endblock %}

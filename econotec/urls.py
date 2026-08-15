@@ -130,6 +130,8 @@ urlpatterns = [
     path('pagos/exportar/', views_pagos.pagos_export, name='pagos_export'),
     path('ingresos/<int:pk>/abonos/',
          views_pagos.ingreso_abonos, name='ingreso_abonos'),
+    path('ingresos/<int:pk>/valor-acordado/',
+         views_pagos.ingreso_valor_acordado_editar, name='ingreso_valor_acordado_editar'),
     path('ingresos/<int:ingreso_pk>/abonos/crear/',
          views_pagos.abono_crear, name='abono_crear'),
     path('ingresos/<int:ingreso_pk>/abonos/<int:abono_pk>/editar/',

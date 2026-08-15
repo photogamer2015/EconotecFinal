@@ -901,6 +901,54 @@ class IngresoEquipoForm(forms.ModelForm):
 
 
 # ─────────────────────────────────────────────────────────
+# Pagos
+# ─────────────────────────────────────────────────────────
+
+class ValorAcordadoPagoForm(forms.Form):
+    valor_acordado = forms.CharField(
+        required=True,
+        label='Valor acordado (USD)',
+        widget=forms.TextInput(attrs={
+            'class': 'form-input',
+            'id': 'id_valor_acordado_pago',
+            'placeholder': 'Ej.: 20.00',
+            'inputmode': 'decimal',
+            'autocomplete': 'off',
+        }),
+    )
+
+    def clean_valor_acordado(self):
+        valor = (self.cleaned_data.get('valor_acordado') or '').strip()
+        if not valor:
+            raise forms.ValidationError('Ingresa el valor acordado.')
+
+        normalizado = valor.replace(',', '.')
+        partes = normalizado.split('.', 1)
+        entero = partes[0]
+        decimales = partes[1] if len(partes) == 2 else ''
+        if (
+            normalizado.count('.') > 1
+            or not entero
+            or not entero.isdigit()
+            or (len(partes) == 2 and (not decimales or not decimales.isdigit()))
+            or len(decimales) > 2
+        ):
+            raise forms.ValidationError('Ingresa un monto válido. Ejemplo: 20.00')
+        if len(entero.lstrip('0') or '0') > 8:
+            raise forms.ValidationError('El valor acordado es demasiado alto.')
+
+        try:
+            monto = Decimal(normalizado)
+        except InvalidOperation:
+            raise forms.ValidationError('Ingresa un monto válido. Ejemplo: 20.00')
+
+        if monto < Decimal('0.00'):
+            raise forms.ValidationError('El valor acordado no puede ser negativo.')
+
+        return monto.quantize(Decimal('0.01'))
+
+
+# ─────────────────────────────────────────────────────────
 # Abono
 # ─────────────────────────────────────────────────────────
 

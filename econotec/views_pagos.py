@@ -15,7 +15,7 @@ from django.views.decorators.http import require_POST
 
 from .busqueda import filtrar_objetos_normalizado, texto_ingreso_busqueda
 from .bitacora import registrar_bitacora
-from .forms import AbonoForm
+from .forms import AbonoForm, ValorAcordadoPagoForm
 from .models import Abono, IngresoEquipo
 from .pagination import paginar_resultados
 from .permisos import tecnico_requerido, asesor_requerido
@@ -37,6 +37,24 @@ def _venta_tiene_historial_abonos(ingreso):
     valor = ingreso.valor_efectivo_a_cobrar or Decimal('0.00')
     anticipo = ingreso.abono_anticipo or Decimal('0.00')
     return ingreso.abonos.exists() or (valor > Decimal('0.00') and anticipo < valor)
+
+
+def _puede_editar_valor_acordado_en_pagos(ingreso, salida=None):
+    if ingreso.sede == 'ventas':
+        return False
+    if ingreso.estado in ('cortesia', 'donado', 'equipo_a_comprar'):
+        return False
+
+    salida = salida if salida is not None else getattr(ingreso, 'salida', None)
+    if salida and salida.estado_reparacion == 'revision':
+        return False
+    return True
+
+
+def _valor_acordado_log(valor):
+    if valor is None:
+        return 'pendiente'
+    return f'${valor:.2f}'
 
 
 @asesor_requerido
@@ -232,17 +250,71 @@ def ingreso_abonos(request, pk):
     abonos = ingreso.abonos.select_related('registrado_por').order_by('-fecha', '-creado')
     salida = getattr(ingreso, 'salida', None)
     venta_con_historial_abonos = _venta_tiene_historial_abonos(ingreso)
+    puede_editar_valor_acordado = _puede_editar_valor_acordado_en_pagos(ingreso, salida)
     return render(request, 'pagos/ingreso_abonos.html', {
         'ingreso': ingreso,
         'abonos': abonos,
         'salida': salida,
         'venta_con_historial_abonos': venta_con_historial_abonos,
+        'puede_editar_valor_acordado': puede_editar_valor_acordado,
         'puede_registrar_abono': ingreso.estado != 'cortesia' and (
             ingreso.sede != 'ventas' or (
                 venta_con_historial_abonos and ingreso.diferencia > Decimal('0.00')
             )
         ),
     })
+
+
+@asesor_requerido
+@require_POST
+def ingreso_valor_acordado_editar(request, pk):
+    ingreso = get_object_or_404(
+        IngresoEquipo.objects.select_related('cliente'),
+        pk=pk,
+    )
+    salida = getattr(ingreso, 'salida', None)
+    if not _puede_editar_valor_acordado_en_pagos(ingreso, salida):
+        messages.warning(
+            request,
+            'El valor acordado de este registro no se edita desde Pagos.',
+        )
+        return redirect('econotec:ingreso_abonos', pk=ingreso.pk)
+
+    form = ValorAcordadoPagoForm(request.POST)
+    if not form.is_valid():
+        messages.error(request, 'Ingresa un valor acordado válido.')
+        return redirect('econotec:ingreso_abonos', pk=ingreso.pk)
+
+    valor_anterior = ingreso.valor_acordado
+    valor_nuevo = form.cleaned_data['valor_acordado']
+    if valor_anterior == valor_nuevo:
+        messages.info(request, 'El valor acordado no cambió.')
+        return redirect('econotec:ingreso_abonos', pk=ingreso.pk)
+
+    update_fields = ['valor_acordado']
+    ingreso.valor_acordado = valor_nuevo
+    if ingreso.valor_pendiente_reporte:
+        ingreso.valor_pendiente_reporte = ''
+        ingreso.valor_pendiente_reporte_por = None
+        ingreso.valor_pendiente_reporte_actualizado = None
+        update_fields.extend([
+            'valor_pendiente_reporte',
+            'valor_pendiente_reporte_por',
+            'valor_pendiente_reporte_actualizado',
+        ])
+    ingreso.save(update_fields=update_fields)
+
+    registrar_bitacora(
+        request.user,
+        'ingreso_editado',
+        (
+            f'Valor acordado actualizado en #{ingreso.codigo_equipo}: '
+            f'{_valor_acordado_log(valor_anterior)} a {_valor_acordado_log(valor_nuevo)}.'
+        ),
+        ingreso=ingreso,
+    )
+    messages.success(request, 'Valor acordado actualizado.')
+    return redirect('econotec:ingreso_abonos', pk=ingreso.pk)
 
 
 @asesor_requerido

@@ -5046,6 +5046,58 @@ class VentasTests(TestCase):
         response = self.client.get(reverse('econotec:pagos_ventas_lista'))
         self.assertContains(response, 'Ver abono / Historial')
 
+    def test_ingreso_abonos_muestra_editor_de_valor_acordado(self):
+        ingreso = self.crear_ingreso_reparacion(
+            valor_acordado=Decimal('20.00'),
+            abono_anticipo=Decimal('0.00'),
+        )
+
+        response = self.client.get(reverse('econotec:ingreso_abonos', kwargs={'pk': ingreso.pk}))
+
+        self.assertContains(response, 'Valor acordado de este equipo')
+        self.assertContains(response, 'id="btn-editar-valor-acordado"')
+        self.assertContains(response, 'Editar valor acordado')
+        self.assertContains(response, 'id="valor-acordado-confirm-modal"')
+        self.assertContains(response, '¿Está seguro que quieres guardar los cambios?')
+        self.assertContains(
+            response,
+            reverse('econotec:ingreso_valor_acordado_editar', kwargs={'pk': ingreso.pk}),
+        )
+
+    def test_editar_valor_acordado_desde_abonos_actualiza_saldo(self):
+        ingreso = self.crear_ingreso_reparacion(
+            valor_acordado=Decimal('20.00'),
+            abono_anticipo=Decimal('5.00'),
+        )
+
+        response = self.client.post(
+            reverse('econotec:ingreso_valor_acordado_editar', kwargs={'pk': ingreso.pk}),
+            {'valor_acordado': '35.50'},
+        )
+
+        self.assertRedirects(response, reverse('econotec:ingreso_abonos', kwargs={'pk': ingreso.pk}))
+        ingreso.refresh_from_db()
+        self.assertEqual(ingreso.valor_acordado, Decimal('35.50'))
+        self.assertEqual(ingreso.diferencia, Decimal('30.50'))
+        evento = BitacoraTecnico.objects.get(ingreso=ingreso, tipo='ingreso_editado')
+        self.assertIn('Valor acordado actualizado', evento.texto)
+        self.assertIn('$20.00 a $35.50', evento.texto)
+
+    def test_editar_valor_acordado_rechaza_monto_invalido(self):
+        ingreso = self.crear_ingreso_reparacion(valor_acordado=Decimal('20.00'))
+
+        response = self.client.post(
+            reverse('econotec:ingreso_valor_acordado_editar', kwargs={'pk': ingreso.pk}),
+            {'valor_acordado': '20.999'},
+        )
+
+        self.assertRedirects(response, reverse('econotec:ingreso_abonos', kwargs={'pk': ingreso.pk}))
+        ingreso.refresh_from_db()
+        self.assertEqual(ingreso.valor_acordado, Decimal('20.00'))
+        self.assertFalse(
+            BitacoraTecnico.objects.filter(ingreso=ingreso, tipo='ingreso_editado').exists()
+        )
+
     def test_formulario_abono_mixto_conserva_el_monto_total_a_dividir(self):
         ingreso = self.crear_ingreso_reparacion(
             valor_acordado=Decimal('5.00'),
