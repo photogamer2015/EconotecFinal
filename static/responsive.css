@@ -5,6 +5,7 @@
  */
 
 .mobile-nav-toggle,
+.mobile-profile-trigger,
 .table-mobile-hint {
     display: none;
 }
@@ -87,6 +88,28 @@
     header.top .brand-actions {
         width: auto !important;
         margin: 0 !important;
+    }
+
+    .js header.top .mobile-profile-trigger {
+        display: inline-flex !important;
+        align-items: center;
+        justify-content: center;
+        gap: 7px;
+        min-height: 42px;
+        padding: 8px 12px !important;
+        border-radius: 999px !important;
+        background: rgba(255, 255, 255, 0.15) !important;
+        border: 1px solid rgba(255, 255, 255, 0.3) !important;
+        color: #ffffff !important;
+        font-size: 12px !important;
+        font-weight: 850 !important;
+        line-height: 1;
+        white-space: nowrap;
+    }
+
+    .js header.top .mobile-profile-trigger:hover {
+        background: rgba(255, 255, 255, 0.24) !important;
+        border-color: rgba(250, 204, 21, 0.48) !important;
     }
 
     header.top .top-inventory-link {
@@ -505,7 +528,15 @@
         font-size: 18px !important;
     }
 
+    .js header.top .mobile-profile-trigger {
+        width: 44px !important;
+        min-width: 44px;
+        padding: 0 !important;
+        font-size: 18px !important;
+    }
+
     .top-inventory-text,
+    .mobile-profile-text,
     .mobile-nav-toggle-text {
         position: absolute !important;
         width: 1px !important;
@@ -640,6 +671,7 @@
 
 @media print {
     .mobile-nav-toggle,
+    .mobile-profile-trigger,
     .table-mobile-hint,
     .list-pagination {
         display: none !important;

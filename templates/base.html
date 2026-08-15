@@ -1426,6 +1426,12 @@
                         <span class="top-inventory-text" aria-hidden="true">Inventario</span>
                         <span class="visually-hidden">📦 Inventario</span>
                     </a>
+                    {% if es_tecnico or es_asesor %}
+                        <button type="button" id="btn-perfil-mobile" class="mobile-profile-trigger" data-perfil-trigger title="Ver mi perfil" aria-label="Ver mi perfil">
+                            <span aria-hidden="true">👤</span>
+                            <span class="mobile-profile-text" aria-hidden="true">Perfil</span>
+                        </button>
+                    {% endif %}
                 </div>
             {% endif %}
             {% if user.is_authenticated %}
@@ -1531,7 +1537,7 @@
                 {% endif %}
                 
                 {% if es_tecnico or es_asesor %}
-                <button type="button" id="btn-perfil" title="Ver mi perfil" style="background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.3); color: white; border-radius: 20px; padding: 5px 14px; margin-right: 10px; cursor: pointer; transition: 0.2s; font-weight: bold; margin-left: 5px;">
+                <button type="button" id="btn-perfil" data-perfil-trigger title="Ver mi perfil" style="background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.3); color: white; border-radius: 20px; padding: 5px 14px; margin-right: 10px; cursor: pointer; transition: 0.2s; font-weight: bold; margin-left: 5px;">
                     👤 Perfil
                 </button>
                 {% endif %}
@@ -2449,7 +2455,7 @@
         })();
 
         document.addEventListener('DOMContentLoaded', function() {
-	            var btnPerfil = document.getElementById('btn-perfil');
+	            var botonesPerfil = document.querySelectorAll('[data-perfil-trigger]');
 	            var modalPerfil = document.getElementById('perfil-modal');
 	            var perfilColorButtons = document.querySelectorAll('.perfil-color-btn');
 	            var btnBitacora = document.getElementById('btn-bitacora');
@@ -2635,8 +2641,9 @@
                 });
             });
             
-            if (btnPerfil && modalPerfil) {
-                btnPerfil.addEventListener('click', function() {
+	            if (botonesPerfil.length && modalPerfil) {
+	                botonesPerfil.forEach(function(btnPerfil) {
+	                    btnPerfil.addEventListener('click', function() {
                     modalPerfil.style.display = 'flex';
                     
                     fetch('/api/perfil/')
@@ -2711,9 +2718,10 @@
                                 fill.style.background = data.color;
                                 pText.textContent = data.total + ' operaciones (Nivel Máximo)';
                             }
-                        });
-                });
-            }
+	                        });
+	                    });
+	                });
+	            }
         });
 
         function mostrarAyudaPerfil() {
