@@ -6271,7 +6271,19 @@ class VentasTests(TestCase):
                 self.assertNotContains(response, '¡Equipo reparado y listo para retiro!')
 
     def test_whatsapp_retirado_usa_mensaje_de_cierre_sin_bodegaje(self):
+        User = get_user_model()
+        tecnico_ingreso = User.objects.create_user(
+            username='TecnicoIngresoWhatsApp',
+            first_name='Tecnico',
+            last_name='Ingreso',
+        )
+        tecnico_reparo = User.objects.create_user(
+            username='TecnicoReparoWhatsApp',
+            first_name='Tecnico',
+            last_name='Reparador',
+        )
         ingreso = self.crear_ingreso_reparacion(
+            tecnico_encargado=tecnico_ingreso,
             valor_acordado=Decimal('25.00'),
             abono_anticipo=Decimal('25.00'),
         )
@@ -6280,7 +6292,7 @@ class VentasTests(TestCase):
             fecha_salida=date(2026, 7, 17),
             fecha_retiro_real=date(2026, 7, 18),
             estado_reparacion='retirado',
-            tecnico_reparo=self.usuario,
+            tecnico_reparo=tecnico_reparo,
             valor_final_cobrado=Decimal('0.00'),
             metodo_pago_final='sin_pago',
             registrado_por=self.usuario,
@@ -6293,6 +6305,9 @@ class VentasTests(TestCase):
         self.assertIn('Gracias por confiar su equipo a Econotec', texto)
         self.assertIn('reparación de sus próximos equipos', texto)
         self.assertIn('Fecha de retiro: 18/07/2026', texto)
+        self.assertIn('Técnico que reparó: Tecnico Reparador', texto)
+        self.assertNotIn('Técnico encargado', texto)
+        self.assertNotIn('Tecnico Ingreso', texto)
         self.assertNotIn('listo para retiro', texto)
         self.assertNotIn('coordine con nosotros', texto)
         self.assertNotIn('Política de bodegaje', texto)

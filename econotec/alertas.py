@@ -225,7 +225,7 @@ def whatsapp_link_equipo_listo(salida):
 
     # Saludo personalizado por género no detectable → usamos "estimado(a)"
     nombre_cliente = (ingreso.cliente.nombres or '').split(' ')[0] or 'cliente'
-    nombre_tecnico = ingreso.tecnico_encargado_nombre or 'el equipo técnico de Econotec'
+    nombre_tecnico = salida.tecnico_reparo_nombre or 'el equipo técnico de Econotec'
 
     # Estado del trabajo en términos claros para el cliente
     estado_label = salida.get_estado_reparacion_display()
@@ -264,7 +264,7 @@ def whatsapp_link_equipo_listo(salida):
             f"{linea_equipo}\n"
             f"• Estado del trabajo: {estado_label}\n"
             f"• Fecha de retiro: {fecha_retiro.strftime('%d/%m/%Y')}\n"
-            f"• Técnico encargado: {nombre_tecnico}\n\n"
+            f"• Técnico que reparó: {nombre_tecnico}\n\n"
             f"{linea_saldo}"
             f"{linea_garantia}"
             f"\nGracias por confiar su equipo a Econotec. "
@@ -285,7 +285,7 @@ def whatsapp_link_equipo_listo(salida):
     mensaje += (
         f"\n• Estado del trabajo: {estado_label}\n"
         f"• Fecha de salida: {salida.fecha_salida.strftime('%d/%m/%Y')}\n"
-        f"• Técnico encargado: {nombre_tecnico}\n\n"
+        f"• Técnico que reparó: {nombre_tecnico}\n\n"
         f"{linea_saldo}"
         f"{linea_garantia}"
         f"\nPor favor, coordine con nosotros el día y horario para pasar a retirar su equipo. "
