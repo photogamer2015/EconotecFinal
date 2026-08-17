@@ -5116,6 +5116,119 @@ class VentasTests(TestCase):
         self.assertContains(response, 'id="abono_monto_2"')
         self.assertContains(response, 'resumen-pago-mixto')
 
+    def test_formulario_abono_muestra_accion_de_registrar_y_dar_salida(self):
+        ingreso = self.crear_ingreso_reparacion(
+            valor_acordado=Decimal('28.00'),
+            abono_anticipo=Decimal('0.00'),
+        )
+        SalidaEquipo.objects.create(
+            ingreso=ingreso,
+            fecha_salida=date.today(),
+            estado_reparacion='pendiente_retiro',
+            tecnico_reparo=self.usuario,
+            valor_final_cobrado=Decimal('0.00'),
+            metodo_pago_final='sin_pago',
+            registrado_por=self.usuario,
+        )
+
+        response = self.client.get(
+            reverse('econotec:abono_crear', kwargs={'ingreso_pk': ingreso.pk})
+        )
+
+        self.assertContains(response, 'Registrar Abono y Dar Salida del Equipo')
+        self.assertContains(response, 'value="registrar_y_salida"')
+        self.assertContains(response, 'value="registrar"')
+
+    def test_abono_completo_puede_confirmar_salida_fisica(self):
+        ingreso = self.crear_ingreso_reparacion(
+            valor_acordado=Decimal('28.00'),
+            abono_anticipo=Decimal('0.00'),
+        )
+        salida = SalidaEquipo.objects.create(
+            ingreso=ingreso,
+            fecha_salida=date.today(),
+            estado_reparacion='pendiente_retiro',
+            tecnico_reparo=self.usuario,
+            valor_final_cobrado=Decimal('0.00'),
+            metodo_pago_final='sin_pago',
+            registrado_por=self.usuario,
+        )
+
+        response = self.client.post(
+            reverse('econotec:abono_crear', kwargs={'ingreso_pk': ingreso.pk}),
+            {
+                'fecha': '2026-08-17',
+                'monto': '28.00',
+                'metodo': 'efectivo',
+                'banco': '',
+                'banco_otro': '',
+                'tarjeta_app': '',
+                'comprobante_url': '',
+                'numero_recibo': '',
+                'observaciones': '',
+                'factura_realizada': 'no',
+                'factura_nombres': '',
+                'factura_cedula': '',
+                'factura_correo': '',
+                'bodegaje_decision': 'na',
+                'bodegaje_monto_aplicado': '0.00',
+                'accion_abono': 'registrar_y_salida',
+            },
+        )
+
+        self.assertRedirects(response, reverse('econotec:salida_retiros_lista'))
+        ingreso.refresh_from_db()
+        salida.refresh_from_db()
+        self.assertEqual(ingreso.total_abonado, Decimal('28.00'))
+        self.assertEqual(ingreso.diferencia, Decimal('0.00'))
+        self.assertEqual(salida.fecha_retiro_real, date.today())
+        self.assertEqual(salida.estado_reparacion, 'retirado')
+
+    def test_abono_parcial_no_confirma_salida_fisica(self):
+        ingreso = self.crear_ingreso_reparacion(
+            valor_acordado=Decimal('28.00'),
+            abono_anticipo=Decimal('0.00'),
+        )
+        salida = SalidaEquipo.objects.create(
+            ingreso=ingreso,
+            fecha_salida=date.today(),
+            estado_reparacion='pendiente_retiro',
+            tecnico_reparo=self.usuario,
+            valor_final_cobrado=Decimal('0.00'),
+            metodo_pago_final='sin_pago',
+            registrado_por=self.usuario,
+        )
+
+        response = self.client.post(
+            reverse('econotec:abono_crear', kwargs={'ingreso_pk': ingreso.pk}),
+            {
+                'fecha': '2026-08-17',
+                'monto': '10.00',
+                'metodo': 'efectivo',
+                'banco': '',
+                'banco_otro': '',
+                'tarjeta_app': '',
+                'comprobante_url': '',
+                'numero_recibo': '',
+                'observaciones': '',
+                'factura_realizada': 'no',
+                'factura_nombres': '',
+                'factura_cedula': '',
+                'factura_correo': '',
+                'bodegaje_decision': 'na',
+                'bodegaje_monto_aplicado': '0.00',
+                'accion_abono': 'registrar_y_salida',
+            },
+        )
+
+        self.assertRedirects(response, reverse('econotec:ingreso_abonos', kwargs={'pk': ingreso.pk}))
+        ingreso.refresh_from_db()
+        salida.refresh_from_db()
+        self.assertEqual(ingreso.total_abonado, Decimal('10.00'))
+        self.assertEqual(ingreso.diferencia, Decimal('18.00'))
+        self.assertIsNone(salida.fecha_retiro_real)
+        self.assertEqual(salida.estado_reparacion, 'pendiente_retiro')
+
     def test_abono_mixto_guarda_dos_partes_que_suman_el_total(self):
         ingreso = self.crear_ingreso_reparacion(
             valor_acordado=Decimal('5.00'),
@@ -5571,6 +5684,8 @@ class VentasTests(TestCase):
         self.assertContains(aviso_pendiente, '📖 Guía rápida')
         self.assertContains(aviso_pendiente, 'Siguiente →')
         self.assertContains(aviso_pendiente, 'Ingresar saldo pendiente')
+        self.assertContains(aviso_pendiente, 'id="btn-ingresar-saldo-pendiente"')
+        self.assertContains(aviso_pendiente, 'saldo-pendiente-directo')
         self.assertContains(aviso_pendiente, 'No quiero que se muestre de nuevo')
         self.assertContains(aviso_pendiente, 'type="checkbox"')
         self.assertContains(aviso_pendiente, '¿Está seguro?')

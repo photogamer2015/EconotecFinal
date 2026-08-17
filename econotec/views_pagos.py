@@ -57,6 +57,64 @@ def _valor_acordado_log(valor):
     return f'${valor:.2f}'
 
 
+def _puede_confirmar_salida_desde_abono(ingreso):
+    salida = getattr(ingreso, 'salida', None)
+    return bool(
+        ingreso.sede != 'ventas'
+        and salida
+        and not salida.cliente_ya_retiro
+    )
+
+
+def _confirmar_salida_desde_abono(request, ingreso):
+    """
+    Marca la salida física después de registrar un abono.
+
+    Se ejecuta solo después de guardar el pago. Si aún queda saldo, conserva el
+    abono registrado y no confirma la salida.
+    """
+    salida = getattr(ingreso, 'salida', None)
+    if not salida:
+        messages.warning(
+            request,
+            'Abono registrado, pero este equipo todavía no tiene una salida creada.',
+        )
+        return False
+
+    if salida.cliente_ya_retiro:
+        messages.info(
+            request,
+            f'Abono registrado. El equipo {ingreso.codigo_equipo} ya constaba fuera de la oficina.',
+        )
+        return True
+
+    saldo_pendiente = ingreso.diferencia
+    if saldo_pendiente > Decimal('0.00'):
+        messages.warning(
+            request,
+            f'Abono registrado, pero no se confirmó la salida porque aún queda '
+            f'un saldo pendiente de ${saldo_pendiente:.2f}.',
+        )
+        return False
+
+    bod = salida.calcular_bodegaje()
+    salida.fecha_retiro_real = date.today()
+    salida.estado_reparacion = 'retirado'
+    update_fields = ['fecha_retiro_real', 'estado_reparacion']
+
+    if salida.bodegaje_dias_congelado is None:
+        salida.bodegaje_dias_congelado = bod['dias'] if bod['aplica'] else 0
+        salida.bodegaje_monto_congelado = bod['monto'] if bod['aplica'] else Decimal('0.00')
+        update_fields.extend(['bodegaje_dias_congelado', 'bodegaje_monto_congelado'])
+
+    salida.save(update_fields=update_fields)
+    messages.success(
+        request,
+        f'Salida de la oficina confirmada para el equipo {ingreso.codigo_equipo}.',
+    )
+    return True
+
+
 @asesor_requerido
 def pagos_lista(request):
     """
@@ -346,6 +404,8 @@ def abono_crear(request, ingreso_pk):
     if request.method == 'POST':
         form = AbonoForm(request.POST, ingreso=ingreso)
         if form.is_valid():
+            registrar_y_salida = request.POST.get('accion_abono') == 'registrar_y_salida'
+            salida_confirmada = False
             abono = form.save(commit=False)
             
             if abono.metodo == 'mixto':
@@ -401,28 +461,39 @@ def abono_crear(request, ingreso_pk):
                         dedupe_key=f'abono:{a2.pk}:creado',
                     )
 
+                    if registrar_y_salida:
+                        salida_confirmada = _confirmar_salida_desde_abono(request, ingreso)
+
                 messages.success(
                     request,
                     f'Abono mixto registrado por ${abono.monto:.2f} '
                     f'(${monto_1:.2f} + ${monto_2:.2f}).',
                 )
+                if registrar_y_salida and salida_confirmada:
+                    return redirect('econotec:salida_retiros_lista')
                 return redirect('econotec:ingreso_abonos', pk=ingreso.pk)
             else:
-                abono.ingreso = ingreso
-                abono.registrado_por = request.user
-                abono.save()
-                registrar_bitacora(
-                    request.user,
-                    'abono',
-                    f'Registro de abono {abono.numero_recibo} por ${abono.monto:.2f} en #{ingreso.codigo_equipo}.',
-                    ingreso=ingreso,
-                    abono=abono,
-                    dedupe_key=f'abono:{abono.pk}:creado',
-                )
+                with transaction.atomic():
+                    abono.ingreso = ingreso
+                    abono.registrado_por = request.user
+                    abono.save()
+                    registrar_bitacora(
+                        request.user,
+                        'abono',
+                        f'Registro de abono {abono.numero_recibo} por ${abono.monto:.2f} en #{ingreso.codigo_equipo}.',
+                        ingreso=ingreso,
+                        abono=abono,
+                        dedupe_key=f'abono:{abono.pk}:creado',
+                    )
+                    if registrar_y_salida:
+                        salida_confirmada = _confirmar_salida_desde_abono(request, ingreso)
+
                 messages.success(
                     request,
                     f'Abono {abono.numero_recibo} registrado por ${abono.monto}.'
                 )
+                if registrar_y_salida and salida_confirmada:
+                    return redirect('econotec:salida_retiros_lista')
                 return redirect('econotec:ingreso_abonos', pk=ingreso.pk)
     else:
         form = AbonoForm(initial={'fecha': date.today(), 'monto': ingreso.diferencia}, ingreso=ingreso)
@@ -431,6 +502,7 @@ def abono_crear(request, ingreso_pk):
         'form': form,
         'ingreso': ingreso,
         'modo': 'crear',
+        'puede_confirmar_salida_desde_abono': _puede_confirmar_salida_desde_abono(ingreso),
         'titulo': (
             f'Nuevo Abono — Venta {ingreso.codigo_equipo}'
             if ingreso.sede == 'ventas'

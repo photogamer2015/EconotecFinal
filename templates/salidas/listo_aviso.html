@@ -87,6 +87,22 @@
     .pasos ol { margin: 0 0 0 18px; padding: 0; font-size: 13px; line-height: 1.6; }
     .pasos li { margin-bottom: 4px; }
 
+    .saldo-pendiente-footer {
+        border-top: 0 !important;
+        margin-top: 0 !important;
+        padding-top: 0 !important;
+    }
+    .saldo-pendiente-directo {
+        background: #2e7d32 !important;
+        color: #ffffff !important;
+        border-radius: 8px !important;
+        font-weight: 800 !important;
+        padding: 11px 18px !important;
+    }
+    .saldo-pendiente-directo:hover {
+        background: #1b5e20 !important;
+    }
+
     .acciones-finales {
         margin-top: 24px;
         display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;
@@ -352,7 +368,19 @@ document.addEventListener('DOMContentLoaded', function () {
                 '<p style="line-height:1.5;">El equipo quedó finalizado, pero <b>no puede salir de la oficina</b> hasta registrar el pago completo.</p>',
             confirmButtonText: 'OK',
             confirmButtonColor: '#f97618',
-            allowOutsideClick: false
+            footer: '<button type="button" id="btn-ingresar-saldo-pendiente" class="swal2-styled saldo-pendiente-directo">Ingresar saldo pendiente</button>',
+            customClass: {
+                footer: 'saldo-pendiente-footer'
+            },
+            allowOutsideClick: false,
+            didOpen: function () {
+                const botonSaldoPendiente = document.getElementById('btn-ingresar-saldo-pendiente');
+                if (botonSaldoPendiente) {
+                    botonSaldoPendiente.addEventListener('click', function () {
+                        window.location.assign(urlRegistrarPago);
+                    });
+                }
+            }
         }).then(function (resultado) {
             {% if mostrar_guia_saldo_pendiente %}
             if (resultado.isConfirmed) paginaTutorial(0);

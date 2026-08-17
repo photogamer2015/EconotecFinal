@@ -101,7 +101,9 @@
         border-color: var(--border-color);
     }
     .btn-primary.is-disabled,
-    .btn-primary:disabled {
+    .btn-primary:disabled,
+    .btn-success.is-disabled,
+    .btn-success:disabled {
         opacity: 0.42;
         background: transparent;
         color: var(--primary-dark);
@@ -110,7 +112,9 @@
         box-shadow: none;
     }
     .btn-primary.is-disabled:hover,
-    .btn-primary:disabled:hover {
+    .btn-primary:disabled:hover,
+    .btn-success.is-disabled:hover,
+    .btn-success:disabled:hover {
         background: transparent;
         color: var(--primary-dark);
     }
@@ -133,6 +137,17 @@
     .form-status.ready {
         color: var(--success);
         font-weight: 700;
+    }
+    .abono-actions {
+        display: flex;
+        gap: 10px;
+        justify-content: flex-end;
+        margin-top: 22px;
+        flex-wrap: wrap;
+    }
+    .abono-actions .btn {
+        white-space: normal;
+        text-align: center;
     }
 </style>
 
@@ -368,10 +383,25 @@
         {{ form.observaciones }}
     </div>
 
-    <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 22px; flex-wrap: wrap;">
+    <div class="abono-actions">
         <span class="form-status" id="form-status">Completa los campos obligatorios para registrar.</span>
         <a href="{% url 'econotec:ingreso_abonos' pk=ingreso.pk %}" class="btn btn-secondary">Cancelar</a>
-        <button type="submit" class="btn btn-primary" id="submit-abono">
+        {% if modo == 'crear' and puede_confirmar_salida_desde_abono %}
+        <button type="submit"
+                class="btn btn-success"
+                id="submit-abono-salida"
+                name="accion_abono"
+                value="registrar_y_salida"
+                data-submit-abono>
+            Registrar Abono y Dar Salida del Equipo
+        </button>
+        {% endif %}
+        <button type="submit"
+                class="btn btn-primary"
+                id="submit-abono"
+                name="accion_abono"
+                value="registrar"
+                data-submit-abono>
             {% if modo == 'editar' %}Guardar cambios{% else %}Registrar Abono{% endif %}
         </button>
     </div>
@@ -419,6 +449,7 @@
     const resumenTexto = document.getElementById('resumen-bodegaje-texto');
     const form = document.getElementById('abono-form');
     const submitBtn = document.getElementById('submit-abono');
+    const submitButtons = form ? Array.from(form.querySelectorAll('[data-submit-abono]')) : [];
     const formStatus = document.getElementById('form-status');
 
     // Elementos de pago mixto
@@ -469,12 +500,11 @@
         if (!form || !submitBtn) return;
         const requiredFields = Array.from(form.querySelectorAll('[required]'));
         const complete = requiredFields.every(isRequiredFieldComplete);
-        submitBtn.disabled = !complete;
-        submitBtn.classList.toggle('is-disabled', !complete);
-        submitBtn.setAttribute(
-            'aria-disabled',
-            complete ? 'false' : 'true'
-        );
+        submitButtons.forEach((button) => {
+            button.disabled = !complete;
+            button.classList.toggle('is-disabled', !complete);
+            button.setAttribute('aria-disabled', complete ? 'false' : 'true');
+        });
         if (formStatus) {
             formStatus.textContent = complete
                 ? 'Listo para registrar.'
@@ -718,7 +748,8 @@
 
         form.addEventListener('submit', function(event) {
             updateSubmitState();
-            if (submitBtn && submitBtn.disabled) {
+            const accion = event.submitter || submitBtn;
+            if (accion && accion.disabled) {
                 event.preventDefault();
                 const firstMissing = Array.from(form.querySelectorAll('[required]'))
                     .find((field) => !isRequiredFieldComplete(field));
