@@ -42,7 +42,11 @@ EMAIL_PORT = env.int('EMAIL_PORT', default=587)
 EMAIL_HOST_USER = env('EMAIL_HOST_USER', default='')
 EMAIL_HOST_PASSWORD = env('EMAIL_HOST_PASSWORD', default='')
 EMAIL_USE_TLS = env.bool('EMAIL_USE_TLS', default=True)
+EMAIL_TIMEOUT = env.int('EMAIL_TIMEOUT', default=15)
 DEFAULT_FROM_EMAIL = env('DEFAULT_FROM_EMAIL', default='Econotec <no-reply@econotec.local>')
+ECONOTEC_REPLY_TO = env('ECONOTEC_REPLY_TO', default='')
+INGRESO_EMAIL_AUTOMATICO = env.bool('INGRESO_EMAIL_AUTOMATICO', default=True)
+INGRESO_EMAIL_ADJUNTAR_PDF = env.bool('INGRESO_EMAIL_ADJUNTAR_PDF', default=True)
 EMAIL_BACKEND = env('EMAIL_BACKEND', default='')
 if not EMAIL_BACKEND:
     EMAIL_BACKEND = (

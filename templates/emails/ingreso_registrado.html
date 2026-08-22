@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="es">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Confirmación de ingreso {{ ingreso.codigo_equipo }}</title>
+</head>
+<body style="margin:0; padding:0; background:#f4eee9; color:#202936; font-family:Arial,Helvetica,sans-serif;">
+    <div style="display:none; max-height:0; overflow:hidden; opacity:0; color:transparent;">
+        Recibimos tu {{ ingreso.tipo_equipo_display|lower }}. Código de seguimiento: {{ ingreso.codigo_equipo }}.
+    </div>
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="width:100%; background:#f4eee9;">
+        <tr>
+            <td align="center" style="padding:28px 12px;">
+                <table role="presentation" width="620" cellspacing="0" cellpadding="0" border="0" style="width:100%; max-width:620px; background:#ffffff; border-radius:18px; overflow:hidden; box-shadow:0 8px 24px rgba(32,41,54,.08);">
+                    <tr>
+                        <td style="padding:26px 30px; background:#202936; border-bottom:5px solid #f97618;">
+                            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
+                                <tr>
+                                    <td valign="middle">
+                                        <table role="presentation" cellspacing="0" cellpadding="0" border="0">
+                                            <tr>
+                                                <td width="44" height="44" align="center" valign="middle" style="width:44px; height:44px; border-radius:50%; background:#f97618; color:#ffffff; font-size:25px; font-weight:800;">E</td>
+                                                <td style="padding-left:12px; color:#ffffff; font-size:23px; font-weight:800; letter-spacing:.3px;">ECONOTEC</td>
+                                            </tr>
+                                        </table>
+                                    </td>
+                                    <td align="right" valign="middle" style="color:#ffffff; font-size:12px; line-height:1.5;">
+                                        <strong style="color:#ffb17a;">Sede {{ sede.nombre }}</strong><br>
+                                        {{ ingreso.fecha_ingreso|date:"d/m/Y" }}
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="padding:32px 30px 12px;">
+                            <div style="color:#f97618; font-size:12px; font-weight:800; letter-spacing:1.2px; text-transform:uppercase;">Solicitud recibida</div>
+                            <h1 style="margin:8px 0 9px; color:#202936; font-size:27px; line-height:1.2;">Hola, {{ cliente.nombres }}</h1>
+                            <p style="margin:0; color:#5f6875; font-size:15px; line-height:1.6;">Confirmamos que recibimos tu equipo. Esta comunicación reúne los datos registrados al momento del ingreso.</p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="padding:16px 30px 22px;">
+                            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background:#fff3eb; border:1px solid #ffd6bd; border-radius:13px;">
+                                <tr>
+                                    <td style="padding:20px;">
+                                        <div style="color:#9c4a14; font-size:11px; font-weight:800; letter-spacing:1px; text-transform:uppercase;">Tu código de ingreso</div>
+                                        <div style="padding-top:4px; color:#f36a0b; font-size:31px; font-weight:900; line-height:1;">{{ ingreso.codigo_equipo }}</div>
+                                    </td>
+                                    <td align="right" style="padding:20px; color:#374151; font-size:14px; line-height:1.5;">
+                                        <strong>{{ ingreso.tipo_equipo_display }}</strong><br>
+                                        {{ ingreso.marca }} {{ ingreso.modelo_serie }}
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="padding:0 30px 24px;">
+                            <div style="padding-bottom:9px; color:#f36a0b; font-size:14px; font-weight:800; text-transform:uppercase;">Datos del equipo</div>
+                            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="border:1px solid #eadfd8; border-radius:12px; overflow:hidden;">
+                                <tr>
+                                    <td width="34%" style="padding:11px 14px; background:#faf7f5; color:#687180; font-size:13px; border-bottom:1px solid #eadfd8;">Tipo</td>
+                                    <td style="padding:11px 14px; color:#202936; font-size:13px; font-weight:700; border-bottom:1px solid #eadfd8;">{{ ingreso.tipo_equipo_display }}</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding:11px 14px; background:#faf7f5; color:#687180; font-size:13px; border-bottom:1px solid #eadfd8;">Marca / modelo</td>
+                                    <td style="padding:11px 14px; color:#202936; font-size:13px; font-weight:700; border-bottom:1px solid #eadfd8;">{{ ingreso.marca }} / {{ ingreso.modelo_serie }}</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding:11px 14px; background:#faf7f5; color:#687180; font-size:13px; border-bottom:1px solid #eadfd8;">Serie</td>
+                                    <td style="padding:11px 14px; color:#202936; font-size:13px; font-weight:700; border-bottom:1px solid #eadfd8;">{{ ingreso.serie|default:"—" }}</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding:11px 14px; background:#faf7f5; color:#687180; font-size:13px;">Accesorios</td>
+                                    <td style="padding:11px 14px; color:#202936; font-size:13px; font-weight:700;">{{ ingreso.accesorios_entregados|default:"Ninguno"|linebreaksbr }}</td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="padding:0 30px 24px;">
+                            <div style="padding-bottom:9px; color:#f36a0b; font-size:14px; font-weight:800; text-transform:uppercase;">Problema reportado</div>
+                            <div style="padding:15px 16px; background:#faf7f5; border-left:4px solid #f97618; border-radius:7px; color:#374151; font-size:14px; line-height:1.55;">{{ ingreso.problema_reportado|linebreaksbr }}</div>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="padding:0 30px 24px;">
+                            <div style="padding-bottom:9px; color:#f36a0b; font-size:14px; font-weight:800; text-transform:uppercase;">Datos de recepción</div>
+                            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="font-size:13px; line-height:1.5;">
+                                <tr>
+                                    <td width="50%" valign="top" style="padding:12px 14px; background:#faf7f5; border-right:4px solid #ffffff; border-bottom:4px solid #ffffff;">
+                                        <span style="color:#7b8490;">Cliente</span><br><strong>{{ cliente.nombres }}</strong><br>{{ cliente.cedula }} · {{ cliente.whatsapp|default:"—" }}<br>{{ cliente.correo }}<br>Sector: {{ cliente.sector_display|default:"—" }}
+                                    </td>
+                                    <td valign="top" style="padding:12px 14px; background:#faf7f5; border-bottom:4px solid #ffffff;">
+                                        <span style="color:#7b8490;">Personal Econotec</span><br><strong>{{ tecnico_nombre }}</strong><br>Asesor: {{ ingreso.asesor_comercial|default:"—" }}<br>Registró: {{ registrado_por_nombre }}
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td valign="top" style="padding:12px 14px; background:#faf7f5; border-right:4px solid #ffffff;">
+                                        <span style="color:#7b8490;">Diagnóstico inmediato</span><br><strong>{{ ingreso.get_diagnostico_inmediato_display }}</strong><br>Valor: ${{ ingreso.valor_diagnostico|floatformat:2 }}{% if ingreso.valor_diagnostico %}<br>{{ ingreso.get_diagnostico_metodo_display }}{% endif %}
+                                    </td>
+                                    <td valign="top" style="padding:12px 14px; background:#faf7f5;">
+                                        <span style="color:#7b8490;">Valores registrados</span><br><strong>{% if ingreso.valor_acordado is not None %}Acordado: ${{ ingreso.valor_acordado|floatformat:2 }}{% else %}Cotización pendiente{% endif %}</strong><br>Anticipo: ${{ ingreso.abono_anticipo|floatformat:2 }}{% if ingreso.abono_anticipo %}<br>{{ ingreso.get_anticipo_metodo_display }}{% endif %}
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td colspan="2" style="padding:12px 14px; background:#faf7f5; border-top:4px solid #ffffff;">
+                                        <span style="color:#7b8490;">Estado del ingreso</span><br><strong>{{ ingreso.get_estado_display }}</strong> · Factura N.º {{ ingreso.numero_factura|default:"—" }}
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+                    {% if adjunto_incluido %}
+                    <tr>
+                        <td style="padding:0 30px 24px;">
+                            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background:#edf9f1; border:1px solid #bde8cb; border-radius:10px;">
+                                <tr>
+                                    <td width="42" align="center" style="padding:14px 0 14px 14px; color:#16803a; font-size:24px;">✓</td>
+                                    <td style="padding:14px; color:#25633a; font-size:13px; line-height:1.5;"><strong>PDF oficial adjunto</strong><br>Conserva la solicitud de ingreso {{ ingreso.codigo_equipo }} como respaldo.</td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+                    {% endif %}
+                    <tr>
+                        <td style="padding:22px 30px; background:#fff3eb; color:#654633; font-size:13px; line-height:1.6;">
+                            <strong style="color:#d95d08;">¿Qué sigue?</strong><br>
+                            El tiempo de revisión gratuita es de 24 a 96 horas. Te contactaremos con el informe técnico y la cotización correspondiente.
+                        </td>
+                    </tr>
+                    <tr>
+                        <td align="center" style="padding:25px 30px; background:#202936; color:#cdd2d9; font-size:11px; line-height:1.65;">
+                            <strong style="color:#ffffff;">ECONOTEC · Sede {{ sede.nombre }}</strong><br>
+                            {{ sede.direccion }}<br>
+                            WhatsApp: {{ whatsapps_econotec }} · {{ sitio_econotec }}<br><br>
+                            Mensaje automático generado por el sistema Econotec.
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>

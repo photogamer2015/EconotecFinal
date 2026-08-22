@@ -1405,7 +1405,8 @@
         }
     </script>
     {% block extra_head %}{% endblock %}
-    <link rel="stylesheet" href="{% static 'responsive.css' %}">
+    <link rel="stylesheet" href="{% static 'responsive.css' %}?v=20260822-6">
+    <script src="{% static 'table_navigation.js' %}?v=20260822-6" defer></script>
     <!-- SweetAlert2 -->
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 </head>
@@ -1736,39 +1737,6 @@
             });
         })();
 
-        (function prepararTablasParaMovil() {
-            const wrappers = Array.prototype.slice.call(document.querySelectorAll('.table-wrap'));
-            if (!wrappers.length) return;
-
-            function actualizarTabla(wrapper) {
-                const table = wrapper.querySelector('table');
-                if (!table) return;
-
-                const necesitaDesplazamiento = table.scrollWidth > wrapper.clientWidth + 8;
-                wrapper.dataset.mobileScroll = necesitaDesplazamiento ? 'true' : 'false';
-                wrapper.setAttribute('role', 'region');
-                wrapper.setAttribute('aria-label', 'Tabla con desplazamiento horizontal');
-                wrapper.tabIndex = necesitaDesplazamiento ? 0 : -1;
-
-                let hint = wrapper.querySelector('.table-mobile-hint');
-                if (necesitaDesplazamiento && !hint) {
-                    hint = document.createElement('div');
-                    hint.className = 'table-mobile-hint';
-                    hint.setAttribute('aria-hidden', 'true');
-                    hint.innerHTML = '<span>↔</span><span>Desliza para consultar todas las columnas</span>';
-                    wrapper.insertBefore(hint, table);
-                }
-            }
-
-            wrappers.forEach(actualizarTabla);
-            let resizeTimer = null;
-            window.addEventListener('resize', function() {
-                window.clearTimeout(resizeTimer);
-                resizeTimer = window.setTimeout(function() {
-                    wrappers.forEach(actualizarTabla);
-                }, 120);
-            });
-        })();
     </script>
     <script>
         function confirmDelete(event, form, text = '¿Estás seguro de eliminar este registro?', confirmText = 'Sí, eliminar', cancelText = 'Cancelar / Volver') {

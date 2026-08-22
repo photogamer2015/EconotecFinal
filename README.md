@@ -154,7 +154,7 @@ DB_PORT=3306
 
 Luego instala `mysqlclient` y corre `python manage.py migrate`.
 
-### Correo para doble factor
+### Correo transaccional y doble factor
 
 Por defecto, en desarrollo Django imprime el código de doble factor en la terminal del servidor. Para enviar el código por correo real, agrega tu SMTP al `.env`:
 
@@ -165,8 +165,17 @@ EMAIL_PORT=587
 EMAIL_HOST_USER=tu_correo@dominio.com
 EMAIL_HOST_PASSWORD=tu_clave_smtp
 EMAIL_USE_TLS=True
+EMAIL_TIMEOUT=15
 DEFAULT_FROM_EMAIL=Econotec <tu_correo@dominio.com>
+ECONOTEC_REPLY_TO=ventas@econotec.ec.com
+INGRESO_EMAIL_AUTOMATICO=True
+INGRESO_EMAIL_ADJUNTAR_PDF=True
 ```
+
+Al registrar una solicitud de ingreso con correo del cliente, el sistema envía
+automáticamente una confirmación profesional y adjunta el mismo PDF disponible
+en el detalle del equipo. Si SMTP no está disponible, el registro del equipo
+no se revierte ni se pierde.
 
 Si un usuario todavía no tiene correo, el sistema se lo pedirá una sola vez
 después de validar usuario, contraseña, sede y captcha. El correo se guarda

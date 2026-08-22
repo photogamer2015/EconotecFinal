@@ -813,16 +813,11 @@ def _draw_productos_venta_pdf(c, x, y, ingreso, max_w=510):
     return y
 
 
-@tecnico_requerido
-def ingreso_pdf(request, pk):
-    """Genera el PDF de la Solicitud de Ingreso, replicando el formato del papel."""
+def generar_ingreso_pdf_bytes(ingreso):
+    """Genera el PDF oficial de la solicitud y devuelve su contenido en bytes."""
     from reportlab.lib.colors import Color, black
     naranja = Color(*ECO_NARANJA)
 
-    ingreso = get_object_or_404(
-        IngresoEquipo.objects.select_related('cliente', 'tecnico_encargado'),
-        pk=pk,
-    )
     cliente = ingreso.cliente
     buf = BytesIO()
     
@@ -1114,8 +1109,20 @@ def ingreso_pdf(request, pk):
     pdf = buf.getvalue()
     buf.close()
 
+    return pdf
+
+
+@tecnico_requerido
+def ingreso_pdf(request, pk):
+    """Descarga el PDF oficial de la Solicitud de Ingreso."""
+    ingreso = get_object_or_404(
+        IngresoEquipo.objects.select_related('cliente', 'tecnico_encargado'),
+        pk=pk,
+    )
+    pdf = generar_ingreso_pdf_bytes(ingreso)
+
     response = HttpResponse(pdf, content_type='application/pdf')
-    nombre_descarga = 'registro_venta' if es_venta else 'ingreso_equipo'
+    nombre_descarga = 'registro_venta' if ingreso.sede == 'ventas' else 'ingreso_equipo'
     response['Content-Disposition'] = (
         f'attachment; filename="{nombre_descarga}_{ingreso.codigo_equipo}.pdf"'
     )

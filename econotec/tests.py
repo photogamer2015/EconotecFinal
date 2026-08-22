@@ -2450,6 +2450,137 @@ class VentasTests(TestCase):
         self.assertTrue(ingreso.firma_cliente)
         self.assertEqual(ingreso.firma_cliente_imagen, self.FIRMA_PNG_DATA_URI)
 
+    @override_settings(
+        EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend',
+        INGRESO_EMAIL_AUTOMATICO=True,
+        INGRESO_EMAIL_ADJUNTAR_PDF=True,
+        DEFAULT_FROM_EMAIL='Econotec <no-reply@econotec.test>',
+    )
+    def test_registrar_ingreso_envia_correo_profesional_con_pdf(self):
+        self.activar_sede_guayaquil()
+        mail.outbox.clear()
+
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.post(
+                reverse('econotec:ingreso_registrar'),
+                self.ingreso_registro_post_data(),
+            )
+
+        ingreso = IngresoEquipo.objects.get(cliente=self.cliente_existente)
+        self.assertRedirects(
+            response,
+            reverse('econotec:ingreso_detalle', kwargs={'pk': ingreso.pk}),
+        )
+        self.assertEqual(len(mail.outbox), 1)
+        correo = mail.outbox[0]
+        self.assertEqual(correo.to, [self.cliente_existente.correo])
+        self.assertIn(ingreso.codigo_equipo, correo.subject)
+        self.assertIn('No enciende', correo.body)
+        html = next(
+            alternativa[0]
+            for alternativa in correo.alternatives
+            if alternativa[1] == 'text/html'
+        )
+        self.assertIn('SOLICITUD RECIBIDA', html.upper())
+        self.assertIn(ingreso.codigo_equipo, html)
+        self.assertIn(self.cliente_existente.nombres, html)
+        self.assertIn(self.cliente_existente.cedula, html)
+        self.assertIn(self.cliente_existente.correo, html)
+        self.assertIn('MacBook M4 S', html)
+        self.assertNotIn('{{', html)
+        self.assertNotIn('{%', html)
+        self.assertEqual(len(correo.attachments), 1)
+        adjunto = correo.attachments[0]
+        self.assertEqual(
+            adjunto[0],
+            f'Solicitud_de_ingreso_{ingreso.codigo_equipo}.pdf',
+        )
+        self.assertTrue(adjunto[1].startswith(b'%PDF-'))
+        self.assertEqual(adjunto[2], 'application/pdf')
+
+    @override_settings(
+        EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend',
+        INGRESO_EMAIL_AUTOMATICO=True,
+    )
+    def test_registrar_ingreso_sin_correo_no_impide_guardar(self):
+        self.activar_sede_guayaquil()
+        mail.outbox.clear()
+
+        response = self.client.post(
+            reverse('econotec:ingreso_registrar'),
+            self.ingreso_registro_post_data(**{'cli-correo': ''}),
+        )
+
+        ingreso = IngresoEquipo.objects.get(cliente=self.cliente_existente)
+        self.assertRedirects(
+            response,
+            reverse('econotec:ingreso_detalle', kwargs={'pk': ingreso.pk}),
+        )
+        self.assertEqual(len(mail.outbox), 0)
+        self.assertEqual(ingreso.cliente.correo, '')
+
+    @override_settings(
+        EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend',
+        INGRESO_EMAIL_AUTOMATICO=True,
+        INGRESO_EMAIL_ADJUNTAR_PDF=True,
+    )
+    def test_nuevo_cliente_tambien_recibe_correo_automatico(self):
+        self.activar_sede_guayaquil()
+        mail.outbox.clear()
+        datos = self.ingreso_registro_post_data(**{
+            'cli-cedula': '0923456789',
+            'cli-nombres': 'Ana Prueba',
+            'cli-whatsapp': '0987654321',
+            'cli-correo': 'ana@example.com',
+            'cli-sector': 'centro',
+        })
+
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.post(
+                reverse('econotec:ingreso_registrar'),
+                datos,
+            )
+
+        ingreso = IngresoEquipo.objects.get(cliente__cedula='0923456789')
+        self.assertRedirects(
+            response,
+            reverse('econotec:ingreso_detalle', kwargs={'pk': ingreso.pk}),
+        )
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].to, ['ana@example.com'])
+
+    @override_settings(
+        EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend',
+        INGRESO_EMAIL_AUTOMATICO=True,
+    )
+    @patch('econotec.emails.EmailMultiAlternatives.send', side_effect=OSError('SMTP no disponible'))
+    def test_fallo_correo_automatico_no_revierte_ingreso(self, _send):
+        self.activar_sede_guayaquil()
+
+        with self.assertLogs('econotec.emails', level='ERROR'):
+            with self.captureOnCommitCallbacks(execute=True):
+                response = self.client.post(
+                    reverse('econotec:ingreso_registrar'),
+                    self.ingreso_registro_post_data(),
+                )
+
+        ingreso = IngresoEquipo.objects.get(cliente=self.cliente_existente)
+        self.assertRedirects(
+            response,
+            reverse('econotec:ingreso_detalle', kwargs={'pk': ingreso.pk}),
+        )
+        self.assertEqual(ingreso.problema_reportado, 'No enciende')
+
+    def test_detalle_no_muestra_boton_de_correo_manual(self):
+        ingreso = self.crear_ingreso_reparacion()
+
+        response = self.client.get(
+            reverse('econotec:ingreso_detalle', kwargs={'pk': ingreso.pk}),
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, 'Enviar por correo')
+
     def test_ingreso_imprimir_muestra_firma_cliente_si_existe(self):
         ingreso = self.crear_ingreso_reparacion(
             firma_cliente=True,

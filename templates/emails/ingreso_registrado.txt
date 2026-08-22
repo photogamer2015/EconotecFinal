@@ -1,0 +1,48 @@
+Hola {{ cliente.nombres }},
+
+Confirmamos que recibimos tu equipo en Econotec.
+
+SOLICITUD DE INGRESO {{ ingreso.codigo_equipo }}
+Fecha de ingreso: {{ ingreso.fecha_ingreso|date:"d/m/Y" }}
+Sede: {{ sede.nombre }}
+
+DATOS DEL CLIENTE
+Nombre: {{ cliente.nombres }}
+Cédula o RUC: {{ cliente.cedula }}
+WhatsApp: {{ cliente.whatsapp|default:"—" }}
+Correo: {{ cliente.correo }}
+Sector: {{ cliente.sector_display|default:"—" }}
+
+DATOS DEL EQUIPO
+Tipo: {{ ingreso.tipo_equipo_display }}
+Marca: {{ ingreso.marca }}
+Modelo: {{ ingreso.modelo_serie }}
+Serie: {{ ingreso.serie|default:"—" }}
+Accesorios entregados: {{ ingreso.accesorios_entregados|default:"Ninguno" }}
+
+PROBLEMA REPORTADO
+{{ ingreso.problema_reportado }}
+
+DATOS DE RECEPCIÓN
+Asesor comercial: {{ ingreso.asesor_comercial|default:"—" }}
+Técnico recibido: {{ tecnico_nombre }}
+Registró: {{ registrado_por_nombre }}
+Factura N.º: {{ ingreso.numero_factura|default:"—" }}
+Estado: {{ ingreso.get_estado_display }}
+Diagnóstico inmediato: {{ ingreso.get_diagnostico_inmediato_display }}
+Valor del diagnóstico: ${{ ingreso.valor_diagnostico|floatformat:2 }}
+{% if ingreso.valor_diagnostico %}Método del diagnóstico: {{ ingreso.get_diagnostico_metodo_display }}{% endif %}
+Valor acordado: {% if ingreso.valor_acordado is not None %}${{ ingreso.valor_acordado|floatformat:2 }}{% else %}Pendiente de cotización{% endif %}
+Anticipo registrado: ${{ ingreso.abono_anticipo|floatformat:2 }}
+{% if ingreso.abono_anticipo %}Método del anticipo: {{ ingreso.get_anticipo_metodo_display }}{% endif %}
+
+{% if adjunto_incluido %}Adjuntamos el PDF oficial de tu solicitud de ingreso. Consérvalo como respaldo.{% endif %}
+
+El tiempo de revisión gratuita es de 24 a 96 horas. Te contactaremos con el informe técnico y la cotización correspondiente.
+
+Econotec — Sede {{ sede.nombre }}
+{{ sede.direccion }}
+WhatsApp: {{ whatsapps_econotec }}
+{{ sitio_econotec }}
+
+Este es un mensaje automático generado por el sistema Econotec.

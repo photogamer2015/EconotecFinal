@@ -8,6 +8,7 @@ from io import BytesIO
 import json
 import unicodedata
 
+from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ValidationError
@@ -39,6 +40,7 @@ from .models import (
 )
 from .bitacora import registrar_bitacora, nombre_corto_usuario, construir_bitacora_usuario
 from .date_filters import aplicar_rango_fecha, contexto_rango_fecha, obtener_rango_fecha
+from .emails import enviar_correo_ingreso_seguro
 from .pagination import paginar_resultados
 from .permisos import admin_requerido, tecnico_requerido, es_admin, es_asesor, es_tecnico
 from .gamificacion import (
@@ -1291,6 +1293,22 @@ def cliente_buscar_por_cedula(request):
     })
 
 
+def _programar_correo_ingreso_automatico(request, ingreso):
+    """Programa el envío solo después de guardar correctamente la transacción."""
+    if not getattr(settings, 'INGRESO_EMAIL_AUTOMATICO', True):
+        return
+    if not (ingreso.cliente.correo or '').strip():
+        messages.warning(
+            request,
+            'El equipo quedó registrado, pero el cliente no tiene un correo para enviarle el comprobante.',
+        )
+        return
+
+    transaction.on_commit(
+        lambda ingreso_pk=ingreso.pk: enviar_correo_ingreso_seguro(ingreso_pk)
+    )
+
+
 @tecnico_requerido
 @transaction.atomic
 def ingreso_registrar(request):
@@ -1350,6 +1368,7 @@ def ingreso_registrar(request):
                         request,
                         f'Equipo {ingreso.codigo_equipo} ingresado para {cliente.nombres}.'
                     )
+                    _programar_correo_ingreso_automatico(request, ingreso)
                     if duplicado and confirmar_mismo_equipo_cliente:
                         messages.info(
                             request,
@@ -1378,6 +1397,7 @@ def ingreso_registrar(request):
                     request,
                     f'Equipo {ingreso.codigo_equipo} ingresado para {cliente.nombres}.'
                 )
+                _programar_correo_ingreso_automatico(request, ingreso)
                 return redirect('econotec:ingreso_detalle', pk=ingreso.pk)
 
     else:
