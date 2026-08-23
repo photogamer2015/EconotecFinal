@@ -1,23 +1,31 @@
 {% extends 'base.html' %}
 {% load econotec_extras %}
 
-{% block title %}Bodegajes Activos y Chatarrerización | Econotec{% endblock %}
+{% block title %}Bodegaje / Chatarrerización | Econotec{% endblock %}
 
 {% block content %}
 <div class="header-actions">
     <div>
-        <h2 class="page-title">Bodegajes Activos y Chatarrerización</h2>
-        <p class="page-subtitle">Equipos que aún no han sido retirados por el cliente</p>
+        <h2 class="page-title">Bodegaje / Chatarrerización</h2>
+        <p class="page-subtitle">Seguimiento de equipos pendientes de retiro y comunicación con el cliente.</p>
     </div>
-    <a href="{% url 'econotec:admin_dashboard' %}" class="btn btn-secondary">← Volver al Dashboard</a>
+    <a href="{% url 'econotec:bienvenida' %}" class="btn btn-secondary">← Volver al inicio</a>
 </div>
 <br>
-<hr>
+
+<div class="card" style="margin-bottom:24px; border-left:5px solid #f97618;">
+    <h3 style="margin-bottom:8px;">📨 Avisos profesionales de retiro</h3>
+    <p class="text-sm text-muted" style="margin:0; line-height:1.6;">
+        Desde cada equipo puedes enviar un mensaje por WhatsApp o correo con los días en bodega,
+        el saldo del servicio, el bodegaje acumulado, el total actualizado y la advertencia de
+        chatarrerización. El correo incluye el acta actualizada en PDF.
+    </p>
+</div>
 
 <div class="card" style="margin-bottom: 24px;">
     <h3>📦 Equipos en Bodegaje Activo</h3>
     <p class="text-sm text-muted" style="margin-bottom: 16px;">
-        Equipos con más de 5 días desde su salida y que no han sido retirados.
+        Equipos que superaron el período de gracia y aún no han sido retirados.
     </p>
 
     <div class="table-responsive">
@@ -29,7 +37,7 @@
                     <th>Modelo</th>
                     <th>Cliente</th>
                     <th>Días</th>
-                    <th>Saldo</th>
+                    <th>Valores actuales</th>
                     <th>Acciones</th>
                 </tr>
             </thead>
@@ -41,24 +49,43 @@
                     <td>{{ item.salida.ingreso.modelo_serie_detalle }}</td>
                     <td>
                         {{ item.salida.ingreso.cliente.nombres }}<br>
-                        <small class="text-muted">{{ item.salida.ingreso.cliente.whatsapp }}</small>
+                        <small class="text-muted">WhatsApp: {{ item.salida.ingreso.cliente.whatsapp|default:"—" }}</small><br>
+                        <small class="text-muted">Correo: {{ item.salida.ingreso.cliente.correo|default:"—" }}</small>
                     </td>
                     <td><strong style="color:var(--danger)">{{ item.dias_totales }} días</strong><br><small class="text-muted">(Cobrando {{ item.dias_bodegaje }} días)</small></td>
                     <td style="vertical-align: middle;">
-                        {% if item.salida.ingreso.diferencia > 0 %}
-                            <span class="status-badge status-pendiente" style="font-size: 12px; display:inline-block; white-space:nowrap;">Pendiente: {{ item.salida.ingreso.diferencia|dinero_signo }}</span>
-                        {% else %}
-                            <span class="status-badge status-pagado" style="font-size: 12px; display:inline-block; white-space:nowrap;">Pagado</span>
-                        {% endif %}
+                        <div style="font-size:12px; line-height:1.55; white-space:nowrap;">
+                            <div>Servicio: <strong>{{ item.saldo_reparacion|dinero_signo }}</strong></div>
+                            <div>Bodegaje: <strong>{{ item.monto_bodegaje|dinero_signo }}</strong></div>
+                            <div style="color:var(--danger);">Total hoy: <strong>{{ item.total_a_regularizar|dinero_signo }}</strong></div>
+                        </div>
                     </td>
                     <td>
                         <div style="display:flex; flex-direction:column; gap:8px;">
-                            <div style="display:flex; gap:8px; justify-content: center;">
-                                <a href="{{ item.wa_link }}" 
-                                   target="_blank" class="btn btn-primary btn-sm">
+                            <div style="display:flex; gap:8px; justify-content:center; flex-wrap:wrap;">
+                                {% if item.wa_link %}
+                                <a href="{{ item.wa_link }}"
+                                   target="_blank" rel="noopener" class="btn btn-primary btn-sm"
+                                   title="Abrir WhatsApp con el aviso profesional preparado">
                                     💬 Enviar WhatsApp
                                 </a>
-                                
+                                {% else %}
+                                <button type="button" class="btn btn-secondary btn-sm" disabled title="El cliente no tiene WhatsApp registrado">
+                                    💬 Sin WhatsApp
+                                </button>
+                                {% endif %}
+
+                                {% if item.salida.ingreso.cliente.correo %}
+                                <button type="button" class="btn btn-info btn-sm"
+                                        onclick="enviarCorreoBodegaje({{ item.salida.pk }}, '{{ item.salida.ingreso.cliente.correo|escapejs }}')">
+                                    ✉️ Enviar correo
+                                </button>
+                                {% else %}
+                                <button type="button" class="btn btn-secondary btn-sm" disabled title="El cliente no tiene correo registrado">
+                                    ✉️ Sin correo
+                                </button>
+                                {% endif %}
+
                                 <form method="post" action="{% url 'econotec:salida_marcar_retirada' item.salida.pk %}" style="margin:0; min-width:0;"
                                       onsubmit="{% if item.salida.ingreso.diferencia > 0 %}event.preventDefault(); Swal.fire({icon: 'error', title: 'Saldo Pendiente', text: 'No se puede retirar. El cliente tiene un saldo pendiente de {{ item.salida.ingreso.diferencia|dinero_signo }}. Debe pagar todo antes de retirar el equipo.', confirmButtonColor: '#d33'}); return false;{% else %}confirmarCierre(event, this, '{{ item.salida.ingreso.codigo_equipo }}', {% if item.monto_bodegaje > 0 %}true{% else %}false{% endif %}, {{ item.monto_bodegaje|default:0|stringformat:'.2f' }}, {{ item.dias_bodegaje|default:0 }});{% endif %}">
                                     {% csrf_token %}
@@ -68,9 +95,11 @@
                                     </button>
                                 </form>
 
-                                <button class="btn btn-danger btn-sm" onclick="cambiarEstado({{ item.salida.pk }}, 'chatarrerizacion')">
+                                {% if es_admin %}
+                                <button type="button" class="btn btn-danger btn-sm" onclick="cambiarEstado({{ item.salida.pk }}, 'chatarrerizacion')">
                                     ♻️ Chatarrerización
                                 </button>
+                                {% endif %}
                             </div>
                         </div>
                     </td>
@@ -126,6 +155,55 @@
 </div>
 
 <script>
+function enviarCorreoBodegaje(salidaId, correo) {
+    const urlBase = "{% url 'econotec:bodegaje_enviar_correo' pk=0 %}";
+    const url = urlBase.replace('/0/', '/' + salidaId + '/');
+
+    Swal.fire({
+        icon: 'question',
+        title: '¿Enviar aviso por correo?',
+        html:
+            '<p style="line-height:1.55;">Se enviará a <b>' + correo + '</b> el aviso de retiro, los valores actualizados, la regla de bodegaje y la advertencia de chatarrerización.</p>' +
+            '<p style="font-size:13px;color:#6b7280;">También se adjuntará el acta actualizada del equipo en PDF.</p>',
+        showCancelButton: true,
+        confirmButtonText: 'Sí, enviar correo',
+        cancelButtonText: 'Cancelar',
+        confirmButtonColor: '#1976d2',
+        cancelButtonColor: '#6b7280',
+        showLoaderOnConfirm: true,
+        allowOutsideClick: function () { return !Swal.isLoading(); },
+        preConfirm: function () {
+            return fetch(url, {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: {
+                    'X-CSRFToken': '{{ csrf_token }}',
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            }).then(function (response) {
+                return response.json();
+            }).catch(function () {
+                return {
+                    ok: false,
+                    mensaje: 'No fue posible conectar con el servicio de correo.'
+                };
+            });
+        }
+    }).then(function (resultado) {
+        if (!resultado.isConfirmed) return;
+        const respuesta = resultado.value || {
+            ok: false,
+            mensaje: 'No se recibió confirmación del servicio de correo.'
+        };
+        Swal.fire({
+            icon: respuesta.ok ? 'success' : 'warning',
+            title: respuesta.ok ? 'Correo enviado' : 'No se pudo enviar',
+            text: respuesta.mensaje,
+            confirmButtonColor: respuesta.ok ? '#2e7d32' : '#f97618'
+        });
+    });
+}
+
 function cambiarEstado(salidaId, estado) {
     let titulo = estado === 'retirado' ? '¿Marcar como RETIRADO?' : '¿Enviar a CHATARRERIZACIÓN?';
     let mensaje = estado === 'retirado' 

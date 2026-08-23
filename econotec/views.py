@@ -40,7 +40,7 @@ from .models import (
 )
 from .bitacora import registrar_bitacora, nombre_corto_usuario, construir_bitacora_usuario
 from .date_filters import aplicar_rango_fecha, contexto_rango_fecha, obtener_rango_fecha
-from .emails import enviar_correo_ingreso_seguro
+from .emails import enviar_correo_finalizacion_seguro, enviar_correo_ingreso_seguro
 from .pagination import paginar_resultados
 from .permisos import admin_requerido, tecnico_requerido, es_admin, es_asesor, es_tecnico
 from .gamificacion import (
@@ -3772,6 +3772,41 @@ def salida_ocultar_guia_saldo_pendiente(request):
         actividad.ocultar_guia_saldo_pendiente = True
         actividad.save(update_fields=['ocultar_guia_saldo_pendiente'])
     return JsonResponse({'ok': True})
+
+
+@tecnico_requerido
+@require_POST
+def salida_enviar_correo_finalizacion(request, pk):
+    """Envía el acta cuando el usuario confirma el aviso de finalización."""
+    salida = get_object_or_404(
+        SalidaEquipo.objects.select_related('ingreso', 'ingreso__cliente'),
+        pk=pk,
+    )
+    destino = (salida.ingreso.cliente.correo or '').strip()
+    if not destino:
+        return JsonResponse({
+            'ok': False,
+            'codigo': 'sin_correo',
+            'mensaje': 'El cliente no tiene un correo registrado.',
+        })
+    if not getattr(settings, 'SALIDA_EMAIL_AUTOMATICO', True):
+        return JsonResponse({
+            'ok': False,
+            'codigo': 'desactivado',
+            'mensaje': 'El envío automático de finalización está desactivado.',
+        })
+
+    enviado = enviar_correo_finalizacion_seguro(salida.pk)
+    if not enviado:
+        return JsonResponse({
+            'ok': False,
+            'codigo': 'fallo_envio',
+            'mensaje': 'No se pudo enviar el correo. La finalización quedó guardada correctamente.',
+        })
+    return JsonResponse({
+        'ok': True,
+        'mensaje': f'Acta enviada correctamente a {destino}.',
+    })
 
 
 @tecnico_requerido

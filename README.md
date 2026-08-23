@@ -170,12 +170,21 @@ DEFAULT_FROM_EMAIL=Econotec <tu_correo@dominio.com>
 ECONOTEC_REPLY_TO=ventas@econotec.ec.com
 INGRESO_EMAIL_AUTOMATICO=True
 INGRESO_EMAIL_ADJUNTAR_PDF=True
+SALIDA_EMAIL_AUTOMATICO=True
+PAGO_EMAIL_AUTOMATICO=True
+EQUIPO_EMAIL_ADJUNTAR_PDF=True
 ```
 
 Al registrar una solicitud de ingreso con correo del cliente, el sistema envía
 automáticamente una confirmación profesional y adjunta el mismo PDF disponible
 en el detalle del equipo. Si SMTP no está disponible, el registro del equipo
 no se revierte ni se pierde.
+
+Al confirmar que un equipo fue finalizado, el sistema también puede enviar el
+acta de finalización con el saldo y la regla de bodegaje. Cada nuevo abono envía
+un comprobante actualizado con el valor recibido, el historial completo, el
+saldo restante y el PDF vigente. El botón **Registrar Abono y Dar Salida del
+Equipo** usa el mismo flujo y comunica además el cierre de la salida.
 
 Si un usuario todavía no tiene correo, el sistema se lo pedirá una sola vez
 después de validar usuario, contraseña, sede y captcha. El correo se guarda

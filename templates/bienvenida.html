@@ -2194,7 +2194,23 @@
       <span>Ingresar →</span>
     </div>
   </a>
-  {% endif %} {# ── REGISTRO ADMINISTRATIVO: solo admin ── #} {% if es_admin %}
+  {% endif %}
+  {% if puede_gestionar_equipos %}
+  <a href="{% url 'econotec:admin_activos_bodegaje' %}" class="card-box" style="border-left:4px solid #f59e0b;">
+    <div class="card-header">
+      <div class="card-title">Bodegaje / Chatarrerización</div>
+      <div class="card-icon">📦</div>
+    </div>
+    <div class="card-desc">
+      Revisa equipos pendientes de retiro y envía avisos profesionales por WhatsApp o correo con saldo, bodegaje y acta PDF.
+    </div>
+    <div class="card-footer">
+      <span class="status-ok">Disponible</span>
+      <span class="card-number">Activos: {{ bodegajes_total }}</span>
+    </div>
+  </a>
+  {% endif %}
+  {# ── REGISTRO ADMINISTRATIVO: solo admin ── #} {% if es_admin %}
   <a href="{% url 'econotec:salida_totales' %}" class="card-box card-box-ranking">
     <div class="card-header">
       <div class="card-title">Ranking de Técnicos</div>

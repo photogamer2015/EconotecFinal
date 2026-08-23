@@ -15,7 +15,7 @@ from django.db.models import (
     Subquery, Sum, Value,
 )
 from django.db.models.functions import Coalesce
-from django.http import HttpResponse
+from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
@@ -31,6 +31,7 @@ from .gamificacion import (
 from .busqueda import filtrar_objetos_normalizado, texto_salida_busqueda, total_resultados
 from .bitacora import construir_bitacora_usuario
 from .date_filters import aplicar_rango_fecha, contexto_rango_fecha, obtener_rango_fecha
+from .emails import enviar_correo_bodegaje_seguro
 from .models import (
     IngresoEquipo, SalidaEquipo, Abono, Egreso, CategoriaEgreso, Cliente,
     AvisoPanel, BitacoraTecnico, HorarioTecnico, InventarioItem,
@@ -1407,26 +1408,35 @@ def admin_bodegajes(request):
     })
 
 
-@admin_requerido
+@tecnico_requerido
 def admin_activos_bodegaje(request):
-    """Manejo de equipos en bodegaje activo y chatarrerización."""
+    """Consulta y comunicación de bodegaje para todos los roles operativos."""
     from .alertas import salidas_bodegaje_qs
-    import json
-    from django.http import JsonResponse
-    
+
     if request.method == 'POST':
+        if not es_admin(request.user):
+            return JsonResponse({
+                'status': 'error',
+                'msg': 'Solo un administrador puede enviar equipos a chatarrerización.',
+            }, status=403)
         try:
             data = json.loads(request.body)
             accion = data.get('accion')
             salida_id = data.get('salida_id')
-            
-            salida = SalidaEquipo.objects.get(pk=salida_id)
-            if accion == 'retirado':
-                salida.estado_reparacion = 'retirado'
-                salida.fecha_retiro_real = date.today()
-            elif accion == 'chatarrerizacion':
-                salida.estado_reparacion = 'chatarrerizacion'
-                salida.fecha_retiro_real = date.today()  # Detiene el bodegaje
+
+            if accion != 'chatarrerizacion':
+                return JsonResponse({
+                    'status': 'error',
+                    'msg': 'La acción solicitada no es válida.',
+                }, status=400)
+            salida = SalidaEquipo.objects.select_related('ingreso').get(pk=salida_id)
+            if salida.fecha_retiro_real or not salida.calcular_bodegaje()['aplica']:
+                return JsonResponse({
+                    'status': 'error',
+                    'msg': 'El equipo ya no tiene un bodegaje activo.',
+                }, status=400)
+            salida.estado_reparacion = 'chatarrerizacion'
+            salida.fecha_retiro_real = date.today()  # Detiene el bodegaje
                 
             salida.save()
             return JsonResponse({'status': 'ok'})
@@ -1443,10 +1453,13 @@ def admin_activos_bodegaje(request):
         bod = s.calcular_bodegaje()
         if bod['dias'] > 0:
             dias_totales = (hoy - s.fecha_salida).days if s.fecha_salida else 0
+            saldo_reparacion = max(s.ingreso.diferencia, Decimal('0.00'))
             activos.append({
                 'salida': s,
                 'dias_bodegaje': bod['dias'],
                 'monto_bodegaje': bod['monto'],
+                'saldo_reparacion': saldo_reparacion,
+                'total_a_regularizar': saldo_reparacion + bod['monto'],
                 'dias_totales': dias_totales,
                 'wa_link': whatsapp_link_bodegaje(s),
             })
@@ -1459,6 +1472,41 @@ def admin_activos_bodegaje(request):
         'activos': activos,
         'chatarrerizacion': chatarrerizacion,
         'count_chatarrerizacion': chatarrerizacion.count(),
+    })
+
+
+@tecnico_requerido
+@require_POST
+def bodegaje_enviar_correo(request, pk):
+    """Envía al cliente el recordatorio formal de retiro y chatarrerización."""
+    salida = get_object_or_404(
+        SalidaEquipo.objects.select_related('ingreso', 'ingreso__cliente'),
+        pk=pk,
+    )
+    if salida.fecha_retiro_real or not salida.calcular_bodegaje()['aplica']:
+        return JsonResponse({
+            'ok': False,
+            'mensaje': 'Este equipo ya no tiene un bodegaje activo para notificar.',
+        })
+
+    destino = (salida.ingreso.cliente.correo or '').strip()
+    if not destino:
+        return JsonResponse({
+            'ok': False,
+            'codigo': 'sin_correo',
+            'mensaje': 'El cliente no tiene un correo registrado.',
+        })
+
+    enviado = enviar_correo_bodegaje_seguro(salida.pk)
+    if not enviado:
+        return JsonResponse({
+            'ok': False,
+            'codigo': 'fallo_envio',
+            'mensaje': 'No se pudo enviar el correo. El expediente no fue modificado.',
+        })
+    return JsonResponse({
+        'ok': True,
+        'mensaje': f'Aviso de bodegaje enviado correctamente a {destino}.',
     })
 
 def _equipos_administrativos_filtrados(request, incluir_egreso=False):

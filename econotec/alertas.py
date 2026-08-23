@@ -321,23 +321,33 @@ def whatsapp_link_bodegaje(salida):
     nombre_cliente = (ingreso.cliente.nombres or '').split(' ')[0] or 'cliente'
     nombre_tecnico = salida.tecnico_reparo_nombre or 'el equipo técnico de Econotec'
 
+    saldo_reparacion = max(ingreso.diferencia, Decimal('0.00'))
+    total_a_regularizar = saldo_reparacion + bodegaje['monto']
     monto_fmt = f"{bodegaje['monto']:.2f}".replace('.', ',')
+    saldo_fmt = f"{saldo_reparacion:.2f}".replace('.', ',')
+    total_fmt = f"{total_a_regularizar:.2f}".replace('.', ',')
     costo_dia_fmt = f"{COSTO_BODEGAJE_DIA:.2f}".replace('.', ',')
 
     mensaje = (
-        f"Estimado(a) {nombre_cliente}, reciba un cordial saludo de parte de *Econotec — Reparación de Tecnología*.\n\n"
-        f"Le recordamos que su equipo "
+        f"Estimado(a) {nombre_cliente}, reciba un cordial saludo de parte de "
+        f"*Econotec — Reparación de Tecnología*.\n\n"
+        f"⚠️ *AVISO IMPORTANTE DE RETIRO Y BODEGAJE*\n\n"
+        f"Su equipo "
         f"({ingreso.tipo_equipo_display} {ingreso.marca}) "
-        f"con código *{ingreso.codigo_equipo}* se encuentra *listo* desde el "
+        f"con código *{ingreso.codigo_equipo}* se encuentra listo desde el "
         f"{salida.fecha_salida.strftime('%d/%m/%Y')} "
-        f"(hace *{dias_desde} día(s)*) y aún no ha sido retirado.\n\n"
-        f"📦 Conforme a nuestra política de bodegaje, a partir del sexto día de estar listo "
-        f"se aplica un cargo de *${costo_dia_fmt} diarios* por almacenamiento. "
-        f"Hasta hoy se han acumulado *${monto_fmt}* "
-        f"({bodegaje['dias']} día(s) de bodegaje).\n\n"
-        f"Le agradecemos coordinar el retiro de su equipo a la brevedad "
-        f"para evitar mayores cargos.\n\n"
-        f"Quedamos atentos a sus comentarios.\n\n"
+        f"y permanece en nuestras instalaciones desde hace *{dias_desde} día(s)*.\n\n"
+        f"📋 *Detalle actualizado*\n"
+        f"• Saldo pendiente del servicio: *${saldo_fmt}*\n"
+        f"• Bodegaje acumulado ({bodegaje['dias']} día(s)): *${monto_fmt}*\n"
+        f"• Total a regularizar al día de hoy: *${total_fmt}*\n\n"
+        f"📦 La política de bodegaje contempla {UMBRAL_DIAS_BODEGAJE} días de gracia. "
+        f"Al cumplirse ese plazo se aplica un cargo de *${costo_dia_fmt} por día* "
+        f"hasta el retiro.\n\n"
+        f"Le solicitamos coordinar el pago y retiro a la brevedad. De continuar sin "
+        f"retiro ni coordinación, el equipo será derivado al proceso de "
+        f"*chatarrerización*, cerrando definitivamente su permanencia en bodega.\n\n"
+        f"Por favor responda a este mensaje para coordinar su atención.\n\n"
         f"Saludos cordiales,\n"
         f"{nombre_tecnico} — Econotec"
     )

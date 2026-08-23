@@ -41,6 +41,11 @@ urlpatterns = [
         views.salida_ocultar_guia_saldo_pendiente,
         name='salida_ocultar_guia_saldo_pendiente',
     ),
+    path(
+        'salidas/<int:pk>/enviar-correo-finalizacion/',
+        views.salida_enviar_correo_finalizacion,
+        name='salida_enviar_correo_finalizacion',
+    ),
     path('salidas/<int:pk>/marcar-retirada/',
          views.salida_marcar_retirada, name='salida_marcar_retirada'),
     path('salidas/<int:pk>/deshacer-retiro/',
@@ -183,6 +188,11 @@ urlpatterns = [
          views_admin.export_egresos, name='admin_export_egresos'),
     path('admin-panel/bodegajes/', views_admin.admin_bodegajes, name='admin_bodegajes'),
     path('admin-panel/activos-bodegaje/', views_admin.admin_activos_bodegaje, name='admin_activos_bodegaje'),
+    path(
+        'bodegaje-chatarrerizacion/<int:pk>/enviar-correo/',
+        views_admin.bodegaje_enviar_correo,
+        name='bodegaje_enviar_correo',
+    ),
 
     # ── Control de Registro / Auditoría (solo admin) ───────
     path('admin-panel/control-registro/', views_admin.control_registro, name='control_registro'),

@@ -1,0 +1,36 @@
+AVISO IMPORTANTE DE RETIRO Y BODEGAJE
+
+Hola, {{ cliente.nombres }}.
+
+Tu equipo está finalizado desde el {{ salida.fecha_salida|date:"d/m/Y" }} y permanece en nuestras instalaciones desde hace {{ dias_totales }} días.
+
+DATOS DEL EQUIPO
+Código: {{ ingreso.codigo_equipo }}
+Equipo: {{ ingreso.tipo_equipo_display }}
+Marca / modelo: {{ ingreso.marca }} / {{ ingreso.modelo_serie }}
+Estado: {{ salida.get_estado_reparacion_display }}
+
+DETALLE ACTUALIZADO
+Saldo pendiente del servicio: ${{ saldo_reparacion|floatformat:2 }}
+Bodegaje acumulado ({{ dias_bodegaje }} día(s)): ${{ bodegaje_monto|floatformat:2 }}
+Total a regularizar al día de hoy: ${{ total_a_regularizar|floatformat:2 }}
+
+POLÍTICA DE BODEGAJE
+Se conceden {{ dias_gracia }} días de gracia desde la finalización. Al cumplirse ese plazo se cobra ${{ costo_dia|floatformat:2 }} por cada día hasta el retiro. El valor continúa acumulándose mientras el equipo permanezca en bodega.
+
+ADVERTENCIA DE CHATARRERIZACIÓN
+Te solicitamos coordinar el pago y retiro a la brevedad. De continuar sin retiro ni coordinación, el equipo será derivado al proceso de chatarrerización, cerrando definitivamente su permanencia en bodega.
+
+{% if pagos %}PAGOS REGISTRADOS
+{% for pago in pagos %}- {{ pago.fecha|date:"d/m/Y" }} · {{ pago.concepto }} · ${{ pago.monto|floatformat:2 }} · {{ pago.metodo }} · {{ pago.detalle }}
+{% endfor %}
+{% endif %}{% if adjunto_incluido %}Adjuntamos el acta actualizada del equipo en PDF con su historial económico completo.{% endif %}
+
+Responde a este correo o comunícate por WhatsApp para coordinar tu atención y retiro.
+
+Econotec — Sede {{ sede.nombre }}
+{{ sede.direccion }}
+WhatsApp: {{ whatsapps_econotec }}
+{{ sitio_econotec }}
+
+Este es un mensaje automático generado por el sistema Econotec.

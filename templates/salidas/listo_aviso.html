@@ -249,11 +249,44 @@ document.addEventListener('DOMContentLoaded', function () {
     const codigoEquipo = '{{ ingreso.codigo_equipo|escapejs }}';
     const urlEquiposFinalizados = '{% url "econotec:salida_lista" %}';
     const urlRegistrarPago = '{% url "econotec:abono_crear" ingreso_pk=ingreso.pk %}';
+    const urlEnviarCorreoFinalizacion = '{% url "econotec:salida_enviar_correo_finalizacion" pk=salida.pk %}';
     const tieneBodegaje = {% if ingreso.bodegaje_pendiente > 0 %}true{% else %}false{% endif %};
     const montoBodegaje = {{ ingreso.bodegaje_pendiente|default:0|stringformat:'.2f' }};
     const diasBodegaje = {{ ingreso.bodegaje_dias_pendiente|default:0 }};
     const formularioSalida = document.getElementById('confirmar-salida-oficina-form');
     const csrfToken = formularioSalida.querySelector('[name="csrfmiddlewaretoken"]').value;
+
+    function enviarCorreoFinalizacion() {
+        return fetch(urlEnviarCorreoFinalizacion, {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: {
+                'X-CSRFToken': csrfToken,
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        }).then(function (respuesta) {
+            return respuesta.json();
+        }).catch(function () {
+            return {
+                ok: false,
+                mensaje: 'No fue posible conectar con el servicio de correo. La finalización quedó guardada.'
+            };
+        });
+    }
+
+    function mostrarResultadoCorreo(resultado, continuar) {
+        resultado = resultado || {
+            ok: false,
+            mensaje: 'No se recibió confirmación del servicio de correo. La finalización quedó guardada.'
+        };
+        Swal.fire({
+            icon: resultado.ok ? 'success' : 'warning',
+            title: resultado.ok ? 'Acta enviada por correo' : 'Finalización guardada',
+            text: resultado.mensaje,
+            confirmButtonText: 'Continuar',
+            confirmButtonColor: resultado.ok ? '#2e7d32' : '#f97618'
+        }).then(continuar);
+    }
 
     {% if mostrar_guia_saldo_pendiente %}
     const urlOcultarGuiaSaldo = '{% url "econotec:salida_ocultar_guia_saldo_pendiente" %}';
@@ -365,7 +398,8 @@ document.addEventListener('DOMContentLoaded', function () {
             title: 'Este equipo tiene un saldo pendiente',
             html:
                 '<div style="font-size:28px;font-weight:900;color:#c62828;margin:10px 0;">' + saldoPendiente + '</div>' +
-                '<p style="line-height:1.5;">El equipo quedó finalizado, pero <b>no puede salir de la oficina</b> hasta registrar el pago completo.</p>',
+                '<p style="line-height:1.5;">El equipo quedó finalizado, pero <b>no puede salir de la oficina</b> hasta registrar el pago completo.</p>' +
+                '<p style="font-size:13px;color:#6b7280;line-height:1.45;">Al presionar <b>OK</b>, enviaremos al correo del cliente el acta en PDF, el saldo pendiente y la regla de bodegaje.</p>',
             confirmButtonText: 'OK',
             confirmButtonColor: '#f97618',
             footer: '<button type="button" id="btn-ingresar-saldo-pendiente" class="swal2-styled saldo-pendiente-directo">Ingresar saldo pendiente</button>',
@@ -373,6 +407,8 @@ document.addEventListener('DOMContentLoaded', function () {
                 footer: 'saldo-pendiente-footer'
             },
             allowOutsideClick: false,
+            showLoaderOnConfirm: true,
+            preConfirm: enviarCorreoFinalizacion,
             didOpen: function () {
                 const botonSaldoPendiente = document.getElementById('btn-ingresar-saldo-pendiente');
                 if (botonSaldoPendiente) {
@@ -382,9 +418,13 @@ document.addEventListener('DOMContentLoaded', function () {
                 }
             }
         }).then(function (resultado) {
-            {% if mostrar_guia_saldo_pendiente %}
-            if (resultado.isConfirmed) paginaTutorial(0);
-            {% endif %}
+            if (resultado.isConfirmed) {
+                mostrarResultadoCorreo(resultado.value, function () {
+                    {% if mostrar_guia_saldo_pendiente %}
+                    paginaTutorial(0);
+                    {% endif %}
+                });
+            }
         });
         return;
     }
@@ -418,7 +458,20 @@ document.addEventListener('DOMContentLoaded', function () {
         allowEscapeKey: false
     }).then(function (resultado) {
         if (resultado.isConfirmed) {
-            window.location.assign(urlEquiposFinalizados);
+            Swal.fire({
+                title: 'Enviando acta al cliente…',
+                allowOutsideClick: false,
+                allowEscapeKey: false,
+                didOpen: function () {
+                    Swal.showLoading();
+                    enviarCorreoFinalizacion().then(function (respuestaCorreo) {
+                        Swal.close();
+                        mostrarResultadoCorreo(respuestaCorreo, function () {
+                            window.location.assign(urlEquiposFinalizados);
+                        });
+                    });
+                }
+            });
         } else if (resultado.isDenied) {
             if (tieneBodegaje) {
                 confirmarCierre(

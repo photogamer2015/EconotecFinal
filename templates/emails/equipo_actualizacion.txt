@@ -1,0 +1,38 @@
+{{ titulo }}
+
+Hola, {{ cliente.nombres }}.
+
+{{ introduccion }}
+
+EQUIPO
+Código: {{ ingreso.codigo_equipo }}
+Equipo: {{ ingreso.tipo_equipo_display }}
+Marca / modelo: {{ ingreso.marca }} / {{ ingreso.modelo_serie }}
+{% if salida %}Estado: {{ salida.get_estado_reparacion_display }}
+Fecha de finalización: {{ salida.fecha_salida|date:"d/m/Y" }}
+{% if salida.fecha_retiro_real %}Salida física confirmada: {{ salida.fecha_retiro_real|date:"d/m/Y" }}{% endif %}{% endif %}
+
+{% if abonos_evento %}PAGO REGISTRADO AHORA
+Valor recibido: ${{ monto_evento|floatformat:2 }}
+{% for abono in abonos_evento %}- {{ abono.fecha|date:"d/m/Y" }} · ${{ abono.monto|floatformat:2 }} · {{ abono.metodo }} · {{ abono.detalle }}
+{% endfor %}
+{% endif %}RESUMEN ECONÓMICO
+Valor total registrado: ${{ valor_total|floatformat:2 }}
+Total de pagos registrados: ${{ total_pagado|floatformat:2 }}
+Saldo restante: ${{ saldo_pendiente|floatformat:2 }}
+
+{% if pagos %}HISTORIAL COMPLETO DE PAGOS
+{% for pago in pagos %}- {{ pago.fecha|date:"d/m/Y" }} · {{ pago.concepto }} · ${{ pago.monto|floatformat:2 }} · {{ pago.metodo }} · {{ pago.detalle }}
+{% endfor %}
+{% endif %}{% if bodegaje %}REGLA DE BODEGAJE
+Dispones de {{ bodegaje.dias_gracia }} días de gracia desde la fecha de finalización. Al cumplirse ese plazo, se cobra ${{ bodegaje.costo_dia|floatformat:2 }} por cada día de bodegaje hasta el retiro del equipo.
+Situación actual: {{ bodegaje.estado }}{% if bodegaje.detalle_actual %} · {{ bodegaje.detalle_actual }}{% endif %}.
+
+{% endif %}{% if adjunto_incluido %}Adjuntamos la hoja oficial actualizada del equipo {{ ingreso.codigo_equipo }} en PDF.{% endif %}
+
+Econotec — Sede {{ sede.nombre }}
+{{ sede.direccion }}
+WhatsApp: {{ whatsapps_econotec }}
+{{ sitio_econotec }}
+
+Este es un mensaje automático generado por el sistema Econotec.

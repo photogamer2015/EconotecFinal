@@ -6,6 +6,7 @@ from datetime import date
 from decimal import Decimal
 from io import BytesIO
 
+from django.conf import settings
 from django.contrib import messages
 from django.db import transaction
 from django.db.models import Sum
@@ -15,6 +16,7 @@ from django.views.decorators.http import require_POST
 
 from .busqueda import filtrar_objetos_normalizado, texto_ingreso_busqueda
 from .bitacora import registrar_bitacora
+from .emails import enviar_correo_abono_seguro
 from .forms import AbonoForm, ValorAcordadoPagoForm
 from .models import Abono, IngresoEquipo
 from .pagination import paginar_resultados
@@ -113,6 +115,33 @@ def _confirmar_salida_desde_abono(request, ingreso):
         f'Salida de la oficina confirmada para el equipo {ingreso.codigo_equipo}.',
     )
     return True
+
+
+def _programar_correo_abono(request, ingreso, abono_pks, *, salida_confirmada):
+    """Programa el comprobante después del commit y mantiene seguro el pago."""
+    if not getattr(settings, 'PAGO_EMAIL_AUTOMATICO', True):
+        return
+
+    destino = (ingreso.cliente.correo or '').strip()
+    if not destino:
+        messages.warning(
+            request,
+            'El abono quedó guardado, pero no se envió correo porque el cliente no tiene uno registrado.',
+        )
+        return
+
+    pks = tuple(abono_pks)
+    transaction.on_commit(
+        lambda: enviar_correo_abono_seguro(
+            ingreso.pk,
+            pks,
+            salida_confirmada=salida_confirmada,
+        )
+    )
+    messages.info(
+        request,
+        f'El comprobante actualizado será enviado a {destino}.',
+    )
 
 
 @asesor_requerido
@@ -464,6 +493,13 @@ def abono_crear(request, ingreso_pk):
                     if registrar_y_salida:
                         salida_confirmada = _confirmar_salida_desde_abono(request, ingreso)
 
+                    _programar_correo_abono(
+                        request,
+                        ingreso,
+                        [a1.pk, a2.pk],
+                        salida_confirmada=salida_confirmada,
+                    )
+
                 messages.success(
                     request,
                     f'Abono mixto registrado por ${abono.monto:.2f} '
@@ -487,6 +523,13 @@ def abono_crear(request, ingreso_pk):
                     )
                     if registrar_y_salida:
                         salida_confirmada = _confirmar_salida_desde_abono(request, ingreso)
+
+                    _programar_correo_abono(
+                        request,
+                        ingreso,
+                        [abono.pk],
+                        salida_confirmada=salida_confirmada,
+                    )
 
                 messages.success(
                     request,

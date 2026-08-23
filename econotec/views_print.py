@@ -287,8 +287,8 @@ def _detalle_pago_simple(obj, metodo, banco_attr='banco', banco_otro_attr='banco
     return ' · '.join(detalles)
 
 
-def _pagos_detallados_salida(salida):
-    ingreso = salida.ingreso
+def _pagos_detallados_ingreso(ingreso):
+    """Historial económico del ingreso antes del pago propio de la salida."""
     pagos = []
 
     if ingreso.diagnostico_inmediato == 'si' and ingreso.valor_diagnostico and ingreso.valor_diagnostico > 0:
@@ -349,6 +349,14 @@ def _pagos_detallados_salida(salida):
             'metodo': abono.get_metodo_display(),
             'detalle': detalle or '—',
         })
+
+    return pagos
+
+
+def _pagos_detallados_salida(salida):
+    """Historial económico completo, incluido el pago propio de la salida."""
+    ingreso = salida.ingreso
+    pagos = _pagos_detallados_ingreso(ingreso)
 
     if salida.valor_final_cobrado and salida.valor_final_cobrado > 0:
         detalle = _detalle_partes_mixtas(salida.pago_mixto_partes)
@@ -1129,14 +1137,173 @@ def ingreso_pdf(request, pk):
     return response
 
 
-@tecnico_requerido
-def salida_pdf(request, pk):
-    """Genera el PDF del acta de equipo finalizado."""
-    salida = get_object_or_404(
-        SalidaEquipo.objects.select_related('ingreso', 'ingreso__cliente', 'tecnico_reparo')
-        .prefetch_related('ingreso__abonos'),
-        pk=pk,
+def _draw_anexo_economico_salida(c, width, height, salida, pagos):
+    """Dibuja el historial completo y la regla de bodegaje en páginas seguras."""
+    from reportlab.lib.colors import Color, black
+    from reportlab.lib.utils import simpleSplit
+
+    from .alertas import COSTO_BODEGAJE_DIA, UMBRAL_DIAS_BODEGAJE
+
+    ingreso = salida.ingreso
+    naranja = Color(*ECO_NARANJA)
+    gris = Color(0.42, 0.45, 0.52)
+    borde = Color(0.88, 0.78, 0.72)
+    margen = 48
+    ancho = width - (margen * 2)
+
+    def encabezado(pagina):
+        y_inicio = _draw_header_econotec(
+            c,
+            width,
+            height,
+            'ANEXO ECONÓMICO Y BODEGAJE',
+        )
+        c.setFillColor(gris)
+        c.setFont('Helvetica', 7.5)
+        c.drawRightString(width - margen, height - 154, f'Equipo {ingreso.codigo_equipo} · Página {pagina}')
+        return y_inicio - 8
+
+    def tabla_encabezado(y):
+        c.setFillColor(naranja)
+        c.setFont('Helvetica-Bold', 7.5)
+        columnas = [('FECHA', 0), ('CONCEPTO', 62), ('VALOR', 190), ('MÉTODO', 260), ('DETALLE', 355)]
+        for texto, offset in columnas:
+            c.drawString(margen + offset, y, texto)
+        c.setStrokeColor(borde)
+        c.line(margen, y - 5, margen + ancho, y - 5)
+        return y - 16
+
+    pagina = 1
+    y = encabezado(pagina)
+
+    c.setFillColor(naranja)
+    c.setFont('Helvetica-Bold', 11)
+    c.drawString(margen, y, 'RESUMEN ACTUALIZADO')
+    y -= 18
+
+    saldo = max(ingreso.diferencia, Decimal('0.00'))
+    resumen = [
+        ('Valor total del servicio', ingreso.valor_efectivo_a_cobrar),
+        ('Total de pagos registrados', ingreso.total_abonado),
+        ('Saldo pendiente', saldo),
+    ]
+    caja_w = ancho / 3
+    for indice, (etiqueta, monto) in enumerate(resumen):
+        x = margen + (indice * caja_w)
+        c.setStrokeColor(borde)
+        c.setFillColorRGB(1, 0.97, 0.94)
+        c.rect(x, y - 42, caja_w, 42, stroke=1, fill=1)
+        c.setFillColor(gris)
+        c.setFont('Helvetica-Bold', 7)
+        c.drawString(x + 8, y - 13, etiqueta.upper())
+        c.setFillColor(black)
+        c.setFont('Helvetica-Bold', 12)
+        c.drawString(x + 8, y - 31, _money_text(monto))
+    y -= 58
+
+    calculo = salida.calcular_bodegaje()
+    if salida.bodegaje_dias_congelado is not None:
+        if salida.bodegaje_aplicado_al_pago:
+            estado_bodegaje = 'Cobrado y cerrado'
+        elif (salida.bodegaje_monto_congelado or Decimal('0.00')) > Decimal('0.00'):
+            estado_bodegaje = 'Perdonado y cerrado'
+        else:
+            estado_bodegaje = 'Cerrado sin cargos'
+    elif ingreso.bodegaje_pendiente > Decimal('0.00'):
+        estado_bodegaje = 'Pendiente de decisión'
+    else:
+        estado_bodegaje = 'Dentro del período de gracia'
+
+    regla = (
+        f'Regla: {UMBRAL_DIAS_BODEGAJE} días de gracia desde la fecha de finalización. '
+        f'Al cumplirse el plazo se cobra {_money_text(COSTO_BODEGAJE_DIA)} por cada día '
+        'de bodegaje hasta el retiro del equipo.'
     )
+    situacion = f'Situación actual: {estado_bodegaje}.'
+    if calculo['aplica'] and calculo['monto'] > 0:
+        if salida.bodegaje_dias_congelado is not None:
+            concepto_bodegaje = (
+                'Monto cobrado'
+                if salida.bodegaje_aplicado_al_pago
+                else 'Monto perdonado'
+            )
+        else:
+            concepto_bodegaje = 'Acumulado actual'
+        situacion += (
+            f" {calculo['dias']} día(s). {concepto_bodegaje}: "
+            f"{_money_text(calculo['monto'])}."
+        )
+
+    regla_lineas = simpleSplit(regla, 'Helvetica', 8, ancho - 20)
+    situacion_lineas = simpleSplit(situacion, 'Helvetica-Bold', 8, ancho - 20)
+    caja_h = 24 + ((len(regla_lineas) + len(situacion_lineas)) * 10)
+    c.setStrokeColor(Color(0.88, 0.68, 0.2))
+    c.setFillColorRGB(1, 0.98, 0.88)
+    c.roundRect(margen, y - caja_h, ancho, caja_h, 5, stroke=1, fill=1)
+    c.setFillColor(Color(0.43, 0.30, 0.0))
+    c.setFont('Helvetica-Bold', 9)
+    c.drawString(margen + 10, y - 14, 'REGLA DE BODEGAJE')
+    cy = y - 27
+    c.setFont('Helvetica', 8)
+    for linea in regla_lineas:
+        c.drawString(margen + 10, cy, linea)
+        cy -= 10
+    c.setFont('Helvetica-Bold', 8)
+    for linea in situacion_lineas:
+        c.drawString(margen + 10, cy, linea)
+        cy -= 10
+    y -= caja_h + 22
+
+    c.setFillColor(naranja)
+    c.setFont('Helvetica-Bold', 11)
+    c.drawString(margen, y, 'HISTORIAL COMPLETO DE PAGOS')
+    y -= 16
+    y = tabla_encabezado(y)
+
+    if not pagos:
+        c.setFillColor(black)
+        c.setFont('Helvetica', 8.5)
+        c.drawString(margen, y, 'No existen pagos ni abonos registrados.')
+        return
+
+    font = 'Helvetica'
+    tamano = 6.8
+    leading = 8
+    anchos = [55, 118, 62, 85, 143]
+    for pago in pagos:
+        c.setFont(font, tamano)
+        celdas = [
+            [pago['fecha'].strftime('%d/%m/%Y')],
+            simpleSplit(str(pago['concepto']), font, tamano, anchos[1]) or ['—'],
+            [_money_text(pago['monto'])],
+            simpleSplit(str(pago['metodo']), font, tamano, anchos[3]) or ['—'],
+            simpleSplit(str(pago['detalle'] or '—'), font, tamano, anchos[4]) or ['—'],
+        ]
+        celdas = [lineas[:4] for lineas in celdas]
+        alto = (max(len(lineas) for lineas in celdas) * leading) + 8
+        if y - alto < 52:
+            c.showPage()
+            pagina += 1
+            y = encabezado(pagina)
+            c.setFillColor(naranja)
+            c.setFont('Helvetica-Bold', 11)
+            c.drawString(margen, y, 'CONTINUACIÓN DEL HISTORIAL DE PAGOS')
+            y -= 16
+            y = tabla_encabezado(y)
+
+        offsets = [0, 62, 190, 260, 355]
+        c.setFillColor(black)
+        c.setFont(font, tamano)
+        for columna, lineas in enumerate(celdas):
+            for indice, linea in enumerate(lineas):
+                c.drawString(margen + offsets[columna], y - (indice * leading), linea)
+        y -= alto
+        c.setStrokeColor(Color(0.9, 0.9, 0.9))
+        c.line(margen, y + 3, margen + ancho, y + 3)
+
+
+def generar_salida_pdf_bytes(salida):
+    """Genera el acta oficial de equipo finalizado y devuelve sus bytes."""
     ingreso = salida.ingreso
     cliente = ingreso.cliente
     # La responsabilidad de la salida nunca se hereda del técnico asignado
@@ -1251,11 +1418,7 @@ def salida_pdf(request, pk):
         c.save()
         pdf = buf.getvalue()
         buf.close()
-        response = HttpResponse(pdf, content_type='application/pdf')
-        response['Content-Disposition'] = (
-            f'attachment; filename="equipo_finalizado_cortesia_{ingreso.codigo_equipo}.pdf"'
-        )
-        return response
+        return pdf
 
     # ── Factura ──
     def _clip_factura(valor, max_len=42):
@@ -1328,7 +1491,11 @@ def salida_pdf(request, pk):
     c.drawString(margen + 10, y - 21, 'Su valor pendiente es:')
     c.setFillColor(black)
     c.setFont('Helvetica-Bold', 13)
-    c.drawRightString(margen + 490, y - 21, _money_text(ingreso.diferencia))
+    c.drawRightString(
+        margen + 490,
+        y - 21,
+        _money_text(max(ingreso.diferencia, Decimal('0.00'))),
+    )
     y -= 48
 
     if pagos_detallados:
@@ -1392,7 +1559,7 @@ def salida_pdf(request, pk):
             c.drawString(
                 margen,
                 y,
-                f'Hay {len(pagos_detallados) - max_pagos_pdf} pago(s) adicional(es) en el historial de abonos.',
+                'Consulta el historial completo de pagos en el anexo económico de este documento.',
             )
             y -= 10
     else:
@@ -1412,15 +1579,35 @@ def salida_pdf(request, pk):
     c.drawCentredString(firma_x + 110, y - 10, 'FIRMA DEL TÉCNICO')
 
     c.showPage()
+    _draw_anexo_economico_salida(c, width, height, salida, pagos_detallados)
+    c.showPage()
     c.save()
 
     pdf = buf.getvalue()
     buf.close()
 
-    response = HttpResponse(pdf, content_type='application/pdf')
-    response['Content-Disposition'] = (
-        f'attachment; filename="equipo_finalizado_{ingreso.codigo_equipo}.pdf"'
+    return pdf
+
+
+@tecnico_requerido
+def salida_pdf(request, pk):
+    """Descarga el PDF oficial del acta de equipo finalizado."""
+    salida = get_object_or_404(
+        SalidaEquipo.objects.select_related(
+            'ingreso',
+            'ingreso__cliente',
+            'tecnico_reparo',
+        ).prefetch_related('ingreso__abonos'),
+        pk=pk,
     )
+    pdf = generar_salida_pdf_bytes(salida)
+    response = HttpResponse(pdf, content_type='application/pdf')
+    nombre = (
+        f'equipo_finalizado_cortesia_{salida.ingreso.codigo_equipo}.pdf'
+        if salida.estado_reparacion == 'cortesia'
+        else f'equipo_finalizado_{salida.ingreso.codigo_equipo}.pdf'
+    )
+    response['Content-Disposition'] = f'attachment; filename="{nombre}"'
     return response
 
 

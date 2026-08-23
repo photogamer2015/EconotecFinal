@@ -1,0 +1,149 @@
+{% load econotec_extras %}
+<!doctype html>
+<html lang="es">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Aviso de retiro y bodegaje {{ ingreso.codigo_equipo }}</title>
+</head>
+<body style="margin:0; padding:0; background:#f4eee9; color:#202936; font-family:Arial,Helvetica,sans-serif;">
+    <div style="display:none; max-height:0; overflow:hidden; opacity:0; color:transparent;">
+        Aviso importante: el equipo {{ ingreso.codigo_equipo }} continúa pendiente de retiro.
+    </div>
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="width:100%; background:#f4eee9;">
+        <tr>
+            <td align="center" style="padding:28px 12px;">
+                <table role="presentation" width="640" cellspacing="0" cellpadding="0" border="0" style="width:100%; max-width:640px; background:#ffffff; border-radius:18px; overflow:hidden; box-shadow:0 8px 24px rgba(32,41,54,.08);">
+                    <tr>
+                        <td style="padding:25px 30px; background:#202936; border-bottom:5px solid #f97618;">
+                            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
+                                <tr>
+                                    <td valign="middle">
+                                        <table role="presentation" cellspacing="0" cellpadding="0" border="0">
+                                            <tr>
+                                                <td width="44" height="44" align="center" valign="middle" style="width:44px; height:44px; border-radius:50%; background:#f97618; color:#ffffff; font-size:25px; font-weight:800;">E</td>
+                                                <td style="padding-left:12px; color:#ffffff; font-size:23px; font-weight:800;">ECONOTEC</td>
+                                            </tr>
+                                        </table>
+                                    </td>
+                                    <td align="right" valign="middle" style="color:#ffffff; font-size:12px; line-height:1.5;">
+                                        <strong style="color:#ffb17a;">Sede {{ sede.nombre }}</strong><br>
+                                        Equipo {{ ingreso.codigo_equipo }}
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="padding:30px 30px 14px;">
+                            <div style="color:#c62828; font-size:12px; font-weight:900; letter-spacing:1.1px; text-transform:uppercase;">Aviso importante de retiro</div>
+                            <h1 style="margin:8px 0 10px; color:#202936; font-size:27px; line-height:1.2;">Tu equipo continúa en bodegaje</h1>
+                            <p style="margin:0; color:#5f6875; font-size:15px; line-height:1.6;">Hola, {{ cliente.nombres }}. Tu equipo está finalizado desde el {{ salida.fecha_salida|date:"d/m/Y" }} y permanece en nuestras instalaciones desde hace <strong>{{ dias_totales }} días</strong>.</p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="padding:14px 30px 22px;">
+                            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background:#fff3eb; border:1px solid #ffd6bd; border-radius:13px;">
+                                <tr>
+                                    <td style="padding:20px;">
+                                        <div style="color:#9c4a14; font-size:11px; font-weight:800; text-transform:uppercase;">Equipo</div>
+                                        <div style="padding-top:4px; color:#f36a0b; font-size:29px; font-weight:900;">{{ ingreso.codigo_equipo }}</div>
+                                        <div style="padding-top:7px; color:#374151; font-size:13px;">{{ ingreso.tipo_equipo_display }} · {{ ingreso.marca }} {{ ingreso.modelo_serie }}</div>
+                                    </td>
+                                    <td align="right" style="padding:20px;">
+                                        <div style="color:#687180; font-size:11px; font-weight:800; text-transform:uppercase;">Total al día de hoy</div>
+                                        <div style="padding-top:4px; color:#c62828; font-size:28px; font-weight:900;">{{ total_a_regularizar|dinero_signo }}</div>
+                                        <div style="padding-top:5px; color:#687180; font-size:12px;">Pago y retiro pendientes</div>
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="padding:0 30px 24px;">
+                            <div style="padding-bottom:9px; color:#f36a0b; font-size:14px; font-weight:800; text-transform:uppercase;">Detalle actualizado</div>
+                            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="border:1px solid #eadfd8; border-radius:12px; overflow:hidden; font-size:13px;">
+                                <tr>
+                                    <td style="padding:11px 14px; background:#faf7f5; color:#687180; border-bottom:1px solid #eadfd8;">Saldo pendiente del servicio</td>
+                                    <td align="right" style="padding:11px 14px; font-weight:800; border-bottom:1px solid #eadfd8;">{{ saldo_reparacion|dinero_signo }}</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding:11px 14px; background:#faf7f5; color:#687180; border-bottom:1px solid #eadfd8;">Bodegaje acumulado · {{ dias_bodegaje }} día{{ dias_bodegaje|pluralize }}</td>
+                                    <td align="right" style="padding:11px 14px; font-weight:800; border-bottom:1px solid #eadfd8;">{{ bodegaje_monto|dinero_signo }}</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding:13px 14px; background:#faf7f5; color:#202936; font-weight:900;">Total a regularizar hoy</td>
+                                    <td align="right" style="padding:13px 14px; color:#c62828; font-size:17px; font-weight:900;">{{ total_a_regularizar|dinero_signo }}</td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="padding:0 30px 24px;">
+                            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background:#fff8e1; border:1px solid #f0d486; border-radius:12px;">
+                                <tr>
+                                    <td style="padding:17px; color:#6d4c00; font-size:13px; line-height:1.6;">
+                                        <strong style="font-size:14px;">Política de bodegaje</strong><br>
+                                        Se conceden {{ dias_gracia }} días de gracia desde la finalización. Al cumplirse ese plazo se cobra {{ costo_dia|dinero_signo }} por cada día hasta el retiro; el valor continúa acumulándose mientras el equipo permanezca en bodega.
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="padding:0 30px 24px;">
+                            <div style="padding:17px; background:#fff0f0; border:1px solid #efb5b5; border-left:5px solid #c62828; border-radius:9px; color:#7f1d1d; font-size:13px; line-height:1.6;">
+                                <strong style="font-size:14px;">Advertencia de chatarrerización</strong><br>
+                                Te solicitamos coordinar el pago y retiro a la brevedad. De continuar sin retiro ni coordinación, el equipo será derivado al proceso de <strong>chatarrerización</strong>, cerrando definitivamente su permanencia en bodega.
+                            </div>
+                        </td>
+                    </tr>
+                    {% if pagos %}
+                    <tr>
+                        <td style="padding:0 30px 24px;">
+                            <div style="padding-bottom:9px; color:#f36a0b; font-size:14px; font-weight:800; text-transform:uppercase;">Pagos registrados</div>
+                            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="border:1px solid #eadfd8; border-radius:12px; overflow:hidden; font-size:12px;">
+                                <tr style="background:#202936; color:#ffffff;">
+                                    <th align="left" style="padding:10px 9px;">Fecha</th>
+                                    <th align="left" style="padding:10px 9px;">Concepto</th>
+                                    <th align="right" style="padding:10px 9px;">Valor</th>
+                                    <th align="left" style="padding:10px 9px;">Método / detalle</th>
+                                </tr>
+                                {% for pago in pagos %}
+                                <tr>
+                                    <td valign="top" style="padding:10px 9px; border-top:1px solid #eadfd8; white-space:nowrap;">{{ pago.fecha|date:"d/m/Y" }}</td>
+                                    <td valign="top" style="padding:10px 9px; border-top:1px solid #eadfd8;">{{ pago.concepto }}</td>
+                                    <td valign="top" align="right" style="padding:10px 9px; border-top:1px solid #eadfd8; font-weight:800; white-space:nowrap;">{{ pago.monto|dinero_signo }}</td>
+                                    <td valign="top" style="padding:10px 9px; border-top:1px solid #eadfd8;">{{ pago.metodo }}<br><span style="color:#687180;">{{ pago.detalle }}</span></td>
+                                </tr>
+                                {% endfor %}
+                            </table>
+                        </td>
+                    </tr>
+                    {% endif %}
+                    {% if adjunto_incluido %}
+                    <tr>
+                        <td style="padding:0 30px 24px;">
+                            <div style="padding:14px 16px; background:#edf9f1; border:1px solid #bde8cb; border-radius:10px; color:#25633a; font-size:13px; line-height:1.5;"><strong>Acta actualizada adjunta</strong><br>El PDF contiene los datos del equipo, el historial completo de pagos, el saldo y la regla de bodegaje.</div>
+                        </td>
+                    </tr>
+                    {% endif %}
+                    <tr>
+                        <td style="padding:20px 30px; background:#fff3eb; color:#654633; font-size:13px; line-height:1.6;">
+                            Responde a este correo o comunícate por WhatsApp para coordinar tu atención y retiro.
+                        </td>
+                    </tr>
+                    <tr>
+                        <td align="center" style="padding:25px 30px; background:#202936; color:#cdd2d9; font-size:11px; line-height:1.65;">
+                            <strong style="color:#ffffff;">ECONOTEC · Sede {{ sede.nombre }}</strong><br>
+                            {{ sede.direccion }}<br>
+                            WhatsApp: {{ whatsapps_econotec }} · {{ sitio_econotec }}<br><br>
+                            Mensaje automático generado por el sistema Econotec.
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>

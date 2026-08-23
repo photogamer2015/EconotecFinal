@@ -1,0 +1,177 @@
+{% load econotec_extras %}
+<!doctype html>
+<html lang="es">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{ titulo }} — {{ ingreso.codigo_equipo }}</title>
+</head>
+<body style="margin:0; padding:0; background:#f4eee9; color:#202936; font-family:Arial,Helvetica,sans-serif;">
+    <div style="display:none; max-height:0; overflow:hidden; opacity:0; color:transparent;">
+        {{ titulo }}. Equipo {{ ingreso.codigo_equipo }}. Saldo pendiente {{ saldo_pendiente|dinero_signo }}.
+    </div>
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="width:100%; background:#f4eee9;">
+        <tr>
+            <td align="center" style="padding:28px 12px;">
+                <table role="presentation" width="640" cellspacing="0" cellpadding="0" border="0" style="width:100%; max-width:640px; background:#ffffff; border-radius:18px; overflow:hidden; box-shadow:0 8px 24px rgba(32,41,54,.08);">
+                    <tr>
+                        <td style="padding:25px 30px; background:#202936; border-bottom:5px solid #f97618;">
+                            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
+                                <tr>
+                                    <td valign="middle">
+                                        <table role="presentation" cellspacing="0" cellpadding="0" border="0">
+                                            <tr>
+                                                <td width="44" height="44" align="center" valign="middle" style="width:44px; height:44px; border-radius:50%; background:#f97618; color:#ffffff; font-size:25px; font-weight:800;">E</td>
+                                                <td style="padding-left:12px; color:#ffffff; font-size:23px; font-weight:800; letter-spacing:.3px;">ECONOTEC</td>
+                                            </tr>
+                                        </table>
+                                    </td>
+                                    <td align="right" valign="middle" style="color:#ffffff; font-size:12px; line-height:1.5;">
+                                        <strong style="color:#ffb17a;">Sede {{ sede.nombre }}</strong><br>
+                                        Equipo {{ ingreso.codigo_equipo }}
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="padding:31px 30px 12px;">
+                            <div style="color:#f97618; font-size:12px; font-weight:800; letter-spacing:1.2px; text-transform:uppercase;">{{ etiqueta }}</div>
+                            <h1 style="margin:8px 0 9px; color:#202936; font-size:27px; line-height:1.2;">{{ titulo }}</h1>
+                            <p style="margin:0; color:#5f6875; font-size:15px; line-height:1.6;">Hola, {{ cliente.nombres }}. {{ introduccion }}</p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="padding:16px 30px 22px;">
+                            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background:#fff3eb; border:1px solid #ffd6bd; border-radius:13px;">
+                                <tr>
+                                    <td style="padding:20px;">
+                                        <div style="color:#9c4a14; font-size:11px; font-weight:800; letter-spacing:1px; text-transform:uppercase;">Equipo</div>
+                                        <div style="padding-top:4px; color:#f36a0b; font-size:30px; font-weight:900; line-height:1;">{{ ingreso.codigo_equipo }}</div>
+                                        <div style="padding-top:8px; color:#374151; font-size:13px;">{{ ingreso.tipo_equipo_display }} · {{ ingreso.marca }} {{ ingreso.modelo_serie }}</div>
+                                    </td>
+                                    <td align="right" valign="middle" style="padding:20px;">
+                                        <div style="color:#687180; font-size:11px; font-weight:800; text-transform:uppercase;">Saldo pendiente</div>
+                                        <div style="padding-top:4px; color:{% if saldo_pendiente > 0 %}#c62828{% else %}#16803a{% endif %}; font-size:29px; font-weight:900;">{{ saldo_pendiente|dinero_signo }}</div>
+                                        <div style="padding-top:5px; color:#687180; font-size:12px;">{% if saldo_pendiente > 0 %}Pendiente de pago{% else %}Cuenta al día{% endif %}</div>
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+
+                    {% if abonos_evento %}
+                    <tr>
+                        <td style="padding:0 30px 24px;">
+                            <div style="padding-bottom:9px; color:#f36a0b; font-size:14px; font-weight:800; text-transform:uppercase;">Pago registrado ahora</div>
+                            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="border:1px solid #bde8cb; border-radius:12px; overflow:hidden;">
+                                <tr>
+                                    <td style="padding:15px; background:#edf9f1; color:#25633a; font-size:13px;">Valor recibido</td>
+                                    <td align="right" style="padding:15px; background:#edf9f1; color:#16803a; font-size:20px; font-weight:900;">{{ monto_evento|dinero_signo }}</td>
+                                </tr>
+                                {% for abono in abonos_evento %}
+                                <tr>
+                                    <td colspan="2" style="padding:11px 15px; color:#374151; font-size:12px; line-height:1.5; border-top:1px solid #d9eee0;">
+                                        <strong>{{ abono.fecha|date:"d/m/Y" }} · {{ abono.metodo }}</strong><br>{{ abono.detalle }}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </table>
+                        </td>
+                    </tr>
+                    {% endif %}
+
+                    <tr>
+                        <td style="padding:0 30px 24px;">
+                            <div style="padding-bottom:9px; color:#f36a0b; font-size:14px; font-weight:800; text-transform:uppercase;">Resumen económico</div>
+                            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="border:1px solid #eadfd8; border-radius:12px; overflow:hidden; font-size:13px;">
+                                <tr>
+                                    <td style="padding:11px 14px; background:#faf7f5; color:#687180; border-bottom:1px solid #eadfd8;">Valor total registrado</td>
+                                    <td align="right" style="padding:11px 14px; color:#202936; font-weight:800; border-bottom:1px solid #eadfd8;">{{ valor_total|dinero_signo }}</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding:11px 14px; background:#faf7f5; color:#687180; border-bottom:1px solid #eadfd8;">Total de pagos registrados</td>
+                                    <td align="right" style="padding:11px 14px; color:#16803a; font-weight:800; border-bottom:1px solid #eadfd8;">{{ total_pagado|dinero_signo }}</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding:12px 14px; background:#faf7f5; color:#687180;">Saldo restante</td>
+                                    <td align="right" style="padding:12px 14px; color:{% if saldo_pendiente > 0 %}#c62828{% else %}#16803a{% endif %}; font-size:16px; font-weight:900;">{{ saldo_pendiente|dinero_signo }}</td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+
+                    {% if pagos %}
+                    <tr>
+                        <td style="padding:0 30px 24px;">
+                            <div style="padding-bottom:9px; color:#f36a0b; font-size:14px; font-weight:800; text-transform:uppercase;">Historial completo de pagos</div>
+                            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="border:1px solid #eadfd8; border-radius:12px; overflow:hidden; font-size:12px;">
+                                <tr style="background:#202936; color:#ffffff;">
+                                    <th align="left" style="padding:10px 9px;">Fecha</th>
+                                    <th align="left" style="padding:10px 9px;">Concepto</th>
+                                    <th align="right" style="padding:10px 9px;">Valor</th>
+                                    <th align="left" style="padding:10px 9px;">Método / detalle</th>
+                                </tr>
+                                {% for pago in pagos %}
+                                <tr>
+                                    <td valign="top" style="padding:10px 9px; border-top:1px solid #eadfd8; white-space:nowrap;">{{ pago.fecha|date:"d/m/Y" }}</td>
+                                    <td valign="top" style="padding:10px 9px; border-top:1px solid #eadfd8;">{{ pago.concepto }}</td>
+                                    <td valign="top" align="right" style="padding:10px 9px; border-top:1px solid #eadfd8; font-weight:800; white-space:nowrap;">{{ pago.monto|dinero_signo }}</td>
+                                    <td valign="top" style="padding:10px 9px; border-top:1px solid #eadfd8;">{{ pago.metodo }}<br><span style="color:#687180;">{{ pago.detalle }}</span></td>
+                                </tr>
+                                {% endfor %}
+                            </table>
+                        </td>
+                    </tr>
+                    {% endif %}
+
+                    {% if salida %}
+                    <tr>
+                        <td style="padding:0 30px 24px;">
+                            <div style="padding-bottom:9px; color:#f36a0b; font-size:14px; font-weight:800; text-transform:uppercase;">Estado del equipo</div>
+                            <div style="padding:15px 16px; background:#faf7f5; border-left:4px solid #f97618; border-radius:7px; color:#374151; font-size:14px; line-height:1.55;">
+                                <strong>{{ salida.get_estado_reparacion_display }}</strong><br>
+                                Finalizado el {{ salida.fecha_salida|date:"d/m/Y" }}{% if salida.fecha_retiro_real %} · Salida física confirmada el {{ salida.fecha_retiro_real|date:"d/m/Y" }}{% endif %}.
+                            </div>
+                        </td>
+                    </tr>
+                    {% endif %}
+
+                    {% if bodegaje %}
+                    <tr>
+                        <td style="padding:0 30px 24px;">
+                            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background:#fff8e1; border:1px solid #f0d486; border-radius:12px;">
+                                <tr>
+                                    <td style="padding:17px; color:#6d4c00; font-size:13px; line-height:1.6;">
+                                        <strong style="font-size:14px;">Regla de bodegaje</strong><br>
+                                        Dispones de {{ bodegaje.dias_gracia }} días de gracia desde la fecha de finalización. Al cumplirse ese plazo, se cobra {{ bodegaje.costo_dia|dinero_signo }} por cada día de bodegaje hasta el retiro del equipo.<br>
+                                        <strong>Situación actual:</strong> {{ bodegaje.estado }}{% if bodegaje.detalle_actual %} · {{ bodegaje.detalle_actual }}{% endif %}.
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+                    {% endif %}
+
+                    {% if adjunto_incluido %}
+                    <tr>
+                        <td style="padding:0 30px 24px;">
+                            <div style="padding:14px 16px; background:#edf9f1; border:1px solid #bde8cb; border-radius:10px; color:#25633a; font-size:13px; line-height:1.5;"><strong>PDF oficial adjunto</strong><br>Conserva la hoja actualizada del equipo {{ ingreso.codigo_equipo }} como respaldo de la operación.</div>
+                        </td>
+                    </tr>
+                    {% endif %}
+
+                    <tr>
+                        <td align="center" style="padding:25px 30px; background:#202936; color:#cdd2d9; font-size:11px; line-height:1.65;">
+                            <strong style="color:#ffffff;">ECONOTEC · Sede {{ sede.nombre }}</strong><br>
+                            {{ sede.direccion }}<br>
+                            WhatsApp: {{ whatsapps_econotec }} · {{ sitio_econotec }}<br><br>
+                            Mensaje automático generado por el sistema Econotec.
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>
