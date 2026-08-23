@@ -28,7 +28,7 @@ Saldo restante: ${{ saldo_pendiente|floatformat:2 }}
 Dispones de {{ bodegaje.dias_gracia }} días de gracia desde la fecha de finalización. Al cumplirse ese plazo, se cobra ${{ bodegaje.costo_dia|floatformat:2 }} por cada día de bodegaje hasta el retiro del equipo.
 Situación actual: {{ bodegaje.estado }}{% if bodegaje.detalle_actual %} · {{ bodegaje.detalle_actual }}{% endif %}.
 
-{% endif %}{% if adjunto_incluido %}Adjuntamos la hoja oficial actualizada del equipo {{ ingreso.codigo_equipo }} en PDF.{% endif %}
+{% endif %}{% if adjunto_incluido %}{% if tipo == 'salida' %}Adjuntamos el acta oficial de salida de la oficina del equipo {{ ingreso.codigo_equipo }} en PDF.{% else %}Adjuntamos la hoja oficial actualizada del equipo {{ ingreso.codigo_equipo }} en PDF.{% endif %}{% endif %}
 
 Econotec — Sede {{ sede.nombre }}
 {{ sede.direccion }}

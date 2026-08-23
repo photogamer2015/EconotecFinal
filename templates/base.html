@@ -1794,10 +1794,7 @@
                         }).then((confirmRes) => {
                             if(confirmRes.isConfirmed) {
                                 bodegajeTargetForm = form;
-                                // Mostrar el monto dentro del modal de pago
-                                var lbl = document.getElementById('bod_monto_label');
-                                if (lbl) lbl.textContent = '$' + montoFmt + (diasTxt ? ' (' + diasTxt + ')' : '');
-                                document.getElementById('bodegaje-modal').style.display = 'flex';
+                                abrirModalPagoBodegaje(montoFmt, diasTxt);
                             }
                         });
                     } else if (result.isDenied) {
@@ -1978,115 +1975,340 @@
     </script>
 
     <!-- Modal Cobro de Bodegaje -->
-    <div id="bodegaje-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:9999; align-items:center; justify-content:center; padding:20px;">
-        <div style="background:var(--card-bg,#fff); border-radius:12px; padding:24px; max-width:400px; width:100%; box-shadow:0 10px 40px rgba(0,0,0,0.3); position: relative;">
-            <h3 style="margin:0 0 8px; color:var(--primary,#f97618); font-size:18px;">💳 Cobro de Bodegaje</h3>
-            <div style="background:rgba(249,118,24,0.10); border:1px solid rgba(249,118,24,0.35); border-radius:8px; padding:10px 12px; margin-bottom:14px; text-align:center;">
-                <span style="font-size:12px; color:var(--text-muted,#666); display:block;">Valor de bodegaje a cobrar</span>
-                <strong id="bod_monto_label" style="font-size:22px; color:var(--primary,#f97618);">$0.00</strong>
+    <style>
+        .bodegaje-modal {
+            display: none; position: fixed; inset: 0; z-index: 9999;
+            align-items: center; justify-content: center; padding: 20px;
+            background: rgba(17, 24, 39, .68); backdrop-filter: blur(3px);
+        }
+        .bodegaje-dialog {
+            width: min(640px, 100%); max-height: calc(100vh - 40px); overflow-y: auto;
+            padding: 24px; border: 1px solid var(--border-color); border-radius: 17px;
+            background: var(--card-bg, #fff); box-shadow: 0 20px 65px rgba(0,0,0,.35);
+        }
+        .bodegaje-dialog h3 { margin: 0 0 8px; color: var(--primary, #f97618); font-size: 21px; }
+        .bodegaje-dialog p { margin: 0 0 16px; color: var(--text-muted, #666); font-size: 13px; line-height: 1.5; }
+        .bodegaje-total {
+            margin-bottom: 16px; padding: 13px 15px; text-align: center;
+            border: 1px solid rgba(249,118,24,.36); border-radius: 11px;
+            background: rgba(249,118,24,.10);
+        }
+        .bodegaje-total span { display: block; color: var(--text-muted); font-size: 12px; }
+        .bodegaje-total strong { color: var(--primary, #f97618); font-size: 25px; }
+        .bod-field { margin-bottom: 13px; }
+        .bod-field label { display: block; margin-bottom: 5px; color: var(--text-main); font-size: 13px; font-weight: 800; }
+        .bod-field .form-input { width: 100%; min-width: 0; box-sizing: border-box; }
+        .bod-mixto { display: none; margin: 15px 0 4px; }
+        .bod-mixto-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+        .bod-parte {
+            min-width: 0; padding: 14px; border: 1px solid var(--border-color);
+            border-radius: 12px; background: rgba(249,118,24,.045);
+        }
+        .bod-parte h4 { margin: 0 0 12px; color: var(--text-main); font-size: 14px; }
+        .bod-mixto-resumen {
+            margin: 12px 0 0; padding: 10px 12px; border-radius: 9px;
+            background: rgba(37, 99, 235, .09); color: #1d4ed8;
+            font-size: 12px; font-weight: 750; text-align: center;
+        }
+        [data-theme="dark"] .bod-mixto-resumen { color: #93c5fd; }
+        .bod-error {
+            display: none; margin-top: 13px; padding: 10px 12px; border-radius: 9px;
+            border: 1px solid rgba(198,40,40,.32); background: rgba(198,40,40,.09);
+            color: #c62828; font-size: 12px; font-weight: 750; line-height: 1.45;
+        }
+        .bod-email-note {
+            margin-top: 15px; padding: 11px 13px; border-radius: 9px;
+            background: rgba(46,125,50,.09); color: #257234; font-size: 12px; line-height: 1.45;
+        }
+        [data-theme="dark"] .bod-email-note { color: #86efac; }
+        .bod-actions { display: flex; justify-content: flex-end; gap: 9px; margin-top: 19px; }
+        @media (max-width: 640px) {
+            .bodegaje-modal { align-items: flex-end; padding: 8px; }
+            .bodegaje-dialog { max-height: calc(100vh - 16px); padding: 18px 15px; border-radius: 16px; }
+            .bod-mixto-grid { grid-template-columns: minmax(0, 1fr); }
+            .bod-actions { flex-direction: column-reverse; }
+            .bod-actions .btn { width: 100%; min-height: 46px; }
+        }
+    </style>
+    <div id="bodegaje-modal" class="bodegaje-modal" role="dialog" aria-modal="true" aria-labelledby="bodegaje-modal-title">
+        <div class="bodegaje-dialog">
+            <h3 id="bodegaje-modal-title">💳 Cobro de bodegaje</h3>
+            <div class="bodegaje-total">
+                <span>Valor total de bodegaje a cobrar</span>
+                <strong id="bod_monto_label">$0.00</strong>
             </div>
-            <p style="font-size:13px; color:var(--text-muted,#666); margin-bottom:16px;">Selecciona el método de pago con el que el cliente está cancelando el valor del bodegaje.</p>
-            
-            <div style="margin-bottom: 12px;">
-                <label style="display:block; font-size:13px; font-weight:bold; margin-bottom:4px; color:var(--text-color);">Método de pago</label>
-                <select id="bod_metodo" class="form-input" style="width:100%; box-sizing:border-box; padding:8px;" onchange="toggleBodegajeFields()">
+            <p>Selecciona cómo cancela el cliente. Si usa dos formas de pago, elige <strong>Pago mixto</strong> y distribuye exactamente el valor total.</p>
+
+            <div class="bod-field">
+                <label for="bod_metodo">Método de pago *</label>
+                <select id="bod_metodo" class="form-input" onchange="toggleBodegajeFields()">
                     <option value="efectivo">Efectivo</option>
-                    <option value="transferencia">Transferencia Bancaria</option>
+                    <option value="transferencia">Transferencia bancaria</option>
                     <option value="tarjeta">Tarjeta / App (Payphone, Deuna)</option>
+                    <option value="mixto">Pago mixto (2 métodos)</option>
                 </select>
             </div>
 
-            <div id="bod_wrap_banco" style="display:none; margin-bottom: 12px;">
-                <label style="display:block; font-size:13px; font-weight:bold; margin-bottom:4px; color:var(--text-color);">Banco</label>
-                <select id="bod_banco" class="form-input" style="width:100%; box-sizing:border-box; padding:8px;" onchange="toggleBodegajeFields()">
-                    <option value="pichincha">Pichincha</option>
-                    <option value="guayaquil">Guayaquil</option>
-                    <option value="produbanco">Produbanco</option>
-                    <option value="bolivariano">Bolivariano</option>
-                    <option value="pacifico">Pacífico</option>
-                    <option value="internacional">Internacional</option>
-                    <option value="austro">Austro</option>
-                    <option value="cooperativa_jep">Cooperativa JEP</option>
-                    <option value="otro">Otro (Especificar)</option>
-                </select>
+            <div id="bod_pago_simple">
+                <div id="bod_wrap_banco" class="bod-field" style="display:none;">
+                    <label for="bod_banco">Banco *</label>
+                    <select id="bod_banco" class="form-input" onchange="toggleDetallePagoBodegaje('')">
+                        <option value="">— Selecciona un banco —</option>
+                        <option value="pichincha">Banco Pichincha</option>
+                        <option value="guayaquil">Banco Guayaquil</option>
+                        <option value="produbanco">Produbanco</option>
+                        <option value="pacifico">Banco Pacífico</option>
+                        <option value="interbancaria">Interbancaria</option>
+                        <option value="otro">Otro banco</option>
+                    </select>
+                </div>
+                <div id="bod_wrap_banco_otro" class="bod-field" style="display:none;">
+                    <label for="bod_banco_otro">Nombre del banco *</label>
+                    <input type="text" id="bod_banco_otro" class="form-input" maxlength="100" placeholder="Escribe el nombre completo">
+                </div>
+                <div id="bod_wrap_tarjeta" class="bod-field" style="display:none;">
+                    <label for="bod_tarjeta_app">Tarjeta / App *</label>
+                    <select id="bod_tarjeta_app" class="form-input">
+                        <option value="">— Selecciona una opción —</option>
+                        <option value="payphone">Payphone</option>
+                        <option value="deuna">Deuna</option>
+                    </select>
+                </div>
+                <div id="bod_wrap_comprobante" class="bod-field" style="display:none;">
+                    <label for="bod_comprobante_url">Enlace al comprobante (opcional)</label>
+                    <input type="url" id="bod_comprobante_url" class="form-input" placeholder="https://...">
+                </div>
             </div>
 
-            <div id="bod_wrap_banco_otro" style="display:none; margin-bottom: 12px;">
-                <label style="display:block; font-size:13px; font-weight:bold; margin-bottom:4px; color:var(--text-color);">Especificar Banco</label>
-                <input type="text" id="bod_banco_otro" class="form-input" style="width:100%; box-sizing:border-box; padding:8px;" placeholder="Nombre del banco...">
+            <div id="bod_wrap_mixto" class="bod-mixto">
+                <div class="bod-mixto-grid">
+                    <section class="bod-parte" aria-labelledby="bod-parte-1-title">
+                        <h4 id="bod-parte-1-title">Parte 1 del pago</h4>
+                        <div class="bod-field">
+                            <label for="bod_monto_1">Monto 1 (USD) *</label>
+                            <input type="number" id="bod_monto_1" class="form-input" min="0.01" step="0.01" inputmode="decimal" oninput="actualizarResumenMixtoBodegaje()">
+                        </div>
+                        <div class="bod-field">
+                            <label for="bod_metodo_1">Método 1 *</label>
+                            <select id="bod_metodo_1" class="form-input" onchange="toggleDetallePagoBodegaje('_1')">
+                                <option value="">— Selecciona —</option>
+                                <option value="efectivo">Efectivo</option>
+                                <option value="transferencia">Transferencia bancaria</option>
+                                <option value="tarjeta">Tarjeta / App</option>
+                            </select>
+                        </div>
+                        <div id="bod_wrap_banco_1" class="bod-field" style="display:none;">
+                            <label for="bod_banco_1">Banco 1 *</label>
+                            <select id="bod_banco_1" class="form-input" onchange="toggleDetallePagoBodegaje('_1')">
+                                <option value="">— Selecciona —</option>
+                                <option value="pichincha">Banco Pichincha</option><option value="guayaquil">Banco Guayaquil</option>
+                                <option value="produbanco">Produbanco</option><option value="pacifico">Banco Pacífico</option>
+                                <option value="interbancaria">Interbancaria</option><option value="otro">Otro banco</option>
+                            </select>
+                        </div>
+                        <div id="bod_wrap_banco_otro_1" class="bod-field" style="display:none;">
+                            <label for="bod_banco_otro_1">Nombre del banco 1 *</label>
+                            <input type="text" id="bod_banco_otro_1" class="form-input" maxlength="100">
+                        </div>
+                        <div id="bod_wrap_tarjeta_1" class="bod-field" style="display:none;">
+                            <label for="bod_tarjeta_app_1">Tarjeta / App 1 *</label>
+                            <select id="bod_tarjeta_app_1" class="form-input"><option value="">— Selecciona —</option><option value="payphone">Payphone</option><option value="deuna">Deuna</option></select>
+                        </div>
+                        <div id="bod_wrap_comprobante_1" class="bod-field" style="display:none;">
+                            <label for="bod_comprobante_url_1">Comprobante 1 (opcional)</label>
+                            <input type="url" id="bod_comprobante_url_1" class="form-input" placeholder="https://...">
+                        </div>
+                    </section>
+
+                    <section class="bod-parte" aria-labelledby="bod-parte-2-title">
+                        <h4 id="bod-parte-2-title">Parte 2 del pago</h4>
+                        <div class="bod-field">
+                            <label for="bod_monto_2">Monto 2 (USD) *</label>
+                            <input type="number" id="bod_monto_2" class="form-input" min="0.01" step="0.01" inputmode="decimal" oninput="actualizarResumenMixtoBodegaje()">
+                        </div>
+                        <div class="bod-field">
+                            <label for="bod_metodo_2">Método 2 *</label>
+                            <select id="bod_metodo_2" class="form-input" onchange="toggleDetallePagoBodegaje('_2')">
+                                <option value="">— Selecciona —</option>
+                                <option value="efectivo">Efectivo</option>
+                                <option value="transferencia">Transferencia bancaria</option>
+                                <option value="tarjeta">Tarjeta / App</option>
+                            </select>
+                        </div>
+                        <div id="bod_wrap_banco_2" class="bod-field" style="display:none;">
+                            <label for="bod_banco_2">Banco 2 *</label>
+                            <select id="bod_banco_2" class="form-input" onchange="toggleDetallePagoBodegaje('_2')">
+                                <option value="">— Selecciona —</option>
+                                <option value="pichincha">Banco Pichincha</option><option value="guayaquil">Banco Guayaquil</option>
+                                <option value="produbanco">Produbanco</option><option value="pacifico">Banco Pacífico</option>
+                                <option value="interbancaria">Interbancaria</option><option value="otro">Otro banco</option>
+                            </select>
+                        </div>
+                        <div id="bod_wrap_banco_otro_2" class="bod-field" style="display:none;">
+                            <label for="bod_banco_otro_2">Nombre del banco 2 *</label>
+                            <input type="text" id="bod_banco_otro_2" class="form-input" maxlength="100">
+                        </div>
+                        <div id="bod_wrap_tarjeta_2" class="bod-field" style="display:none;">
+                            <label for="bod_tarjeta_app_2">Tarjeta / App 2 *</label>
+                            <select id="bod_tarjeta_app_2" class="form-input"><option value="">— Selecciona —</option><option value="payphone">Payphone</option><option value="deuna">Deuna</option></select>
+                        </div>
+                        <div id="bod_wrap_comprobante_2" class="bod-field" style="display:none;">
+                            <label for="bod_comprobante_url_2">Comprobante 2 (opcional)</label>
+                            <input type="url" id="bod_comprobante_url_2" class="form-input" placeholder="https://...">
+                        </div>
+                    </section>
+                </div>
+                <div id="bod_mixto_resumen" class="bod-mixto-resumen" aria-live="polite"></div>
             </div>
 
-            <div id="bod_wrap_tarjeta" style="display:none; margin-bottom: 12px;">
-                <label style="display:block; font-size:13px; font-weight:bold; margin-bottom:4px; color:var(--text-color);">Tarjeta / App</label>
-                <select id="bod_tarjeta_app" class="form-input" style="width:100%; box-sizing:border-box; padding:8px;">
-                    <option value="payphone">Payphone</option>
-                    <option value="deuna">Deuna</option>
-                    <option value="credito">Tarjeta de Crédito</option>
-                    <option value="debito">Tarjeta de Débito</option>
-                </select>
-            </div>
-
-            <div id="bod_wrap_comprobante" style="display:none; margin-bottom: 16px;">
-                <label style="display:block; font-size:13px; font-weight:bold; margin-bottom:4px; color:var(--text-color);">Enlace al comprobante (Opcional)</label>
-                <input type="url" id="bod_comprobante_url" class="form-input" style="width:100%; box-sizing:border-box; padding:8px;" placeholder="URL de la imagen...">
-            </div>
-
-            <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:20px;">
-                <button type="button" class="btn btn-secondary" onclick="document.getElementById('bodegaje-modal').style.display='none'">Cancelar</button>
-                <button type="button" class="btn btn-primary" onclick="submitBodegajeForm()">Guardar y Retirar</button>
+            <div id="bod_error" class="bod-error" role="alert" aria-live="assertive"></div>
+            <div class="bod-email-note">✉️ Al confirmar, el cliente recibirá por correo el acta PDF de salida con el pago, el saldo, el historial y el resultado del bodegaje.</div>
+            <div class="bod-actions">
+                <button type="button" class="btn btn-secondary" onclick="cerrarModalPagoBodegaje()">Cancelar</button>
+                <button type="button" id="bod_submit" class="btn btn-primary" onclick="submitBodegajeForm()">Guardar pago y confirmar salida</button>
             </div>
         </div>
     </div>
 
     <script>
         let bodegajeTargetForm = null;
+        let bodegajeMontoActual = 0;
 
-        function toggleBodegajeFields() {
-            const metodo = document.getElementById('bod_metodo').value;
-            const wrapBanco = document.getElementById('bod_wrap_banco');
-            const wrapBancoOtro = document.getElementById('bod_wrap_banco_otro');
-            const wrapTarjeta = document.getElementById('bod_wrap_tarjeta');
-            const wrapComprobante = document.getElementById('bod_wrap_comprobante');
-            const banco = document.getElementById('bod_banco').value;
-
-            wrapBanco.style.display = (metodo === 'transferencia') ? 'block' : 'none';
-            wrapTarjeta.style.display = (metodo === 'tarjeta') ? 'block' : 'none';
-            wrapComprobante.style.display = (metodo === 'transferencia') ? 'block' : 'none';
-
-            if (metodo === 'transferencia' && banco === 'otro') {
-                wrapBancoOtro.style.display = 'block';
-            } else {
-                wrapBancoOtro.style.display = 'none';
-            }
+        function bodElemento(id) { return document.getElementById(id); }
+        function bodCentavos(valor) {
+            const numero = parseFloat(valor);
+            return Number.isFinite(numero) ? Math.round(numero * 100) : 0;
         }
-
+        function mostrarErrorBodegaje(mensaje, campo) {
+            const error = bodElemento('bod_error');
+            error.textContent = mensaje;
+            error.style.display = 'block';
+            if (campo) campo.focus();
+            return false;
+        }
+        function limpiarErrorBodegaje() {
+            const error = bodElemento('bod_error');
+            error.textContent = '';
+            error.style.display = 'none';
+        }
+        function abrirModalPagoBodegaje(montoFmt, diasTxt) {
+            bodegajeMontoActual = parseFloat(montoFmt) || 0;
+            bodElemento('bod_monto_label').textContent = '$' + montoFmt + (diasTxt ? ' (' + diasTxt + ')' : '');
+            bodElemento('bod_metodo').value = 'efectivo';
+            ['bod_monto_1', 'bod_monto_2', 'bod_banco_otro', 'bod_banco_otro_1', 'bod_banco_otro_2',
+             'bod_comprobante_url', 'bod_comprobante_url_1', 'bod_comprobante_url_2'].forEach(function(id) {
+                bodElemento(id).value = '';
+            });
+            ['bod_banco', 'bod_tarjeta_app', 'bod_metodo_1', 'bod_banco_1', 'bod_tarjeta_app_1',
+             'bod_metodo_2', 'bod_banco_2', 'bod_tarjeta_app_2'].forEach(function(id) {
+                bodElemento(id).value = '';
+            });
+            limpiarErrorBodegaje();
+            toggleBodegajeFields();
+            bodElemento('bodegaje-modal').style.display = 'flex';
+            bodElemento('bod_metodo').focus();
+        }
+        function cerrarModalPagoBodegaje() {
+            bodElemento('bodegaje-modal').style.display = 'none';
+            bodegajeTargetForm = null;
+            limpiarErrorBodegaje();
+        }
+        function toggleDetallePagoBodegaje(sufijo) {
+            const metodo = bodElemento('bod_metodo' + sufijo).value;
+            const banco = bodElemento('bod_banco' + sufijo).value;
+            bodElemento('bod_wrap_banco' + sufijo).style.display = metodo === 'transferencia' ? 'block' : 'none';
+            bodElemento('bod_wrap_banco_otro' + sufijo).style.display = metodo === 'transferencia' && banco === 'otro' ? 'block' : 'none';
+            bodElemento('bod_wrap_tarjeta' + sufijo).style.display = metodo === 'tarjeta' ? 'block' : 'none';
+            bodElemento('bod_wrap_comprobante' + sufijo).style.display = metodo === 'transferencia' ? 'block' : 'none';
+        }
+        function toggleBodegajeFields() {
+            const esMixto = bodElemento('bod_metodo').value === 'mixto';
+            bodElemento('bod_pago_simple').style.display = esMixto ? 'none' : 'block';
+            bodElemento('bod_wrap_mixto').style.display = esMixto ? 'block' : 'none';
+            if (esMixto && !bodElemento('bod_monto_1').value && !bodElemento('bod_monto_2').value) {
+                const total = bodCentavos(bodegajeMontoActual);
+                const primeraParte = Math.ceil(total / 2);
+                bodElemento('bod_monto_1').value = (primeraParte / 100).toFixed(2);
+                bodElemento('bod_monto_2').value = ((total - primeraParte) / 100).toFixed(2);
+            }
+            toggleDetallePagoBodegaje('');
+            toggleDetallePagoBodegaje('_1');
+            toggleDetallePagoBodegaje('_2');
+            actualizarResumenMixtoBodegaje();
+            limpiarErrorBodegaje();
+        }
+        function actualizarResumenMixtoBodegaje() {
+            const pagado = bodCentavos(bodElemento('bod_monto_1').value) + bodCentavos(bodElemento('bod_monto_2').value);
+            const esperado = bodCentavos(bodegajeMontoActual);
+            const diferencia = esperado - pagado;
+            let texto = 'Total distribuido: $' + (pagado / 100).toFixed(2) + ' de $' + (esperado / 100).toFixed(2) + '.';
+            if (diferencia > 0) texto += ' Falta $' + (diferencia / 100).toFixed(2) + '.';
+            if (diferencia < 0) texto += ' Excede por $' + (Math.abs(diferencia) / 100).toFixed(2) + '.';
+            if (diferencia === 0 && esperado > 0) texto += ' ✓ Distribución completa.';
+            bodElemento('bod_mixto_resumen').textContent = texto;
+        }
+        function validarDetallePagoBodegaje(sufijo) {
+            const metodo = bodElemento('bod_metodo' + sufijo);
+            if (!metodo.value) return mostrarErrorBodegaje('Selecciona el método de pago.', metodo);
+            if (metodo.value === 'transferencia') {
+                const banco = bodElemento('bod_banco' + sufijo);
+                if (!banco.value) return mostrarErrorBodegaje('Selecciona el banco de la transferencia.', banco);
+                const bancoOtro = bodElemento('bod_banco_otro' + sufijo);
+                if (banco.value === 'otro' && !bancoOtro.value.trim()) return mostrarErrorBodegaje('Escribe el nombre del banco.', bancoOtro);
+                const comprobante = bodElemento('bod_comprobante_url' + sufijo);
+                if (comprobante.value && !comprobante.checkValidity()) return mostrarErrorBodegaje('Ingresa un enlace de comprobante válido.', comprobante);
+            }
+            if (metodo.value === 'tarjeta') {
+                const tarjeta = bodElemento('bod_tarjeta_app' + sufijo);
+                if (!tarjeta.value) return mostrarErrorBodegaje('Selecciona la tarjeta o aplicación usada.', tarjeta);
+            }
+            return true;
+        }
         function submitBodegajeForm() {
             if (!bodegajeTargetForm) return;
+            limpiarErrorBodegaje();
+            const metodo = bodElemento('bod_metodo').value;
 
-            // Create hidden inputs for the payment data
-            const addHiddenInput = (name, value) => {
-                let existing = bodegajeTargetForm.querySelector('[name="' + name + '"]');
-                if (existing) {
-                    existing.value = value;
-                } else {
-                    let input = document.createElement('input');
+            if (metodo === 'mixto') {
+                const monto1 = bodElemento('bod_monto_1');
+                const monto2 = bodElemento('bod_monto_2');
+                if (bodCentavos(monto1.value) <= 0) return mostrarErrorBodegaje('Ingresa un primer monto mayor a cero.', monto1);
+                if (bodCentavos(monto2.value) <= 0) return mostrarErrorBodegaje('Ingresa un segundo monto mayor a cero.', monto2);
+                if (bodCentavos(monto1.value) + bodCentavos(monto2.value) !== bodCentavos(bodegajeMontoActual)) {
+                    return mostrarErrorBodegaje('Las dos partes deben sumar exactamente $' + bodegajeMontoActual.toFixed(2) + '.', monto2);
+                }
+                if (!validarDetallePagoBodegaje('_1') || !validarDetallePagoBodegaje('_2')) return;
+                if (bodElemento('bod_metodo_1').value === bodElemento('bod_metodo_2').value) {
+                    return mostrarErrorBodegaje('En un pago mixto los dos métodos deben ser diferentes.', bodElemento('bod_metodo_2'));
+                }
+            } else if (!validarDetallePagoBodegaje('')) {
+                return;
+            }
+
+            const addHiddenInput = function(name, value) {
+                let input = bodegajeTargetForm.querySelector('[name="' + name + '"]');
+                if (!input) {
+                    input = document.createElement('input');
                     input.type = 'hidden';
                     input.name = name;
-                    input.value = value;
                     bodegajeTargetForm.appendChild(input);
                 }
+                input.value = value;
             };
-
-            addHiddenInput('pago_bod_metodo', document.getElementById('bod_metodo').value);
-            addHiddenInput('pago_bod_banco', document.getElementById('bod_banco').value);
-            addHiddenInput('pago_bod_banco_otro', document.getElementById('bod_banco_otro').value);
-            addHiddenInput('pago_bod_tarjeta_app', document.getElementById('bod_tarjeta_app').value);
-            addHiddenInput('pago_bod_comprobante_url', document.getElementById('bod_comprobante_url').value);
-            
-            // Set the bodegaje flag robustly
+            const campos = [
+                'metodo', 'banco', 'banco_otro', 'tarjeta_app', 'comprobante_url',
+                'monto_1', 'metodo_1', 'banco_1', 'banco_otro_1', 'tarjeta_app_1', 'comprobante_url_1',
+                'monto_2', 'metodo_2', 'banco_2', 'banco_otro_2', 'tarjeta_app_2', 'comprobante_url_2'
+            ];
+            campos.forEach(function(campo) {
+                addHiddenInput('pago_bod_' + campo, bodElemento('bod_' + campo).value);
+            });
             addHiddenInput('aplicar_bodegaje', 'on');
 
-            document.getElementById('bodegaje-modal').style.display = 'none';
+            const boton = bodElemento('bod_submit');
+            boton.disabled = true;
+            boton.textContent = 'Guardando y preparando correo…';
+            bodElemento('bodegaje-modal').style.display = 'none';
             bodegajeTargetForm.submit();
         }
     </script>

@@ -156,7 +156,7 @@
                     {% if adjunto_incluido %}
                     <tr>
                         <td style="padding:0 30px 24px;">
-                            <div style="padding:14px 16px; background:#edf9f1; border:1px solid #bde8cb; border-radius:10px; color:#25633a; font-size:13px; line-height:1.5;"><strong>PDF oficial adjunto</strong><br>Conserva la hoja actualizada del equipo {{ ingreso.codigo_equipo }} como respaldo de la operación.</div>
+                            <div style="padding:14px 16px; background:#edf9f1; border:1px solid #bde8cb; border-radius:10px; color:#25633a; font-size:13px; line-height:1.5;"><strong>{% if tipo == 'salida' %}Acta PDF de salida adjunta{% else %}PDF oficial adjunto{% endif %}</strong><br>Conserva la hoja actualizada del equipo {{ ingreso.codigo_equipo }} como respaldo de la operación.</div>
                         </td>
                     </tr>
                     {% endif %}

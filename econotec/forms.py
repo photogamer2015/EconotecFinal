@@ -1268,6 +1268,109 @@ class AbonoForm(forms.ModelForm):
         return cleaned
 
 
+class CobroBodegajeForm(forms.Form):
+    """Valida el pago de bodegaje capturado en el modal de salida física."""
+
+    METODOS_INDIVIDUALES = [
+        (codigo, etiqueta)
+        for codigo, etiqueta in Abono.METODOS_PAGO
+        if codigo != 'mixto'
+    ]
+    BANCOS = [('', '— Selecciona un banco —'), *Abono.BANCOS]
+    TARJETAS_APPS = [('', '— Selecciona una opción —'), *Abono.TARJETAS_APPS]
+
+    pago_bod_metodo = forms.ChoiceField(choices=Abono.METODOS_PAGO)
+    pago_bod_banco = forms.ChoiceField(choices=BANCOS, required=False)
+    pago_bod_banco_otro = forms.CharField(max_length=100, required=False)
+    pago_bod_tarjeta_app = forms.ChoiceField(choices=TARJETAS_APPS, required=False)
+    pago_bod_comprobante_url = forms.URLField(required=False)
+
+    pago_bod_monto_1 = forms.DecimalField(
+        max_digits=10, decimal_places=2, min_value=Decimal('0.01'), required=False,
+    )
+    pago_bod_metodo_1 = forms.ChoiceField(choices=METODOS_INDIVIDUALES, required=False)
+    pago_bod_banco_1 = forms.ChoiceField(choices=BANCOS, required=False)
+    pago_bod_banco_otro_1 = forms.CharField(max_length=100, required=False)
+    pago_bod_tarjeta_app_1 = forms.ChoiceField(choices=TARJETAS_APPS, required=False)
+    pago_bod_comprobante_url_1 = forms.URLField(required=False)
+
+    pago_bod_monto_2 = forms.DecimalField(
+        max_digits=10, decimal_places=2, min_value=Decimal('0.01'), required=False,
+    )
+    pago_bod_metodo_2 = forms.ChoiceField(choices=METODOS_INDIVIDUALES, required=False)
+    pago_bod_banco_2 = forms.ChoiceField(choices=BANCOS, required=False)
+    pago_bod_banco_otro_2 = forms.CharField(max_length=100, required=False)
+    pago_bod_tarjeta_app_2 = forms.ChoiceField(choices=TARJETAS_APPS, required=False)
+    pago_bod_comprobante_url_2 = forms.URLField(required=False)
+
+    def __init__(self, *args, monto_esperado, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.monto_esperado = Decimal(monto_esperado or 0).quantize(Decimal('0.01'))
+
+    def _validar_detalle(self, cleaned, sufijo=''):
+        metodo = cleaned.get(f'pago_bod_metodo{sufijo}')
+        banco = cleaned.get(f'pago_bod_banco{sufijo}')
+        banco_otro = (cleaned.get(f'pago_bod_banco_otro{sufijo}') or '').strip()
+        tarjeta_app = cleaned.get(f'pago_bod_tarjeta_app{sufijo}')
+
+        if metodo == 'transferencia':
+            if not banco:
+                self.add_error(
+                    f'pago_bod_banco{sufijo}',
+                    'Selecciona el banco de la transferencia.',
+                )
+            elif banco == 'otro' and not banco_otro:
+                self.add_error(
+                    f'pago_bod_banco_otro{sufijo}',
+                    'Escribe el nombre del banco.',
+                )
+        elif metodo == 'tarjeta' and not tarjeta_app:
+            self.add_error(
+                f'pago_bod_tarjeta_app{sufijo}',
+                'Selecciona la tarjeta o aplicación usada.',
+            )
+
+    def clean(self):
+        cleaned = super().clean()
+        metodo = cleaned.get('pago_bod_metodo')
+
+        if metodo != 'mixto':
+            self._validar_detalle(cleaned)
+            return cleaned
+
+        monto_1 = cleaned.get('pago_bod_monto_1')
+        monto_2 = cleaned.get('pago_bod_monto_2')
+        metodo_1 = cleaned.get('pago_bod_metodo_1')
+        metodo_2 = cleaned.get('pago_bod_metodo_2')
+
+        if monto_1 is None:
+            self.add_error('pago_bod_monto_1', 'Ingresa el primer monto.')
+        if monto_2 is None:
+            self.add_error('pago_bod_monto_2', 'Ingresa el segundo monto.')
+        if not metodo_1:
+            self.add_error('pago_bod_metodo_1', 'Selecciona el primer método.')
+        if not metodo_2:
+            self.add_error('pago_bod_metodo_2', 'Selecciona el segundo método.')
+        if metodo_1 and metodo_2 and metodo_1 == metodo_2:
+            self.add_error(
+                'pago_bod_metodo_2',
+                'El segundo método debe ser diferente para registrar un pago mixto.',
+            )
+        if monto_1 is not None and monto_2 is not None:
+            total = (monto_1 + monto_2).quantize(Decimal('0.01'))
+            if total != self.monto_esperado:
+                self.add_error(
+                    'pago_bod_monto_2',
+                    f'Las dos partes deben sumar exactamente ${self.monto_esperado:.2f}.',
+                )
+
+        if metodo_1:
+            self._validar_detalle(cleaned, '_1')
+        if metodo_2:
+            self._validar_detalle(cleaned, '_2')
+        return cleaned
+
+
 # ─────────────────────────────────────────────────────────
 # Salida de equipo
 # ─────────────────────────────────────────────────────────

@@ -24,7 +24,8 @@ from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_GET, require_POST
 
 from .forms import (
-    ClienteForm, IngresoEquipoForm, SalidaEquipoForm, InventarioItemForm,
+    ClienteForm, CobroBodegajeForm, IngresoEquipoForm, SalidaEquipoForm,
+    InventarioItemForm,
 )
 from .busqueda import (
     filtrar_objetos_normalizado,
@@ -40,7 +41,11 @@ from .models import (
 )
 from .bitacora import registrar_bitacora, nombre_corto_usuario, construir_bitacora_usuario
 from .date_filters import aplicar_rango_fecha, contexto_rango_fecha, obtener_rango_fecha
-from .emails import enviar_correo_finalizacion_seguro, enviar_correo_ingreso_seguro
+from .emails import (
+    enviar_correo_finalizacion_seguro,
+    enviar_correo_ingreso_seguro,
+    enviar_correo_salida_fisica_seguro,
+)
 from .pagination import paginar_resultados
 from .permisos import admin_requerido, tecnico_requerido, es_admin, es_asesor, es_tecnico
 from .gamificacion import (
@@ -3809,18 +3814,142 @@ def salida_enviar_correo_finalizacion(request, pk):
     })
 
 
+def _url_retorno_salida(request, nombre_default):
+    """Respeta `next` solo cuando apunta al propio sistema."""
+    next_url = request.POST.get('next') or request.GET.get('next') or ''
+    if next_url and url_has_allowed_host_and_scheme(
+        next_url,
+        allowed_hosts={request.get_host()},
+        require_https=request.is_secure(),
+    ):
+        return next_url
+    return reverse(f'econotec:{nombre_default}')
+
+
+def _programar_correo_salida_fisica(request, salida, abono_pks=()):
+    """Programa el acta de salida tras el commit sin arriesgar la operación."""
+    if not getattr(settings, 'SALIDA_EMAIL_AUTOMATICO', True):
+        return
+
+    destino = (salida.ingreso.cliente.correo or '').strip()
+    if not destino:
+        messages.warning(
+            request,
+            'La salida quedó confirmada, pero no se envió correo porque el cliente '
+            'no tiene uno registrado.',
+        )
+        return
+
+    pks = tuple(abono_pks)
+    transaction.on_commit(
+        lambda salida_pk=salida.pk, abonos=pks: enviar_correo_salida_fisica_seguro(
+            salida_pk,
+            abonos,
+        )
+    )
+    messages.info(
+        request,
+        f'El acta de salida actualizada será enviada a {destino}.',
+    )
+
+
+def _crear_abonos_bodegaje(salida, pago, monto_bodegaje, dias_bodegaje, usuario):
+    """Registra uno o dos abonos según el método elegido para el bodegaje."""
+    metodo = pago['pago_bod_metodo']
+    if metodo == 'mixto':
+        partes = [
+            {
+                'monto': pago['pago_bod_monto_1'],
+                'metodo': pago['pago_bod_metodo_1'],
+                'banco': pago.get('pago_bod_banco_1') or '',
+                'banco_otro': pago.get('pago_bod_banco_otro_1') or '',
+                'tarjeta_app': pago.get('pago_bod_tarjeta_app_1') or '',
+                'comprobante_url': pago.get('pago_bod_comprobante_url_1') or '',
+            },
+            {
+                'monto': pago['pago_bod_monto_2'],
+                'metodo': pago['pago_bod_metodo_2'],
+                'banco': pago.get('pago_bod_banco_2') or '',
+                'banco_otro': pago.get('pago_bod_banco_otro_2') or '',
+                'tarjeta_app': pago.get('pago_bod_tarjeta_app_2') or '',
+                'comprobante_url': pago.get('pago_bod_comprobante_url_2') or '',
+            },
+        ]
+    else:
+        partes = [{
+            'monto': monto_bodegaje,
+            'metodo': metodo,
+            'banco': pago.get('pago_bod_banco') or '',
+            'banco_otro': pago.get('pago_bod_banco_otro') or '',
+            'tarjeta_app': pago.get('pago_bod_tarjeta_app') or '',
+            'comprobante_url': pago.get('pago_bod_comprobante_url') or '',
+        }]
+
+    abonos = []
+    total_partes = len(partes)
+    for indice, parte in enumerate(partes, start=1):
+        metodo_parte = parte['metodo']
+        detalle_mixto = (
+            f' Pago mixto (parte {indice} de {total_partes}).'
+            if total_partes > 1
+            else ''
+        )
+        abono = Abono.objects.create(
+            ingreso=salida.ingreso,
+            monto=parte['monto'],
+            fecha=date.today(),
+            metodo=metodo_parte,
+            banco=parte['banco'] if metodo_parte == 'transferencia' else '',
+            banco_otro=(
+                parte['banco_otro']
+                if metodo_parte == 'transferencia' and parte['banco'] == 'otro'
+                else ''
+            ),
+            tarjeta_app=parte['tarjeta_app'] if metodo_parte == 'tarjeta' else '',
+            comprobante_url=(
+                parte['comprobante_url'] if metodo_parte == 'transferencia' else ''
+            ),
+            observaciones=(
+                f'Cobro por {dias_bodegaje} día(s) de bodegaje al retirar el equipo.'
+                f'{detalle_mixto}'
+            ),
+            bodegaje_decision='si' if indice == 1 else 'na',
+            bodegaje_monto_aplicado=(
+                monto_bodegaje if indice == 1 else D('0.00')
+            ),
+            registrado_por=usuario,
+        )
+        registrar_bitacora(
+            usuario,
+            'abono',
+            (
+                f'Cobro de bodegaje {abono.numero_recibo} por ${abono.monto:.2f} '
+                f'en #{salida.ingreso.codigo_equipo}.'
+            ),
+            ingreso=salida.ingreso,
+            salida=salida,
+            abono=abono,
+            dedupe_key=f'abono:{abono.pk}:bodegaje-salida',
+        )
+        abonos.append(abono)
+    return abonos
+
+
 @tecnico_requerido
 @require_POST
+@transaction.atomic
 def salida_marcar_retirada(request, pk):
     """
     Marca la salida como "Cliente ya retiró", congelando el bodegaje
     acumulado hasta hoy. Esto cierra el caso.
 
-    Si en el POST viene `aplicar_bodegaje=on`, marca el bodegaje como
-    cobrado al cliente (esto es solo informativo: el monto del bodegaje
-    debe haberse incluido manualmente al hacer el último abono).
+    Si en el POST viene `aplicar_bodegaje=on`, valida y registra el pago
+    del bodegaje antes de cerrar el expediente.
     """
-    salida = get_object_or_404(SalidaEquipo, pk=pk)
+    salida = get_object_or_404(
+        SalidaEquipo.objects.select_related('ingreso', 'ingreso__cliente'),
+        pk=pk,
+    )
 
     if salida.cliente_ya_retiro:
         messages.info(
@@ -3841,6 +3970,24 @@ def salida_marcar_retirada(request, pk):
     bod = salida.calcular_bodegaje()
     aplicar = request.POST.get('aplicar_bodegaje') == 'on'
 
+    pago_bodegaje = None
+    if bod['monto'] > 0 and aplicar:
+        pago_bodegaje = CobroBodegajeForm(
+            request.POST,
+            monto_esperado=bod['monto'],
+        )
+        if not pago_bodegaje.is_valid():
+            errores = ' '.join(
+                str(error)
+                for lista_errores in pago_bodegaje.errors.values()
+                for error in lista_errores
+            )
+            messages.error(
+                request,
+                f'No se confirmó la salida: revisa el pago de bodegaje. {errores}',
+            )
+            return redirect(_url_retorno_salida(request, 'salida_lista'))
+
     salida.fecha_retiro_real = date.today()
     salida.estado_reparacion = 'retirado'
     salida.bodegaje_dias_congelado = bod['dias']
@@ -3854,52 +4001,21 @@ def salida_marcar_retirada(request, pk):
         'bodegaje_aplicado_al_pago',
     ])
 
-    if bod['monto'] > 0 and aplicar:
-        # ── Normalizar los datos del método de pago del bodegaje ──
-        # El campo correcto en el modelo Abono es `metodo` (NO `metodo_pago`).
-        # Además, el modal ofrece algunas opciones que no existen en los
-        # choices del modelo; las saneamos para que el recibo muestre el
-        # nombre correcto en lugar de un código crudo.
-        metodo_bod = request.POST.get('pago_bod_metodo', 'efectivo')
-        if metodo_bod not in dict(Abono.METODOS_PAGO):
-            metodo_bod = 'efectivo'
-
-        banco_bod = request.POST.get('pago_bod_banco', '') if metodo_bod == 'transferencia' else ''
-        banco_otro_bod = request.POST.get('pago_bod_banco_otro', '') if metodo_bod == 'transferencia' else ''
-        tarjeta_bod = request.POST.get('pago_bod_tarjeta_app', '') if metodo_bod == 'tarjeta' else ''
-        comprobante_bod = request.POST.get('pago_bod_comprobante_url', '') if metodo_bod == 'transferencia' else ''
-
-        # Si el banco elegido no está en los choices del modelo, lo movemos
-        # a "otro" + texto libre para no perder el dato y mostrarlo bien.
-        if banco_bod and banco_bod not in dict(Abono.BANCOS):
-            if not banco_otro_bod:
-                banco_otro_bod = dict([
-                    ('bolivariano', 'Bolivariano'),
-                    ('internacional', 'Internacional'),
-                    ('austro', 'Banco del Austro'),
-                    ('cooperativa_jep', 'Cooperativa JEP'),
-                ]).get(banco_bod, banco_bod.replace('_', ' ').title())
-            banco_bod = 'otro'
-
-        # Igual para tarjeta/app fuera de choices.
-        if tarjeta_bod and tarjeta_bod not in dict(Abono.TARJETAS_APPS):
-            tarjeta_bod = ''
-
-        # Crear el Abono por el bodegaje
-        Abono.objects.create(
-            ingreso=salida.ingreso,
-            monto=bod['monto'],
-            fecha=date.today(),
-            metodo=metodo_bod,
-            banco=banco_bod,
-            banco_otro=banco_otro_bod,
-            tarjeta_app=tarjeta_bod,
-            comprobante_url=comprobante_bod,
-            observaciones=f"Cobro por {bod['dias']} días de bodegaje al retirar el equipo.",
-            bodegaje_decision='si',
-            bodegaje_monto_aplicado=bod['monto'],
-            registrado_por=request.user
+    abonos_bodegaje = []
+    if pago_bodegaje is not None:
+        abonos_bodegaje = _crear_abonos_bodegaje(
+            salida,
+            pago_bodegaje.cleaned_data,
+            bod['monto'],
+            bod['dias'],
+            request.user,
         )
+
+    _programar_correo_salida_fisica(
+        request,
+        salida,
+        [abono.pk for abono in abonos_bodegaje],
+    )
 
     if bod['monto'] > 0:
         if aplicar:
@@ -3920,10 +4036,7 @@ def salida_marcar_retirada(request, pk):
             f'Salida de la oficina confirmada para el equipo {salida.ingreso.codigo_equipo}.'
         )
 
-    next_url = request.POST.get('next') or request.GET.get('next')
-    if next_url:
-        return redirect(next_url)
-    return redirect('econotec:salida_retiros_lista')
+    return redirect(_url_retorno_salida(request, 'salida_retiros_lista'))
 
 
 @admin_requerido

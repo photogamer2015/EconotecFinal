@@ -2785,13 +2785,13 @@ class VentasTests(TestCase):
         self.assertEqual(salida.estado_reparacion, 'retirado')
         self.assertEqual(len(mail.outbox), 1)
         correo = mail.outbox[0]
-        self.assertIn('Pago completado y salida', correo.subject)
+        self.assertIn('Salida de la oficina confirmada', correo.subject)
         html = next(
             alternativa[0]
             for alternativa in correo.alternatives
             if alternativa[1] == 'text/html'
         )
-        self.assertIn('Pago registrado y equipo listo', html)
+        self.assertIn('Tu equipo salió de la oficina', html)
         self.assertIn('Salida física confirmada', html)
         self.assertIn('$0,00', html)
         self.assertIn('Regla de bodegaje', html)
@@ -5023,6 +5023,9 @@ class VentasTests(TestCase):
         self.assertContains(lista_finalizados, 'class="salidas-table"')
         self.assertContains(lista_finalizados, '⏳ Reparado — pendiente de retiro')
         self.assertContains(lista_finalizados, 'class="salidas-filter-form"')
+        self.assertContains(lista_finalizados, 'Pago mixto (2 métodos)')
+        self.assertContains(lista_finalizados, 'Guardar pago y confirmar salida')
+        self.assertContains(lista_finalizados, 'acta PDF de salida')
         self.assertNotContains(lista_finalizados, 'id="salida-guide-heading"')
 
         response = self.client.post(reverse('econotec:salida_marcar_retirada', kwargs={'pk': salida.pk}))
@@ -5076,6 +5079,212 @@ class VentasTests(TestCase):
             self.client.get(reverse('econotec:salida_retiros_lista')),
             ingreso.codigo_equipo,
         )
+
+    @override_settings(
+        EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend',
+        SALIDA_EMAIL_AUTOMATICO=True,
+        EQUIPO_EMAIL_ADJUNTAR_PDF=True,
+    )
+    def test_salida_fisica_sin_bodegaje_envia_acta_actualizada(self):
+        ingreso = self.crear_ingreso_reparacion(valor_acordado=Decimal('0.00'))
+        salida = SalidaEquipo.objects.create(
+            ingreso=ingreso,
+            fecha_salida=date.today(),
+            estado_reparacion='pendiente_retiro',
+            tecnico_reparo=self.usuario,
+            valor_final_cobrado=Decimal('0.00'),
+            metodo_pago_final='sin_pago',
+            registrado_por=self.usuario,
+        )
+        mail.outbox.clear()
+
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.post(
+                reverse('econotec:salida_marcar_retirada', kwargs={'pk': salida.pk}),
+                {'aplicar_bodegaje': ''},
+            )
+
+        self.assertRedirects(response, reverse('econotec:salida_retiros_lista'))
+        salida.refresh_from_db()
+        self.assertTrue(salida.cliente_ya_retiro)
+        self.assertEqual(len(mail.outbox), 1)
+        correo = mail.outbox[0]
+        self.assertIn('Salida de la oficina confirmada', correo.subject)
+        html = next(
+            alternativa[0]
+            for alternativa in correo.alternatives
+            if alternativa[1] == 'text/html'
+        )
+        self.assertIn('Tu equipo salió de la oficina', html)
+        self.assertIn('Salida física confirmada', html)
+        self.assertIn('Regla de bodegaje', html)
+        self.assertEqual(
+            correo.attachments[0][0],
+            f'Acta_salida_oficina_{ingreso.codigo_equipo}.pdf',
+        )
+        self.assertTrue(correo.attachments[0][1].startswith(b'%PDF-'))
+
+    @override_settings(
+        EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend',
+        SALIDA_EMAIL_AUTOMATICO=True,
+        EQUIPO_EMAIL_ADJUNTAR_PDF=True,
+    )
+    def test_salida_fisica_cobra_bodegaje_mixto_y_envia_resultado(self):
+        ingreso = self.crear_ingreso_reparacion(valor_acordado=Decimal('0.00'))
+        salida = SalidaEquipo.objects.create(
+            ingreso=ingreso,
+            fecha_salida=date.today() - timedelta(days=10),
+            estado_reparacion='pendiente_retiro',
+            tecnico_reparo=self.usuario,
+            valor_final_cobrado=Decimal('0.00'),
+            metodo_pago_final='sin_pago',
+            registrado_por=self.usuario,
+        )
+        self.assertEqual(salida.calcular_bodegaje()['monto'], Decimal('6.00'))
+        mail.outbox.clear()
+
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.post(
+                reverse('econotec:salida_marcar_retirada', kwargs={'pk': salida.pk}),
+                {
+                    'aplicar_bodegaje': 'on',
+                    'pago_bod_metodo': 'mixto',
+                    'pago_bod_monto_1': '2.50',
+                    'pago_bod_metodo_1': 'efectivo',
+                    'pago_bod_banco_1': '',
+                    'pago_bod_banco_otro_1': '',
+                    'pago_bod_tarjeta_app_1': '',
+                    'pago_bod_comprobante_url_1': '',
+                    'pago_bod_monto_2': '3.50',
+                    'pago_bod_metodo_2': 'transferencia',
+                    'pago_bod_banco_2': 'guayaquil',
+                    'pago_bod_banco_otro_2': '',
+                    'pago_bod_tarjeta_app_2': '',
+                    'pago_bod_comprobante_url_2': 'https://example.com/comprobante',
+                    'pago_bod_banco': '',
+                    'pago_bod_banco_otro': '',
+                    'pago_bod_tarjeta_app': '',
+                    'pago_bod_comprobante_url': '',
+                },
+            )
+
+        self.assertRedirects(response, reverse('econotec:salida_retiros_lista'))
+        salida.refresh_from_db()
+        self.assertTrue(salida.cliente_ya_retiro)
+        self.assertTrue(salida.bodegaje_aplicado_al_pago)
+        self.assertEqual(salida.bodegaje_monto_congelado, Decimal('6.00'))
+        abonos = list(ingreso.abonos.order_by('pk'))
+        self.assertEqual([abono.monto for abono in abonos], [Decimal('2.50'), Decimal('3.50')])
+        self.assertEqual([abono.metodo for abono in abonos], ['efectivo', 'transferencia'])
+        self.assertEqual(abonos[0].bodegaje_decision, 'si')
+        self.assertEqual(abonos[0].bodegaje_monto_aplicado, Decimal('6.00'))
+        self.assertEqual(abonos[1].banco, 'guayaquil')
+        self.assertEqual(len(mail.outbox), 1)
+        html = next(
+            alternativa[0]
+            for alternativa in mail.outbox[0].alternatives
+            if alternativa[1] == 'text/html'
+        )
+        self.assertIn('Pago registrado ahora', html)
+        self.assertIn('$6,00', html)
+        self.assertIn('Cobrado y cerrado', html)
+        self.assertIn('Pago mixto (parte 1 de 2)', html)
+        self.assertEqual(
+            mail.outbox[0].attachments[0][0],
+            f'Acta_salida_oficina_{ingreso.codigo_equipo}.pdf',
+        )
+
+    @override_settings(
+        EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend',
+        SALIDA_EMAIL_AUTOMATICO=True,
+    )
+    def test_salida_fisica_perdona_bodegaje_y_tambien_envia_acta(self):
+        ingreso = self.crear_ingreso_reparacion(valor_acordado=Decimal('0.00'))
+        salida = SalidaEquipo.objects.create(
+            ingreso=ingreso,
+            fecha_salida=date.today() - timedelta(days=7),
+            estado_reparacion='pendiente_retiro',
+            tecnico_reparo=self.usuario,
+            valor_final_cobrado=Decimal('0.00'),
+            metodo_pago_final='sin_pago',
+            registrado_por=self.usuario,
+        )
+        mail.outbox.clear()
+
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.post(
+                reverse('econotec:salida_marcar_retirada', kwargs={'pk': salida.pk}),
+                {'aplicar_bodegaje': ''},
+            )
+
+        self.assertRedirects(response, reverse('econotec:salida_retiros_lista'))
+        salida.refresh_from_db()
+        self.assertFalse(salida.bodegaje_aplicado_al_pago)
+        self.assertEqual(salida.bodegaje_monto_congelado, Decimal('3.00'))
+        self.assertEqual(ingreso.abonos.count(), 0)
+        self.assertEqual(len(mail.outbox), 1)
+        html = next(
+            alternativa[0]
+            for alternativa in mail.outbox[0].alternatives
+            if alternativa[1] == 'text/html'
+        )
+        self.assertIn('Perdonado y cerrado', html)
+        self.assertIn('$3,00', html)
+
+    def test_pago_mixto_bodegaje_invalido_no_confirma_la_salida(self):
+        ingreso = self.crear_ingreso_reparacion(valor_acordado=Decimal('0.00'))
+        salida = SalidaEquipo.objects.create(
+            ingreso=ingreso,
+            fecha_salida=date.today() - timedelta(days=10),
+            estado_reparacion='pendiente_retiro',
+            tecnico_reparo=self.usuario,
+            valor_final_cobrado=Decimal('0.00'),
+            metodo_pago_final='sin_pago',
+            registrado_por=self.usuario,
+        )
+
+        response = self.client.post(
+            reverse('econotec:salida_marcar_retirada', kwargs={'pk': salida.pk}),
+            {
+                'aplicar_bodegaje': 'on',
+                'pago_bod_metodo': 'mixto',
+                'pago_bod_monto_1': '2.00',
+                'pago_bod_metodo_1': 'efectivo',
+                'pago_bod_monto_2': '2.00',
+                'pago_bod_metodo_2': 'efectivo',
+            },
+        )
+
+        self.assertRedirects(response, reverse('econotec:salida_lista'))
+        salida.refresh_from_db()
+        self.assertFalse(salida.cliente_ya_retiro)
+        self.assertEqual(ingreso.abonos.count(), 0)
+
+    @override_settings(SALIDA_EMAIL_AUTOMATICO=True)
+    @patch('econotec.emails.EmailMultiAlternatives.send', side_effect=OSError('SMTP no disponible'))
+    def test_fallo_correo_salida_fisica_no_revierte_el_retiro(self, _send):
+        ingreso = self.crear_ingreso_reparacion(valor_acordado=Decimal('0.00'))
+        salida = SalidaEquipo.objects.create(
+            ingreso=ingreso,
+            fecha_salida=date.today(),
+            estado_reparacion='pendiente_retiro',
+            tecnico_reparo=self.usuario,
+            valor_final_cobrado=Decimal('0.00'),
+            metodo_pago_final='sin_pago',
+            registrado_por=self.usuario,
+        )
+
+        with self.assertLogs('econotec.emails', level='ERROR'):
+            with self.captureOnCommitCallbacks(execute=True):
+                response = self.client.post(
+                    reverse('econotec:salida_marcar_retirada', kwargs={'pk': salida.pk}),
+                    {'aplicar_bodegaje': ''},
+                )
+
+        self.assertRedirects(response, reverse('econotec:salida_retiros_lista'))
+        salida.refresh_from_db()
+        self.assertTrue(salida.cliente_ya_retiro)
+        self.assertEqual(salida.estado_reparacion, 'retirado')
 
     def test_salida_facturas_lista_muestra_solo_facturas_realizadas(self):
         User = get_user_model()

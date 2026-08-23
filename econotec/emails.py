@@ -33,6 +33,11 @@ CONTACTO_SEDES = {
 }
 
 
+def _dinero_es(valor):
+    """Formatea importes incluidos dentro de textos libres del correo."""
+    return f'${Decimal(valor or 0):.2f}'.replace('.', ',')
+
+
 def _nombre_usuario(usuario):
     if not usuario:
         return '—'
@@ -145,7 +150,7 @@ def _contexto_bodegaje(salida):
         else:
             concepto = 'Acumulado actual'
         detalle_actual = (
-            f"{calculo['dias']} día(s) · {concepto}: ${calculo['monto']:.2f}"
+            f"{calculo['dias']} día(s) · {concepto}: {_dinero_es(calculo['monto'])}"
         )
 
     return {
@@ -170,7 +175,7 @@ def _detalle_abono(abono):
     if abono.numero_recibo:
         detalle.append(f'Recibo {abono.numero_recibo}')
     if abono.bodegaje_decision == 'si':
-        detalle.append(f'Incluye ${abono.bodegaje_monto_aplicado:.2f} de bodegaje')
+        detalle.append(f'Incluye {_dinero_es(abono.bodegaje_monto_aplicado)} de bodegaje')
     elif abono.bodegaje_decision == 'no':
         detalle.append('Bodegaje perdonado')
     return ' · '.join(detalle) or '—'
@@ -188,12 +193,18 @@ def _contexto_correo_actualizacion(ingreso, *, tipo, abonos_evento, adjunto_incl
             'A continuación encontrarás el estado, los valores y el historial registrado.'
         )
     elif tipo == 'salida':
-        etiqueta = 'Pago completado'
-        titulo = 'Pago registrado y equipo listo'
-        introduccion = (
-            'Registramos correctamente tu pago y la salida del equipo. '
-            'Adjuntamos el acta actualizada como respaldo.'
-        )
+        etiqueta = 'Salida física confirmada'
+        titulo = 'Tu equipo salió de la oficina'
+        if abonos_evento:
+            introduccion = (
+                'Registramos correctamente el pago indicado y confirmamos la entrega '
+                'física de tu equipo. Adjuntamos el acta de salida actualizada como respaldo.'
+            )
+        else:
+            introduccion = (
+                'Confirmamos la entrega física de tu equipo y su salida de nuestras '
+                'instalaciones. Adjuntamos el acta de salida actualizada como respaldo.'
+            )
     else:
         etiqueta = 'Abono registrado'
         titulo = 'Recibimos tu abono'
@@ -253,7 +264,10 @@ def _enviar_correo_actualizacion(ingreso, *, tipo, abonos_evento=()):
     if adjuntar_pdf:
         if salida:
             pdf = generar_salida_pdf_bytes(salida)
-            nombre_pdf = f'Acta_equipo_finalizado_{ingreso.codigo_equipo}.pdf'
+            if tipo == 'salida':
+                nombre_pdf = f'Acta_salida_oficina_{ingreso.codigo_equipo}.pdf'
+            else:
+                nombre_pdf = f'Acta_equipo_finalizado_{ingreso.codigo_equipo}.pdf'
         else:
             pdf = generar_ingreso_pdf_bytes(ingreso)
             nombre_pdf = f'Hoja_equipo_{ingreso.codigo_equipo}.pdf'
@@ -267,7 +281,7 @@ def _enviar_correo_actualizacion(ingreso, *, tipo, abonos_evento=()):
     if tipo == 'finalizacion':
         asunto = f'Equipo {ingreso.codigo_equipo} finalizado | Econotec'
     elif tipo == 'salida':
-        asunto = f'Pago completado y salida {ingreso.codigo_equipo} | Econotec'
+        asunto = f'Salida de la oficina confirmada {ingreso.codigo_equipo} | Econotec'
     else:
         asunto = f'Abono registrado {ingreso.codigo_equipo} | Econotec'
 
@@ -337,6 +351,35 @@ def enviar_correo_abono_seguro(ingreso_pk, abono_pks, *, salida_confirmada=False
         logger.exception(
             'No se pudo enviar el correo de abono para ingreso pk=%s, abonos=%s.',
             ingreso_pk,
+            abono_pks,
+        )
+        return False
+
+
+def enviar_correo_salida_fisica_seguro(salida_pk, abono_pks=()):
+    """Envía el acta de salida actualizada sin comprometer el cierre guardado."""
+    try:
+        salida = SalidaEquipo.objects.select_related(
+            'ingreso',
+            'ingreso__cliente',
+            'tecnico_reparo',
+            'registrado_por',
+        ).prefetch_related('ingreso__abonos').get(pk=salida_pk)
+        abonos = list(
+            Abono.objects.filter(
+                pk__in=tuple(abono_pks),
+                ingreso=salida.ingreso,
+            ).order_by('pk')
+        )
+        return _enviar_correo_actualizacion(
+            salida.ingreso,
+            tipo='salida',
+            abonos_evento=abonos,
+        )
+    except Exception:
+        logger.exception(
+            'No se pudo enviar el acta de salida física para salida pk=%s, abonos=%s.',
+            salida_pk,
             abono_pks,
         )
         return False
