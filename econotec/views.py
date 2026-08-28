@@ -3506,8 +3506,12 @@ def salida_totales(request):
             num_equipos=Count('id'),
             total_acordado=Sum('ingreso__valor_acordado'),
             total_anticipo=Sum('ingreso__abono_anticipo'),
-            entregados=Count('id', filter=Q(estado_reparacion='retirado')),
-            pendientes=Count('id', filter=Q(estado_reparacion='pendiente_retiro')),
+            # La ubicación física se determina por la fecha real de retiro.
+            # El resultado de reparación puede tener otros valores válidos
+            # (revisión, no reparable, cortesía, etc.) y no debe confundirse
+            # con que el equipo continúe o no dentro de la oficina.
+            entregados=Count('id', filter=Q(fecha_retiro_real__isnull=False)),
+            pendientes=Count('id', filter=Q(fecha_retiro_real__isnull=True)),
         )
         .order_by('-num_equipos', '-total_acordado')
     )

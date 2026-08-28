@@ -121,6 +121,38 @@
         font-weight: 800; font-size: 13px;
         min-width: 45px; text-align: right;
     }
+    .rank-actions {
+        display: flex;
+        justify-content: center;
+        gap: 6px;
+        flex-wrap: wrap;
+        min-width: 190px;
+    }
+    .rank-actions .btn {
+        padding: 6px 10px;
+        font-size: 11px;
+        white-space: nowrap;
+    }
+    .rank-actions .btn-outside {
+        background: #e8f5e9;
+        color: #1b5e20;
+        border: 1px solid #a5d6a7;
+    }
+    .rank-actions .btn-finalized {
+        background: #fff3e0;
+        color: #b45309;
+        border: 1px solid #fed7aa;
+    }
+    [data-theme="dark"] .rank-actions .btn-outside {
+        background: rgba(34, 197, 94, 0.16);
+        color: #86efac;
+        border-color: rgba(134, 239, 172, 0.35);
+    }
+    [data-theme="dark"] .rank-actions .btn-finalized {
+        background: rgba(249, 115, 22, 0.16);
+        color: #fdba74;
+        border-color: rgba(253, 186, 116, 0.35);
+    }
 </style>
 
 <div class="crumb">
@@ -129,7 +161,7 @@
 </div>
 
 <h2 class="page-title">🏆 Ranking de <span class="accent">Técnicos</span></h2>
-<p class="page-subtitle">Ingresos asignados y salidas reparadas, separados según la responsabilidad registrada en cada etapa.</p>
+<p class="page-subtitle">Ingresos asignados, equipos finalizados y salidas físicas, separados según la responsabilidad registrada en cada etapa.</p>
 
 <form method="get" class="filter-bar">
     <div>
@@ -153,7 +185,7 @@
         <div class="value">{{ total_equipos }}</div>
     </div>
     <div class="stat-card success">
-        <div class="label">Salidas positivas</div>
+        <div class="label">Equipos finalizados positivos</div>
         <div class="value">{{ total_positivas_global }} <small style="font-size:14px; color:#888;">/ {{ total_salidas_global }}</small></div>
     </div>
     <div class="stat-card">
@@ -252,6 +284,8 @@
     <p class="rank-section-note">
         Cuenta exclusivamente al <strong>técnico que reparó registrado en la salida</strong>.
         El técnico asignado al ingreso no interviene en esta tabla.
+        <strong>Ver detalle</strong> muestra los equipos que ya están fuera de la oficina;
+        <strong>Equipos finalizados</strong> muestra los que todavía permanecen dentro.
     </p>
 
     {% if ranking %}
@@ -261,15 +295,15 @@
                 <tr style="background: var(--primary); color: white;">
                     <th style="padding: 12px; text-align: center;">Pos.</th>
                     <th style="padding: 12px; text-align: left;">Técnico</th>
-                    <th style="padding: 12px; text-align: center;">Salidas</th>
-                    <th style="padding: 12px; text-align: center;">Retirados</th>
-                    <th style="padding: 12px; text-align: center;">Pend. retiro</th>
+                    <th style="padding: 12px; text-align: center;">Finalizados</th>
+                    <th style="padding: 12px; text-align: center;">Fuera de oficina</th>
+                    <th style="padding: 12px; text-align: center;">En oficina</th>
                     <th style="padding: 12px; text-align: center;">Salidas +</th>
                     <th style="padding: 12px; text-align: center;">Salidas −</th>
                     <th style="padding: 12px; text-align: left;">Efectividad</th>
                     <th style="padding: 12px; text-align: right;">Acordado</th>
                     <th style="padding: 12px; text-align: right;">Recaudado</th>
-                    <th style="padding: 12px; text-align: center;">Acción</th>
+                    <th style="padding: 12px; text-align: center;">Detalles</th>
                 </tr>
             </thead>
             <tbody>
@@ -319,7 +353,14 @@
                     <td style="padding: 12px; text-align: right; color: var(--success); font-weight: 800;">{{ r.total_recaudado|dinero_signo }}</td>
                     <td style="padding: 12px; text-align: center;">
                         {% if not r.sin_asignar %}
-                            <a href="{% url 'econotec:salida_lista' %}?tecnico_salida={{ r.tecnico_id }}{% if filtros.desde %}&fecha_desde={{ filtros.desde }}{% endif %}{% if filtros.hasta %}&fecha_hasta={{ filtros.hasta }}{% endif %}" class="btn btn-secondary" style="padding: 6px 12px; font-size: 11px;">Ver detalle</a>
+                            <div class="rank-actions">
+                                <a href="{% url 'econotec:salida_retiros_lista' %}?tecnico_salida={{ r.tecnico_id }}{% if filtros.desde %}&fecha_desde={{ filtros.desde }}{% endif %}{% if filtros.hasta %}&fecha_hasta={{ filtros.hasta }}{% endif %}"
+                                   class="btn btn-outside"
+                                   title="Ver equipos de este técnico que ya salieron de la oficina">Ver detalle</a>
+                                <a href="{% url 'econotec:salida_lista' %}?tecnico_salida={{ r.tecnico_id }}{% if filtros.desde %}&fecha_desde={{ filtros.desde }}{% endif %}{% if filtros.hasta %}&fecha_hasta={{ filtros.hasta }}{% endif %}"
+                                   class="btn btn-finalized"
+                                   title="Ver equipos finalizados por este técnico que aún están en la oficina">Equipos finalizados</a>
+                            </div>
                         {% endif %}
                     </td>
                 </tr>

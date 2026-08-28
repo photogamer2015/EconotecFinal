@@ -3275,6 +3275,61 @@ class VentasTests(TestCase):
         self.assertContains(response, 'Ranking de Ingresos por Técnico Asignado')
         self.assertContains(response, 'Ranking de Técnicos por Salidas Reparadas')
 
+    def test_salida_totales_separa_fuera_de_oficina_y_finalizados(self):
+        ingreso_fuera = self.crear_ingreso_reparacion(
+            fecha_ingreso=date(2026, 8, 1),
+        )
+        ingreso_en_oficina = self.crear_ingreso_reparacion(
+            fecha_ingreso=date(2026, 8, 2),
+        )
+        SalidaEquipo.objects.create(
+            ingreso=ingreso_fuera,
+            fecha_salida=date(2026, 8, 10),
+            fecha_retiro_real=date(2026, 8, 12),
+            # La ubicación depende de fecha_retiro_real, aunque el resultado
+            # histórico no tenga el código "retirado".
+            estado_reparacion='no_reparable',
+            tecnico_reparo=self.usuario,
+            valor_final_cobrado=Decimal('0.00'),
+            metodo_pago_final='sin_pago',
+            registrado_por=self.usuario,
+        )
+        SalidaEquipo.objects.create(
+            ingreso=ingreso_en_oficina,
+            fecha_salida=date(2026, 8, 11),
+            estado_reparacion='revision',
+            tecnico_reparo=self.usuario,
+            valor_final_cobrado=Decimal('0.00'),
+            metodo_pago_final='sin_pago',
+            registrado_por=self.usuario,
+        )
+        self.client.force_login(self.admin)
+
+        response = self.client.get(reverse('econotec:salida_totales'), {
+            'desde': '2026-08-01',
+            'hasta': '2026-08-31',
+        })
+
+        self.assertEqual(response.status_code, 200)
+        ranking = next(
+            fila for fila in response.context['ranking']
+            if fila['tecnico_id'] == self.usuario.pk
+        )
+        self.assertEqual(ranking['num_equipos'], 2)
+        self.assertEqual(ranking['entregados'], 1)
+        self.assertEqual(ranking['pendientes'], 1)
+        self.assertContains(response, 'Fuera de oficina')
+        self.assertContains(response, 'En oficina')
+        self.assertContains(response, 'Equipos finalizados')
+        self.assertContains(
+            response,
+            f'{reverse("econotec:salida_retiros_lista")}?tecnico_salida={self.usuario.pk}',
+        )
+        self.assertContains(
+            response,
+            f'{reverse("econotec:salida_lista")}?tecnico_salida={self.usuario.pk}',
+        )
+
     def test_top_clientes_cuenta_equipos_reales_por_sede_sin_multiplicar(self):
         biomedics = Cliente.objects.create(
             cedula='0993018740001',
