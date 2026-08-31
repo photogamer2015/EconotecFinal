@@ -751,7 +751,9 @@
 <div class="wrap">
 
     <!-- ESTADO ACTUAL -->
-    {% if estado_actual_movil == 'entregado_con_solucion' %}
+    {% if estado_bloqueado_por_salida %}
+        <div class="estado-banner eb-ok"><span class="dot">🚚</span> Salida de la oficina confirmada</div>
+    {% elif estado_actual_movil == 'entregado_con_solucion' %}
         <div class="estado-banner eb-ok"><span class="dot">✅</span> Con solución</div>
     {% elif estado_actual_movil == 'entregado_sin_solucion' %}
         <div class="estado-banner eb-fail"><span class="dot">❌</span> Sin solución</div>
@@ -910,6 +912,15 @@
             </div>
         </div>
 
+        {% if estado_bloqueado_por_salida %}
+        <div class="card">
+            <div class="card-title">🚚 Estado del equipo</div>
+            <div class="salida-help">
+                Este equipo ya salió de la oficina. Puedes actualizar el reporte técnico,
+                pero el estado de salida queda bloqueado y no volverá a pendiente de retiro.
+            </div>
+        </div>
+        {% else %}
         <div class="card">
             <div class="card-title">🔄 Estado del equipo</div>
             <div class="estado-opciones">
@@ -952,6 +963,7 @@
                 </select>
             </div>
         </div>
+        {% endif %}
 
         <div class="save-bar">
             <button type="submit" name="accion" value="guardar" class="btn btn-primary">💾 Guardar cambios</button>

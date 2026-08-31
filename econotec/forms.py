@@ -1636,6 +1636,28 @@ class SalidaEquipoForm(forms.ModelForm):
             ):
                 self.fields[nombre].required = False
 
+        # Después de la salida física el resultado queda cerrado. Se permite
+        # editar datos económicos o administrativos, pero no regresar el equipo
+        # a "pendiente de retiro" ni cambiar su resultado desde este formulario.
+        if self.instance and self.instance.pk and self.instance.fecha_retiro_real:
+            estado_cerrado = self.instance.estado_reparacion
+            if estado_cerrado == 'pendiente_retiro':
+                estado_cerrado = 'retirado'
+            etiqueta_cerrada = dict(SalidaEquipo.ESTADO_REPARACION).get(
+                estado_cerrado,
+                estado_cerrado,
+            )
+            self.fields['estado_reparacion'].choices = [
+                (estado_cerrado, etiqueta_cerrada),
+            ]
+            self.fields['estado_reparacion'].disabled = True
+            self.fields['estado_reparacion'].required = False
+            self.fields['estado_reparacion'].help_text = (
+                'La salida de la oficina ya fue confirmada. Este estado no cambia '
+                'al editar pagos u otros datos.'
+            )
+            self.initial['estado_reparacion'] = estado_cerrado
+
     def _limpiar_pago_pendiente(self, cleaned):
         cleaned['metodo_pago_final'] = 'sin_pago'
         cleaned['banco'] = ''

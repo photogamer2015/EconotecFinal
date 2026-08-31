@@ -130,7 +130,7 @@
                         <td style="padding:0 30px 24px;">
                             <div style="padding-bottom:9px; color:#f36a0b; font-size:14px; font-weight:800; text-transform:uppercase;">Estado del equipo</div>
                             <div style="padding:15px 16px; background:#faf7f5; border-left:4px solid #f97618; border-radius:7px; color:#374151; font-size:14px; line-height:1.55;">
-                                <strong>{{ salida.get_estado_reparacion_display }}</strong><br>
+                                <strong>{{ salida.estado_operativo_display }}</strong><br>
                                 Finalizado el {{ salida.fecha_salida|date:"d/m/Y" }}{% if salida.fecha_retiro_real %} · Salida física confirmada el {{ salida.fecha_retiro_real|date:"d/m/Y" }}{% endif %}.
                             </div>
                         </td>

@@ -2681,7 +2681,7 @@ class VentasTests(TestCase):
         )
         SalidaEquipo.objects.create(
             ingreso=ingreso,
-            fecha_salida=date(2026, 8, 23),
+            fecha_salida=date.today(),
             estado_reparacion='pendiente_retiro',
             tecnico_reparo=self.usuario,
             valor_final_cobrado=Decimal('0.00'),
@@ -2694,7 +2694,7 @@ class VentasTests(TestCase):
             response = self.client.post(
                 reverse('econotec:abono_crear', kwargs={'ingreso_pk': ingreso.pk}),
                 {
-                    'fecha': '2026-08-23',
+                    'fecha': date.today().isoformat(),
                     'monto': '10.00',
                     'metodo': 'efectivo',
                     'banco': '',
@@ -2748,7 +2748,7 @@ class VentasTests(TestCase):
         )
         salida = SalidaEquipo.objects.create(
             ingreso=ingreso,
-            fecha_salida=date(2026, 8, 23),
+            fecha_salida=date.today(),
             estado_reparacion='pendiente_retiro',
             tecnico_reparo=self.usuario,
             valor_final_cobrado=Decimal('0.00'),
@@ -2761,7 +2761,7 @@ class VentasTests(TestCase):
             response = self.client.post(
                 reverse('econotec:abono_crear', kwargs={'ingreso_pk': ingreso.pk}),
                 {
-                    'fecha': '2026-08-23',
+                    'fecha': date.today().isoformat(),
                     'monto': '30.00',
                     'metodo': 'efectivo',
                     'banco': '',
@@ -6039,6 +6039,61 @@ class VentasTests(TestCase):
         self.assertEqual(salida.fecha_retiro_real, date.today())
         self.assertEqual(salida.estado_reparacion, 'retirado')
 
+    def test_editar_abono_despues_de_salida_no_altera_estado_cerrado(self):
+        ingreso = self.crear_ingreso_reparacion(
+            valor_acordado=Decimal('28.00'),
+            abono_anticipo=Decimal('0.00'),
+        )
+        salida = SalidaEquipo.objects.create(
+            ingreso=ingreso,
+            fecha_salida=date(2026, 8, 17),
+            fecha_retiro_real=date(2026, 8, 18),
+            estado_reparacion='retirado',
+            tecnico_reparo=self.usuario,
+            valor_final_cobrado=Decimal('0.00'),
+            metodo_pago_final='sin_pago',
+            registrado_por=self.usuario,
+        )
+        abono = Abono.objects.create(
+            ingreso=ingreso,
+            fecha=date(2026, 8, 17),
+            monto=Decimal('28.00'),
+            metodo='efectivo',
+            registrado_por=self.usuario,
+        )
+
+        response = self.client.post(
+            reverse('econotec:abono_editar', kwargs={
+                'ingreso_pk': ingreso.pk,
+                'abono_pk': abono.pk,
+            }),
+            {
+                'fecha': '2026-08-19',
+                'monto': '28.00',
+                'metodo': 'transferencia',
+                'banco': 'pichincha',
+                'banco_otro': '',
+                'tarjeta_app': '',
+                'comprobante_url': '',
+                'numero_recibo': abono.numero_recibo,
+                'observaciones': 'Pago actualizado después de la entrega.',
+                'factura_realizada': 'no',
+                'factura_nombres': '',
+                'factura_cedula': '',
+                'factura_correo': '',
+                'bodegaje_decision': 'na',
+                'bodegaje_monto_aplicado': '0.00',
+            },
+        )
+
+        self.assertRedirects(
+            response,
+            reverse('econotec:ingreso_abonos', kwargs={'pk': ingreso.pk}),
+        )
+        salida.refresh_from_db()
+        self.assertEqual(salida.estado_reparacion, 'retirado')
+        self.assertEqual(salida.fecha_retiro_real, date(2026, 8, 18))
+
     def test_abono_parcial_no_confirma_salida_fisica(self):
         ingreso = self.crear_ingreso_reparacion(
             valor_acordado=Decimal('28.00'),
@@ -7105,6 +7160,117 @@ class VentasTests(TestCase):
         self.assertEqual(salida.numero_recibo, '')
         self.assertEqual(salida.banco, '')
         self.assertEqual(salida.comprobante_url, '')
+
+    def test_editar_finalizacion_cerrada_ignora_regreso_a_pendiente(self):
+        ingreso = self.crear_ingreso_reparacion(
+            valor_acordado=Decimal('25.00'),
+            abono_anticipo=Decimal('25.00'),
+        )
+        salida = SalidaEquipo.objects.create(
+            ingreso=ingreso,
+            fecha_salida=date(2026, 8, 20),
+            fecha_retiro_real=date(2026, 8, 21),
+            estado_reparacion='retirado',
+            tecnico_reparo=self.usuario,
+            valor_final_cobrado=Decimal('0.00'),
+            metodo_pago_final='sin_pago',
+            registrado_por=self.usuario,
+        )
+
+        response = self.client.post(
+            reverse('econotec:salida_editar', kwargs={'pk': salida.pk}),
+            self.salida_post_data(
+                fecha_salida='2026-08-22',
+                estado_reparacion='pendiente_retiro',
+                tecnico_reparo=str(self.usuario.pk),
+            ),
+        )
+
+        self.assertRedirects(
+            response,
+            reverse('econotec:salida_listo_aviso', kwargs={'pk': salida.pk}),
+        )
+        salida.refresh_from_db()
+        ingreso.refresh_from_db()
+        self.assertEqual(salida.estado_reparacion, 'retirado')
+        self.assertEqual(salida.fecha_retiro_real, date(2026, 8, 21))
+        self.assertEqual(ingreso.subestado_entregado, 'con_solucion')
+
+    def test_salida_confirmada_heredada_no_aparece_como_pendiente(self):
+        ingreso = self.crear_ingreso_reparacion(
+            valor_acordado=Decimal('25.00'),
+            abono_anticipo=Decimal('25.00'),
+        )
+        salida = SalidaEquipo.objects.create(
+            ingreso=ingreso,
+            fecha_salida=date(2026, 8, 20),
+            estado_reparacion='pendiente_retiro',
+            tecnico_reparo=self.usuario,
+            valor_final_cobrado=Decimal('0.00'),
+            metodo_pago_final='sin_pago',
+            registrado_por=self.usuario,
+        )
+        # Simula un registro anterior a la corrección: tenía fecha de retiro,
+        # pero conservaba el código "pendiente_retiro".
+        SalidaEquipo.objects.filter(pk=salida.pk).update(
+            fecha_retiro_real=date(2026, 8, 21),
+            estado_reparacion='pendiente_retiro',
+        )
+        ingreso.refresh_from_db()
+
+        inicio = self.client.get(reverse('econotec:bienvenida'))
+        pendientes = self.client.get(
+            reverse('econotec:dashboard_details', kwargs={'tipo': 'pendientes'}),
+        )
+        detalle = self.client.get(
+            reverse('econotec:ingreso_detalle', kwargs={'pk': ingreso.pk}),
+        )
+
+        self.assertEqual(inicio.context['stats']['pendientes_retiro'], 0)
+        self.assertNotContains(pendientes, ingreso.codigo_equipo)
+        self.assertEqual(ingreso.estado_visual_key, 'retirado')
+        self.assertEqual(ingreso.estado_visual_display, 'Salió de la oficina')
+        self.assertContains(detalle, 'Salió de la oficina')
+        self.assertNotContains(detalle, 'Reparado — pendiente de retiro')
+
+    def test_tecnico_no_puede_reabrir_equipo_que_ya_salio(self):
+        ingreso = self.crear_ingreso_reparacion(
+            valor_acordado=Decimal('25.00'),
+            abono_anticipo=Decimal('25.00'),
+        )
+        salida = SalidaEquipo.objects.create(
+            ingreso=ingreso,
+            fecha_salida=date(2026, 8, 20),
+            fecha_retiro_real=date(2026, 8, 21),
+            estado_reparacion='retirado',
+            tecnico_reparo=self.usuario,
+            valor_final_cobrado=Decimal('0.00'),
+            metodo_pago_final='sin_pago',
+            registrado_por=self.usuario,
+        )
+        token = token_para_ingreso(ingreso.pk)
+
+        response = self.client.post(
+            reverse('econotec:tecnico_hoja', kwargs={'token': token}),
+            {
+                'reporte_tecnico': 'Se agregó una observación posterior.',
+                'estado_movil': 'en_reparacion',
+                'subestado_reparacion': 'en_reparacion',
+                'accion': 'guardar',
+            },
+        )
+
+        self.assertRedirects(
+            response,
+            reverse('econotec:tecnico_hoja', kwargs={'token': token}),
+        )
+        ingreso.refresh_from_db()
+        salida.refresh_from_db()
+        self.assertEqual(ingreso.reporte_tecnico, 'Se agregó una observación posterior.')
+        self.assertEqual(ingreso.estado, 'entregado')
+        self.assertEqual(ingreso.subestado_entregado, 'con_solucion')
+        self.assertEqual(salida.estado_reparacion, 'retirado')
+        self.assertEqual(salida.fecha_retiro_real, date(2026, 8, 21))
 
     def test_aviso_salida_negativa_no_dice_equipo_reparado(self):
         for estado in ('no_reparable', 'cliente_no_acepta'):

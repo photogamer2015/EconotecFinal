@@ -166,7 +166,7 @@
         <div class="resumen">
             <div class="row"><span>Cliente:</span><strong>{{ ingreso.cliente.nombres }}</strong></div>
             <div class="row"><span>Equipo:</span><strong>{{ ingreso.tipo_equipo_display }} {{ ingreso.marca }}</strong></div>
-            <div class="row"><span>Estado:</span><strong>{{ salida.get_estado_reparacion_display }}</strong></div>
+            <div class="row"><span>Estado:</span><strong>{{ salida.estado_operativo_display }}</strong></div>
             <div class="row"><span>Fecha de finalización:</span><strong>{{ salida.fecha_salida|date:"d/m/Y" }}</strong></div>
             {% if salida.garantia_dias %}
                 <div class="row"><span>Garantía:</span><strong>{{ salida.garantia_dias }} día{{ salida.garantia_dias|pluralize }}</strong></div>

@@ -885,7 +885,7 @@
         <div class="info-card" style="margin-top:18px; border-left:4px solid var(--success);">
             <h3>✅ Equipo finalizado</h3>
             <div class="field-row"><span class="label">Fecha de finalización</span><span class="value">{{ salida.fecha_salida|date:"d/m/Y" }}</span></div>
-            <div class="field-row"><span class="label">Estado</span><span class="value"><span class="badge badge-{{ salida.estado_reparacion }}">{{ salida.get_estado_reparacion_display }}</span></span></div>
+            <div class="field-row"><span class="label">Estado</span><span class="value"><span class="badge badge-{{ salida.estado_operativo_key }}">{{ salida.estado_operativo_display }}</span></span></div>
             <div class="field-row"><span class="label">Cobrado</span><span class="value">{{ salida.valor_final_cobrado|dinero_signo }}</span></div>
             <div class="field-row">
                 <span class="label">Técnico responsable</span>

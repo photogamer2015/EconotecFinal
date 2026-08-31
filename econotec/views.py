@@ -224,6 +224,7 @@ def bienvenida(request):
         ).count() + SalidaEquipo.objects.filter(
             ingreso__sede__in=SEDES_EQUIPOS,
             estado_reparacion='pendiente_retiro',
+            fecha_retiro_real__isnull=True,
         ).count(),
     }
     salidas_equipos = SalidaEquipo.objects.filter(ingreso__sede__in=SEDES_EQUIPOS)
@@ -466,6 +467,7 @@ def dashboard_details(request, tipo):
         salidas = list(SalidaEquipo.objects.select_related('ingreso__cliente').filter(
             ingreso__sede__in=SEDES_EQUIPOS,
             estado_reparacion='pendiente_retiro',
+            fecha_retiro_real__isnull=True,
         ))
         columnas = ['Código', 'Cliente', 'Equipo', 'Fase', 'Estado', 'Acción']
         
@@ -1184,6 +1186,7 @@ def ingreso_menu(request):
     ).count() + SalidaEquipo.objects.filter(
         ingreso__sede__in=SEDES_EQUIPOS,
         estado_reparacion='pendiente_retiro',
+        fecha_retiro_real__isnull=True,
     ).count()
     pendientes_valor = _ingresos_pendientes_valor_qs().count()
     return render(request, 'ingresos/menu.html', {
@@ -1728,8 +1731,12 @@ def ingreso_lista(request):
             )
         elif estado == 'con_salida':
             qs = qs.filter(salida__isnull=False)
+        elif estado == 'salida_entregado_cliente':
+            qs = qs.filter(salida__fecha_retiro_real__isnull=False)
         elif estado in estados_salida_filtro:
             qs = qs.filter(salida__estado_reparacion=estados_salida_filtro[estado])
+            if estado == 'salida_pendiente_retiro':
+                qs = qs.filter(salida__fecha_retiro_real__isnull=True)
         else:
             qs = qs.filter(estado=estado)
     if tipo:
@@ -2946,6 +2953,7 @@ def salida_menu(request):
     total = SalidaEquipo.objects.filter(fecha_retiro_real__isnull=True).count()
     listos_para_entregar = SalidaEquipo.objects.filter(
         estado_reparacion='pendiente_retiro',
+        fecha_retiro_real__isnull=True,
     ).count()
     facturas_realizadas = SalidaEquipo.objects.filter(
         factura_realizada='si',
@@ -3000,7 +3008,7 @@ def salida_lista(request, solo_fuera_oficina=False):
         campo_fecha_filtro = 'fecha_salida'
         etiqueta_fecha_filtro = 'Fecha de finalización'
 
-    if estado:
+    if estado and not (solo_fuera_oficina and estado == 'retirado'):
         qs = qs.filter(estado_reparacion=estado)
     if sede_filtro in ('guayaquil', 'quito'):
         qs = qs.filter(ingreso__sede=sede_filtro)

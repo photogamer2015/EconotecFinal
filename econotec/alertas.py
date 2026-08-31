@@ -228,7 +228,7 @@ def whatsapp_link_equipo_listo(salida):
     nombre_tecnico = salida.tecnico_reparo_nombre or 'el equipo técnico de Econotec'
 
     # Estado del trabajo en términos claros para el cliente
-    estado_label = salida.get_estado_reparacion_display()
+    estado_label = salida.estado_operativo_display
 
     saldo = ingreso.diferencia
     if saldo and saldo > 0:

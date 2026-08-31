@@ -496,7 +496,7 @@
                         📝 {{ s.registrado_por.first_name|default:s.registrado_por.username|default:"—" }}
                     </span>
                 </td>
-                <td data-label="Estado"><span class="badge badge-{{ s.estado_reparacion }}">{{ s.get_estado_reparacion_display }}</span></td>
+                <td data-label="Estado"><span class="badge badge-{{ s.estado_operativo_key }}">{{ s.estado_operativo_display }}</span></td>
                 <td class="office-exit-cell" data-label="Salida de la oficina">
                     {% if s.cliente_ya_retiro %}
                         <div style="display: flex; gap: 4px; align-items: center; white-space: nowrap;">

@@ -771,14 +771,19 @@ class IngresoEquipo(models.Model):
     def pendiente_retiro_visual(self):
         salida = self._salida_relacionada()
         if salida is not None:
-            return salida.estado_reparacion == 'pendiente_retiro'
+            return (
+                not salida.cliente_ya_retiro
+                and salida.estado_reparacion == 'pendiente_retiro'
+            )
         return self.estado == 'entregado' and self.subestado_entregado == 'pendiente_retiro'
 
     @property
     def estado_visual_key(self):
+        salida = self._salida_relacionada()
+        if salida is not None and salida.cliente_ya_retiro:
+            return 'retirado'
         if self.pendiente_retiro_visual:
             return 'pendiente_retiro'
-        salida = self._salida_relacionada()
         if salida is not None:
             if salida.estado_reparacion == 'no_reparable':
                 return 'no_reparable'
@@ -795,9 +800,11 @@ class IngresoEquipo(models.Model):
 
     @property
     def estado_visual_display(self):
+        salida = self._salida_relacionada()
+        if salida is not None and salida.cliente_ya_retiro:
+            return 'Salió de la oficina'
         if self.pendiente_retiro_visual:
             return 'Pendiente de retiro'
-        salida = self._salida_relacionada()
         if salida is not None and salida.estado_reparacion == 'revision':
             return 'Revisión'
         return self.get_estado_display()
@@ -835,9 +842,11 @@ class IngresoEquipo(models.Model):
 
     @property
     def subestado_visual_display(self):
+        salida = self._salida_relacionada()
+        if salida is not None and salida.cliente_ya_retiro:
+            return 'Salida de la oficina confirmada'
         if self.pendiente_retiro_visual:
             return 'Reparado - pendiente de retiro'
-        salida = self._salida_relacionada()
         if salida is not None and salida.estado_reparacion == 'revision':
             return 'Revisión pendiente de pago'
         if self.estado == 'en_reparacion' and self.subestado_reparacion:
@@ -1795,6 +1804,19 @@ class SalidaEquipo(models.Model):
         return self.fecha_retiro_real is not None
 
     @property
+    def estado_operativo_key(self):
+        """Estado de ubicación que debe prevalecer en las pantallas operativas."""
+        return 'retirado' if self.cliente_ya_retiro else self.estado_reparacion
+
+    @property
+    def estado_operativo_display(self):
+        """Etiqueta de salida física sin perder el resultado técnico guardado."""
+        return dict(self.ESTADO_REPARACION).get(
+            self.estado_operativo_key,
+            self.estado_operativo_key,
+        )
+
+    @property
     def tecnico_reparo_nombre(self):
         """Nombre del técnico responsable registrado en la salida."""
         u = self.tecnico_reparo
@@ -1888,6 +1910,37 @@ class SalidaEquipo(models.Model):
         return f'RECS-{siguiente:04d}'
 
     def save(self, *args, **kwargs):
+        # Una salida física ya confirmada queda cerrada. Los cambios posteriores
+        # (pagos, abonos, factura, reporte, etc.) no pueden devolverla a un estado
+        # de taller. La única reapertura válida primero limpia fecha_retiro_real
+        # desde la acción administrativa "Deshacer salida".
+        estado_cerrado = None
+        if self.pk and self.fecha_retiro_real is not None:
+            anterior = (
+                type(self).objects
+                .filter(pk=self.pk)
+                .values('fecha_retiro_real', 'estado_reparacion')
+                .first()
+            )
+            if anterior and anterior['fecha_retiro_real'] is not None:
+                estado_cerrado = anterior['estado_reparacion']
+
+        # Corrige también el caso histórico contradictorio: fecha de retiro
+        # confirmada junto con "pendiente de retiro".
+        if estado_cerrado == 'pendiente_retiro':
+            estado_cerrado = 'retirado'
+        if estado_cerrado is not None:
+            self.estado_reparacion = estado_cerrado
+        elif (
+            self.fecha_retiro_real is not None
+            and self.estado_reparacion == 'pendiente_retiro'
+        ):
+            self.estado_reparacion = 'retirado'
+
+        update_fields = kwargs.get('update_fields')
+        if update_fields is not None and self.fecha_retiro_real is not None:
+            kwargs['update_fields'] = set(update_fields) | {'estado_reparacion'}
+
         es_cortesia = (
             self.estado_reparacion == 'cortesia'
             or (self.ingreso_id and self.ingreso.estado == 'cortesia')

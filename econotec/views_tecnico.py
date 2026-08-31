@@ -179,6 +179,7 @@ def tecnico_hoja(request, token):
         'subestado_reparacion_actual': ingreso.subestado_reparacion or '',
         'subestados_reparacion': IngresoEquipo._meta.get_field(
             'subestado_reparacion').choices,
+        'estado_bloqueado_por_salida': ingreso.retirado_por_cliente,
     }
     return render(request, 'tecnico/hoja.html', contexto)
 
@@ -266,6 +267,17 @@ def _procesar_actualizacion(request, ingreso, token):
                                     'reporte_actualizado', 'actualizado'])
         registrar_reporte_si_cambio()
         messages.info(request, 'El valor acordado se edita desde el sistema principal.')
+        return redirect('econotec:tecnico_hoja', token=token)
+
+    if ingreso.retirado_por_cliente:
+        ingreso.save(update_fields=['reporte_tecnico', 'reporte_por',
+                                    'reporte_actualizado', 'actualizado'])
+        registrar_reporte_si_cambio()
+        messages.info(
+            request,
+            f'Reporte actualizado. El equipo {ingreso.codigo_equipo} ya salió de '
+            'la oficina y su estado permanece cerrado.'
+        )
         return redirect('econotec:tecnico_hoja', token=token)
 
     estados_crean_salida = {
