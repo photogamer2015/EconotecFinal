@@ -3275,6 +3275,114 @@ class VentasTests(TestCase):
         self.assertContains(response, 'Ranking de Ingresos por Técnico Asignado')
         self.assertContains(response, 'Ranking de Técnicos por Salidas Reparadas')
 
+    def test_tecnico_y_asesor_ven_ranking_filtrado_sin_valores_monetarios(self):
+        ingreso_periodo = self.crear_ingreso_reparacion(
+            fecha_ingreso=date(2026, 7, 5),
+            valor_acordado=Decimal('987.65'),
+            abono_anticipo=Decimal('123.45'),
+        )
+        SalidaEquipo.objects.create(
+            ingreso=ingreso_periodo,
+            fecha_salida=date(2026, 7, 20),
+            estado_reparacion='pendiente_retiro',
+            tecnico_reparo=self.usuario,
+            valor_final_cobrado=Decimal('864.20'),
+            metodo_pago_final='efectivo',
+            registrado_por=self.usuario,
+        )
+        self.crear_ingreso_reparacion(
+            fecha_ingreso=date(2026, 8, 5),
+            valor_acordado=Decimal('555.55'),
+        )
+
+        for usuario in (self.usuario, self.vendedor):
+            with self.subTest(rol=usuario.username):
+                self.client.force_login(usuario)
+                response = self.client.get(reverse('econotec:salida_totales'), {
+                    'desde': '2026-07-01',
+                    'hasta': '2026-07-31',
+                })
+
+                self.assertEqual(response.status_code, 200)
+                self.assertFalse(response.context['mostrar_valores_monetarios'])
+                self.assertEqual(response.context['filtros'], {
+                    'desde': '2026-07-01',
+                    'hasta': '2026-07-31',
+                })
+                self.assertEqual(response.context['total_equipos'], 1)
+                self.assertEqual(response.context['total_salidas_global'], 1)
+                self.assertFalse(any(
+                    'total_acordado_global' in contexto
+                    for contexto in response.context
+                ))
+                self.assertNotIn('total_acordado', response.context['ranking_ingresos'][0])
+                self.assertNotIn('total_recaudado', response.context['ranking'][0])
+                self.assertContains(response, 'Equipos ingresados')
+                self.assertContains(response, 'Equipos finalizados positivos')
+                self.assertContains(response, 'value="2026-07-01"')
+                self.assertContains(response, 'value="2026-07-31"')
+                self.assertContains(response, 'fecha_desde=2026-07-01')
+                self.assertContains(response, 'fecha_hasta=2026-07-31')
+                self.assertNotContains(response, 'Total acordado')
+                self.assertNotContains(response, 'Total recaudado')
+                self.assertNotContains(response, 'Diagnóstico (No reparados)')
+                self.assertNotContains(response, '>Anticipos<')
+                self.assertNotContains(response, '>Acordado<')
+                self.assertNotContains(response, '>Recaudado<')
+                self.assertNotContains(response, '$987,65')
+                self.assertNotContains(response, '$123,45')
+                self.assertNotContains(response, '$864,20')
+
+    def test_superusuario_asignado_como_tecnico_tampoco_ve_dinero_en_ranking(self):
+        User = get_user_model()
+        superusuario_tecnico = User.objects.create_superuser(
+            username='TecnicoConPermisosElevados',
+            email='tecnico-elevado@example.com',
+            password='testpass123',
+        )
+        superusuario_tecnico.groups.add(Group.objects.get(name='Tecnicos'))
+        ingreso = self.crear_ingreso_reparacion(
+            fecha_ingreso=date(2026, 7, 5),
+            valor_acordado=Decimal('987.65'),
+            abono_anticipo=Decimal('123.45'),
+        )
+        SalidaEquipo.objects.create(
+            ingreso=ingreso,
+            fecha_salida=date(2026, 7, 20),
+            estado_reparacion='pendiente_retiro',
+            tecnico_reparo=self.usuario,
+            valor_final_cobrado=Decimal('864.20'),
+            metodo_pago_final='efectivo',
+            registrado_por=self.usuario,
+        )
+        self.client.force_login(superusuario_tecnico)
+
+        response = self.client.get(reverse('econotec:salida_totales'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(response.context['mostrar_valores_monetarios'])
+        self.assertFalse(response.context['puede_ver_valores_ranking'])
+        self.assertFalse(any(
+            'total_acordado_global' in contexto
+            for contexto in response.context
+        ))
+        self.assertNotIn('total_acordado', response.context['ranking_ingresos'][0])
+        self.assertNotIn('total_recaudado', response.context['ranking'][0])
+        self.assertNotContains(response, 'Total acordado')
+        self.assertNotContains(response, 'Total recaudado')
+        self.assertNotContains(response, '>Anticipos<')
+        self.assertNotContains(response, '>Acordado<')
+        self.assertNotContains(response, '>Recaudado<')
+        self.assertNotContains(response, '$987,65')
+        self.assertNotContains(response, '$123,45')
+        self.assertNotContains(response, '$864,20')
+
+        inicio = self.client.get(reverse('econotec:bienvenida'))
+        self.assertContains(
+            inicio,
+            'Consulta trabajos asignados, equipos finalizados, resultados y efectividad de cada técnico.',
+        )
+
     def test_salida_totales_separa_fuera_de_oficina_y_finalizados(self):
         ingreso_fuera = self.crear_ingreso_reparacion(
             fecha_ingreso=date(2026, 8, 1),
@@ -4063,6 +4171,65 @@ class VentasTests(TestCase):
 
         self.assertContains(response, ingreso.codigo_equipo)
         self.assertNotContains(response, venta.codigo_equipo)
+
+    def test_cinco_modales_dashboard_incluyen_busqueda_y_filtros_responsivos(self):
+        ingreso_g = self.crear_ingreso_reparacion(
+            sede='guayaquil',
+            fecha_ingreso=date.today(),
+            tipo_equipo='laptop',
+        )
+        ingreso_u = self.crear_ingreso_reparacion(
+            sede='quito',
+            fecha_ingreso=date.today(),
+            tipo_equipo='impresora',
+        )
+        SalidaEquipo.objects.create(
+            ingreso=ingreso_u,
+            fecha_salida=date.today(),
+            estado_reparacion='pendiente_retiro',
+            tecnico_reparo=self.usuario,
+            valor_final_cobrado=Decimal('0.00'),
+            metodo_pago_final='sin_pago',
+            registrado_por=self.usuario,
+        )
+
+        for tipo in ('equipos_total', 'ingresos_mes', 'pendientes', 'salidas_mes', 'clientes'):
+            with self.subTest(tipo=tipo):
+                response = self.client.get(
+                    reverse('econotec:dashboard_details', kwargs={'tipo': tipo})
+                )
+
+                self.assertEqual(response.status_code, 200)
+                self.assertContains(response, 'id="dashModalSearch"')
+                self.assertContains(response, 'id="dashModalSede"')
+                self.assertContains(response, 'id="dashModalEquipo"')
+                self.assertContains(response, 'id="dashModalOrden"')
+                self.assertContains(response, 'id="dashModalClear"')
+                self.assertContains(response, 'data-dashboard-row')
+                self.assertContains(response, 'G — Guayaquil')
+                self.assertContains(response, 'U — Quito')
+                self.assertContains(response, 'data-label=')
+
+        total = self.client.get(
+            reverse('econotec:dashboard_details', kwargs={'tipo': 'equipos_total'})
+        )
+        self.assertContains(total, f'data-codigo="{ingreso_g.codigo_equipo}"')
+        self.assertContains(total, 'data-sedes="guayaquil"')
+        self.assertContains(total, 'value="Laptop"')
+        self.assertContains(total, 'value="Impresora"')
+
+        clientes = self.client.get(
+            reverse('econotec:dashboard_details', kwargs={'tipo': 'clientes'})
+        )
+        self.assertContains(clientes, ingreso_g.codigo_equipo)
+        self.assertContains(clientes, ingreso_u.codigo_equipo)
+        self.assertContains(clientes, 'data-sedes="guayaquil|||quito"')
+
+        inicio = self.client.get(reverse('econotec:bienvenida'))
+        self.assertContains(inicio, 'function inicializarFiltrosModalDashboard()')
+        self.assertContains(inicio, '@media (max-width: 900px)')
+        self.assertContains(inicio, '@media (max-width: 640px)')
+        self.assertContains(inicio, '@media (max-width: 420px)')
 
     def test_admin_dashboard_equipos_mes_excluye_ventas_producto(self):
         User = get_user_model()
@@ -5502,7 +5669,17 @@ class VentasTests(TestCase):
         inicio_tecnico = self.client.get(reverse('econotec:bienvenida'))
         self.assertContains(inicio_tecnico, 'Salidas físicas confirmadas')
         self.assertContains(inicio_tecnico, reverse('econotec:salida_retiros_lista'))
-        self.assertNotContains(inicio_tecnico, reverse('econotec:salida_totales'))
+        self.assertContains(inicio_tecnico, 'Ranking de Técnicos')
+        self.assertContains(inicio_tecnico, reverse('econotec:salida_totales'))
+        self.assertContains(
+            inicio_tecnico,
+            'Consulta trabajos asignados, equipos finalizados, resultados y efectividad de cada técnico.',
+        )
+
+        self.client.force_login(self.vendedor)
+        inicio_asesor = self.client.get(reverse('econotec:bienvenida'))
+        self.assertContains(inicio_asesor, 'Ranking de Técnicos')
+        self.assertContains(inicio_asesor, reverse('econotec:salida_totales'))
 
         self.client.force_login(self.admin)
         inicio_admin = self.client.get(reverse('econotec:bienvenida'))
@@ -5513,7 +5690,7 @@ class VentasTests(TestCase):
             f'<a href="{reverse("econotec:salida_totales")}" class="card-box card-box-ranking">',
             html=False,
         )
-        self.assertContains(inicio_admin, 'Solo Admin')
+        self.assertContains(inicio_admin, 'Vista completa')
 
     def test_busqueda_pagos_ignora_tildes_y_mayusculas(self):
         self.cliente_existente.nombres = 'Yandri Guevará'

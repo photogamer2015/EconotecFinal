@@ -156,7 +156,6 @@
 </style>
 
 <div class="crumb">
-    <a href="{% url 'econotec:bienvenida' %}">Inicio</a> /
     <a href="{% url 'econotec:bienvenida' %}">Inicio</a> / Ranking de Técnicos
 </div>
 
@@ -188,18 +187,20 @@
         <div class="label">Equipos finalizados positivos</div>
         <div class="value">{{ total_positivas_global }} <small style="font-size:14px; color:#888;">/ {{ total_salidas_global }}</small></div>
     </div>
-    <div class="stat-card">
-        <div class="label">Total acordado</div>
-        <div class="value">{{ total_acordado_global|dinero_signo }}</div>
-    </div>
-    <div class="stat-card success">
-        <div class="label">Total recaudado</div>
-        <div class="value">{{ total_recaudado_global|dinero_signo }}</div>
-    </div>
-    <div class="stat-card" style="border-left-color: var(--warning);">
-        <div class="label" style="font-size: 10px;">Diagnóstico (No reparados)</div>
-        <div class="value" style="color: var(--warning);">{{ total_diag_no_reparado|dinero_signo }}</div>
-    </div>
+    {% if mostrar_valores_monetarios %}
+        <div class="stat-card">
+            <div class="label">Total acordado</div>
+            <div class="value">{{ total_acordado_global|dinero_signo }}</div>
+        </div>
+        <div class="stat-card success">
+            <div class="label">Total recaudado</div>
+            <div class="value">{{ total_recaudado_global|dinero_signo }}</div>
+        </div>
+        <div class="stat-card" style="border-left-color: var(--warning);">
+            <div class="label" style="font-size: 10px;">Diagnóstico (No reparados)</div>
+            <div class="value" style="color: var(--warning);">{{ total_diag_no_reparado|dinero_signo }}</div>
+        </div>
+    {% endif %}
 </div>
 
 <!-- Ranking de ingresos por técnico encargado -->
@@ -212,7 +213,7 @@
 
     {% if ranking_ingresos %}
     <div style="overflow-x:auto;">
-        <table class="ranking-table ingress-table" style="width:100%; min-width: 900px; border-collapse: collapse; font-size: 13px;">
+        <table class="ranking-table ingress-table" style="width:100%; min-width: {% if mostrar_valores_monetarios %}900{% else %}700{% endif %}px; border-collapse: collapse; font-size: 13px;">
             <thead>
                 <tr style="background: #0f766e; color: white;">
                     <th style="padding: 12px; text-align: center;">Pos.</th>
@@ -221,8 +222,10 @@
                     <th style="padding: 12px; text-align: center;">Sin salida registrada</th>
                     <th style="padding: 12px; text-align: center;">Con salida registrada</th>
                     <th style="padding: 12px; text-align: left;">Participación</th>
-                    <th style="padding: 12px; text-align: right;">Acordado</th>
-                    <th style="padding: 12px; text-align: right;">Anticipos</th>
+                    {% if mostrar_valores_monetarios %}
+                        <th style="padding: 12px; text-align: right;">Acordado</th>
+                        <th style="padding: 12px; text-align: right;">Anticipos</th>
+                    {% endif %}
                     <th style="padding: 12px; text-align: center;">Acción</th>
                 </tr>
             </thead>
@@ -258,8 +261,10 @@
                             <span class="num">{{ r.participacion|floatformat:1 }}%</span>
                         </div>
                     </td>
-                    <td style="padding: 12px; text-align: right; font-weight: 700;">{{ r.total_acordado|dinero_signo }}</td>
-                    <td style="padding: 12px; text-align: right; color: var(--success); font-weight: 800;">{{ r.total_anticipo|dinero_signo }}</td>
+                    {% if mostrar_valores_monetarios %}
+                        <td style="padding: 12px; text-align: right; font-weight: 700;">{{ r.total_acordado|dinero_signo }}</td>
+                        <td style="padding: 12px; text-align: right; color: var(--success); font-weight: 800;">{{ r.total_anticipo|dinero_signo }}</td>
+                    {% endif %}
                     <td style="padding: 12px; text-align: center;">
                         {% if not r.sin_asignar %}
                             <a href="{% url 'econotec:ingreso_lista' %}?sede=todas&tecnico={{ r.tecnico_id }}{% if filtros.desde %}&fecha_desde={{ filtros.desde }}{% endif %}{% if filtros.hasta %}&fecha_hasta={{ filtros.hasta }}{% endif %}" class="btn btn-secondary" style="padding: 6px 12px; font-size: 11px;">Ver ingresos</a>
@@ -301,8 +306,10 @@
                     <th style="padding: 12px; text-align: center;">Salidas +</th>
                     <th style="padding: 12px; text-align: center;">Salidas −</th>
                     <th style="padding: 12px; text-align: left;">Efectividad</th>
-                    <th style="padding: 12px; text-align: right;">Acordado</th>
-                    <th style="padding: 12px; text-align: right;">Recaudado</th>
+                    {% if mostrar_valores_monetarios %}
+                        <th style="padding: 12px; text-align: right;">Acordado</th>
+                        <th style="padding: 12px; text-align: right;">Recaudado</th>
+                    {% endif %}
                     <th style="padding: 12px; text-align: center;">Detalles</th>
                 </tr>
             </thead>
@@ -349,8 +356,10 @@
                             <span class="num">{{ r.efectividad }}%</span>
                         </div>
                     </td>
-                    <td style="padding: 12px; text-align: right; font-weight: 700;">{{ r.total_acordado|dinero_signo }}</td>
-                    <td style="padding: 12px; text-align: right; color: var(--success); font-weight: 800;">{{ r.total_recaudado|dinero_signo }}</td>
+                    {% if mostrar_valores_monetarios %}
+                        <td style="padding: 12px; text-align: right; font-weight: 700;">{{ r.total_acordado|dinero_signo }}</td>
+                        <td style="padding: 12px; text-align: right; color: var(--success); font-weight: 800;">{{ r.total_recaudado|dinero_signo }}</td>
+                    {% endif %}
                     <td style="padding: 12px; text-align: center;">
                         {% if not r.sin_asignar %}
                             <div class="rank-actions">
@@ -386,7 +395,9 @@
         <div style="background: var(--primary-light); padding: 14px; border-radius: 10px; text-align: center;">
             <div style="font-size: 11px; color: var(--primary-dark); text-transform: uppercase; font-weight: 700;">{{ t.tipo }}</div>
             <div style="font-size: 26px; color: var(--primary); font-weight: 800; margin: 4px 0;">{{ t.num }}</div>
-            <div style="font-size: 12px; color: #666;">{{ t.suma|dinero_signo }} acordados</div>
+            {% if mostrar_valores_monetarios %}
+                <div style="font-size: 12px; color: #666;">{{ t.suma|dinero_signo }} acordados</div>
+            {% endif %}
         </div>
         {% endfor %}
     </div>

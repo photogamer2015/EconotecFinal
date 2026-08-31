@@ -19,6 +19,7 @@ from .permisos import (
     puede_gestionar_equipos as _puede_gestionar_equipos,
     puede_gestionar_pagos as _puede_gestionar_pagos,
     puede_ver_ranking as _puede_ver_ranking,
+    puede_ver_valores_ranking as _puede_ver_valores_ranking,
 )
 
 
@@ -43,6 +44,7 @@ def roles(request):
             'puede_gestionar_equipos': False,
             'puede_gestionar_pagos': False,
             'puede_ver_ranking': False,
+            'puede_ver_valores_ranking': False,
             'rol_actual': '',
             'sede_actual': sede_actual,
             'sede_actual_display': sede_actual_display,
@@ -139,6 +141,7 @@ def roles(request):
         'puede_gestionar_equipos': _puede_gestionar_equipos(user),
         'puede_gestionar_pagos': _puede_gestionar_pagos(user),
         'puede_ver_ranking': _puede_ver_ranking(user),
+        'puede_ver_valores_ranking': _puede_ver_valores_ranking(user),
         'rol_actual': rol_actual,
         'sede_actual': sede_actual,
         'sede_actual_display': sede_actual_display,

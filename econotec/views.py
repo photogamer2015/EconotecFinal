@@ -14,12 +14,13 @@ from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ValidationError
 from django.core.validators import validate_email
 from django.db import transaction
-from django.db.models import Count, Q, Sum
+from django.db.models import Count, Prefetch, Q, Sum
 from django.db.models.deletion import ProtectedError
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
+from django.utils.html import format_html
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_GET, require_POST
 
@@ -397,6 +398,8 @@ def dashboard_details(request, tipo):
     titulo = ""
     columnas = []
     filas = []
+    tipos_disponibles = {}
+    es_modal_clientes = tipo == 'clientes'
 
     link_ver_todos = ""
 
@@ -413,14 +416,82 @@ def dashboard_details(request, tipo):
             return '—'
         return f'${valor:.2f}'
 
+    def boton_modal(url, texto, clase):
+        return format_html(
+            '<a href="{}" class="badge {} dashboard-modal-action">{}</a>',
+            url,
+            clase,
+            texto,
+        )
+
+    def agregar_fila(
+        valores,
+        *,
+        codigo='',
+        sedes=(),
+        tipos=(),
+        texto_busqueda='',
+        fecha_orden=None,
+        clave_orden='',
+        destacar_codigo=True,
+    ):
+        etiquetas_tipo = []
+        for etiqueta in tipos:
+            etiqueta = str(etiqueta or '').strip()
+            if not etiqueta:
+                continue
+            tipos_disponibles[etiqueta.casefold()] = etiqueta
+            etiquetas_tipo.append(etiqueta)
+
+        filas.append({
+            'celdas': [
+                {
+                    'label': columnas[indice],
+                    'valor': valor,
+                    'es_codigo': destacar_codigo and indice == 0,
+                }
+                for indice, valor in enumerate(valores)
+            ],
+            'codigo': codigo,
+            'sedes': '|||'.join(sede for sede in sedes if sede),
+            'tipos': '|||'.join(etiquetas_tipo),
+            'busqueda': texto_busqueda,
+            'orden_fecha': fecha_orden.isoformat() if fecha_orden else '',
+            'orden_codigo': clave_orden or codigo,
+        })
+
     if tipo == 'equipos_total':
         titulo = "Total de Equipos Ingresados"
-        link_ver_todos = "/ingresos/"
-        qs = ingresos_de_equipo_qs().select_related('cliente', 'salida').order_by('-fecha_ingreso')
+        link_ver_todos = reverse('econotec:ingreso_lista')
+        qs = ingresos_de_equipo_qs().select_related('cliente', 'salida').order_by(
+            '-fecha_ingreso', '-creado',
+        )
         columnas = ['Código', 'Cliente', 'Equipo', 'Fecha Ingreso', 'Estado', 'Acción']
         for eq in qs:
-            btn = f'<a href="/ingresos/{eq.pk}/" class="badge badge-ingresado" style="text-decoration:none; padding: 4px 8px;">Ver detallles</a>'
-            filas.append([eq.codigo_equipo, eq.cliente.nombres, eq.tipo_equipo_display, eq.fecha_ingreso.strftime('%d/%m/%Y'), estado_ingreso_para_modal(eq), btn])
+            btn = boton_modal(
+                reverse('econotec:ingreso_detalle', kwargs={'pk': eq.pk}),
+                'Ver detalles',
+                'badge-ingresado',
+            )
+            agregar_fila(
+                [
+                    eq.codigo_equipo,
+                    eq.cliente.nombres,
+                    eq.tipo_equipo_display,
+                    eq.fecha_ingreso.strftime('%d/%m/%Y'),
+                    estado_ingreso_para_modal(eq),
+                    btn,
+                ],
+                codigo=eq.codigo_equipo,
+                sedes=(eq.sede,),
+                tipos=(eq.tipo_equipo_display,),
+                texto_busqueda=(
+                    f'{eq.codigo_equipo} {eq.cliente.nombres} '
+                    f'{eq.tipo_equipo_display} {eq.marca} {eq.modelo_serie_detalle} '
+                    f'{estado_ingreso_para_modal(eq)}'
+                ),
+                fecha_orden=eq.fecha_ingreso,
+            )
 
     elif tipo.startswith('ingresos_sede_'):
         sede = tipo.replace('ingresos_sede_', '', 1)
@@ -434,32 +505,70 @@ def dashboard_details(request, tipo):
         )
         columnas = ['Código', 'Cliente', 'Equipo', 'Fecha', 'Técnico', 'Estado', 'Valor', 'Acción']
         for eq in qs:
-            btn = f'<a href="/ingresos/{eq.pk}/" class="badge badge-ingresado" style="text-decoration:none; padding: 4px 8px;">Ver detalle</a>'
-            filas.append([
-                eq.codigo_equipo,
-                eq.cliente.nombres,
-                f'{eq.tipo_equipo_display} — {eq.marca} {eq.modelo_serie_detalle}',
-                eq.fecha_ingreso.strftime('%d/%m/%Y'),
-                eq.tecnico_encargado_nombre or '—',
-                estado_ingreso_para_modal(eq),
-                dinero_modal(eq.valor_acordado),
-                btn,
-            ])
+            btn = boton_modal(
+                reverse('econotec:ingreso_detalle', kwargs={'pk': eq.pk}),
+                'Ver detalle',
+                'badge-ingresado',
+            )
+            estado = estado_ingreso_para_modal(eq)
+            agregar_fila(
+                [
+                    eq.codigo_equipo,
+                    eq.cliente.nombres,
+                    f'{eq.tipo_equipo_display} — {eq.marca} {eq.modelo_serie_detalle}',
+                    eq.fecha_ingreso.strftime('%d/%m/%Y'),
+                    eq.tecnico_encargado_nombre or '—',
+                    estado,
+                    dinero_modal(eq.valor_acordado),
+                    btn,
+                ],
+                codigo=eq.codigo_equipo,
+                sedes=(eq.sede,),
+                tipos=(eq.tipo_equipo_display,),
+                texto_busqueda=(
+                    f'{eq.codigo_equipo} {eq.cliente.nombres} {eq.tipo_equipo_display} '
+                    f'{eq.marca} {eq.modelo_serie_detalle} '
+                    f'{eq.tecnico_encargado_nombre} {estado}'
+                ),
+                fecha_orden=eq.fecha_ingreso,
+            )
 
     elif tipo == 'ingresos_mes':
         titulo = f"Ingresos del Mes ({hoy.strftime('%B %Y').capitalize()})"
-        link_ver_todos = "/ingresos/"
+        link_ver_todos = reverse('econotec:ingreso_lista')
         qs = ingresos_de_equipo_qs().select_related('cliente', 'salida').filter(
             fecha_ingreso__year=ano_actual, fecha_ingreso__month=mes_actual
-        ).order_by('-fecha_ingreso')
+        ).order_by('-fecha_ingreso', '-creado')
         columnas = ['Código', 'Cliente', 'Equipo', 'Fecha Ingreso', 'Estado', 'Acción']
         for eq in qs:
-            btn = f'<a href="/ingresos/{eq.pk}/" class="badge badge-ingresado" style="text-decoration:none; padding: 4px 8px;">Ver detallles</a>'
-            filas.append([eq.codigo_equipo, eq.cliente.nombres, eq.tipo_equipo_display, eq.fecha_ingreso.strftime('%d/%m/%Y'), estado_ingreso_para_modal(eq), btn])
+            btn = boton_modal(
+                reverse('econotec:ingreso_detalle', kwargs={'pk': eq.pk}),
+                'Ver detalles',
+                'badge-ingresado',
+            )
+            estado = estado_ingreso_para_modal(eq)
+            agregar_fila(
+                [
+                    eq.codigo_equipo,
+                    eq.cliente.nombres,
+                    eq.tipo_equipo_display,
+                    eq.fecha_ingreso.strftime('%d/%m/%Y'),
+                    estado,
+                    btn,
+                ],
+                codigo=eq.codigo_equipo,
+                sedes=(eq.sede,),
+                tipos=(eq.tipo_equipo_display,),
+                texto_busqueda=(
+                    f'{eq.codigo_equipo} {eq.cliente.nombres} '
+                    f'{eq.tipo_equipo_display} {eq.marca} {eq.modelo_serie_detalle} {estado}'
+                ),
+                fecha_orden=eq.fecha_ingreso,
+            )
 
     elif tipo == 'pendientes':
         titulo = "Equipos Pendientes en Taller"
-        link_ver_todos = "/ingresos/"
+        link_ver_todos = reverse('econotec:ingreso_lista')
         ingresos = list(ingresos_de_equipo_qs().select_related('cliente').filter(
             estado__in=['ingresado', 'en_reparacion'],
             salida__isnull=True,
@@ -470,25 +579,93 @@ def dashboard_details(request, tipo):
             fecha_retiro_real__isnull=True,
         ))
         columnas = ['Código', 'Cliente', 'Equipo', 'Fase', 'Estado', 'Acción']
-        
+
         for eq in ingresos:
-            btn = f'<a href="/ingresos/{eq.pk}/" class="badge badge-ingresado" style="text-decoration:none; padding: 4px 8px;">Ver detallles</a>'
-            filas.append([eq.codigo_equipo, eq.cliente.nombres, eq.tipo_equipo_display, 'En Proceso', estado_ingreso_para_modal(eq), btn])
+            btn = boton_modal(
+                reverse('econotec:ingreso_detalle', kwargs={'pk': eq.pk}),
+                'Ver detalles',
+                'badge-ingresado',
+            )
+            estado = estado_ingreso_para_modal(eq)
+            agregar_fila(
+                [
+                    eq.codigo_equipo,
+                    eq.cliente.nombres,
+                    eq.tipo_equipo_display,
+                    'En proceso',
+                    estado,
+                    btn,
+                ],
+                codigo=eq.codigo_equipo,
+                sedes=(eq.sede,),
+                tipos=(eq.tipo_equipo_display,),
+                texto_busqueda=(
+                    f'{eq.codigo_equipo} {eq.cliente.nombres} '
+                    f'{eq.tipo_equipo_display} {eq.marca} {eq.modelo_serie_detalle} {estado}'
+                ),
+                fecha_orden=eq.fecha_ingreso,
+            )
         for sal in salidas:
-            btn = f'<a href="/ingresos/{sal.ingreso.pk}/" class="badge badge-ingresado" style="text-decoration:none; padding: 4px 8px;">Ver detallles</a>'
-            filas.append([sal.ingreso.codigo_equipo, sal.ingreso.cliente.nombres, sal.ingreso.tipo_equipo_display, 'Terminado', 'Listo (Pendiente Retiro)', btn])
+            eq = sal.ingreso
+            btn = boton_modal(
+                reverse('econotec:ingreso_detalle', kwargs={'pk': eq.pk}),
+                'Ver detalles',
+                'badge-ingresado',
+            )
+            agregar_fila(
+                [
+                    eq.codigo_equipo,
+                    eq.cliente.nombres,
+                    eq.tipo_equipo_display,
+                    'Terminado',
+                    'Listo (pendiente de retiro)',
+                    btn,
+                ],
+                codigo=eq.codigo_equipo,
+                sedes=(eq.sede,),
+                tipos=(eq.tipo_equipo_display,),
+                texto_busqueda=(
+                    f'{eq.codigo_equipo} {eq.cliente.nombres} '
+                    f'{eq.tipo_equipo_display} {eq.marca} {eq.modelo_serie_detalle} '
+                    'Terminado listo pendiente de retiro'
+                ),
+                fecha_orden=sal.fecha_salida,
+            )
 
     elif tipo == 'salidas_mes':
         titulo = f"Equipos Finalizados del Mes ({hoy.strftime('%B %Y').capitalize()})"
-        link_ver_todos = "/salidas/"
+        link_ver_todos = reverse('econotec:salida_lista')
         qs = SalidaEquipo.objects.select_related('ingreso__cliente').filter(
             ingreso__sede__in=SEDES_EQUIPOS,
             fecha_salida__year=ano_actual, fecha_salida__month=mes_actual
-        ).order_by('-fecha_salida')
+        ).order_by('-fecha_salida', '-creado')
         columnas = ['Código', 'Cliente', 'Equipo', 'Fecha de finalización', 'Resultado', 'Acción']
         for sal in qs:
-            btn = f'<a href="/salidas/{sal.pk}/imprimir/" class="badge badge-entregado" style="text-decoration:none; padding: 4px 8px;">Ver PDF</a>'
-            filas.append([sal.ingreso.codigo_equipo, sal.ingreso.cliente.nombres, sal.ingreso.tipo_equipo_display, sal.fecha_salida.strftime('%d/%m/%Y'), sal.get_estado_reparacion_display(), btn])
+            eq = sal.ingreso
+            btn = boton_modal(
+                reverse('econotec:salida_imprimir', kwargs={'pk': sal.pk}),
+                'Ver PDF',
+                'badge-entregado',
+            )
+            resultado = sal.estado_operativo_display
+            agregar_fila(
+                [
+                    eq.codigo_equipo,
+                    eq.cliente.nombres,
+                    eq.tipo_equipo_display,
+                    sal.fecha_salida.strftime('%d/%m/%Y'),
+                    resultado,
+                    btn,
+                ],
+                codigo=eq.codigo_equipo,
+                sedes=(eq.sede,),
+                tipos=(eq.tipo_equipo_display,),
+                texto_busqueda=(
+                    f'{eq.codigo_equipo} {eq.cliente.nombres} '
+                    f'{eq.tipo_equipo_display} {eq.marca} {eq.modelo_serie_detalle} {resultado}'
+                ),
+                fecha_orden=sal.fecha_salida,
+            )
 
     elif tipo.startswith('salidas_sede_'):
         sede = tipo.replace('salidas_sede_', '', 1)
@@ -502,30 +679,97 @@ def dashboard_details(request, tipo):
         )
         columnas = ['Código', 'Cliente', 'Equipo', 'Fecha', 'Técnico', 'Resultado', 'Cobrado', 'Acción']
         for sal in qs:
-            btn = f'<a href="/salidas/{sal.pk}/imprimir/" class="badge badge-entregado" style="text-decoration:none; padding: 4px 8px;">Ver PDF</a>'
-            filas.append([
-                sal.ingreso.codigo_equipo,
-                sal.ingreso.cliente.nombres,
-                f'{sal.ingreso.tipo_equipo_display} — {sal.ingreso.marca} {sal.ingreso.modelo_serie_detalle}',
-                sal.fecha_salida.strftime('%d/%m/%Y'),
-                sal.tecnico_reparo.get_username() if sal.tecnico_reparo else '—',
-                sal.get_estado_reparacion_display(),
-                dinero_modal(sal.valor_final_cobrado),
-                btn,
-            ])
+            eq = sal.ingreso
+            btn = boton_modal(
+                reverse('econotec:salida_imprimir', kwargs={'pk': sal.pk}),
+                'Ver PDF',
+                'badge-entregado',
+            )
+            tecnico = sal.tecnico_reparo.get_username() if sal.tecnico_reparo else '—'
+            resultado = sal.estado_operativo_display
+            agregar_fila(
+                [
+                    eq.codigo_equipo,
+                    eq.cliente.nombres,
+                    f'{eq.tipo_equipo_display} — {eq.marca} {eq.modelo_serie_detalle}',
+                    sal.fecha_salida.strftime('%d/%m/%Y'),
+                    tecnico,
+                    resultado,
+                    dinero_modal(sal.valor_final_cobrado),
+                    btn,
+                ],
+                codigo=eq.codigo_equipo,
+                sedes=(eq.sede,),
+                tipos=(eq.tipo_equipo_display,),
+                texto_busqueda=(
+                    f'{eq.codigo_equipo} {eq.cliente.nombres} {eq.tipo_equipo_display} '
+                    f'{eq.marca} {eq.modelo_serie_detalle} {tecnico} {resultado}'
+                ),
+                fecha_orden=sal.fecha_salida,
+            )
 
     elif tipo == 'clientes':
         titulo = "Directorio de Clientes"
         link_ver_todos = ""
-        qs = Cliente.objects.order_by('-id')
-        columnas = ['Nombre / Razón Social', 'Cédula / RUC', 'WhatsApp', 'Email']
+        ingresos_cliente = ingresos_de_equipo_qs().only(
+            'cliente_id',
+            'sede',
+            'numero_equipo',
+            'tipo_equipo',
+            'tipo_equipo_otro',
+            'fecha_ingreso',
+        ).order_by('-fecha_ingreso', '-creado')
+        qs = Cliente.objects.prefetch_related(
+            Prefetch('ingresos', queryset=ingresos_cliente, to_attr='equipos_dashboard')
+        ).order_by('nombres', 'id')
+        columnas = ['Nombre / Razón Social', 'Cédula / RUC', 'WhatsApp', 'Email', 'Equipos']
         for cli in qs:
-            filas.append([cli.nombres, cli.cedula, cli.whatsapp or '-', cli.correo or '-'])
+            equipos = cli.equipos_dashboard
+            codigos = [equipo.codigo_equipo for equipo in equipos]
+            sedes = sorted({equipo.sede for equipo in equipos})
+            tipos = sorted({equipo.tipo_equipo_display for equipo in equipos}, key=str.casefold)
+            codigos_resumen = ', '.join(codigos[:6]) or 'Sin equipos'
+            if len(codigos) > 6:
+                codigos_resumen += f' · +{len(codigos) - 6}'
+            agregar_fila(
+                [
+                    cli.nombres,
+                    cli.cedula,
+                    cli.whatsapp or '—',
+                    cli.correo or '—',
+                    codigos_resumen,
+                ],
+                codigo=' '.join(codigos),
+                sedes=sedes,
+                tipos=tipos,
+                texto_busqueda=' '.join([
+                    cli.nombres,
+                    cli.cedula,
+                    cli.whatsapp or '',
+                    cli.correo or '',
+                    *codigos,
+                    *tipos,
+                ]),
+                fecha_orden=equipos[0].fecha_ingreso if equipos else None,
+                clave_orden=cli.nombres,
+                destacar_codigo=False,
+            )
+
+    if es_modal_clientes:
+        filas.sort(key=lambda fila: fila['orden_codigo'].casefold())
+    else:
+        filas.sort(
+            key=lambda fila: (fila['orden_fecha'], fila['orden_codigo']),
+            reverse=True,
+        )
 
     ctx = {
         'titulo': titulo,
         'columnas': columnas,
         'filas': filas,
+        'total_filas': len(filas),
+        'tipos_filtro': sorted(tipos_disponibles.values(), key=str.casefold),
+        'es_modal_clientes': es_modal_clientes,
         'link_ver_todos': link_ver_todos,
     }
     return render(request, 'includes/dashboard_modal_content.html', ctx)
@@ -3428,7 +3672,10 @@ def cliente_export(request):
 # Ranking de Técnicos (totales por técnico)
 # ═════════════════════════════════════════════════════════════════
 
-from .permisos import ranking_requerido as _ranking_requerido
+from .permisos import (
+    puede_ver_valores_ranking as _puede_ver_valores_ranking,
+    ranking_requerido as _ranking_requerido,
+)
 
 @_ranking_requerido
 def salida_totales(request):
@@ -3442,6 +3689,7 @@ def salida_totales(request):
 
     desde = (request.GET.get('desde') or '').strip()
     hasta = (request.GET.get('hasta') or '').strip()
+    mostrar_valores_monetarios = _puede_ver_valores_ranking(request.user)
 
     estados_positivos = SALIDA_BUENA_ESTADOS
     estados_negativos = SALIDA_MALA_ESTADOS
@@ -3470,11 +3718,18 @@ def salida_totales(request):
             num_ingresos=Count('id'),
             sin_salida=Count('id', filter=Q(salida__isnull=True)),
             con_salida=Count('id', filter=Q(salida__isnull=False)),
+        )
+    )
+    if mostrar_valores_monetarios:
+        ranking_ingresos_qs = ranking_ingresos_qs.annotate(
             total_acordado=Sum('valor_acordado'),
             total_anticipo=Sum('abono_anticipo'),
+        ).order_by('-num_ingresos', '-total_acordado')
+    else:
+        ranking_ingresos_qs = ranking_ingresos_qs.order_by(
+            '-num_ingresos',
+            'tecnico_encargado__username',
         )
-        .order_by('-num_ingresos', '-total_acordado')
-    )
     ranking_ingresos = []
     for posicion, row in enumerate(ranking_ingresos_qs, start=1):
         tid = row['tecnico_encargado_id']
@@ -3482,7 +3737,7 @@ def salida_totales(request):
             f"{row['tecnico_encargado__first_name'] or ''} "
             f"{row['tecnico_encargado__last_name'] or ''}"
         ).strip() or row['tecnico_encargado__username'] or '— Sin asignar —'
-        ranking_ingresos.append({
+        item_ranking_ingreso = {
             'posicion': posicion,
             'tecnico_id': tid,
             'nombre': nombre,
@@ -3494,9 +3749,13 @@ def salida_totales(request):
                 (row['num_ingresos'] / total_ingresos_ranking) * 100,
                 1,
             ) if total_ingresos_ranking else 0,
-            'total_acordado': row['total_acordado'] or D('0.00'),
-            'total_anticipo': row['total_anticipo'] or D('0.00'),
-        })
+        }
+        if mostrar_valores_monetarios:
+            item_ranking_ingreso.update({
+                'total_acordado': row['total_acordado'] or D('0.00'),
+                'total_anticipo': row['total_anticipo'] or D('0.00'),
+            })
+        ranking_ingresos.append(item_ranking_ingreso)
 
     # Base del ranking: salidas en el rango. La productividad se atribuye al
     # técnico que reparó en la salida, no al técnico encargado del ingreso.
@@ -3512,8 +3771,6 @@ def salida_totales(request):
                 'tecnico_reparo__last_name', 'tecnico_reparo__username')
         .annotate(
             num_equipos=Count('id'),
-            total_acordado=Sum('ingreso__valor_acordado'),
-            total_anticipo=Sum('ingreso__abono_anticipo'),
             # La ubicación física se determina por la fecha real de retiro.
             # El resultado de reparación puede tener otros valores válidos
             # (revisión, no reparable, cortesía, etc.) y no debe confundirse
@@ -3521,8 +3778,14 @@ def salida_totales(request):
             entregados=Count('id', filter=Q(fecha_retiro_real__isnull=False)),
             pendientes=Count('id', filter=Q(fecha_retiro_real__isnull=True)),
         )
-        .order_by('-num_equipos', '-total_acordado')
     )
+    if mostrar_valores_monetarios:
+        ranking = ranking.annotate(
+            total_acordado=Sum('ingreso__valor_acordado'),
+            total_anticipo=Sum('ingreso__abono_anticipo'),
+        ).order_by('-num_equipos', '-total_acordado')
+    else:
+        ranking = ranking.order_by('-num_equipos', 'tecnico_reparo__username')
 
     ranking_list = []
     for row in ranking:
@@ -3540,9 +3803,10 @@ def salida_totales(request):
         salidas_positivas = 0
         salidas_negativas = 0
         cobrado_final = D('0.00')
-        
-        total_acordado = row['total_acordado'] or D('0.00')
-        total_anticipo = row['total_anticipo'] or D('0.00')
+
+        if mostrar_valores_monetarios:
+            total_acordado = row['total_acordado'] or D('0.00')
+            total_anticipo = row['total_anticipo'] or D('0.00')
 
         for salida in sal_qs:
             estado = salida.estado_reparacion
@@ -3554,42 +3818,43 @@ def salida_totales(request):
                 salidas_negativas += 1
                 
             # Cobrado
-            cobrado_final += (salida.valor_final_cobrado or D('0.00'))
-            
-            # Ajuste de Venta (Acordado)
-            if estado == 'cliente_no_acepta':
-                total_acordado -= (salida.ingreso.valor_acordado or D('0.00'))
-                total_acordado += D('5.00')
-            elif estado == 'no_reparable':
-                total_acordado -= (salida.ingreso.valor_acordado or D('0.00'))
-            elif estado == 'revision':
-                total_acordado -= (salida.ingreso.valor_acordado or D('0.00'))
-                total_acordado += (salida.valor_acordado_revision or D('0.00'))
+            if mostrar_valores_monetarios:
+                cobrado_final += (salida.valor_final_cobrado or D('0.00'))
 
-        # Recaudado para el técnico: EXCLUYE anticipos, SOLO cobros de salida
-        total_recaudado = cobrado_final
+                # Ajuste de Venta (Acordado)
+                if estado == 'cliente_no_acepta':
+                    total_acordado -= (salida.ingreso.valor_acordado or D('0.00'))
+                    total_acordado += D('5.00')
+                elif estado == 'no_reparable':
+                    total_acordado -= (salida.ingreso.valor_acordado or D('0.00'))
+                elif estado == 'revision':
+                    total_acordado -= (salida.ingreso.valor_acordado or D('0.00'))
+                    total_acordado += (salida.valor_acordado_revision or D('0.00'))
 
-        ranking_list.append({
+        item_ranking = {
             'tecnico_id': tid,
             'nombre': nombre,
             'sin_asignar': tid is None,
             'num_equipos': row['num_equipos'],
             'entregados': row['entregados'],
             'pendientes': row['pendientes'],
-            'total_acordado': total_acordado,
-            'total_anticipo': total_anticipo,
-            'cobrado_final': cobrado_final,
-            'total_recaudado': total_recaudado,
             'total_salidas': total_salidas,
             'salidas_positivas': salidas_positivas,
             'salidas_negativas': salidas_negativas,
             'efectividad': round((salidas_positivas / total_salidas * 100) if total_salidas else 0, 1),
-        })
+        }
+        if mostrar_valores_monetarios:
+            item_ranking.update({
+                'total_acordado': total_acordado,
+                'total_anticipo': total_anticipo,
+                'cobrado_final': cobrado_final,
+                # Recaudado para el técnico: excluye anticipos.
+                'total_recaudado': cobrado_final,
+            })
+        ranking_list.append(item_ranking)
 
     # Totales globales
     total_equipos = qs_ing.count()
-    total_acordado_global = qs_ing.aggregate(s=Sum('valor_acordado'))['s'] or D('0.00')
-    total_anticipos_global = qs_ing.aggregate(s=Sum('abono_anticipo'))['s'] or D('0.00')
 
     # Salidas globales
     sal_global = SalidaEquipo.objects.all()
@@ -3601,39 +3866,49 @@ def salida_totales(request):
     total_positivas_global = sal_global.filter(
         estado_reparacion__in=estados_positivos
     ).count()
-    cobrado_final_global = sal_global.aggregate(s=Sum('valor_final_cobrado'))['s'] or D('0.00')
-
-    total_diag_no_reparado = sal_global.filter(
-        estado_reparacion__in=['no_reparable', 'cliente_no_acepta']
-    ).aggregate(s=Sum('valor_final_cobrado'))['s'] or D('0.00')
-
     # Top tipos de equipo trabajados
-    por_tipo = (
-        qs_ing.values('tipo_equipo')
-        .annotate(num=Count('id'), suma=Sum('valor_acordado'))
-        .order_by('-num')
-    )
-    map_tipos = dict(IngresoEquipo._meta.get_field('tipo_equipo').choices)
-    por_tipo_list = [{
-        'tipo': map_tipos.get(t['tipo_equipo'], t['tipo_equipo']),
-        'num': t['num'],
-        'suma': t['suma'] or D('0.00'),
-    } for t in por_tipo]
+    por_tipo = qs_ing.values('tipo_equipo').annotate(num=Count('id'))
+    if mostrar_valores_monetarios:
+        por_tipo = por_tipo.annotate(suma=Sum('valor_acordado'))
+    por_tipo = por_tipo.order_by('-num')
 
-    return render(request, 'salidas/totales.html', {
+    map_tipos = dict(IngresoEquipo._meta.get_field('tipo_equipo').choices)
+    por_tipo_list = []
+    for tipo in por_tipo:
+        item_tipo = {
+            'tipo': map_tipos.get(tipo['tipo_equipo'], tipo['tipo_equipo']),
+            'num': tipo['num'],
+        }
+        if mostrar_valores_monetarios:
+            item_tipo['suma'] = tipo['suma'] or D('0.00')
+        por_tipo_list.append(item_tipo)
+
+    contexto = {
         'ranking_ingresos': ranking_ingresos,
         'ranking': ranking_list,
         'por_tipo': por_tipo_list,
         'total_equipos': total_equipos,
-        'total_acordado_global': total_acordado_global,
-        'total_anticipos_global': total_anticipos_global,
-        'cobrado_final_global': cobrado_final_global,
-        'total_recaudado_global': total_anticipos_global + cobrado_final_global,
         'total_salidas_global': total_salidas_global,
         'total_positivas_global': total_positivas_global,
-        'total_diag_no_reparado': total_diag_no_reparado,
+        'mostrar_valores_monetarios': mostrar_valores_monetarios,
         'filtros': {'desde': desde, 'hasta': hasta},
-    })
+    }
+    if mostrar_valores_monetarios:
+        total_acordado_global = qs_ing.aggregate(s=Sum('valor_acordado'))['s'] or D('0.00')
+        total_anticipos_global = qs_ing.aggregate(s=Sum('abono_anticipo'))['s'] or D('0.00')
+        cobrado_final_global = sal_global.aggregate(s=Sum('valor_final_cobrado'))['s'] or D('0.00')
+        total_diag_no_reparado = sal_global.filter(
+            estado_reparacion__in=['no_reparable', 'cliente_no_acepta']
+        ).aggregate(s=Sum('valor_final_cobrado'))['s'] or D('0.00')
+        contexto.update({
+            'total_acordado_global': total_acordado_global,
+            'total_anticipos_global': total_anticipos_global,
+            'cobrado_final_global': cobrado_final_global,
+            'total_recaudado_global': total_anticipos_global + cobrado_final_global,
+            'total_diag_no_reparado': total_diag_no_reparado,
+        })
+
+    return render(request, 'salidas/totales.html', contexto)
 
 
 # ═════════════════════════════════════════════════════════════════

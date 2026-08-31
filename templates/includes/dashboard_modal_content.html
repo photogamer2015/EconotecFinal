@@ -1,15 +1,75 @@
-<div class="dash-modal-header" style="display: flex; justify-content: space-between; align-items: center; gap: 12px;">
-    <h3 style="margin: 0;">{{ titulo }}</h3>
-    <div style="display: flex; align-items: center; margin-left: auto;">
+<div class="dash-modal-header">
+    <h3>{{ titulo }}</h3>
+    <div class="dash-modal-header-actions">
         {% if link_ver_todos %}
-            <a href="{{ link_ver_todos }}" class="btn btn-sm btn-primary" style="font-size: 11px; padding: 4px 10px; border-radius: 4px; margin-right: 16px; text-decoration: none; font-weight: bold; background: var(--primary); color: white;">Ver todos &rarr;</a>
+            <a href="{{ link_ver_todos }}" class="btn btn-sm btn-primary dash-modal-view-all">Ver todos &rarr;</a>
         {% endif %}
-        <button type="button" class="dash-modal-close" onclick="cerrarModalDashboard()" style="margin: 0; padding: 0; line-height: 1;">&times;</button>
+        <button type="button" class="dash-modal-close" onclick="cerrarModalDashboard()" aria-label="Cerrar ventana">&times;</button>
     </div>
 </div>
+
+{% if filas %}
+<div class="dash-modal-filters" data-dashboard-filters>
+    <div class="dash-filter-field dash-filter-search">
+        <label for="dashModalSearch">{% if es_modal_clientes %}Buscar cliente o código{% else %}Buscar por código o cliente{% endif %}</label>
+        <div class="dash-search-control">
+            <span aria-hidden="true">⌕</span>
+            <input
+                id="dashModalSearch"
+                type="search"
+                placeholder="{% if es_modal_clientes %}Nombre, cédula, teléfono o código…{% else %}Ej.: G1025, cliente o modelo…{% endif %}"
+                autocomplete="off"
+            >
+        </div>
+    </div>
+
+    <div class="dash-filter-field">
+        <label for="dashModalSede">Sede / prefijo</label>
+        <select id="dashModalSede">
+            <option value="">Todas (G / U)</option>
+            <option value="guayaquil">G — Guayaquil</option>
+            <option value="quito">U — Quito</option>
+        </select>
+    </div>
+
+    <div class="dash-filter-field">
+        <label for="dashModalEquipo">Tipo de equipo</label>
+        <select id="dashModalEquipo">
+            <option value="">Todos los equipos</option>
+            {% for tipo_equipo in tipos_filtro %}
+                <option value="{{ tipo_equipo }}">{{ tipo_equipo }}</option>
+            {% endfor %}
+        </select>
+    </div>
+
+    <div class="dash-filter-field">
+        <label for="dashModalOrden">Ordenar</label>
+        <select id="dashModalOrden">
+            {% if es_modal_clientes %}
+                <option value="nombre_asc">Nombre A–Z</option>
+                <option value="nombre_desc">Nombre Z–A</option>
+                <option value="recientes">Actividad reciente</option>
+            {% else %}
+                <option value="recientes">Más recientes</option>
+                <option value="antiguos">Más antiguos</option>
+                <option value="codigo_asc">Código A–Z</option>
+                <option value="codigo_desc">Código Z–A</option>
+            {% endif %}
+        </select>
+    </div>
+
+    <button type="button" class="dash-filter-clear" id="dashModalClear">Limpiar</button>
+</div>
+
+<div class="dash-filter-summary" aria-live="polite">
+    <span>Mostrando <strong id="dashModalVisibleCount">{{ total_filas }}</strong> de {{ total_filas }}</span>
+    <span class="dash-filter-summary-hint">Puedes combinar búsqueda, sede y tipo de equipo.</span>
+</div>
+{% endif %}
+
 <div class="dash-modal-body">
     {% if filas %}
-    <div class="table-responsive">
+    <div class="table-responsive dash-modal-table-wrap" role="region" aria-label="{{ titulo }}" tabindex="0">
         <table class="table-dash-modal">
             <thead>
                 <tr>
@@ -18,15 +78,23 @@
                     {% endfor %}
                 </tr>
             </thead>
-            <tbody>
+            <tbody id="dashModalRows">
                 {% for fila in filas %}
-                <tr>
-                    {% for celda in fila %}
-                    <td>
-                        {% if forloop.first %}
-                            <span class="badge-codigo">{{ celda }}</span>
+                <tr
+                    data-dashboard-row
+                    data-search="{{ fila.busqueda }}"
+                    data-codigo="{{ fila.codigo }}"
+                    data-sedes="{{ fila.sedes }}"
+                    data-tipos="{{ fila.tipos }}"
+                    data-orden-fecha="{{ fila.orden_fecha }}"
+                    data-orden-codigo="{{ fila.orden_codigo }}"
+                >
+                    {% for celda in fila.celdas %}
+                    <td data-label="{{ celda.label }}">
+                        {% if celda.es_codigo %}
+                            <span class="badge-codigo">{{ celda.valor }}</span>
                         {% else %}
-                            {{ celda|safe }}
+                            {{ celda.valor }}
                         {% endif %}
                     </td>
                     {% endfor %}
@@ -34,6 +102,11 @@
                 {% endfor %}
             </tbody>
         </table>
+    </div>
+    <div class="dash-modal-empty dash-modal-filter-empty" id="dashModalFilterEmpty" hidden>
+        <div class="dash-modal-empty-icon" aria-hidden="true">⌕</div>
+        <strong>No encontramos coincidencias</strong>
+        <p>Prueba otro código o limpia alguno de los filtros.</p>
     </div>
     {% else %}
     <div class="dash-modal-empty">

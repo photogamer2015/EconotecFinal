@@ -8,8 +8,8 @@ ROLES DEL SISTEMA:
 | Admin            | TODO el sistema (incl. Reg. Administrativo)        |
 | Técnico          | Ingresos, Salidas, Clientes, Historial, Pagos,     |
 |                  | Ranking de Técnicos                                |
-| Asesor Comercial | Ingresos, Salidas, Clientes, Historial, Pagos      |
-|                  | (SIN Ranking de Técnicos)                          |
+| Asesor Comercial | Ingresos, Salidas, Clientes, Historial, Pagos,     |
+|                  | Ranking de Técnicos sin valores económicos         |
 ─────────────────────────────────────────────────────────────────────────
 
 Los superusuarios siempre tienen acceso total, sin importar el grupo.
@@ -57,8 +57,7 @@ def es_tecnico(user):
 
 def es_asesor(user):
     """¿Pertenece al grupo Asesor Comercial?
-    Accede a: Ingresos, Salidas, Clientes, Historial, Pagos.
-    NO puede ver el Ranking de Técnicos."""
+    Accede a: Ingresos, Salidas, Clientes, Historial, Pagos y Ranking."""
     if not user.is_authenticated:
         return False
     return user.groups.filter(name__in=GRUPOS_ASESOR_COMERCIAL).exists()
@@ -85,8 +84,22 @@ def puede_gestionar_pagos(user):
 
 def puede_ver_ranking(user):
     """Puede ver el Ranking de Técnicos.
-    → Solo Admin."""
-    return es_admin(user)
+    → Admin, Técnico o Asesor Comercial.
+
+    La vista decide por separado si puede mostrar valores económicos;
+    esos valores continúan reservados exclusivamente para el admin.
+    """
+    return es_admin(user) or es_tecnico(user) or es_asesor(user)
+
+
+def puede_ver_valores_ranking(user):
+    """Puede ver importes dentro del Ranking de Técnicos.
+
+    Solo una cuenta administradora pura puede verlos. Si un superusuario está
+    asignado además al grupo Técnicos o Asesores, prevalece ese rol operativo
+    y el ranking no expone dinero.
+    """
+    return es_admin(user) and not es_tecnico(user) and not es_asesor(user)
 
 
 # ─────────────────────────────────────────────────────────
@@ -141,7 +154,7 @@ def asesor_requerido(view_func):
 
 
 def ranking_requerido(view_func):
-    """Solo administradores — para el Ranking de Técnicos."""
+    """Admin, Técnico o Asesor Comercial — para el Ranking de Técnicos."""
     @wraps(view_func)
     @login_required
     def _wrapped(request, *args, **kwargs):
