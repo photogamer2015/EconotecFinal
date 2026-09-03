@@ -4030,6 +4030,88 @@ class VentasTests(TestCase):
         self.assertEqual(ingreso.diagnostico_metodo_2, 'efectivo')
         self.assertEqual(ingreso.modelo_serie, 'Elitebook actualizado')
 
+    def test_editar_ingreso_muestra_resultados_negativos_en_estado_abierto(self):
+        escenarios = (
+            ('ingresado', ''),
+            ('en_reparacion', 'en_reparacion'),
+            ('en_reparacion', 'espera_repuesto'),
+            ('en_reparacion', 'espera_cliente'),
+        )
+        for estado, subestado in escenarios:
+            with self.subTest(estado=estado, subestado=subestado):
+                ingreso = self.crear_ingreso_reparacion(
+                    estado=estado,
+                    subestado_reparacion=subestado,
+                    subestado_entregado='',
+                )
+
+                response = self.client.get(
+                    reverse('econotec:ingreso_editar', kwargs={'pk': ingreso.pk})
+                )
+
+                opciones = dict(response.context['ing_form'].fields['estado'].choices)
+                self.assertNotIn('entregado', opciones)
+                self.assertEqual(
+                    opciones[IngresoEquipoForm.ESTADO_NO_QUISO_REPARAR],
+                    'Cliente no quiso reparar',
+                )
+                self.assertEqual(
+                    opciones[IngresoEquipoForm.ESTADO_NO_SE_PUDO_REPARAR],
+                    'No se pudo reparar',
+                )
+                self.assertContains(response, 'id="finalizacion-rapida"')
+
+    def test_editar_ingreso_finaliza_negativo_con_cobro_adicional(self):
+        ingreso = self.crear_ingreso_reparacion(
+            valor_acordado=Decimal('40.00'),
+            abono_anticipo=Decimal('0.00'),
+            estado='en_reparacion',
+            subestado_reparacion='espera_cliente',
+            subestado_entregado='',
+        )
+        data = self.ingreso_edit_post_data(
+            ingreso,
+            **{
+                'ing-estado': IngresoEquipoForm.ESTADO_NO_QUISO_REPARAR,
+                'ing-subestado_reparacion': '',
+                'ing-subestado_entregado': '',
+                'ing-valor_acordado_estado': 'no',
+                'ing-valor_acordado': '',
+                'ing-abono_anticipo': '0.00',
+            },
+        )
+        data.update(self.salida_rapida_post_data(
+            estado_reparacion='cliente_no_acepta',
+            aplica_valor_acordado_adicional='si',
+            valor_acordado_adicional='15.00',
+            motivo_valor_acordado_adicional='Revisión avanzada autorizada.',
+            valor_final_cobrado='5.00',
+            metodo_pago_final='efectivo',
+            asesora_notificacion=str(self.vendedor.pk),
+        ))
+
+        response = self.client.post(
+            reverse('econotec:ingreso_editar', kwargs={'pk': ingreso.pk}),
+            data,
+        )
+
+        salida = SalidaEquipo.objects.get(ingreso=ingreso)
+        self.assertRedirects(
+            response,
+            reverse('econotec:salida_listo_aviso', kwargs={'pk': salida.pk}),
+        )
+        ingreso.refresh_from_db()
+        self.assertEqual(ingreso.estado, 'entregado')
+        self.assertEqual(ingreso.subestado_entregado, 'no_quiso_reparar')
+        self.assertEqual(ingreso.valor_acordado, Decimal('0.00'))
+        self.assertEqual(salida.estado_reparacion, 'cliente_no_acepta')
+        self.assertEqual(salida.valor_acordado_adicional, Decimal('15.00'))
+        self.assertEqual(salida.valor_final_cobrado, Decimal('5.00'))
+        self.assertEqual(ingreso.diferencia, Decimal('10.00'))
+        notificacion = NotificacionAsesora.objects.get(salida=salida)
+        self.assertEqual(notificacion.tipo, NotificacionAsesora.TIPO_COBRO_ADICIONAL)
+        self.assertEqual(notificacion.valor_acordado, Decimal('10.00'))
+
     def test_bitacora_edicion_ingreso_muestra_detalle_de_cambios(self):
         ingreso = self.crear_ingreso_reparacion(
             marca='Epson',
@@ -8486,7 +8568,7 @@ class VentasTests(TestCase):
         self.assertNotIn('entregado', opciones)
         self.assertEqual(
             opciones[IngresoEquipoForm.ESTADO_NO_QUISO_REPARAR],
-            'No quiso reparar',
+            'Cliente no quiso reparar',
         )
         self.assertEqual(
             opciones[IngresoEquipoForm.ESTADO_NO_SE_PUDO_REPARAR],

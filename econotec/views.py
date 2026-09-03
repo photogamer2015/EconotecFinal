@@ -1835,9 +1835,36 @@ def ingreso_editar(request, pk):
         },
     }
 
+    def render_edicion(cli_form, ing_form, salida_form=None):
+        return render(request, 'ingresos/form.html', {
+            'cli_form': cli_form,
+            'ing_form': ing_form,
+            'salida_form': salida_form,
+            'modo': 'editar',
+            'titulo': f'Editar equipo {ingreso.codigo_equipo}',
+            'siguiente_numero': ingreso.numero_equipo,
+            'siguiente_codigo': ingreso.codigo_equipo,
+            'ingreso': ingreso,
+            'confirmar_mismo_equipo_cliente': confirmar_mismo_equipo_cliente,
+        })
+
     if request.method == 'POST':
         cli_form = ClienteForm(request.POST, prefix='cli', instance=ingreso.cliente)
-        ing_form = IngresoEquipoForm(request.POST, prefix='ing', instance=ingreso)
+        ing_form = IngresoEquipoForm(
+            request.POST,
+            prefix='ing',
+            instance=ingreso,
+            permitir_finalizacion_rapida=True,
+        )
+        salida_form = _form_salida_rapida(request, request.user, ingreso=ingreso)
+        estado_solicitado = (request.POST.get('ing-estado') or '').strip()
+        es_finalizacion_negativa_rapida = (
+            not ing_form.estado_bloqueado_por_salida
+            and estado_solicitado in (
+                IngresoEquipoForm.ESTADO_NO_QUISO_REPARAR,
+                IngresoEquipoForm.ESTADO_NO_SE_PUDO_REPARAR,
+            )
+        )
         valores_cliente_antes = _snapshot_form_original(cli_form)
         valores_ingreso_antes = _snapshot_form_original(ing_form)
         campos_cliente_cambiados = set(cli_form.changed_data or [])
@@ -1848,6 +1875,8 @@ def ingreso_editar(request, pk):
         reporte_original = (ingreso.reporte_tecnico or '').strip()
         if cli_form.is_valid() and ing_form.is_valid():
             cliente_editado = cli_form.save(commit=False)
+            ingreso_preview = ing_form.save(commit=False)
+            ingreso_preview.cliente = cliente_editado
             identidad_sin_cambios = (
                 _identidad_equipo_normalizada(ing_form.cleaned_data)
                 == identidad_original
@@ -1868,16 +1897,16 @@ def ingreso_editar(request, pk):
                     request,
                     f'{mensaje_duplicado} Coincide con {duplicado.codigo_equipo}.'
                 )
-                return render(request, 'ingresos/form.html', {
-                    'cli_form': cli_form,
-                    'ing_form': ing_form,
-                    'modo': 'editar',
-                    'titulo': f'Editar equipo {ingreso.codigo_equipo}',
-                    'siguiente_numero': ingreso.numero_equipo,
-                    'siguiente_codigo': ingreso.codigo_equipo,
-                    'ingreso': ingreso,
-                    'confirmar_mismo_equipo_cliente': confirmar_mismo_equipo_cliente,
-                })
+                return render_edicion(cli_form, ing_form, salida_form)
+
+            if es_finalizacion_negativa_rapida:
+                salida_form = _form_salida_rapida(
+                    request,
+                    request.user,
+                    ingreso=ingreso_preview,
+                )
+                if not salida_form.is_valid():
+                    return render_edicion(cli_form, ing_form, salida_form)
 
             estado_nuevo = ing_form.cleaned_data.get('estado')
             valor_acordado_nuevo = ing_form.cleaned_data.get('valor_acordado')
@@ -1886,16 +1915,7 @@ def ingreso_editar(request, pk):
                     'valor_acordado',
                     'Por favor registra un valor acordado para finalizar el equipo.'
                 )
-                return render(request, 'ingresos/form.html', {
-                    'cli_form': cli_form,
-                    'ing_form': ing_form,
-                    'modo': 'editar',
-                    'titulo': f'Editar equipo {ingreso.codigo_equipo}',
-                    'siguiente_numero': ingreso.numero_equipo,
-                    'siguiente_codigo': ingreso.codigo_equipo,
-                    'ingreso': ingreso,
-                    'confirmar_mismo_equipo_cliente': confirmar_mismo_equipo_cliente,
-                })
+                return render_edicion(cli_form, ing_form, salida_form)
 
             cliente_editado.save()
             ingreso = ing_form.save()
@@ -1903,7 +1923,19 @@ def ingreso_editar(request, pk):
 
             # ── Auto-crear Salida si estado=entregado + subestado definido ──
             subestado = ingreso.subestado_entregado
-            if ingreso.estado == 'entregado' and subestado in _MAPA_SALIDA:
+            salida_rapida = None
+            if es_finalizacion_negativa_rapida:
+                salida_rapida = _guardar_salida_rapida(
+                    salida_form,
+                    ingreso,
+                    request.user,
+                )
+                messages.success(
+                    request,
+                    f'Equipo {ingreso.codigo_equipo} actualizado y finalizado como '
+                    f'"{salida_rapida.get_estado_reparacion_display()}".'
+                )
+            elif ingreso.estado == 'entregado' and subestado in _MAPA_SALIDA:
                 datos_salida = _MAPA_SALIDA[subestado]
                 salida_existente = getattr(ingreso, 'salida', None)
                 if salida_existente is None:
@@ -1996,21 +2028,24 @@ def ingreso_editar(request, pk):
                     ingreso=ingreso,
                 )
 
+            if salida_rapida:
+                request.session['confirmar_ubicacion_salida_id'] = salida_rapida.pk
+                return redirect('econotec:salida_listo_aviso', pk=salida_rapida.pk)
             return redirect('econotec:ingreso_detalle', pk=ingreso.pk)
     else:
         cli_form = ClienteForm(prefix='cli', instance=ingreso.cliente)
-        ing_form = IngresoEquipoForm(prefix='ing', instance=ingreso)
+        ing_form = IngresoEquipoForm(
+            prefix='ing',
+            instance=ingreso,
+            permitir_finalizacion_rapida=True,
+        )
+        salida_form = (
+            None
+            if ing_form.estado_bloqueado_por_salida
+            else _form_salida_rapida(request, request.user, ingreso=ingreso)
+        )
 
-    return render(request, 'ingresos/form.html', {
-        'cli_form': cli_form,
-        'ing_form': ing_form,
-        'ingreso': ingreso,
-        'modo': 'editar',
-        'titulo': f'Editar Equipo {ingreso.codigo_equipo}',
-        'siguiente_numero': ingreso.numero_equipo,
-        'siguiente_codigo': ingreso.codigo_equipo,
-        'confirmar_mismo_equipo_cliente': confirmar_mismo_equipo_cliente,
-    })
+    return render_edicion(cli_form, ing_form, salida_form)
 
 
 @tecnico_requerido

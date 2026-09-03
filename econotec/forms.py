@@ -623,7 +623,7 @@ class IngresoEquipoForm(forms.ModelForm):
                             choices_finalizacion.extend([
                                 (
                                     self.ESTADO_NO_QUISO_REPARAR,
-                                    'No quiso reparar',
+                                    'Cliente no quiso reparar',
                                 ),
                                 (
                                     self.ESTADO_NO_SE_PUDO_REPARAR,
