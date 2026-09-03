@@ -1734,7 +1734,7 @@ class VentasTests(TestCase):
         self.assertContains(tabla, reverse('econotec:inventario_editar', kwargs={'codigo': item.codigo}))
         self.assertContains(tabla, reverse('econotec:inventario_eliminar', kwargs={'codigo': item.codigo}))
 
-    def test_inventario_rechaza_producto_y_modelo_duplicados_sin_importar_formato(self):
+    def test_inventario_rechaza_producto_y_modelo_repetidos_sin_importar_formato(self):
         existente = InventarioItem.objects.create(
             sede='guayaquil',
             categoria='impresora',
@@ -1768,13 +1768,51 @@ class VentasTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(InventarioItem.objects.count(), 1)
+        self.assertIn('producto', response.context['form'].errors)
         self.assertIn('modelo', response.context['form'].errors)
         self.assertContains(response, existente.codigo)
-        self.assertContains(response, 'ya está registrado con el mismo modelo')
-        self.assertContains(response, 'Edita ese registro o actualiza su cantidad')
+        self.assertContains(response, 'Ya existe un producto con este mismo nombre')
+        self.assertContains(response, 'Ya existe un producto con este mismo modelo')
 
-    def test_inventario_permite_otro_producto_con_el_mismo_modelo(self):
-        InventarioItem.objects.create(
+    def test_inventario_rechaza_producto_repetido_aunque_cambie_modelo(self):
+        existente = InventarioItem.objects.create(
+            sede='guayaquil',
+            categoria='impresora',
+            tipo='impresora-inyeccion',
+            producto='Tinta cyan',
+            marca='Genérica',
+            modelo='1 litro',
+            estado='disponible',
+            cantidad=1,
+            ubicacion='guayaquil_norte',
+            registrado_por=self.usuario,
+        )
+        registrar_url = reverse('econotec:inventario_registrar', kwargs={
+            'sede': 'guayaquil',
+            'categoria': 'impresora',
+            'tipo': 'impresora-inyeccion',
+        })
+
+        response = self.client.post(registrar_url, {
+            'producto': 'TINTA CYAN',
+            'marca': 'Genérica',
+            'modelo': '500 ml',
+            'serie': '',
+            'estado': 'disponible',
+            'causa_no_disponible': '',
+            'cantidad': '1',
+            'costo': '15.00',
+            'ubicacion': 'guayaquil_norte',
+            'observacion': '',
+        })
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(InventarioItem.objects.count(), 1)
+        self.assertIn('producto', response.context['form'].errors)
+        self.assertContains(response, existente.codigo)
+
+    def test_inventario_rechaza_modelo_repetido_aunque_cambie_producto(self):
+        existente = InventarioItem.objects.create(
             sede='guayaquil',
             categoria='impresora',
             tipo='impresora-inyeccion',
@@ -1805,8 +1843,47 @@ class VentasTests(TestCase):
             'observacion': '',
         })
 
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(InventarioItem.objects.count(), 1)
+        self.assertIn('modelo', response.context['form'].errors)
+        self.assertContains(response, existente.codigo)
+
+    def test_inventario_permite_producto_y_modelo_parecidos(self):
+        InventarioItem.objects.create(
+            sede='guayaquil',
+            categoria='impresora',
+            tipo='impresora-inyeccion',
+            producto='Tinta cyan',
+            marca='Genérica',
+            modelo='1 litro',
+            estado='disponible',
+            cantidad=1,
+            ubicacion='guayaquil_norte',
+            registrado_por=self.usuario,
+        )
+        registrar_url = reverse('econotec:inventario_registrar', kwargs={
+            'sede': 'guayaquil',
+            'categoria': 'impresora',
+            'tipo': 'impresora-inyeccion',
+        })
+
+        response = self.client.post(registrar_url, {
+            'producto': 'Tinta cyan premium',
+            'marca': 'Genérica',
+            'modelo': '1 litro plus',
+            'serie': '',
+            'estado': 'disponible',
+            'causa_no_disponible': '',
+            'cantidad': '1',
+            'costo': '18.00',
+            'ubicacion': 'guayaquil_norte',
+            'observacion': '',
+        })
+
         self.assertEqual(response.status_code, 302)
-        self.assertTrue(InventarioItem.objects.filter(producto='Tinta magenta').exists())
+        self.assertTrue(
+            InventarioItem.objects.filter(producto='Tinta cyan premium').exists()
+        )
 
     def test_inventario_editar_el_mismo_registro_no_es_duplicado(self):
         item = InventarioItem.objects.create(

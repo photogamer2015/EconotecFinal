@@ -164,6 +164,9 @@
             <div class="full">
                 <label class="form-label" for="{{ form.producto.id_for_label }}">Producto</label>
                 {{ form.producto }}
+                <small style="display: block; margin-top: 5px; color: var(--text-muted); font-weight: 700;">
+                    El nombre no puede repetirse exactamente en esta sede y tipo. Los nombres parecidos sí se permiten.
+                </small>
                 {% if form.producto.errors %}<div class="field-errors">{{ form.producto.errors }}</div>{% endif %}
             </div>
             <div>
@@ -175,7 +178,7 @@
                 <label class="form-label" for="{{ form.modelo.id_for_label }}">Modelo</label>
                 {{ form.modelo }}
                 <small style="display: block; margin-top: 5px; color: var(--text-muted); font-weight: 700;">
-                    Se verificará junto con el producto sin distinguir mayúsculas ni minúsculas.
+                    El modelo no puede repetirse exactamente en esta sede y tipo. Los modelos parecidos sí se permiten.
                 </small>
                 {% if form.modelo.errors %}<div class="field-errors">{{ form.modelo.errors }}</div>{% endif %}
             </div>

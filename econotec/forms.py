@@ -178,13 +178,7 @@ class InventarioItemForm(forms.ModelForm):
         modelo = cleaned_data.get('modelo')
         producto_normalizado = _normalizar_identidad_inventario(producto)
         modelo_normalizado = _normalizar_identidad_inventario(modelo)
-        if (
-            producto_normalizado
-            and modelo_normalizado
-            and self.sede_slug
-            and self.categoria_slug
-            and self.tipo_slug
-        ):
+        if self.sede_slug and self.categoria_slug and self.tipo_slug:
             candidatos = InventarioItem.objects.filter(
                 sede=self.sede_slug,
                 categoria=self.categoria_slug,
@@ -193,21 +187,37 @@ class InventarioItemForm(forms.ModelForm):
             if self.instance and self.instance.pk:
                 candidatos = candidatos.exclude(pk=self.instance.pk)
 
-            duplicado = next((
+            duplicado_producto = next((
                 item
                 for item in candidatos
-                if (
-                    _normalizar_identidad_inventario(item.producto) == producto_normalizado
-                    and _normalizar_identidad_inventario(item.modelo) == modelo_normalizado
-                )
+                if producto_normalizado
+                and _normalizar_identidad_inventario(item.producto) == producto_normalizado
             ), None)
-            if duplicado:
+            duplicado_modelo = next((
+                item
+                for item in candidatos
+                if modelo_normalizado
+                and _normalizar_identidad_inventario(item.modelo) == modelo_normalizado
+            ), None)
+
+            if duplicado_producto:
+                self.add_error(
+                    'producto',
+                    (
+                        'Ya existe un producto con este mismo nombre '
+                        f'como {duplicado_producto.codigo} en '
+                        f'{duplicado_producto.get_ubicacion_display()}. '
+                        'Usa un nombre diferente o actualiza el registro existente.'
+                    ),
+                )
+            if duplicado_modelo:
                 self.add_error(
                     'modelo',
                     (
-                        'Este producto ya está registrado con el mismo modelo '
-                        f'como {duplicado.codigo} en {duplicado.get_ubicacion_display()}. '
-                        'Edita ese registro o actualiza su cantidad.'
+                        'Ya existe un producto con este mismo modelo '
+                        f'como {duplicado_modelo.codigo} en '
+                        f'{duplicado_modelo.get_ubicacion_display()}. '
+                        'Usa un modelo diferente o actualiza el registro existente.'
                     ),
                 )
         return cleaned_data
