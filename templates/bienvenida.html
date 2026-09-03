@@ -1074,95 +1074,84 @@
     min-height: 0;
   }
 
-  .dash-modal-filters {
-    display: grid;
-    grid-template-columns: minmax(260px, 2fr) repeat(3, minmax(145px, 1fr)) auto;
-    gap: 12px;
-    align-items: end;
-    padding: 16px 24px 12px;
+  .dash-modal-filterbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 9px 24px;
     background: color-mix(in srgb, var(--bg) 72%, var(--card-bg));
     border-bottom: 1px solid var(--border-color);
     flex: 0 0 auto;
   }
-  .dash-filter-field {
-    min-width: 0;
+  .dash-site-filter {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    flex: 0 0 auto;
   }
-  .dash-filter-field label {
-    display: block;
-    margin: 0 0 6px;
+  .dash-site-filter-label {
     color: var(--text-muted);
     font-size: 11px;
     font-weight: 800;
-    letter-spacing: 0.35px;
     text-transform: uppercase;
   }
-  .dash-filter-field input,
-  .dash-filter-field select {
-    width: 100%;
-    min-width: 0;
-    min-height: 42px;
-    box-sizing: border-box;
+  .dash-site-options {
+    display: inline-flex;
+    overflow: hidden;
     border: 1px solid var(--border-color);
-    border-radius: 9px;
+    border-radius: 8px;
     background: var(--card-bg);
-    color: var(--text-main);
-    padding: 9px 11px;
-    font: inherit;
-    font-size: 13px;
-    outline: none;
   }
-  .dash-filter-field input:focus,
-  .dash-filter-field select:focus {
-    border-color: var(--primary);
-    box-shadow: 0 0 0 3px rgba(249, 118, 24, 0.14);
-  }
-  .dash-search-control {
+  .dash-site-option {
     position: relative;
+    margin: 0;
+    cursor: pointer;
   }
-  .dash-search-control > span {
+  .dash-site-option + .dash-site-option {
+    border-left: 1px solid var(--border-color);
+  }
+  .dash-site-option input {
     position: absolute;
-    left: 12px;
-    top: 50%;
-    transform: translateY(-52%);
-    color: var(--text-muted);
-    font-size: 20px;
-    pointer-events: none;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
   }
-  .dash-search-control input {
-    padding-left: 38px;
-  }
-  .dash-filter-clear {
-    min-height: 42px;
-    padding: 9px 14px;
-    border: 1px solid rgba(249, 118, 24, 0.35);
-    border-radius: 9px;
-    background: var(--primary-light);
-    color: var(--primary-dark);
+  .dash-site-option span {
+    display: inline-flex;
+    min-width: 36px;
+    min-height: 34px;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    padding: 6px 11px;
+    color: var(--text-main);
     font-size: 12px;
     font-weight: 800;
-    cursor: pointer;
-    transition: transform 0.15s, background 0.15s;
+    transition: background 0.15s, color 0.15s;
   }
-  .dash-filter-clear:hover {
-    background: rgba(249, 118, 24, 0.2);
-    transform: translateY(-1px);
+  .dash-site-option:first-child span {
+    min-width: 58px;
+  }
+  .dash-site-option:hover span {
+    background: var(--primary-light);
+  }
+  .dash-site-option input:checked + span {
+    background: var(--primary);
+    color: #fff;
+  }
+  .dash-site-option input:focus-visible + span {
+    outline: 3px solid rgba(249, 118, 24, 0.28);
+    outline-offset: -3px;
   }
   .dash-filter-summary {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    padding: 8px 24px;
-    border-bottom: 1px solid var(--border-color);
     color: var(--text-muted);
     font-size: 12px;
-    flex: 0 0 auto;
   }
   .dash-filter-summary strong {
     color: var(--primary-dark);
-  }
-  .dash-filter-summary-hint {
-    text-align: right;
   }
   .dash-modal-table-wrap {
     width: 100%;
@@ -1248,12 +1237,10 @@
     font-weight: 600;
   }
 
-  [data-theme="dark"] .dash-modal-filters,
-  [data-theme="dark"] .dash-filter-summary {
+  [data-theme="dark"] .dash-modal-filterbar {
     background: rgba(15, 12, 13, 0.96);
   }
-  [data-theme="dark"] .dash-filter-field input,
-  [data-theme="dark"] .dash-filter-field select {
+  [data-theme="dark"] .dash-site-options {
     background: #111827;
   }
 
@@ -1263,21 +1250,11 @@
       max-height: 92vh;
       max-height: 92dvh;
     }
-    .dash-modal-filters {
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      padding: 14px 18px 12px;
-    }
-    .dash-filter-search {
-      grid-column: 1 / -1;
-    }
-    .dash-filter-clear {
-      width: 100%;
+    .dash-modal-filterbar {
+      padding-inline: 18px;
     }
     .dash-modal-body {
       padding: 16px 18px 20px;
-    }
-    .dash-filter-summary {
-      padding-inline: 18px;
     }
   }
 
@@ -1308,16 +1285,20 @@
       padding: 6px 9px;
       font-size: 10px;
     }
-    .dash-modal-filters {
-      gap: 10px;
-      padding: 12px 14px;
-    }
-    .dash-filter-summary {
-      align-items: flex-start;
+    .dash-modal-filterbar {
+      gap: 8px;
       padding: 8px 14px;
     }
-    .dash-filter-summary-hint {
-      display: none;
+    .dash-filter-summary {
+      font-size: 11px;
+    }
+    .dash-site-filter-label {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip: rect(0 0 0 0);
+      white-space: nowrap;
     }
     .dash-modal-body {
       padding: 12px 14px 18px;
@@ -1373,11 +1354,21 @@
   }
 
   @media (max-width: 420px) {
-    .dash-modal-filters {
-      grid-template-columns: minmax(0, 1fr);
+    .dash-modal-header {
+      gap: 8px;
     }
-    .dash-filter-search {
-      grid-column: auto;
+    .dash-modal-header h3 {
+      min-width: 0;
+      font-size: 16px;
+    }
+    .dash-modal-header-actions {
+      flex-shrink: 0;
+    }
+    .dash-modal-filterbar {
+      flex-wrap: wrap;
+    }
+    .dash-site-option span {
+      min-height: 32px;
     }
     .table-dash-modal td {
       grid-template-columns: minmax(90px, 34%) minmax(0, 1fr);
@@ -2745,105 +2736,40 @@
     if (arrow) arrow.textContent = isHidden ? "▲" : "▼";
   }
 
-  function normalizarTextoDashboard(valor) {
-    return String(valor || "")
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "")
-      .toLocaleLowerCase("es");
-  }
-
   function inicializarFiltrosModalDashboard() {
     const root = document.getElementById("dashModalContainer");
     const filtros = root.querySelector("[data-dashboard-filters]");
     if (!filtros) return;
 
-    const buscador = root.querySelector("#dashModalSearch");
-    const sede = root.querySelector("#dashModalSede");
-    const equipo = root.querySelector("#dashModalEquipo");
-    const orden = root.querySelector("#dashModalOrden");
-    const limpiar = root.querySelector("#dashModalClear");
-    const cuerpo = root.querySelector("#dashModalRows");
+    const sedes = Array.from(root.querySelectorAll('input[name="dashModalSede"]'));
     const tabla = root.querySelector(".dash-modal-table-wrap");
     const vacio = root.querySelector("#dashModalFilterEmpty");
     const contador = root.querySelector("#dashModalVisibleCount");
     const filas = Array.from(root.querySelectorAll("[data-dashboard-row]"));
 
-    filas.forEach((fila, indice) => {
-      fila.dataset.ordenOriginal = String(indice);
-    });
-
-    function listaDatos(fila, atributo) {
-      return (fila.dataset[atributo] || "")
+    function sedesDeFila(fila) {
+      return (fila.dataset.sedes || "")
         .split("|||")
         .map(valor => valor.trim())
         .filter(Boolean);
     }
 
-    function compararTexto(a, b) {
-      return a.localeCompare(b, "es", { numeric: true, sensitivity: "base" });
-    }
-
-    function ordenarFilas(filasOrdenadas) {
-      const modo = orden.value;
-      filasOrdenadas.sort((a, b) => {
-        if (modo === "recientes" || modo === "antiguos") {
-          const comparacion = compararTexto(
-            a.dataset.ordenFecha || "",
-            b.dataset.ordenFecha || "",
-          );
-          if (comparacion !== 0) {
-            return modo === "recientes" ? -comparacion : comparacion;
-          }
-        }
-
-        if (modo === "codigo_asc" || modo === "codigo_desc" || modo === "nombre_asc" || modo === "nombre_desc") {
-          const comparacion = compararTexto(
-            a.dataset.ordenCodigo || "",
-            b.dataset.ordenCodigo || "",
-          );
-          return (modo === "codigo_desc" || modo === "nombre_desc") ? -comparacion : comparacion;
-        }
-
-        return Number(a.dataset.ordenOriginal) - Number(b.dataset.ordenOriginal);
-      });
-      filasOrdenadas.forEach(fila => cuerpo.appendChild(fila));
-    }
-
     function aplicarFiltros() {
-      const consulta = normalizarTextoDashboard(buscador.value.trim());
-      const sedeSeleccionada = sede.value;
-      const equipoSeleccionado = equipo.value;
+      const sedeSeleccionada = sedes.find(opcion => opcion.checked)?.value || "";
       let visibles = 0;
 
       filas.forEach(fila => {
-        const coincideBusqueda = !consulta || normalizarTextoDashboard(
-          `${fila.dataset.codigo || ""} ${fila.dataset.search || ""}`,
-        ).includes(consulta);
-        const coincideSede = !sedeSeleccionada || listaDatos(fila, "sedes").includes(sedeSeleccionada);
-        const coincideEquipo = !equipoSeleccionado || listaDatos(fila, "tipos").includes(equipoSeleccionado);
-        const mostrar = coincideBusqueda && coincideSede && coincideEquipo;
+        const mostrar = !sedeSeleccionada || sedesDeFila(fila).includes(sedeSeleccionada);
         fila.hidden = !mostrar;
         if (mostrar) visibles += 1;
       });
 
-      ordenarFilas([...filas]);
       contador.textContent = String(visibles);
       tabla.hidden = visibles === 0;
       vacio.hidden = visibles !== 0;
     }
 
-    buscador.addEventListener("input", aplicarFiltros);
-    sede.addEventListener("change", aplicarFiltros);
-    equipo.addEventListener("change", aplicarFiltros);
-    orden.addEventListener("change", aplicarFiltros);
-    limpiar.addEventListener("click", () => {
-      buscador.value = "";
-      sede.value = "";
-      equipo.value = "";
-      orden.selectedIndex = 0;
-      aplicarFiltros();
-      buscador.focus();
-    });
+    sedes.forEach(opcion => opcion.addEventListener("change", aplicarFiltros));
 
     aplicarFiltros();
   }

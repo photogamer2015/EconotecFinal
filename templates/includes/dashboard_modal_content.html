@@ -9,61 +9,27 @@
 </div>
 
 {% if filas %}
-<div class="dash-modal-filters" data-dashboard-filters>
-    <div class="dash-filter-field dash-filter-search">
-        <label for="dashModalSearch">{% if es_modal_clientes %}Buscar cliente o código{% else %}Buscar por código o cliente{% endif %}</label>
-        <div class="dash-search-control">
-            <span aria-hidden="true">⌕</span>
-            <input
-                id="dashModalSearch"
-                type="search"
-                placeholder="{% if es_modal_clientes %}Nombre, cédula, teléfono o código…{% else %}Ej.: G1025, cliente o modelo…{% endif %}"
-                autocomplete="off"
-            >
+<div class="dash-modal-filterbar" data-dashboard-filters>
+    <div class="dash-filter-summary" aria-live="polite">
+        <span>Mostrando <strong id="dashModalVisibleCount">{{ total_filas }}</strong> de {{ total_filas }}</span>
+    </div>
+    <div class="dash-site-filter" role="group" aria-label="Filtrar por sede o prefijo">
+        <span class="dash-site-filter-label">Sede</span>
+        <div class="dash-site-options">
+            <label class="dash-site-option" title="Mostrar todas las sedes">
+                <input type="radio" name="dashModalSede" value="" checked>
+                <span>Todas</span>
+            </label>
+            <label class="dash-site-option" title="Guayaquil">
+                <input type="radio" name="dashModalSede" value="guayaquil">
+                <span>G</span>
+            </label>
+            <label class="dash-site-option" title="Quito">
+                <input type="radio" name="dashModalSede" value="quito">
+                <span>U</span>
+            </label>
         </div>
     </div>
-
-    <div class="dash-filter-field">
-        <label for="dashModalSede">Sede / prefijo</label>
-        <select id="dashModalSede">
-            <option value="">Todas (G / U)</option>
-            <option value="guayaquil">G — Guayaquil</option>
-            <option value="quito">U — Quito</option>
-        </select>
-    </div>
-
-    <div class="dash-filter-field">
-        <label for="dashModalEquipo">Tipo de equipo</label>
-        <select id="dashModalEquipo">
-            <option value="">Todos los equipos</option>
-            {% for tipo_equipo in tipos_filtro %}
-                <option value="{{ tipo_equipo }}">{{ tipo_equipo }}</option>
-            {% endfor %}
-        </select>
-    </div>
-
-    <div class="dash-filter-field">
-        <label for="dashModalOrden">Ordenar</label>
-        <select id="dashModalOrden">
-            {% if es_modal_clientes %}
-                <option value="nombre_asc">Nombre A–Z</option>
-                <option value="nombre_desc">Nombre Z–A</option>
-                <option value="recientes">Actividad reciente</option>
-            {% else %}
-                <option value="recientes">Más recientes</option>
-                <option value="antiguos">Más antiguos</option>
-                <option value="codigo_asc">Código A–Z</option>
-                <option value="codigo_desc">Código Z–A</option>
-            {% endif %}
-        </select>
-    </div>
-
-    <button type="button" class="dash-filter-clear" id="dashModalClear">Limpiar</button>
-</div>
-
-<div class="dash-filter-summary" aria-live="polite">
-    <span>Mostrando <strong id="dashModalVisibleCount">{{ total_filas }}</strong> de {{ total_filas }}</span>
-    <span class="dash-filter-summary-hint">Puedes combinar búsqueda, sede y tipo de equipo.</span>
 </div>
 {% endif %}
 
@@ -104,9 +70,8 @@
         </table>
     </div>
     <div class="dash-modal-empty dash-modal-filter-empty" id="dashModalFilterEmpty" hidden>
-        <div class="dash-modal-empty-icon" aria-hidden="true">⌕</div>
-        <strong>No encontramos coincidencias</strong>
-        <p>Prueba otro código o limpia alguno de los filtros.</p>
+        <strong>No hay registros en esta sede</strong>
+        <p>Selecciona otra sede para ver sus registros.</p>
     </div>
     {% else %}
     <div class="dash-modal-empty">

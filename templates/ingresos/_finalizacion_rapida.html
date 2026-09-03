@@ -1,0 +1,207 @@
+<div id="finalizacion-rapida" class="finalizacion-rapida">
+    <h3>Finalización y cobro del equipo</h3>
+    <p class="finalizacion-rapida-intro">
+        No quiso reparar y No se pudo reparar quedan sin cobro por defecto, con la opción de registrar un cobro adicional.
+    </p>
+
+    {{ salida_form.estado_reparacion.as_hidden }}
+    {{ salida_form.non_field_errors }}
+
+    <div class="form-row cols-2">
+        <div>
+            <label class="form-label">Fecha de finalización *</label>
+            {{ salida_form.fecha_salida }}
+            {{ salida_form.fecha_salida.errors }}
+        </div>
+        <div>
+            <label class="form-label">Técnico que reparó *</label>
+            {{ salida_form.tecnico_reparo }}
+            {{ salida_form.tecnico_reparo.errors }}
+        </div>
+    </div>
+
+    <div style="margin-top:14px;">
+        <label class="form-label">Reporte del técnico</label>
+        {{ salida_form.reporte_tecnico }}
+        {{ salida_form.reporte_tecnico.errors }}
+    </div>
+
+    <div id="fin-cobro-adicional" class="finalizacion-banda" style="display:none;">
+        <h4>Cobro adicional opcional</h4>
+        <div class="form-row cols-2">
+            <div>
+                <label class="form-label">¿Registrar un cobro adicional?</label>
+                {{ salida_form.aplica_valor_acordado_adicional }}
+                {{ salida_form.aplica_valor_acordado_adicional.errors }}
+            </div>
+            <div id="fin-ayuda-sin-cobro" style="align-self:end; color:#856404; font-size:12px; font-weight:700; line-height:1.45;">
+                Este resultado no cobra nada automáticamente.
+            </div>
+        </div>
+        <div id="fin-detalle-adicional" class="form-row cols-2" style="display:none; margin-top:12px;">
+            <div>
+                <label class="form-label">Valor total del cobro adicional (USD) *</label>
+                {{ salida_form.valor_acordado_adicional }}
+                {{ salida_form.valor_acordado_adicional.errors }}
+                <small style="display:block; margin-top:5px; color:#856404;">Mínimo $0.01.</small>
+            </div>
+            <div>
+                <label class="form-label">Motivo del cobro adicional *</label>
+                {{ salida_form.motivo_valor_acordado_adicional }}
+                {{ salida_form.motivo_valor_acordado_adicional.errors }}
+            </div>
+        </div>
+    </div>
+
+    <div id="fin-revision" class="finalizacion-banda" style="display:none;">
+        <h4>Valor de revisión</h4>
+        <label class="form-label">Valor acordado por revisión (USD) *</label>
+        {{ salida_form.valor_acordado_revision }}
+        {{ salida_form.valor_acordado_revision.errors }}
+    </div>
+
+    <div id="fin-economico" class="finalizacion-banda" style="display:none;">
+        <h4>Pago recibido ahora</h4>
+        <div class="form-row cols-2">
+            <div>
+                <label class="form-label">Valor pagado ahora (USD)</label>
+                {{ salida_form.valor_final_cobrado }}
+                {{ salida_form.valor_final_cobrado.errors }}
+                <small style="display:block; margin-top:5px; color:var(--text-muted);">
+                    Puede ser cero, parcial o el total del cobro adicional.
+                </small>
+            </div>
+            <div>
+                <label class="form-label">Método de pago</label>
+                {{ salida_form.metodo_pago_final }}
+                {{ salida_form.metodo_pago_final.errors }}
+            </div>
+        </div>
+
+        <div id="fin-saldo" class="finalizacion-saldo">
+            <span>Saldo pendiente del cobro</span>
+            <strong id="fin-saldo-valor">$0.00</strong>
+        </div>
+
+        <div id="fin-banco" class="form-row cols-2" style="display:none;">
+            <div>
+                <label class="form-label">Banco *</label>
+                {{ salida_form.banco }}
+                {{ salida_form.banco.errors }}
+            </div>
+            <div id="fin-banco-otro" style="display:none;">
+                <label class="form-label">Especificar banco *</label>
+                {{ salida_form.banco_otro }}
+                {{ salida_form.banco_otro.errors }}
+            </div>
+        </div>
+
+        <div id="fin-tarjeta" style="display:none; margin-top:12px;">
+            <label class="form-label">Tarjeta / aplicación *</label>
+            {{ salida_form.tarjeta_app }}
+            {{ salida_form.tarjeta_app.errors }}
+        </div>
+
+        <div id="fin-comprobante" style="display:none; margin-top:12px;">
+            <label class="form-label">Link del comprobante (opcional)</label>
+            {{ salida_form.comprobante_url }}
+            {{ salida_form.comprobante_url.errors }}
+        </div>
+
+        <div id="fin-mixto" class="finalizacion-mixto">
+            <h4 style="color:#1f2937;">Pago mixto</h4>
+            <div class="form-row cols-2">
+                <div>
+                    <label class="form-label">Monto 1 (USD) *</label>
+                    {{ salida_form.monto_1 }}
+                    {{ salida_form.monto_1.errors }}
+                </div>
+                <div>
+                    <label class="form-label">Método 1 *</label>
+                    {{ salida_form.metodo_1 }}
+                    {{ salida_form.metodo_1.errors }}
+                </div>
+                <div id="fin-banco-1" style="display:none;">
+                    <label class="form-label">Banco 1 *</label>
+                    {{ salida_form.banco_1 }}
+                    {{ salida_form.banco_1.errors }}
+                </div>
+                <div>
+                    <label class="form-label">Monto 2 (USD) *</label>
+                    {{ salida_form.monto_2 }}
+                    {{ salida_form.monto_2.errors }}
+                </div>
+                <div>
+                    <label class="form-label">Método 2 *</label>
+                    {{ salida_form.metodo_2 }}
+                    {{ salida_form.metodo_2.errors }}
+                </div>
+                <div id="fin-banco-2" style="display:none;">
+                    <label class="form-label">Banco 2 *</label>
+                    {{ salida_form.banco_2 }}
+                    {{ salida_form.banco_2.errors }}
+                </div>
+            </div>
+            <div id="fin-mixto-error" style="display:none; margin-top:10px; color:#b91c1c; font-size:12px; font-weight:700;">
+                Las dos partes deben sumar el valor pagado ahora.
+            </div>
+        </div>
+
+        <div style="margin-top:12px;">
+            <label class="form-label">Número de recibo (opcional)</label>
+            {{ salida_form.numero_recibo }}
+            {{ salida_form.numero_recibo.errors }}
+        </div>
+    </div>
+
+    <div id="fin-notificacion" class="finalizacion-banda" style="display:none; background:#fff3cd; color:#6d4c00;">
+        <h4 id="fin-notificacion-titulo" style="color:#6d4c00;">Notificar saldo pendiente</h4>
+        <div class="form-row cols-2">
+            <div>
+                <label class="form-label" style="color:#6d4c00;">Asesora responsable *</label>
+                {{ salida_form.asesora_notificacion }}
+                {{ salida_form.asesora_notificacion.errors }}
+            </div>
+            <div>
+                <label class="form-label" style="color:#6d4c00;">Mensaje (opcional)</label>
+                {{ salida_form.mensaje_notificacion }}
+                {{ salida_form.mensaje_notificacion.errors }}
+            </div>
+        </div>
+        <small id="fin-notificacion-ayuda" style="display:block; margin-top:8px; font-weight:700;">
+            Mientras exista saldo pendiente, el equipo no podrá retirarse.
+        </small>
+    </div>
+
+    <div id="fin-factura" class="finalizacion-banda" style="display:none;">
+        <h4>Factura</h4>
+        <div class="form-row cols-2">
+            <div>
+                <label class="form-label">¿Factura realizada?</label>
+                {{ salida_form.factura_realizada }}
+                {{ salida_form.factura_realizada.errors }}
+            </div>
+            <div id="fin-factura-datos" style="display:none;">
+                <label class="form-label">Nombres / razón social</label>
+                {{ salida_form.factura_nombres }}
+                {{ salida_form.factura_nombres.errors }}
+            </div>
+            <div class="fin-factura-campo" style="display:none;">
+                <label class="form-label">Cédula / RUC</label>
+                {{ salida_form.factura_cedula }}
+                {{ salida_form.factura_cedula.errors }}
+            </div>
+            <div class="fin-factura-campo" style="display:none;">
+                <label class="form-label">Correo</label>
+                {{ salida_form.factura_correo }}
+                {{ salida_form.factura_correo.errors }}
+            </div>
+        </div>
+    </div>
+
+    <div style="margin-top:14px;">
+        <label class="form-label">Observaciones del cierre (opcional)</label>
+        {{ salida_form.observaciones }}
+        {{ salida_form.observaciones.errors }}
+    </div>
+</div>

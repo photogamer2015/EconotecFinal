@@ -1078,6 +1078,8 @@ class IngresoEquipo(models.Model):
             return _q2(salida.valor_acordado_revision or Decimal('0.00'))
 
         if self.reparacion_cancelada:
+            if salida and salida.tiene_valor_acordado_adicional:
+                return _q2(salida.valor_acordado_adicional)
             if salida:
                 revision_pendiente = (
                     salida.notificaciones_asesora
@@ -1574,14 +1576,14 @@ class SalidaEquipo(models.Model):
         choices=SI_NO,
         default='no',
         verbose_name='¿Aplica un valor acordado adicional?',
-        help_text='Solo aplica cuando el equipo queda reparado y pendiente de retiro.',
+        help_text='Aplica a equipos pendientes de retiro y a cierres sin reparación.',
     )
     valor_acordado_adicional = models.DecimalField(
         max_digits=10,
         decimal_places=2,
         default=Decimal('0.00'),
         verbose_name='Valor acordado adicional (USD)',
-        help_text='Valor adicional pendiente de pago acordado al finalizar la reparación.',
+        help_text='Cobro adicional opcional acordado al finalizar el equipo.',
     )
     motivo_valor_acordado_adicional = models.TextField(
         blank=True,
@@ -2495,10 +2497,12 @@ class NotificacionAsesora(models.Model):
     TIPO_FALLOS_ADICIONALES = 'fallos_adicionales'
     TIPO_REVISION_PENDIENTE = 'revision_pendiente'
     TIPO_SALDO_RETIRO = 'saldo_retiro'
+    TIPO_COBRO_ADICIONAL = 'cobro_adicional'
     TIPOS = [
         (TIPO_FALLOS_ADICIONALES, 'Garantía con fallos adicionales'),
         (TIPO_REVISION_PENDIENTE, 'Revisión pendiente de pago'),
         (TIPO_SALDO_RETIRO, 'Equipo listo con saldo pendiente'),
+        (TIPO_COBRO_ADICIONAL, 'Cobro adicional pendiente'),
     ]
 
     tipo = models.CharField(

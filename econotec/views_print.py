@@ -155,10 +155,15 @@ def _factura_items_salida(salida):
             ingreso.codigo_equipo,
         )
     elif ingreso.reparacion_cancelada:
+        descripcion = f'Revisión / diagnóstico técnico - Equipo {ingreso.codigo_equipo}'
+        detalle = equipo
+        if salida.tiene_valor_acordado_adicional:
+            descripcion = f'Cobro adicional de finalización - Equipo {ingreso.codigo_equipo}'
+            detalle = salida.motivo_valor_acordado_adicional or equipo
         agregar(
-            f'Revisión / diagnóstico técnico - Equipo {ingreso.codigo_equipo}',
+            descripcion,
             ingreso.valor_efectivo_a_cobrar,
-            equipo,
+            detalle,
             ingreso.codigo_equipo,
         )
     else:
@@ -1454,26 +1459,43 @@ def generar_salida_pdf_bytes(salida):
     y -= 18
 
     if salida.tiene_valor_acordado_adicional:
+        es_cierre_sin_reparacion = salida.estado_reparacion in (
+            'cliente_no_acepta',
+            'no_reparable',
+        )
         box_h = 62
         c.setStrokeColor(naranja)
         c.setFillColorRGB(1, 0.97, 0.94)
         c.roundRect(margen, y - box_h, 500, box_h, 4, stroke=1, fill=1)
         c.setFillColor(naranja)
         c.setFont('Helvetica-Bold', 8.5)
-        c.drawString(margen + 10, y - 13, 'DETALLE DEL VALOR ACORDADO ADICIONAL')
+        titulo_adicional = (
+            'DETALLE DEL COBRO ADICIONAL'
+            if es_cierre_sin_reparacion
+            else 'DETALLE DEL VALOR ACORDADO ADICIONAL'
+        )
+        c.drawString(margen + 10, y - 13, titulo_adicional)
 
-        columnas = [
-            ('VALOR ORIGINAL', ingreso.valor_acordado or Decimal('0.00'), margen + 10),
-            ('VALOR ADICIONAL', salida.valor_acordado_adicional, margen + 175),
-            ('TOTAL ACTUALIZADO', ingreso.valor_efectivo_a_cobrar, margen + 340),
-        ]
+        if es_cierre_sin_reparacion:
+            columnas = [
+                ('RESULTADO BASE', 'SIN COBRO', margen + 10),
+                ('COBRO ADICIONAL', salida.valor_acordado_adicional, margen + 175),
+                ('TOTAL A COBRAR', ingreso.valor_efectivo_a_cobrar, margen + 340),
+            ]
+        else:
+            columnas = [
+                ('VALOR ORIGINAL', ingreso.valor_acordado or Decimal('0.00'), margen + 10),
+                ('VALOR ADICIONAL', salida.valor_acordado_adicional, margen + 175),
+                ('TOTAL ACTUALIZADO', ingreso.valor_efectivo_a_cobrar, margen + 340),
+            ]
         for etiqueta, monto, x in columnas:
             c.setFillColor(Color(0.38, 0.38, 0.38))
             c.setFont('Helvetica-Bold', 6.8)
             c.drawString(x, y - 27, etiqueta)
             c.setFillColor(black)
             c.setFont('Helvetica-Bold', 9.2)
-            c.drawString(x, y - 39, _money_text(monto))
+            valor_mostrado = monto if isinstance(monto, str) else _money_text(monto)
+            c.drawString(x, y - 39, valor_mostrado)
 
         motivo = f'Motivo acordado: {salida.motivo_valor_acordado_adicional}'
         motivo_lineas = simpleSplit(motivo, 'Helvetica', 7.2, 475)[:2] or ['—']

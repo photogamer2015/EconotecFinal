@@ -54,6 +54,60 @@
         grid-template-columns: repeat(2, 1fr);
     }
 
+    .finalizacion-rapida {
+        display: none;
+        margin-top: 22px;
+        padding-top: 22px;
+        border-top: 2px solid var(--primary);
+    }
+    .finalizacion-rapida-intro {
+        margin: -4px 0 16px;
+        color: var(--text-muted);
+        font-size: 13px;
+        line-height: 1.5;
+    }
+    .finalizacion-banda {
+        margin-top: 14px;
+        padding: 14px;
+        border: 1px solid rgba(249, 118, 24, 0.28);
+        border-radius: 8px;
+        background: rgba(249, 118, 24, 0.06);
+    }
+    .finalizacion-banda h4 {
+        margin: 0 0 12px;
+        color: var(--primary);
+        font-size: 14px;
+    }
+    .finalizacion-saldo {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin: 12px 0;
+        padding: 12px 14px;
+        border-radius: 8px;
+        background: #fff3cd;
+        color: #6d4c00;
+        font-weight: 700;
+    }
+    .finalizacion-saldo strong {
+        font-size: 20px;
+    }
+    .finalizacion-mixto {
+        display: none;
+        margin-top: 14px;
+        padding: 14px;
+        border: 1px dashed #94a3b8;
+        border-radius: 8px;
+        background: #fff;
+    }
+    .finalizacion-mixto .form-label {
+        color: #1f2937;
+    }
+    [data-theme="dark"] .finalizacion-banda {
+        background: rgba(249, 118, 24, 0.09);
+    }
+
     @media (max-width: 768px) {
         .form-row.cols-3, .form-row.cols-2 {
             grid-template-columns: 1fr;
@@ -62,6 +116,16 @@
             flex-direction: column;
             gap: 12px;
             align-items: flex-start;
+        }
+        .finalizacion-rapida {
+            margin-top: 18px;
+            padding-top: 18px;
+        }
+        .finalizacion-banda {
+            padding: 12px;
+        }
+        .finalizacion-saldo strong {
+            font-size: 18px;
         }
     }
 
@@ -1294,13 +1358,9 @@
                 {{ ing_form.subestado_reparacion.errors }}
                 <small style="color:#888; font-size:11px;">¿En qué etapa está la reparación?</small>
             </div>
-            <div id="wrap_subestado_entregado" style="display:none;">
-                <label class="form-label" style="color: var(--primary);">
-                    📦 Detalle (Entregado)
-                </label>
+            <div id="wrap_subestado_entregado" style="display:none;" aria-hidden="true">
                 {{ ing_form.subestado_entregado }}
                 {{ ing_form.subestado_entregado.errors }}
-                <small style="color:#888; font-size:11px;">¿Cómo se entregó al cliente?</small>
             </div>
         </div>
 
@@ -1337,8 +1397,11 @@
         <div id="hint-auto-salida" style="display:none; margin-top:16px; padding:14px 18px; border-radius:10px; background:linear-gradient(135deg,#e8f5e9,#f1f8e9); border-left:4px solid #43a047; font-size:13px; transition: all .3s;">
             <strong style="color:#2e7d32; font-size:14px;">⚡ Salida automática</strong><br>
             <span id="hint-auto-salida-texto" style="color:#1b5e20;"></span>
-            <br><small style="color:#388e3c; margin-top:4px; display:block;">💡 Al hacer clic en <strong>Guardar cambios</strong>, se registrará la salida del equipo automáticamente. No tendrás que hacerlo por separado.</small>
+            <br><small style="color:#388e3c; margin-top:4px; display:block;">Al guardar la solicitud también se registrará la finalización. No tendrás que hacerlo por separado.</small>
         </div>
+        {% if salida_form %}
+            {% include 'ingresos/_finalizacion_rapida.html' %}
+        {% endif %}
         {% endif %}
     </div>
 
@@ -1805,32 +1868,43 @@
         var hintBox = document.getElementById('hint-auto-salida');
         var hintTxt = document.getElementById('hint-auto-salida-texto');
 
+        var SUBESTADO_POR_ESTADO = {
+            entregado: 'pendiente_retiro',
+            final_no_quiso_reparar: 'no_quiso_reparar',
+            final_no_se_pudo_reparar: 'sin_solucion'
+        };
+
         var MENSAJES = {
             'con_solucion': '✅ <strong>Con solución — Cliente conforme.</strong> Se registrará la salida como <em>Retirado / Entregado conforme</em>.',
-            'sin_solucion': '❌ <strong>Sin solución — No se pudo reparar.</strong> Se registrará la salida como <em>No se pudo reparar</em>.',
-            'no_quiso_reparar': '🚫 <strong>Sin reparación — Cliente no quiso reparar.</strong> Se registrará la salida como <em>Cliente no quiso reparar</em> y se asignará el cobro de revisión.'
+            'sin_solucion': '❌ <strong>Sin solución — No se pudo reparar.</strong> Quedará sin cobro, salvo que actives un cobro adicional opcional.',
+            'no_quiso_reparar': '🚫 <strong>Sin reparación — Cliente no quiso reparar.</strong> Quedará sin cobro, salvo que actives un cobro adicional opcional.',
+            'pendiente_retiro': '⏳ <strong>Reparado — Pendiente de retiro.</strong> El equipo quedará listo, pero todavía dentro de la oficina.',
+            'revision': '🔎 <strong>Revisión.</strong> Registra el valor acordado y la asesora responsable del cobro.'
         };
 
         function actualizarHint() {
             var estado = selEstado ? selEstado.value : '';
-            var sub = selEnt ? selEnt.value : '';
-            if (estado === 'entregado' && MENSAJES[sub]) {
+            var sub = SUBESTADO_POR_ESTADO[estado] || '';
+            if (MENSAJES[sub]) {
                 if (hintTxt) hintTxt.innerHTML = MENSAJES[sub];
                 if (hintBox) hintBox.style.display = '';
             } else {
                 if (hintBox) hintBox.style.display = 'none';
+            }
+            if (window.__actualizarFinalizacionRapida) {
+                window.__actualizarFinalizacionRapida();
             }
         }
 
         function actualizar() {
             var v = selEstado ? selEstado.value : '';
             if (wrapRep) wrapRep.style.display = (v === 'en_reparacion') ? '' : 'none';
-            if (wrapEnt) wrapEnt.style.display = (v === 'entregado') ? '' : 'none';
+            if (wrapEnt) wrapEnt.style.display = 'none';
             if (wrapGar) wrapGar.style.display = (v === 'garantia') ? '' : 'none';
 
             // Hacer obligatorios los campos según el estado para evitar opciones nulas
             if (selRep) selRep.required = (v === 'en_reparacion');
-            if (selEnt) selEnt.required = (v === 'entregado');
+            if (selEnt) selEnt.required = false;
             if (selGar) selGar.required = false;
             if (inpMotivo) inpMotivo.required = (v === 'garantia');
 
@@ -1840,7 +1914,7 @@
 
             // Limpia el sub-estado que no corresponde para que no quede dato colgado
             if (v !== 'en_reparacion' && selRep) selRep.value = '';
-            if (v !== 'entregado' && selEnt) selEnt.value = '';
+            if (selEnt) selEnt.value = SUBESTADO_POR_ESTADO[v] || '';
             if (v !== 'garantia') {
                 if (selGar) selGar.value = '';
                 if (inpMotivo) inpMotivo.value = '';
@@ -1853,9 +1927,180 @@
             selEstado.addEventListener('change', actualizar);
             actualizar();
         }
-        if (selEnt) {
-            selEnt.addEventListener('change', actualizarHint);
+    })();
+
+    // Finalización incluida en Nueva solicitud de ingreso.
+    (function () {
+        var bloque = document.getElementById('finalizacion-rapida');
+        var estadoIngreso = document.querySelector('[name="ing-estado"]');
+        var estadoSalida = document.querySelector('[name="salida-estado_reparacion"]');
+        if (!bloque || !estadoIngreso || !estadoSalida) return;
+
+        var mapaEstado = {
+            entregado: 'pendiente_retiro',
+            final_no_quiso_reparar: 'cliente_no_acepta',
+            final_no_se_pudo_reparar: 'no_reparable'
+        };
+        var aplica = document.querySelector('[name="salida-aplica_valor_acordado_adicional"]');
+        var valorAdicional = document.querySelector('[name="salida-valor_acordado_adicional"]');
+        var motivoAdicional = document.querySelector('[name="salida-motivo_valor_acordado_adicional"]');
+        var valorRevision = document.querySelector('[name="salida-valor_acordado_revision"]');
+        var pagado = document.querySelector('[name="salida-valor_final_cobrado"]');
+        var metodo = document.querySelector('[name="salida-metodo_pago_final"]');
+        var banco = document.querySelector('[name="salida-banco"]');
+        var bancoOtro = document.querySelector('[name="salida-banco_otro"]');
+        var tarjeta = document.querySelector('[name="salida-tarjeta_app"]');
+        var monto1 = document.querySelector('[name="salida-monto_1"]');
+        var metodo1 = document.querySelector('[name="salida-metodo_1"]');
+        var banco1 = document.querySelector('[name="salida-banco_1"]');
+        var monto2 = document.querySelector('[name="salida-monto_2"]');
+        var metodo2 = document.querySelector('[name="salida-metodo_2"]');
+        var banco2 = document.querySelector('[name="salida-banco_2"]');
+        var asesora = document.querySelector('[name="salida-asesora_notificacion"]');
+        var factura = document.querySelector('[name="salida-factura_realizada"]');
+        var valorAcordado = document.querySelector('[name="ing-valor_acordado"]');
+        var abono = document.querySelector('[name="ing-abono_anticipo"]');
+
+        function mostrar(id, activo) {
+            var elemento = document.getElementById(id);
+            if (!elemento) return;
+            elemento.style.display = activo
+                ? (elemento.classList.contains('form-row') ? 'grid' : 'block')
+                : 'none';
         }
+
+        function numero(campo) {
+            var valor = parseFloat(String(campo && campo.value || '0').replace(',', '.'));
+            return Number.isFinite(valor) ? valor : 0;
+        }
+
+        function requerido(campo, activo) {
+            if (!campo) return;
+            campo.required = !!activo;
+            if (!activo) campo.setCustomValidity('');
+        }
+
+        function habilitarBloque(activo) {
+            Array.prototype.forEach.call(
+                bloque.querySelectorAll('input, select, textarea'),
+                function (campo) { campo.disabled = !activo; }
+            );
+        }
+
+        function actualizarFactura() {
+            var mostrarDatos = factura && factura.value === 'si';
+            mostrar('fin-factura-datos', mostrarDatos);
+            Array.prototype.forEach.call(
+                document.querySelectorAll('.fin-factura-campo'),
+                function (campo) { campo.style.display = mostrarDatos ? '' : 'none'; }
+            );
+        }
+
+        function actualizar() {
+            var estadoFinal = mapaEstado[estadoIngreso.value] || '';
+            var esFinal = !!estadoFinal;
+            bloque.style.display = esFinal ? 'block' : 'none';
+            habilitarBloque(esFinal);
+            if (!esFinal) {
+                estadoSalida.value = '';
+                return;
+            }
+
+            estadoSalida.value = estadoFinal;
+            var esNegativo = estadoFinal === 'no_reparable' || estadoFinal === 'cliente_no_acepta';
+            var esRevision = estadoFinal === 'revision';
+            var esReparado = estadoFinal === 'pendiente_retiro';
+
+            mostrar('fin-cobro-adicional', esNegativo);
+            if (!esNegativo && aplica) aplica.value = 'no';
+            var usaAdicional = esNegativo && aplica && aplica.value === 'si';
+            mostrar('fin-detalle-adicional', usaAdicional);
+            requerido(valorAdicional, usaAdicional);
+            requerido(motivoAdicional, usaAdicional);
+
+            mostrar('fin-revision', esRevision);
+            requerido(valorRevision, esRevision);
+
+            var mostrarEconomico = usaAdicional;
+            mostrar('fin-economico', mostrarEconomico);
+            mostrar('fin-factura', mostrarEconomico);
+            if (!mostrarEconomico) {
+                if (pagado) pagado.value = '0.00';
+                if (metodo) metodo.value = 'sin_pago';
+            }
+
+            var base = usaAdicional ? numero(valorAdicional) : 0;
+            var abonadoPrevio = numero(abono);
+            var pagoActual = mostrarEconomico ? numero(pagado) : 0;
+            var saldo = Math.max(base - abonadoPrevio - pagoActual, 0);
+            var saldoTexto = document.getElementById('fin-saldo-valor');
+            if (saldoTexto) saldoTexto.textContent = '$' + saldo.toFixed(2);
+
+            var valorPendienteReparado = Math.max(numero(valorAcordado) - abonadoPrevio, 0);
+            var notificar = esRevision || (usaAdicional && saldo > 0.004) || (esReparado && valorPendienteReparado > 0.004);
+            mostrar('fin-notificacion', notificar);
+            requerido(asesora, notificar);
+            var titulo = document.getElementById('fin-notificacion-titulo');
+            var ayuda = document.getElementById('fin-notificacion-ayuda');
+            if (titulo) {
+                titulo.textContent = esRevision
+                    ? 'Notificar revisión pendiente'
+                    : (esReparado ? 'Notificar saldo pendiente' : 'Notificar cobro adicional pendiente');
+            }
+            if (ayuda) {
+                ayuda.textContent = esRevision
+                    ? 'La revisión queda pendiente de cobro y el equipo no podrá retirarse hasta pagarla.'
+                    : 'Mientras exista saldo pendiente, el equipo no podrá retirarse.';
+            }
+
+            var metodoActual = mostrarEconomico && metodo ? metodo.value : 'sin_pago';
+            var esTransferencia = metodoActual === 'transferencia' && pagoActual > 0;
+            var esTarjeta = metodoActual === 'tarjeta' && pagoActual > 0;
+            var esMixto = metodoActual === 'mixto' && pagoActual > 0;
+            mostrar('fin-banco', esTransferencia);
+            mostrar('fin-banco-otro', esTransferencia && banco && banco.value === 'otro');
+            mostrar('fin-tarjeta', esTarjeta);
+            mostrar('fin-comprobante', esTransferencia);
+            mostrar('fin-mixto', esMixto);
+            mostrar('fin-banco-1', esMixto && metodo1 && metodo1.value === 'transferencia');
+            mostrar('fin-banco-2', esMixto && metodo2 && metodo2.value === 'transferencia');
+
+            requerido(metodo, mostrarEconomico && pagoActual > 0);
+            requerido(banco, esTransferencia);
+            requerido(bancoOtro, esTransferencia && banco && banco.value === 'otro');
+            requerido(tarjeta, esTarjeta);
+            requerido(monto1, esMixto);
+            requerido(metodo1, esMixto);
+            requerido(banco1, esMixto && metodo1 && metodo1.value === 'transferencia');
+            requerido(monto2, esMixto);
+            requerido(metodo2, esMixto);
+            requerido(banco2, esMixto && metodo2 && metodo2.value === 'transferencia');
+
+            var mixtoValido = !esMixto || (
+                numero(monto1) > 0
+                && numero(monto2) > 0
+                && Math.abs(numero(monto1) + numero(monto2) - pagoActual) < 0.005
+            );
+            if (monto2) {
+                monto2.setCustomValidity(
+                    mixtoValido ? '' : 'Las dos partes deben sumar el valor pagado ahora.'
+                );
+            }
+            mostrar('fin-mixto-error', esMixto && !mixtoValido);
+            actualizarFactura();
+            if (window.__checkRequired) window.__checkRequired();
+        }
+
+        [
+            estadoIngreso, aplica, valorAdicional, valorAcordado, abono,
+            pagado, metodo, banco, monto1, metodo1, monto2, metodo2, factura
+        ].forEach(function (campo) {
+            if (!campo) return;
+            campo.addEventListener('change', actualizar);
+            campo.addEventListener('input', actualizar);
+        });
+        window.__actualizarFinalizacionRapida = actualizar;
+        actualizar();
     })();
 
     // Valor acordado: reemplaza el punto manual por una decisión clara.
@@ -1871,6 +2116,9 @@
         var bloqueoGarantiaActivo = false;
         var bloqueoCompraActivo = false;
         var bloqueoDonadoActivo = false;
+        var bloqueoResultadoNegativoActivo = false;
+        var bloqueoFinalizadoActivo = false;
+        var valorAntesResultadoNegativo = '';
         var mensajeValorMinimo = 'El valor debe ser igual o mayor a $1.00.';
 
         if (!radios.length || !inpValor) return;
@@ -1906,6 +2154,16 @@
 
         function esDonadoIngreso() {
             return selEstadoEquipo && selEstadoEquipo.value === 'donado';
+        }
+
+        function esResultadoNegativoIngreso() {
+            if (!selEstadoEquipo) return false;
+            return selEstadoEquipo.value === 'final_no_quiso_reparar'
+                || selEstadoEquipo.value === 'final_no_se_pudo_reparar';
+        }
+
+        function esEquipoFinalizadoIngreso() {
+            return selEstadoEquipo && selEstadoEquipo.value === 'entregado';
         }
 
         function seleccionarRadio(valor) {
@@ -1948,6 +2206,7 @@
                 esGarantiaIngreso() ||
                 esCortesiaIngreso() ||
                 esDonadoIngreso() ||
+                esResultadoNegativoIngreso() ||
                 estadoActual() !== 'si'
             ) {
                 inpValor.setCustomValidity('');
@@ -2044,6 +2303,52 @@
                 return;
             }
 
+            if (esResultadoNegativoIngreso()) {
+                if (!esPendiente(inpValor.value)) {
+                    var valorActual = parseFloat(String(inpValor.value).replace(',', '.'));
+                    if (Number.isFinite(valorActual) && valorActual >= 1) {
+                        valorAntesResultadoNegativo = inpValor.value;
+                    }
+                }
+                bloqueoResultadoNegativoActivo = true;
+                seleccionarRadio('no');
+                bloquearRadios(true);
+                marcarOpcionActiva();
+                inpValor.value = '0.00';
+                inpValor.removeAttribute('required');
+                inpValor.setAttribute('readonly', 'readonly');
+                inpValor.classList.add('estado-lock-input');
+                if (wrapMonto) wrapMonto.style.display = 'none';
+                if (aviso) aviso.style.display = 'none';
+                validarValorMinimo();
+                if (window.__checkRequired) window.__checkRequired();
+                return;
+            }
+
+            if (esEquipoFinalizadoIngreso()) {
+                bloqueoFinalizadoActivo = true;
+                seleccionarRadio('si');
+                bloquearRadios(false);
+                radios.forEach(function (radio) {
+                    var bloquear = radio.value !== 'si';
+                    radio.disabled = bloquear;
+                    var label = radio.closest('.valor-acordado-opcion');
+                    if (label) label.classList.toggle('is-disabled', bloquear);
+                });
+                marcarOpcionActiva();
+                if (esPendiente(inpValor.value) || parseFloat(String(inpValor.value).replace(',', '.')) < 1) {
+                    inpValor.value = valorAntesResultadoNegativo || ultimoValor || '';
+                }
+                inpValor.removeAttribute('readonly');
+                inpValor.setAttribute('required', 'required');
+                inpValor.classList.remove('estado-lock-input');
+                if (wrapMonto) wrapMonto.style.display = 'block';
+                if (aviso) aviso.style.display = 'none';
+                validarValorMinimo();
+                if (window.__checkRequired) window.__checkRequired();
+                return;
+            }
+
             if (bloqueoCompraActivo) {
                 bloqueoCompraActivo = false;
                 bloquearRadios(false);
@@ -2058,6 +2363,23 @@
                 inpValor.value = '';
                 var labelNormalDonado = document.getElementById('label-valor-acordado');
                 if (labelNormalDonado) labelNormalDonado.textContent = 'Valor acordado (USD)';
+            }
+            if (bloqueoResultadoNegativoActivo) {
+                bloqueoResultadoNegativoActivo = false;
+                bloquearRadios(false);
+                inpValor.classList.remove('estado-lock-input');
+                inpValor.removeAttribute('readonly');
+                if (valorAntesResultadoNegativo) {
+                    inpValor.value = valorAntesResultadoNegativo;
+                    seleccionarRadio('si');
+                } else {
+                    inpValor.value = '.';
+                    seleccionarRadio('no');
+                }
+            }
+            if (bloqueoFinalizadoActivo) {
+                bloqueoFinalizadoActivo = false;
+                bloquearRadios(false);
             }
 
             if (bloqueoGarantiaActivo) {
@@ -2255,7 +2577,9 @@
         function limpiarCamposNoAplicables() {
             var esAdministrativo = estado.value === 'donado' || estado.value === 'equipo_a_comprar';
             var esCortesia = estado.value === 'cortesia';
-            if (!esAdministrativo && !esCortesia) return;
+            var esResultadoNegativo = estado.value === 'final_no_quiso_reparar'
+                || estado.value === 'final_no_se_pudo_reparar';
+            if (!esAdministrativo && !esCortesia && !esResultadoNegativo) return;
 
             if (diagnostico && diagnostico.value !== 'no') {
                 diagnostico.value = 'no';
@@ -2281,12 +2605,14 @@
             var esDonado = estado.value === 'donado';
             var esCortesia = estado.value === 'cortesia';
             var esAdministrativo = esCompra || esDonado;
-            var esSinCobro = esAdministrativo || esCortesia;
+            var esResultadoNegativo = estado.value === 'final_no_quiso_reparar'
+                || estado.value === 'final_no_se_pudo_reparar';
+            var esSinCobro = esAdministrativo || esCortesia || esResultadoNegativo;
 
             mostrar(seccionDiagnostico, !esSinCobro);
             mostrar(seccionAbono, !esSinCobro);
             mostrar(seccionFirma, !esAdministrativo);
-            mostrar(panelValor, !esDonado);
+            mostrar(panelValor, !esDonado && !esResultadoNegativo);
             mostrar(decisionValor, !esSinCobro);
             panel.style.display = esCompra ? '' : 'none';
 

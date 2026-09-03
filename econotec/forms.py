@@ -298,6 +298,12 @@ class IngresoEquipoForm(forms.ModelForm):
     ]
     VALOR_ACORDADO_MINIMO = Decimal('1.00')
     VALOR_ACORDADO_ERROR_MINIMO = 'El valor debe ser igual o mayor a $1.00.'
+    ESTADO_NO_QUISO_REPARAR = 'final_no_quiso_reparar'
+    ESTADO_NO_SE_PUDO_REPARAR = 'final_no_se_pudo_reparar'
+    ESTADOS_NEGATIVOS_RAPIDOS = {
+        ESTADO_NO_QUISO_REPARAR: 'no_quiso_reparar',
+        ESTADO_NO_SE_PUDO_REPARAR: 'sin_solucion',
+    }
 
     FIRMA_CLIENTE_OPCIONES = [
         ('si', 'Sí'),
@@ -455,6 +461,10 @@ class IngresoEquipoForm(forms.ModelForm):
         }
 
     def __init__(self, *args, **kwargs):
+        self.permitir_finalizacion_rapida = kwargs.pop(
+            'permitir_finalizacion_rapida',
+            False,
+        )
         super().__init__(*args, **kwargs)
         self.salida_registrada = None
         self.estado_bloqueado_por_salida = False
@@ -605,10 +615,30 @@ class IngresoEquipoForm(forms.ModelForm):
                         'class': 'form-input estado-lock-input',
                     })
             else:
-                self.fields['estado'].choices = [
-                    choice for choice in self.fields['estado'].choices
-                    if choice[0] != 'entregado'
-                ]
+                choices_estado = list(self.fields['estado'].choices)
+                if self.permitir_finalizacion_rapida:
+                    choices_finalizacion = []
+                    for choice in choices_estado:
+                        if choice[0] == 'entregado':
+                            choices_finalizacion.extend([
+                                (
+                                    self.ESTADO_NO_QUISO_REPARAR,
+                                    'No quiso reparar',
+                                ),
+                                (
+                                    self.ESTADO_NO_SE_PUDO_REPARAR,
+                                    'No se pudo reparar',
+                                ),
+                            ])
+                        else:
+                            choices_finalizacion.append(choice)
+                    self.fields['estado'].choices = choices_finalizacion
+                else:
+                    self.fields['estado'].choices = [
+                        choice
+                        for choice in choices_estado
+                        if choice[0] != 'entregado'
+                    ]
 
     def _valor_acordado_estado_inicial(self):
         if self.is_bound:
@@ -644,6 +674,8 @@ class IngresoEquipoForm(forms.ModelForm):
         estado_equipo = ''
         if self.is_bound:
             estado_equipo = (self.data.get(self.add_prefix('estado')) or '').strip()
+        if estado_equipo in self.ESTADOS_NEGATIVOS_RAPIDOS:
+            return Decimal('0.00')
         if estado_equipo in ('garantia', 'cortesia'):
             return Decimal('0.00')
         if estado_equipo == 'donado':
@@ -709,6 +741,16 @@ class IngresoEquipoForm(forms.ModelForm):
         Así se evita que queden datos colgados si el usuario cambia el estado.
         """
         cleaned = super().clean()
+        estado_solicitado = cleaned.get('estado')
+        subestado_negativo = self.ESTADOS_NEGATIVOS_RAPIDOS.get(estado_solicitado)
+        es_finalizacion_negativa_rapida = bool(
+            self.permitir_finalizacion_rapida and subestado_negativo
+        )
+        if es_finalizacion_negativa_rapida:
+            cleaned['estado'] = 'entregado'
+            cleaned['subestado_entregado'] = subestado_negativo
+        elif self.permitir_finalizacion_rapida and estado_solicitado == 'entregado':
+            cleaned['subestado_entregado'] = 'pendiente_retiro'
         estado = cleaned.get('estado')
         estado_administrativo = estado in ('donado', 'equipo_a_comprar')
         valor_acordado_estado = cleaned.get('valor_acordado_estado')
@@ -730,6 +772,8 @@ class IngresoEquipoForm(forms.ModelForm):
 
         if self.estado_bloqueado_por_salida:
             cleaned['valor_acordado'] = self.instance.valor_acordado
+        elif es_finalizacion_negativa_rapida:
+            cleaned['valor_acordado'] = Decimal('0.00')
         elif estado in ('garantia', 'cortesia'):
             cleaned['valor_acordado'] = Decimal('0.00')
         elif valor_acordado_estado in ('no', 'pendiente'):
@@ -751,6 +795,15 @@ class IngresoEquipoForm(forms.ModelForm):
         elif estado == 'entregado':
             if not cleaned.get('subestado_entregado'):
                 self.add_error('subestado_entregado', 'Debe seleccionar cómo se entregó el equipo.')
+            elif (
+                self.permitir_finalizacion_rapida
+                and cleaned.get('subestado_entregado') in ('con_solucion', 'pendiente_retiro')
+                and cleaned.get('valor_acordado') is None
+            ):
+                self.add_error(
+                    'valor_acordado',
+                    'Registra el valor acordado para finalizar un equipo reparado.',
+                )
             cleaned['subestado_reparacion'] = ''
         else:
             cleaned['subestado_reparacion'] = ''
@@ -772,7 +825,10 @@ class IngresoEquipoForm(forms.ModelForm):
         if self.estado_bloqueado_por_salida:
             for nombre in self.CAMPOS_DIAGNOSTICO:
                 cleaned[nombre] = getattr(self.instance, nombre)
-        elif estado in ('garantia', 'cortesia', 'donado', 'equipo_a_comprar'):
+        elif (
+            es_finalizacion_negativa_rapida
+            or estado in ('garantia', 'cortesia', 'donado', 'equipo_a_comprar')
+        ):
             cleaned['diagnostico_inmediato'] = 'no'
             cleaned['valor_diagnostico'] = Decimal('0.00')
             cleaned['diagnostico_metodo'] = 'efectivo'
@@ -804,7 +860,7 @@ class IngresoEquipoForm(forms.ModelForm):
                     f'La suma del pago mixto debe ser igual al total del diagnóstico: ${diagnostico:.2f}.'
                 )
 
-        if estado_administrativo or estado == 'cortesia':
+        if estado_administrativo or estado == 'cortesia' or es_finalizacion_negativa_rapida:
             cleaned['abono_anticipo'] = Decimal('0.00')
             cleaned['anticipo_metodo'] = 'efectivo'
             cleaned['anticipo_banco'] = ''
@@ -1377,6 +1433,7 @@ class CobroBodegajeForm(forms.Form):
 
 class SalidaEquipoForm(forms.ModelForm):
     ESTADOS_REVISION_PENDIENTE = ('cliente_no_acepta', 'no_reparable')
+    ESTADOS_COBRO_ADICIONAL = ('pendiente_retiro', *ESTADOS_REVISION_PENDIENTE)
     ESTADO_REVISION = 'revision'
 
     reporte_tecnico = forms.CharField(
@@ -1487,6 +1544,10 @@ class SalidaEquipoForm(forms.ModelForm):
         }
 
     def __init__(self, *args, **kwargs):
+        self.permitir_resultados_negativos = kwargs.pop(
+            'permitir_resultados_negativos',
+            False,
+        )
         super().__init__(*args, **kwargs)
         self.notificacion_asesora_tipo = None
         self.notificacion_asesora_valor = Decimal('0.00')
@@ -1496,6 +1557,17 @@ class SalidaEquipoForm(forms.ModelForm):
         self.fields['aplica_valor_acordado_adicional'].choices = [
             ('no', 'No'),
             ('si', 'Sí'),
+        ]
+        metodos_pago_reales = {'efectivo', 'transferencia', 'tarjeta'}
+        self.fields['metodo_1'].choices = [
+            choice
+            for choice in self.fields['metodo_1'].choices
+            if choice[0] in metodos_pago_reales
+        ]
+        self.fields['metodo_2'].choices = [
+            choice
+            for choice in self.fields['metodo_2'].choices
+            if choice[0] in metodos_pago_reales
         ]
         if not self.is_bound and not (self.instance and self.instance.pk):
             self.initial['aplica_valor_acordado_adicional'] = 'no'
@@ -1518,6 +1590,7 @@ class SalidaEquipoForm(forms.ModelForm):
                         .filter(tipo__in=[
                             NotificacionAsesora.TIPO_REVISION_PENDIENTE,
                             NotificacionAsesora.TIPO_SALDO_RETIRO,
+                            NotificacionAsesora.TIPO_COBRO_ADICIONAL,
                         ])
                         .select_related('asesora')
                         .first()
@@ -1593,6 +1666,26 @@ class SalidaEquipoForm(forms.ModelForm):
                     c for c in choices
                     if c[0] not in ('garantia', 'garantia_fallos_adicionales', 'cortesia')
                 ]
+
+        # Estos resultados se registran al crear el ingreso. El formulario
+        # independiente de finalización solo conserva el valor histórico al
+        # editar una salida negativa ya existente.
+        if not self.permitir_resultados_negativos:
+            estado_negativo_existente = (
+                self.instance.estado_reparacion
+                if self.instance
+                and self.instance.pk
+                and self.instance.estado_reparacion in self.ESTADOS_REVISION_PENDIENTE
+                else ''
+            )
+            choices = [
+                choice
+                for choice in choices
+                if (
+                    choice[0] not in self.ESTADOS_REVISION_PENDIENTE
+                    or choice[0] == estado_negativo_existente
+                )
+            ]
                 
         self.fields['estado_reparacion'].choices = choices
 
@@ -1709,10 +1802,37 @@ class SalidaEquipoForm(forms.ModelForm):
             (ingreso.valor_acordado or Decimal('0.00'))
             + (valor_acordado_adicional or Decimal('0.00'))
         )
-        abonado_previo = ingreso.total_abonado
-        if self.instance and self.instance.pk and self.instance.valor_final_cobrado:
-            abonado_previo -= self.instance.valor_final_cobrado
+        abonado_previo = self._total_abonado_previo()
         pendiente = valor_total - abonado_previo - (valor_pagado_ahora or Decimal('0.00'))
+        return pendiente if pendiente > 0 else Decimal('0.00')
+
+    def _total_abonado_previo(self):
+        if not (self.instance and self.instance.ingreso):
+            return Decimal('0.00')
+
+        ingreso = self.instance.ingreso
+        if ingreso.pk:
+            total = ingreso.total_abonado
+        else:
+            total = ingreso.abono_anticipo or Decimal('0.00')
+        if self.instance.pk and self.instance.valor_final_cobrado:
+            total -= self.instance.valor_final_cobrado
+        return total
+
+    def _saldo_cobro_adicional_despues_de_pago(
+        self,
+        valor_adicional,
+        valor_pagado_ahora,
+    ):
+        if not (self.instance and self.instance.ingreso):
+            return Decimal('0.00')
+
+        abonado_previo = self._total_abonado_previo()
+        pendiente = (
+            (valor_adicional or Decimal('0.00'))
+            - abonado_previo
+            - (valor_pagado_ahora or Decimal('0.00'))
+        )
         return pendiente if pendiente > 0 else Decimal('0.00')
 
     def clean(self):
@@ -1746,7 +1866,7 @@ class SalidaEquipoForm(forms.ModelForm):
             return cleaned
 
         valor_adicional = Decimal('0.00')
-        if estado_reparacion == 'pendiente_retiro':
+        if estado_reparacion in self.ESTADOS_COBRO_ADICIONAL:
             aplica_adicional = cleaned.get('aplica_valor_acordado_adicional') or 'no'
             if aplica_adicional == 'si':
                 valor_adicional = cleaned.get('valor_acordado_adicional') or Decimal('0.00')
@@ -1823,27 +1943,64 @@ class SalidaEquipoForm(forms.ModelForm):
             self._limpiar_pago_pendiente(cleaned)
             return cleaned
 
-        if estado_reparacion in self.ESTADOS_REVISION_PENDIENTE and valor > 0:
-            if valor < Decimal('1.00'):
+        if estado_reparacion in self.ESTADOS_REVISION_PENDIENTE:
+            aplica_adicional = cleaned.get('aplica_valor_acordado_adicional') == 'si'
+            if not aplica_adicional:
+                cleaned['valor_final_cobrado'] = Decimal('0.00')
+                self._limpiar_pago_pendiente(cleaned)
+                cleaned['asesora_notificacion'] = None
+                cleaned['mensaje_notificacion'] = ''
+                return cleaned
+
+            saldo_antes_de_pago = self._saldo_cobro_adicional_despues_de_pago(
+                valor_adicional,
+                Decimal('0.00'),
+            )
+            if valor < 0:
                 self.add_error(
                     'valor_final_cobrado',
-                    'El valor pendiente debe ser de $1.00 o más.'
+                    'El valor pagado ahora no puede ser negativo.',
                 )
-            if not cleaned.get('asesora_notificacion'):
+            if valor > saldo_antes_de_pago:
                 self.add_error(
-                    'asesora_notificacion',
-                    'Selecciona la asesora que recibirá esta notificación.'
+                    'valor_final_cobrado',
+                    (
+                        'El pago recibido no puede superar el saldo del cobro '
+                        f'adicional (${saldo_antes_de_pago:.2f}).'
+                    ),
                 )
-            self._registrar_notificacion_pendiente(
-                NotificacionAsesora.TIPO_REVISION_PENDIENTE,
+
+            if valor <= 0:
+                cleaned['valor_final_cobrado'] = Decimal('0.00')
+                self._limpiar_pago_pendiente(cleaned)
+                metodo = 'sin_pago'
+                banco = ''
+                banco_otro = ''
+                tarjeta_app = ''
+            elif metodo in ('', 'sin_pago', 'cortesia', None):
+                self.add_error(
+                    'metodo_pago_final',
+                    'Selecciona cómo se recibió el pago: efectivo, transferencia, tarjeta o mixto.',
+                )
+
+            saldo_pendiente = self._saldo_cobro_adicional_despues_de_pago(
+                valor_adicional,
                 valor,
-                (
-                    'El equipo {codigo} salió con revisión pendiente de pago. '
-                    'Valor pendiente: ${valor:.2f}. No entregar hasta registrar el pago.'
-                ),
             )
-            self._limpiar_pago_pendiente(cleaned)
-            return cleaned
+            if saldo_pendiente > 0:
+                if not cleaned.get('asesora_notificacion'):
+                    self.add_error(
+                        'asesora_notificacion',
+                        'Selecciona la asesora que recibirá esta notificación.'
+                    )
+                self._registrar_notificacion_pendiente(
+                    NotificacionAsesora.TIPO_COBRO_ADICIONAL,
+                    saldo_pendiente,
+                    (
+                        'El equipo {codigo} tiene un cobro adicional con saldo '
+                        'pendiente de ${valor:.2f}. No entregar hasta registrar el pago.'
+                    ),
+                )
 
         if estado_reparacion == 'pendiente_retiro':
             if not (self.instance and self.instance.pk):
@@ -1928,23 +2085,6 @@ class SalidaEquipoForm(forms.ModelForm):
             salida.banco_2 = ''
         elif salida.estado_reparacion == self.ESTADO_REVISION:
             salida.valor_acordado_revision = self.cleaned_data.get('valor_acordado_revision') or Decimal('0.00')
-            salida.valor_final_cobrado = Decimal('0.00')
-            salida.metodo_pago_final = 'sin_pago'
-            salida.numero_recibo = ''
-            salida.banco = ''
-            salida.banco_otro = ''
-            salida.tarjeta_app = ''
-            salida.comprobante_url = ''
-            salida.monto_1 = None
-            salida.metodo_1 = ''
-            salida.banco_1 = ''
-            salida.monto_2 = None
-            salida.metodo_2 = ''
-            salida.banco_2 = ''
-        elif (
-            salida.estado_reparacion in self.ESTADOS_REVISION_PENDIENTE
-            and self.notificacion_asesora_tipo == NotificacionAsesora.TIPO_REVISION_PENDIENTE
-        ):
             salida.valor_final_cobrado = Decimal('0.00')
             salida.metodo_pago_final = 'sin_pago'
             salida.numero_recibo = ''

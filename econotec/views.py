@@ -77,6 +77,7 @@ def _sincronizar_notificacion_asesora(form, salida, user):
         NotificacionAsesora.TIPO_FALLOS_ADICIONALES,
         NotificacionAsesora.TIPO_REVISION_PENDIENTE,
         NotificacionAsesora.TIPO_SALDO_RETIRO,
+        NotificacionAsesora.TIPO_COBRO_ADICIONAL,
     ]
     tipo = getattr(form, 'notificacion_asesora_tipo', None)
     valor = getattr(form, 'notificacion_asesora_valor', D('0.00')) or D('0.00')
@@ -1561,6 +1562,69 @@ def _programar_correo_ingreso_automatico(request, ingreso):
     )
 
 
+_MAPA_ESTADO_FINALIZACION_RAPIDA = {
+    'entregado': 'pendiente_retiro',
+    IngresoEquipoForm.ESTADO_NO_QUISO_REPARAR: 'cliente_no_acepta',
+    IngresoEquipoForm.ESTADO_NO_SE_PUDO_REPARAR: 'no_reparable',
+}
+
+
+def _form_salida_rapida(request, user, ingreso=None):
+    """Construye el cierre incluido dentro de Nueva solicitud de ingreso."""
+    if ingreso is None:
+        ingreso = IngresoEquipo(
+            estado='entregado',
+            diagnostico_inmediato='no',
+            valor_diagnostico=D('0.00'),
+            abono_anticipo=D('0.00'),
+        )
+
+    estado_ingreso = (
+        (request.POST.get('ing-estado') or '').strip()
+        if request.method == 'POST'
+        else ''
+    )
+    estado_salida = _MAPA_ESTADO_FINALIZACION_RAPIDA.get(estado_ingreso, '')
+    datos = None
+    if request.method == 'POST':
+        datos = request.POST.copy()
+        datos['salida-estado_reparacion'] = estado_salida
+
+    return SalidaEquipoForm(
+        datos,
+        prefix='salida',
+        instance=SalidaEquipo(ingreso=ingreso),
+        permitir_resultados_negativos=True,
+        initial={
+            'fecha_salida': date.today(),
+            'estado_reparacion': estado_salida,
+            'metodo_pago_final': 'sin_pago',
+            'valor_final_cobrado': D('0.00'),
+            'aplica_valor_acordado_adicional': 'no',
+            'factura_realizada': 'no',
+            'tecnico_reparo': user if es_tecnico(user) else None,
+        },
+    )
+
+
+def _guardar_salida_rapida(form, ingreso, user):
+    salida = form.save(commit=False)
+    salida.ingreso = ingreso
+    salida.registrado_por = user
+    salida.save()
+    ingreso.save(update_fields=['reporte_tecnico'])
+    _sincronizar_notificacion_asesora(form, salida, user)
+    registrar_bitacora(
+        user,
+        'salida',
+        _texto_salida_bitacora(salida),
+        ingreso=ingreso,
+        salida=salida,
+        dedupe_key=f'salida:{salida.pk}:creada',
+    )
+    return salida
+
+
 @tecnico_requerido
 @transaction.atomic
 def ingreso_registrar(request):
@@ -1580,62 +1644,64 @@ def ingreso_registrar(request):
     )
 
     if request.method == 'POST':
-        cli_form = ClienteForm(request.POST, prefix='cli')
-        ing_form = IngresoEquipoForm(request.POST, prefix='ing')
-
         cedula = (request.POST.get('cli-cedula') or '').strip()
         cliente_existente = Cliente.objects.filter(cedula=cedula).first() if cedula else None
+        cli_form = ClienteForm(
+            request.POST,
+            prefix='cli',
+            instance=cliente_existente,
+        )
+        ing_form = IngresoEquipoForm(
+            request.POST,
+            prefix='ing',
+            permitir_finalizacion_rapida=True,
+        )
+        salida_form = _form_salida_rapida(request, request.user)
 
-        if cliente_existente:
-            # Actualizar datos del cliente con la nueva info, si hay cambios
-            cli_form_existente = ClienteForm(request.POST, prefix='cli', instance=cliente_existente)
-            if ing_form.is_valid() and cli_form_existente.is_valid():
-                duplicado = _equipo_duplicado_para_cliente(cliente_existente, ing_form.cleaned_data)
-                if duplicado and not confirmar_mismo_equipo_cliente:
-                    mensaje_duplicado = (
-                        'ESTE EQUIPO YA SE ENCUENTRA REGISTRADO, POR FAVOR VERIFICA EN LA LISTA DE EQUIPOS.'
-                    )
-                    ing_form.add_error('modelo_serie', f'{mensaje_duplicado} Coincide con el equipo {duplicado.codigo_equipo}.')
-                    messages.error(
-                        request,
-                        f'{mensaje_duplicado} Coincide con {duplicado.codigo_equipo}.'
-                    )
-                    cli_form = cli_form_existente
-                else:
-                    cliente = cli_form_existente.save()
-                    ingreso = ing_form.save(commit=False)
-                    ingreso.cliente = cliente
-                    ingreso.sede = sede_actual           # ← sede de la sesión
-                    ingreso.registrado_por = request.user
-                    ingreso.save()
-                    _sincronizar_egreso_compra(ingreso, request.user)
-                    registrar_bitacora(
-                        request.user,
-                        'ingreso',
-                        _texto_ingreso_bitacora(ingreso),
-                        ingreso=ingreso,
-                        dedupe_key=f'ingreso:{ingreso.pk}:creado',
-                    )
-                    messages.success(
-                        request,
-                        f'Equipo {ingreso.codigo_equipo} ingresado para {cliente.nombres}.'
-                    )
-                    _programar_correo_ingreso_automatico(request, ingreso)
-                    if duplicado and confirmar_mismo_equipo_cliente:
-                        messages.info(
-                            request,
-                            f'Reingreso confirmado: mismo cliente y mismo equipo que {duplicado.codigo_equipo}.'
-                        )
-                    return redirect('econotec:ingreso_detalle', pk=ingreso.pk)
+        cliente_valido = cli_form.is_valid()
+        ingreso_valido = ing_form.is_valid()
+        if cliente_valido and ingreso_valido:
+            cliente_preview = cli_form.save(commit=False)
+            ingreso_preview = ing_form.save(commit=False)
+            ingreso_preview.cliente = cliente_preview
+            ingreso_preview.sede = sede_actual
+            ingreso_preview.registrado_por = request.user
+            es_finalizacion_rapida = ingreso_preview.estado == 'entregado'
+
+            if es_finalizacion_rapida:
+                salida_form = _form_salida_rapida(
+                    request,
+                    request.user,
+                    ingreso=ingreso_preview,
+                )
+                salida_valida = salida_form.is_valid()
             else:
-                cli_form = cli_form_existente
-        else:
-            if cli_form.is_valid() and ing_form.is_valid():
+                salida_valida = True
+
+            duplicado = (
+                _equipo_duplicado_para_cliente(
+                    cliente_existente,
+                    ing_form.cleaned_data,
+                )
+                if cliente_existente
+                else None
+            )
+            if duplicado and not confirmar_mismo_equipo_cliente:
+                mensaje_duplicado = (
+                    'ESTE EQUIPO YA SE ENCUENTRA REGISTRADO, POR FAVOR VERIFICA EN LA LISTA DE EQUIPOS.'
+                )
+                ing_form.add_error(
+                    'modelo_serie',
+                    f'{mensaje_duplicado} Coincide con el equipo {duplicado.codigo_equipo}.',
+                )
+                messages.error(
+                    request,
+                    f'{mensaje_duplicado} Coincide con {duplicado.codigo_equipo}.',
+                )
+            elif salida_valida:
                 cliente = cli_form.save()
-                ingreso = ing_form.save(commit=False)
+                ingreso = ingreso_preview
                 ingreso.cliente = cliente
-                ingreso.sede = sede_actual           # ← sede de la sesión
-                ingreso.registrado_por = request.user
                 ingreso.save()
                 _sincronizar_egreso_compra(ingreso, request.user)
                 registrar_bitacora(
@@ -1645,11 +1711,30 @@ def ingreso_registrar(request):
                     ingreso=ingreso,
                     dedupe_key=f'ingreso:{ingreso.pk}:creado',
                 )
+                salida = None
+                if es_finalizacion_rapida:
+                    salida = _guardar_salida_rapida(
+                        salida_form,
+                        ingreso,
+                        request.user,
+                    )
                 messages.success(
                     request,
-                    f'Equipo {ingreso.codigo_equipo} ingresado para {cliente.nombres}.'
+                    (
+                        f'Equipo {ingreso.codigo_equipo} ingresado y finalizado para {cliente.nombres}.'
+                        if salida
+                        else f'Equipo {ingreso.codigo_equipo} ingresado para {cliente.nombres}.'
+                    ),
                 )
                 _programar_correo_ingreso_automatico(request, ingreso)
+                if duplicado and confirmar_mismo_equipo_cliente:
+                    messages.info(
+                        request,
+                        f'Reingreso confirmado: mismo cliente y mismo equipo que {duplicado.codigo_equipo}.',
+                    )
+                if salida:
+                    request.session['confirmar_ubicacion_salida_id'] = salida.pk
+                    return redirect('econotec:salida_listo_aviso', pk=salida.pk)
                 return redirect('econotec:ingreso_detalle', pk=ingreso.pk)
 
     else:
@@ -1688,7 +1773,12 @@ def ingreso_registrar(request):
             'abono_anticipo': request.GET.get('abono_anticipo', '0.00'),
         }
         cli_form = ClienteForm(prefix='cli', initial=cli_initial)
-        ing_form = IngresoEquipoForm(prefix='ing', initial=ing_initial)
+        ing_form = IngresoEquipoForm(
+            prefix='ing',
+            initial=ing_initial,
+            permitir_finalizacion_rapida=True,
+        )
+        salida_form = _form_salida_rapida(request, request.user)
 
     # El siguiente código se calcula dentro de la sede actual
     from .models import SEDE_PREFIJOS
@@ -1698,6 +1788,7 @@ def ingreso_registrar(request):
     return render(request, 'ingresos/form.html', {
         'cli_form': cli_form,
         'ing_form': ing_form,
+        'salida_form': salida_form,
         'modo': 'registrar',
         'titulo': 'Nueva Solicitud de Ingreso',
         'siguiente_numero': siguiente_numero,
@@ -4276,7 +4367,10 @@ def salida_marcar_retirada(request, pk):
             return redirect(_url_retorno_salida(request, 'salida_lista'))
 
     salida.fecha_retiro_real = date.today()
-    salida.estado_reparacion = 'retirado'
+    # La fecha confirma la ubicación física. Los resultados negativos deben
+    # conservarse para no convertir un equipo sin reparar en uno reparado.
+    if salida.estado_reparacion == 'pendiente_retiro':
+        salida.estado_reparacion = 'retirado'
     salida.bodegaje_dias_congelado = bod['dias']
     salida.bodegaje_monto_congelado = bod['monto']
     salida.bodegaje_aplicado_al_pago = aplicar

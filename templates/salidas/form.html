@@ -222,6 +222,9 @@
         background: rgba(249, 168, 37, 0.15);
         color: #fbbf24;
     }
+    #wrap_pago_mixto .form-label {
+        color: #1f2937;
+    }
     .envio-pdf-card-sinwa a {
         display: inline-block;
         margin-top: 8px;
@@ -386,20 +389,20 @@
             <div class="form-row cols-2" style="align-items:end;">
                 <div>
                     <label class="form-label" for="{{ form.aplica_valor_acordado_adicional.id_for_label }}" style="color:#856404;">
-                        ¿Aplica un valor acordado adicional?
+                        ¿Registrar un cobro adicional opcional?
                     </label>
                     {{ form.aplica_valor_acordado_adicional }}
                     {{ form.aplica_valor_acordado_adicional.errors }}
                 </div>
-                <div style="color:#856404; font-size:11px; font-weight:700; line-height:1.45; padding-bottom:4px;">
-                    El valor adicional se suma al saldo pendiente y no se registra como un pago recibido.
+                <div id="ayuda-cobro-adicional" style="color:#856404; font-size:11px; font-weight:700; line-height:1.45; padding-bottom:4px;">
+                    Es opcional. Si lo activas, el valor se suma al saldo pendiente del equipo.
                 </div>
             </div>
 
             <div id="detalle-valor-adicional" class="form-row cols-2" style="display:none; margin-top:12px; padding-top:12px; border-top:1px dashed #e4b33f;">
                 <div>
                     <label class="form-label" for="{{ form.valor_acordado_adicional.id_for_label }}" style="color:#856404;">
-                        Valor adicional (USD) *
+                        Valor total del cobro adicional (USD) *
                     </label>
                     {{ form.valor_acordado_adicional }}
                     {{ form.valor_acordado_adicional.errors }}
@@ -438,14 +441,6 @@
     <div class="form-section" id="section-cierre-economico"{% if form.estado_reparacion.value == 'retirado' %} style="display:none;"{% endif %}>
         <h3>Cierre Económico</h3>
         
-        <div id="wrap-cobrar-diagnostico" style="display:none; margin-bottom: 14px; background: #fff3cd; padding: 10px; border-radius: 8px; border: 1px solid #ffeeba;">
-            <label class="form-label" style="color: #856404; margin-bottom: 8px;">¿Cobrar diagnóstico?</label>
-            <select id="cobrar_diagnostico_select" class="form-input" style="width: 100%; border-color: #ffeeba;">
-                <option value="no">No, no cobrar nada</option>
-                <option value="si">Sí, registrar valor pendiente ($1 min)</option>
-            </select>
-        </div>
-
         <div class="form-row cols-2" id="wrap-pago-final">
             <div>
                 <label class="form-label" id="label-valor-cobrado">Valor cobrado ahora (USD)</label>
@@ -619,6 +614,7 @@
         var aplicaValorAdicional = document.querySelector('[name="aplica_valor_acordado_adicional"]');
         var inputValorAdicional = document.querySelector('[name="valor_acordado_adicional"]');
         var motivoValorAdicional = document.querySelector('[name="motivo_valor_acordado_adicional"]');
+        var ayudaCobroAdicional = document.getElementById('ayuda-cobro-adicional');
 
         // Datos del ingreso (vienen de Django)
         var valorDiagnostico = parseFloat("{{ ingreso.valor_diagnostico|default:0 }}") || 0;
@@ -646,6 +642,11 @@
                         titulo: 'Notificar a asesora por revisión pendiente',
                         ayuda: 'La asesora verá esta notificación en su apartado y el valor quedará como saldo pendiente para cobrar antes del retiro.',
                         placeholder: 'Ej.: Equipo finalizado en revisión. Cobrar el valor acordado antes del retiro.'
+                    },
+                    adicional: {
+                        titulo: 'Notificar a asesora por cobro adicional pendiente',
+                        ayuda: 'La asesora verá el saldo restante del cobro adicional. El equipo no podrá salir hasta completar el pago.',
+                        placeholder: 'Ej.: Cobro adicional pendiente. Completar el pago antes de retirar.'
                     },
                     retiro: {
                         titulo: 'Notificar a asesora: equipo listo con saldo pendiente',
@@ -687,9 +688,8 @@
         function actualizar() {
             if (!selEstado) return;
             var v = selEstado.value;
-            var wrapCobrar = document.getElementById('wrap-cobrar-diagnostico');
-            if (wrapCobrar) wrapCobrar.style.display = 'none';
-            var mostrarValorAdicional = v === 'pendiente_retiro';
+            var esCierreSinReparacion = v === 'cliente_no_acepta' || v === 'no_reparable';
+            var mostrarValorAdicional = v === 'pendiente_retiro' || esCierreSinReparacion;
             var aplicaAdicional = (
                 mostrarValorAdicional
                 && aplicaValorAdicional
@@ -697,6 +697,11 @@
             );
             if (wrapValorAdicional) {
                 wrapValorAdicional.style.display = mostrarValorAdicional ? 'block' : 'none';
+            }
+            if (ayudaCobroAdicional) {
+                ayudaCobroAdicional.textContent = esCierreSinReparacion
+                    ? 'Este resultado no tiene cobro por defecto. Actívalo solo si se acordó un valor adicional con el cliente.'
+                    : 'Es opcional. Si lo activas, el valor se suma al saldo pendiente del equipo.';
             }
             if (detalleValorAdicional) {
                 detalleValorAdicional.style.display = aplicaAdicional ? 'grid' : 'none';
@@ -745,7 +750,10 @@
                 if (sectionCierreEconomico) sectionCierreEconomico.style.display = '';
                 if (wrapPagoFinal) wrapPagoFinal.style.display = '';
                 if (wrapNumeroRecibo) wrapNumeroRecibo.style.display = '';
-                if (inputCobrado) inputCobrado.setAttribute('min', '0');
+                if (inputCobrado) {
+                    inputCobrado.setAttribute('min', '0');
+                    inputCobrado.removeAttribute('max');
+                }
                 if (wrapValorRevision) wrapValorRevision.style.display = 'none';
                 if (inputValorRevision) {
                     inputValorRevision.removeAttribute('required');
@@ -817,23 +825,22 @@
                     }
                     if (metodoPago) metodoPago.value = 'sin_pago';
                 } else if (v === 'cliente_no_acepta' || v === 'no_reparable') {
-                    if (wrapCobrar) wrapCobrar.style.display = 'block';
-                    var cobrarDiag = document.getElementById('cobrar_diagnostico_select');
-                    var cobrarSiNo = cobrarDiag ? cobrarDiag.value : 'no';
-
-                    if (cobrarSiNo === 'no') {
+                    if (!aplicaAdicional) {
+                        if (sectionCierreEconomico) sectionCierreEconomico.style.display = 'none';
+                        if (wrapPagoFinal) wrapPagoFinal.style.display = 'none';
+                        if (wrapNumeroRecibo) wrapNumeroRecibo.style.display = 'none';
                         saldoDisplay.textContent = '$0.00';
                         saldoDisplay.style.color = 'var(--success)';
                         if (saldoNota) {
                             saldoNota.style.display = '';
-                            saldoNota.textContent = 'No se cobra revisión/diagnóstico adicional.';
+                            saldoNota.textContent = 'Finalización sin cobro adicional.';
                         }
                         if (inputCobrado) {
                             inputCobrado.value = '0';
                             inputCobrado.setAttribute('readonly', 'readonly');
                         }
                         if (ayudaValor) {
-                            ayudaValor.innerHTML = 'Diagnóstico ya cobrado al ingreso o no se cobrará.';
+                            ayudaValor.innerHTML = 'No se registrará ningún pago porque el cobro adicional está desactivado.';
                             ayudaValor.style.color = '#888';
                         }
                         if (metodoPago && metodoPago.value !== 'sin_pago') {
@@ -841,27 +848,44 @@
                             metodoPago.dispatchEvent(new Event('change'));
                         }
                     } else {
+                        if (sectionCierreEconomico) sectionCierreEconomico.style.display = '';
+                        if (wrapPagoFinal) wrapPagoFinal.style.display = '';
+                        if (wrapNumeroRecibo) wrapNumeroRecibo.style.display = '';
+                        var valorCargoAdicional = valorInputCobrado(inputValorAdicional);
                         if (inputCobrado) {
-                            if (inputCobrado.hasAttribute('readonly') || inputCobrado.value === '0') {
-                                inputCobrado.value = '1';
-                            }
                             inputCobrado.removeAttribute('readonly');
-                            inputCobrado.setAttribute('min', '1');
+                            inputCobrado.setAttribute('min', '0');
+                            inputCobrado.setAttribute(
+                                'max',
+                                Math.max(valorCargoAdicional - totalAbonado, 0).toFixed(2)
+                            );
                         }
-                        var valorRevision = valorInputCobrado(inputCobrado);
-                        saldoDisplay.textContent = '$' + valorRevision.toFixed(2);
-                        saldoDisplay.style.color = 'var(--danger)';
+                        var valorPagadoAhora = valorInputCobrado(inputCobrado);
+                        var saldoCobroAdicional = Math.max(
+                            valorCargoAdicional - totalAbonado - valorPagadoAhora,
+                            0
+                        );
+                        saldoDisplay.textContent = '$' + saldoCobroAdicional.toFixed(2);
+                        saldoDisplay.style.color = saldoCobroAdicional > 0
+                            ? 'var(--danger)'
+                            : 'var(--success)';
                         if (saldoNota) {
                             saldoNota.style.display = '';
-                            saldoNota.textContent = 'Valor pendiente de pago antes del retiro.';
+                            saldoNota.textContent = saldoCobroAdicional > 0
+                                ? 'Cobro adicional con saldo pendiente antes del retiro.'
+                                : 'Cobro adicional pagado completamente.';
                         }
-                        bloquearMetodoPagoPendiente(metodoPago, true);
-                        setNotificacionAsesora(true, 'revision');
+                        bloquearMetodoPagoPendiente(metodoPago, false);
+                        if (metodoPago && metodoPago.value === 'sin_pago') {
+                            metodoPago.value = 'efectivo';
+                            metodoPago.dispatchEvent(new Event('change'));
+                        }
+                        setNotificacionAsesora(saldoCobroAdicional > 0, 'adicional');
                         if (labelValorCobrado) {
-                            labelValorCobrado.textContent = 'Valor pendiente por diagnóstico (USD)';
+                            labelValorCobrado.textContent = 'Valor pagado ahora (USD)';
                         }
                         if (ayudaValor) {
-                            ayudaValor.innerHTML = '<strong>Nota:</strong> Ingresa el valor pendiente por diagnóstico (puede ser 1 o mayor). No se registra como pago recibido ahora.';
+                            ayudaValor.innerHTML = 'Ingresa cuánto recibe el taller ahora. Puedes cobrar todo, una parte o dejar 0; cualquier saldo bloqueará el retiro.';
                             ayudaValor.style.color = '#856404';
                         }
                     }
@@ -948,10 +972,6 @@
 
         if (selEstado) {
             selEstado.addEventListener('change', actualizar);
-        }
-        var cobrarDiagSel = document.getElementById('cobrar_diagnostico_select');
-        if (cobrarDiagSel) {
-            cobrarDiagSel.addEventListener('change', actualizar);
         }
         var inputCobrado = document.querySelector('input[name="valor_final_cobrado"]');
         if (inputCobrado) {

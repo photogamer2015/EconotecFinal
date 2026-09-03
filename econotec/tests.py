@@ -424,6 +424,31 @@ class VentasTests(TestCase):
         data.update(overrides)
         return data
 
+    def salida_rapida_post_data(self, **overrides):
+        data = {
+            f'salida-{campo}': valor
+            for campo, valor in self.salida_post_data().items()
+        }
+        data.update({f'salida-{campo}': valor for campo, valor in overrides.items()})
+        return data
+
+    def registrar_ingreso_negativo(self, estado_ingreso, **salida_overrides):
+        self.activar_sede_guayaquil()
+        ultimo_pk = IngresoEquipo.objects.order_by('-pk').values_list('pk', flat=True).first() or 0
+        data = self.ingreso_registro_post_data(**{
+            'ing-estado': estado_ingreso,
+            'ing-subestado_reparacion': '',
+            'ing-subestado_entregado': '',
+            'ing-valor_acordado_estado': 'no',
+            'ing-valor_acordado': '',
+            'confirmar_mismo_equipo_cliente': '1',
+        })
+        data.update(self.salida_rapida_post_data(**salida_overrides))
+
+        response = self.client.post(reverse('econotec:ingreso_registrar'), data)
+        ingreso = IngresoEquipo.objects.get(pk__gt=ultimo_pk)
+        return response, ingreso, SalidaEquipo.objects.get(ingreso=ingreso)
+
     def crear_notificacion_asesora(self, asesora=None, mensaje='Pendiente por cobrar.', **overrides):
         asesora = asesora or self.vendedor
         ingreso = self.crear_ingreso_reparacion(
@@ -2294,12 +2319,6 @@ class VentasTests(TestCase):
             fecha_ingreso=date(2026, 7, 15),
             valor_acordado=Decimal('0.00'),
         )
-        ingreso_negativo = self.crear_ingreso_reparacion(
-            tecnico_encargado=self.usuario,
-            fecha_ingreso=date(2026, 7, 16),
-            valor_acordado=Decimal('0.00'),
-        )
-
         response_positiva = self.client.post(
             reverse('econotec:salida_registrar', kwargs={'ingreso_pk': ingreso_positivo.pk}),
             self.salida_post_data(
@@ -2308,17 +2327,14 @@ class VentasTests(TestCase):
                 metodo_pago_final='sin_pago',
             ),
         )
-        response_negativa = self.client.post(
-            reverse('econotec:salida_registrar', kwargs={'ingreso_pk': ingreso_negativo.pk}),
-            self.salida_post_data(
-                tecnico_reparo=str(tecnico_seleccionado.pk),
-                estado_reparacion='no_reparable',
-                metodo_pago_final='sin_pago',
-            ),
+        response_negativa, ingreso_negativo, salida_negativa = self.registrar_ingreso_negativo(
+            IngresoEquipoForm.ESTADO_NO_SE_PUDO_REPARAR,
+            tecnico_reparo=str(tecnico_seleccionado.pk),
+            estado_reparacion='no_reparable',
+            metodo_pago_final='sin_pago',
         )
 
         salida_positiva = SalidaEquipo.objects.get(ingreso=ingreso_positivo)
-        salida_negativa = SalidaEquipo.objects.get(ingreso=ingreso_negativo)
         self.assertEqual(response_positiva.status_code, 302)
         self.assertEqual(response_negativa.status_code, 302)
         self.assertEqual(salida_positiva.tecnico_reparo, tecnico_seleccionado)
@@ -4172,7 +4188,7 @@ class VentasTests(TestCase):
         self.assertContains(response, ingreso.codigo_equipo)
         self.assertNotContains(response, venta.codigo_equipo)
 
-    def test_cinco_modales_dashboard_incluyen_busqueda_y_filtros_responsivos(self):
+    def test_cinco_modales_dashboard_incluyen_solo_filtro_sede_responsivo(self):
         ingreso_g = self.crear_ingreso_reparacion(
             sede='guayaquil',
             fecha_ingreso=date.today(),
@@ -4200,14 +4216,14 @@ class VentasTests(TestCase):
                 )
 
                 self.assertEqual(response.status_code, 200)
-                self.assertContains(response, 'id="dashModalSearch"')
-                self.assertContains(response, 'id="dashModalSede"')
-                self.assertContains(response, 'id="dashModalEquipo"')
-                self.assertContains(response, 'id="dashModalOrden"')
-                self.assertContains(response, 'id="dashModalClear"')
+                self.assertNotContains(response, 'id="dashModalSearch"')
+                self.assertNotContains(response, 'id="dashModalEquipo"')
+                self.assertNotContains(response, 'id="dashModalOrden"')
+                self.assertNotContains(response, 'id="dashModalClear"')
+                self.assertContains(response, 'name="dashModalSede"', count=3)
+                self.assertContains(response, 'value="guayaquil"')
+                self.assertContains(response, 'value="quito"')
                 self.assertContains(response, 'data-dashboard-row')
-                self.assertContains(response, 'G — Guayaquil')
-                self.assertContains(response, 'U — Quito')
                 self.assertContains(response, 'data-label=')
 
         total = self.client.get(
@@ -4215,8 +4231,6 @@ class VentasTests(TestCase):
         )
         self.assertContains(total, f'data-codigo="{ingreso_g.codigo_equipo}"')
         self.assertContains(total, 'data-sedes="guayaquil"')
-        self.assertContains(total, 'value="Laptop"')
-        self.assertContains(total, 'value="Impresora"')
 
         clientes = self.client.get(
             reverse('econotec:dashboard_details', kwargs={'tipo': 'clientes'})
@@ -5225,7 +5239,7 @@ class VentasTests(TestCase):
         self.assertEqual(pdf_response.status_code, 200)
         self.assertEqual(pdf_response['Content-Type'], 'application/pdf')
 
-    def test_marcar_retirada_actualiza_estado_a_retirado_con_fecha(self):
+    def test_marcar_retirada_conserva_resultado_negativo_y_registra_fecha(self):
         ingreso = self.crear_ingreso_reparacion(valor_acordado=Decimal('0.00'))
         salida = SalidaEquipo.objects.create(
             ingreso=ingreso,
@@ -5254,8 +5268,10 @@ class VentasTests(TestCase):
 
         self.assertRedirects(response, reverse('econotec:salida_retiros_lista'))
         salida.refresh_from_db()
-        self.assertEqual(salida.estado_reparacion, 'retirado')
+        ingreso.refresh_from_db()
+        self.assertEqual(salida.estado_reparacion, 'no_reparable')
         self.assertEqual(salida.fecha_retiro_real, date.today())
+        self.assertEqual(ingreso.subestado_entregado, 'sin_solucion')
 
         lista_finalizados = self.client.get(reverse('econotec:salida_lista'))
         lista_salidas_fisicas = self.client.get(reverse('econotec:salida_retiros_lista'))
@@ -6710,6 +6726,56 @@ class VentasTests(TestCase):
         )
         self.assertFalse(SalidaEquipo.objects.filter(ingreso=ingreso).exists())
 
+    def test_finalizacion_nueva_no_ofrece_resultados_gestionados_en_ingreso(self):
+        ingreso = self.crear_ingreso_reparacion(valor_acordado=Decimal('40.00'))
+
+        response = self.client.get(
+            reverse('econotec:salida_registrar', kwargs={'ingreso_pk': ingreso.pk})
+        )
+
+        self.assertEqual(response.status_code, 200)
+        opciones = dict(response.context['form'].fields['estado_reparacion'].choices)
+        self.assertNotIn('cliente_no_acepta', opciones)
+        self.assertNotIn('no_reparable', opciones)
+        self.assertIn('pendiente_retiro', opciones)
+        self.assertIn('revision', opciones)
+
+    def test_finalizacion_nueva_rechaza_resultado_negativo_enviado_manualmente(self):
+        ingreso = self.crear_ingreso_reparacion(valor_acordado=Decimal('40.00'))
+
+        response = self.client.post(
+            reverse('econotec:salida_registrar', kwargs={'ingreso_pk': ingreso.pk}),
+            self.salida_post_data(
+                estado_reparacion='no_reparable',
+                metodo_pago_final='sin_pago',
+            ),
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(SalidaEquipo.objects.filter(ingreso=ingreso).exists())
+        self.assertIn('estado_reparacion', response.context['form'].errors)
+
+    def test_edicion_conserva_resultado_negativo_existente(self):
+        ingreso = self.crear_ingreso_reparacion(valor_acordado=Decimal('0.00'))
+        salida = SalidaEquipo.objects.create(
+            ingreso=ingreso,
+            fecha_salida=date(2026, 7, 17),
+            estado_reparacion='no_reparable',
+            tecnico_reparo=self.usuario,
+            valor_final_cobrado=Decimal('0.00'),
+            metodo_pago_final='sin_pago',
+            registrado_por=self.usuario,
+        )
+
+        response = self.client.get(
+            reverse('econotec:salida_editar', kwargs={'pk': salida.pk})
+        )
+
+        self.assertEqual(response.status_code, 200)
+        opciones = dict(response.context['form'].fields['estado_reparacion'].choices)
+        self.assertIn('no_reparable', opciones)
+        self.assertNotIn('cliente_no_acepta', opciones)
+
     def test_aviso_post_finalizacion_muestra_confirmacion_o_tutorial_segun_saldo(self):
         ingreso_pagado = self.crear_ingreso_reparacion(
             valor_acordado=Decimal('0.00'),
@@ -7006,79 +7072,152 @@ class VentasTests(TestCase):
         self.assertContains(response, 'Equipo de cortesía finalizado')
         self.assertContains(response, 'Pendiente de registrar')
 
-    def test_salida_cliente_no_acepta_revision_pendiente_notifica_asesora(self):
-        ingreso = self.crear_ingreso_reparacion(valor_acordado=Decimal('40.00'))
-
-        response = self.client.post(
-            reverse('econotec:salida_registrar', kwargs={'ingreso_pk': ingreso.pk}),
-            self.salida_post_data(
-                estado_reparacion='cliente_no_acepta',
-                valor_final_cobrado='12.00',
-                metodo_pago_final='sin_pago',
-                asesora_notificacion=str(self.vendedor.pk),
-                mensaje_notificacion='Cobrar revisión antes del retiro.',
-            ),
+    def test_salida_cliente_no_acepta_cobro_adicional_pendiente_notifica_asesora(self):
+        response, ingreso, salida = self.registrar_ingreso_negativo(
+            IngresoEquipoForm.ESTADO_NO_QUISO_REPARAR,
+            estado_reparacion='cliente_no_acepta',
+            aplica_valor_acordado_adicional='si',
+            valor_acordado_adicional='12.00',
+            motivo_valor_acordado_adicional='Revisión profunda autorizada.',
+            valor_final_cobrado='0.00',
+            metodo_pago_final='sin_pago',
+            asesora_notificacion=str(self.vendedor.pk),
+            mensaje_notificacion='Cobrar valor adicional antes del retiro.',
         )
 
-        salida = SalidaEquipo.objects.get(ingreso=ingreso)
         self.assertRedirects(response, reverse('econotec:salida_listo_aviso', kwargs={'pk': salida.pk}))
         ingreso.refresh_from_db()
+        self.assertEqual(salida.aplica_valor_acordado_adicional, 'si')
+        self.assertEqual(salida.valor_acordado_adicional, Decimal('12.00'))
         self.assertEqual(salida.valor_final_cobrado, Decimal('0.00'))
         self.assertEqual(salida.metodo_pago_final, 'sin_pago')
+        self.assertEqual(ingreso.valor_efectivo_a_cobrar, Decimal('12.00'))
         self.assertEqual(ingreso.diferencia, Decimal('12.00'))
         self.assertEqual(ingreso.estado_pago, 'Pendiente')
 
         notificacion = NotificacionAsesora.objects.get(salida=salida)
-        self.assertEqual(notificacion.tipo, NotificacionAsesora.TIPO_REVISION_PENDIENTE)
+        self.assertEqual(notificacion.tipo, NotificacionAsesora.TIPO_COBRO_ADICIONAL)
         self.assertEqual(notificacion.asesora, self.vendedor)
         self.assertEqual(notificacion.valor_acordado, Decimal('12.00'))
 
-    def test_salida_no_reparable_revision_pendiente_notifica_asesora(self):
-        ingreso = self.crear_ingreso_reparacion(valor_acordado=Decimal('40.00'))
-
-        response = self.client.post(
-            reverse('econotec:salida_registrar', kwargs={'ingreso_pk': ingreso.pk}),
-            self.salida_post_data(
-                estado_reparacion='no_reparable',
-                valor_final_cobrado='7.00',
-                metodo_pago_final='sin_pago',
-                asesora_notificacion=str(self.vendedor.pk),
-                mensaje_notificacion='Cobrar revisión antes del retiro.',
-            ),
+    def test_salida_no_reparable_pago_parcial_transferencia_bloquea_retiro(self):
+        response, ingreso, salida = self.registrar_ingreso_negativo(
+            IngresoEquipoForm.ESTADO_NO_SE_PUDO_REPARAR,
+            estado_reparacion='no_reparable',
+            aplica_valor_acordado_adicional='si',
+            valor_acordado_adicional='7.00',
+            motivo_valor_acordado_adicional='Trabajo adicional autorizado.',
+            valor_final_cobrado='3.00',
+            metodo_pago_final='transferencia',
+            banco='pichincha',
+            asesora_notificacion=str(self.vendedor.pk),
+            mensaje_notificacion='Quedan cuatro dólares pendientes.',
         )
 
-        salida = SalidaEquipo.objects.get(ingreso=ingreso)
         self.assertRedirects(response, reverse('econotec:salida_listo_aviso', kwargs={'pk': salida.pk}))
         ingreso.refresh_from_db()
+        self.assertEqual(salida.valor_final_cobrado, Decimal('3.00'))
+        self.assertEqual(salida.metodo_pago_final, 'transferencia')
+        self.assertEqual(salida.banco, 'pichincha')
+        self.assertEqual(ingreso.valor_efectivo_a_cobrar, Decimal('7.00'))
+        self.assertEqual(ingreso.diferencia, Decimal('4.00'))
+
+        notificacion = NotificacionAsesora.objects.get(salida=salida)
+        self.assertEqual(notificacion.tipo, NotificacionAsesora.TIPO_COBRO_ADICIONAL)
+        self.assertEqual(notificacion.valor_acordado, Decimal('4.00'))
+
+        retiro = self.client.post(
+            reverse('econotec:salida_marcar_retirada', kwargs={'pk': salida.pk}),
+        )
+        self.assertRedirects(
+            retiro,
+            reverse('econotec:salida_listo_aviso', kwargs={'pk': salida.pk}),
+        )
+        salida.refresh_from_db()
+        self.assertIsNone(salida.fecha_retiro_real)
+        self.assertEqual(salida.estado_reparacion, 'no_reparable')
+
+    def test_salida_sin_reparacion_acepta_cobro_adicional_desde_un_centavo(self):
+        response, ingreso, salida = self.registrar_ingreso_negativo(
+            IngresoEquipoForm.ESTADO_NO_QUISO_REPARAR,
+            estado_reparacion='cliente_no_acepta',
+            aplica_valor_acordado_adicional='si',
+            valor_acordado_adicional='0.01',
+            motivo_valor_acordado_adicional='Material consumido autorizado.',
+            valor_final_cobrado='0.00',
+            metodo_pago_final='sin_pago',
+            asesora_notificacion=str(self.vendedor.pk),
+            mensaje_notificacion='Cobrar valor adicional antes del retiro.',
+        )
+
+        self.assertRedirects(response, reverse('econotec:salida_listo_aviso', kwargs={'pk': salida.pk}))
+        ingreso.refresh_from_db()
+        self.assertEqual(ingreso.diferencia, Decimal('0.01'))
+
+        notificacion = NotificacionAsesora.objects.get(salida=salida)
+        self.assertEqual(notificacion.tipo, NotificacionAsesora.TIPO_COBRO_ADICIONAL)
+        self.assertEqual(notificacion.valor_acordado, Decimal('0.01'))
+
+    def test_salida_negativa_sin_cobro_adicional_permanece_en_cero(self):
+        response, ingreso, salida = self.registrar_ingreso_negativo(
+            IngresoEquipoForm.ESTADO_NO_SE_PUDO_REPARAR,
+            estado_reparacion='no_reparable',
+            aplica_valor_acordado_adicional='no',
+            valor_final_cobrado='20.00',
+            metodo_pago_final='transferencia',
+            banco='guayaquil',
+        )
+
+        self.assertRedirects(
+            response,
+            reverse('econotec:salida_listo_aviso', kwargs={'pk': salida.pk}),
+        )
+        ingreso.refresh_from_db()
+        self.assertEqual(salida.aplica_valor_acordado_adicional, 'no')
+        self.assertEqual(salida.valor_acordado_adicional, Decimal('0.00'))
         self.assertEqual(salida.valor_final_cobrado, Decimal('0.00'))
-        self.assertEqual(ingreso.diferencia, Decimal('7.00'))
+        self.assertEqual(salida.metodo_pago_final, 'sin_pago')
+        self.assertEqual(ingreso.valor_efectivo_a_cobrar, Decimal('0.00'))
+        self.assertEqual(ingreso.diferencia, Decimal('0.00'))
+        self.assertFalse(NotificacionAsesora.objects.filter(salida=salida).exists())
 
-        notificacion = NotificacionAsesora.objects.get(salida=salida)
-        self.assertEqual(notificacion.tipo, NotificacionAsesora.TIPO_REVISION_PENDIENTE)
-        self.assertEqual(notificacion.valor_acordado, Decimal('7.00'))
-
-    def test_salida_revision_pendiente_acepta_minimo_un_dolar(self):
-        ingreso = self.crear_ingreso_reparacion(valor_acordado=Decimal('40.00'))
-
-        response = self.client.post(
-            reverse('econotec:salida_registrar', kwargs={'ingreso_pk': ingreso.pk}),
-            self.salida_post_data(
-                estado_reparacion='cliente_no_acepta',
-                valor_final_cobrado='1.00',
-                metodo_pago_final='sin_pago',
-                asesora_notificacion=str(self.vendedor.pk),
-                mensaje_notificacion='Cobrar revisión antes del retiro.',
-            ),
+    def test_salida_negativa_pago_mixto_completo_permite_retiro_y_conserva_resultado(self):
+        response, ingreso, salida = self.registrar_ingreso_negativo(
+            IngresoEquipoForm.ESTADO_NO_QUISO_REPARAR,
+            estado_reparacion='cliente_no_acepta',
+            aplica_valor_acordado_adicional='si',
+            valor_acordado_adicional='12.00',
+            motivo_valor_acordado_adicional='Diagnóstico avanzado autorizado.',
+            valor_final_cobrado='12.00',
+            metodo_pago_final='mixto',
+            monto_1='5.00',
+            metodo_1='efectivo',
+            monto_2='7.00',
+            metodo_2='transferencia',
+            banco_2='guayaquil',
         )
 
-        salida = SalidaEquipo.objects.get(ingreso=ingreso)
-        self.assertRedirects(response, reverse('econotec:salida_listo_aviso', kwargs={'pk': salida.pk}))
+        self.assertRedirects(
+            response,
+            reverse('econotec:salida_listo_aviso', kwargs={'pk': salida.pk}),
+        )
         ingreso.refresh_from_db()
-        self.assertEqual(ingreso.diferencia, Decimal('1.00'))
+        self.assertEqual(salida.valor_final_cobrado, Decimal('12.00'))
+        self.assertEqual(salida.metodo_pago_final, 'mixto')
+        self.assertEqual(len(salida.pago_mixto_partes), 2)
+        self.assertEqual(ingreso.diferencia, Decimal('0.00'))
+        self.assertFalse(NotificacionAsesora.objects.filter(salida=salida).exists())
 
-        notificacion = NotificacionAsesora.objects.get(salida=salida)
-        self.assertEqual(notificacion.tipo, NotificacionAsesora.TIPO_REVISION_PENDIENTE)
-        self.assertEqual(notificacion.valor_acordado, Decimal('1.00'))
+        retiro = self.client.post(
+            reverse('econotec:salida_marcar_retirada', kwargs={'pk': salida.pk}),
+        )
+        self.assertRedirects(retiro, reverse('econotec:salida_retiros_lista'))
+        salida.refresh_from_db()
+        ingreso.refresh_from_db()
+        self.assertEqual(salida.estado_reparacion, 'cliente_no_acepta')
+        self.assertEqual(salida.fecha_retiro_real, date.today())
+        self.assertEqual(ingreso.subestado_entregado, 'no_quiso_reparar')
+        self.assertEqual(ingreso.diferencia, Decimal('0.00'))
 
     def test_salida_revision_usa_valor_acordado_propio_para_saldo(self):
         ingreso = self.crear_ingreso_reparacion(
@@ -7270,17 +7409,19 @@ class VentasTests(TestCase):
             'Explica por qué se aplica el valor acordado adicional.',
         )
 
-    def test_valor_adicional_no_aplica_fuera_de_pendiente_retiro(self):
+    def test_valor_adicional_no_aplica_en_estado_revision(self):
         ingreso = self.crear_ingreso_reparacion(valor_acordado=Decimal('20.00'))
 
         response = self.client.post(
             reverse('econotec:salida_registrar', kwargs={'ingreso_pk': ingreso.pk}),
             self.salida_post_data(
-                estado_reparacion='no_reparable',
+                estado_reparacion='revision',
+                valor_acordado_revision='10.00',
                 aplica_valor_acordado_adicional='si',
                 valor_acordado_adicional='10.00',
                 motivo_valor_acordado_adicional='No debe conservarse.',
                 metodo_pago_final='sin_pago',
+                asesora_notificacion=str(self.vendedor.pk),
             ),
         )
 
@@ -8335,6 +8476,128 @@ class VentasTests(TestCase):
         self.assertContains(response, 'No / pendiente de valor')
         self.assertContains(response, "localStorage.removeItem('econotec_ingreso_form_nuevo')")
         self.assertNotContains(response, "localStorage.getItem('econotec_ingreso_form_nuevo')")
+
+    def test_nueva_solicitud_muestra_resultados_negativos_y_cobro_opcional(self):
+        self.activar_sede_guayaquil()
+
+        response = self.client.get(reverse('econotec:ingreso_registrar'))
+
+        opciones = dict(response.context['ing_form'].fields['estado'].choices)
+        self.assertNotIn('entregado', opciones)
+        self.assertEqual(
+            opciones[IngresoEquipoForm.ESTADO_NO_QUISO_REPARAR],
+            'No quiso reparar',
+        )
+        self.assertEqual(
+            opciones[IngresoEquipoForm.ESTADO_NO_SE_PUDO_REPARAR],
+            'No se pudo reparar',
+        )
+        self.assertContains(response, 'id="finalizacion-rapida"')
+        self.assertContains(response, 'Finalización y cobro del equipo')
+        self.assertContains(response, 'Cobro adicional opcional')
+        self.assertNotContains(response, 'Resultado final del equipo')
+        self.assertNotContains(response, '>Equipo finalizado<')
+
+    def test_nueva_solicitud_no_permite_equipo_finalizado(self):
+        self.activar_sede_guayaquil()
+        cantidad_antes = IngresoEquipo.objects.count()
+        data = self.ingreso_registro_post_data(**{
+            'ing-estado': 'entregado',
+            'ing-subestado_reparacion': '',
+            'ing-subestado_entregado': '',
+            'ing-valor_acordado_estado': 'si',
+            'ing-valor_acordado': '25.00',
+        })
+        data.update(self.salida_rapida_post_data())
+
+        response = self.client.post(reverse('econotec:ingreso_registrar'), data)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(IngresoEquipo.objects.count(), cantidad_antes)
+        self.assertIn('estado', response.context['ing_form'].errors)
+
+    def test_nueva_solicitud_finaliza_sin_solucion_sin_cobro_por_defecto(self):
+        self.activar_sede_guayaquil()
+        data = self.ingreso_registro_post_data(**{
+            'ing-estado': IngresoEquipoForm.ESTADO_NO_SE_PUDO_REPARAR,
+            'ing-subestado_reparacion': '',
+            'ing-subestado_entregado': '',
+            'ing-valor_acordado_estado': 'no',
+            'ing-valor_acordado': '',
+        })
+        data.update(self.salida_rapida_post_data(
+            estado_reparacion='no_reparable',
+            aplica_valor_acordado_adicional='no',
+            valor_acordado_adicional='0.00',
+            valor_final_cobrado='0.00',
+            metodo_pago_final='sin_pago',
+        ))
+
+        response = self.client.post(reverse('econotec:ingreso_registrar'), data)
+
+        ingreso = IngresoEquipo.objects.get(cliente=self.cliente_existente)
+        salida = SalidaEquipo.objects.get(ingreso=ingreso)
+        self.assertRedirects(
+            response,
+            reverse('econotec:salida_listo_aviso', kwargs={'pk': salida.pk}),
+        )
+        self.assertEqual(ingreso.estado, 'entregado')
+        self.assertEqual(ingreso.subestado_entregado, 'sin_solucion')
+        self.assertEqual(salida.estado_reparacion, 'no_reparable')
+        self.assertEqual(ingreso.valor_efectivo_a_cobrar, Decimal('0.00'))
+        self.assertEqual(ingreso.diferencia, Decimal('0.00'))
+        self.assertFalse(NotificacionAsesora.objects.filter(salida=salida).exists())
+
+    def test_nueva_solicitud_cobro_mixto_parcial_bloquea_retiro(self):
+        self.activar_sede_guayaquil()
+        data = self.ingreso_registro_post_data(**{
+            'ing-estado': IngresoEquipoForm.ESTADO_NO_QUISO_REPARAR,
+            'ing-subestado_reparacion': '',
+            'ing-subestado_entregado': '',
+            'ing-valor_acordado_estado': 'no',
+            'ing-valor_acordado': '',
+        })
+        data.update(self.salida_rapida_post_data(
+            estado_reparacion='cliente_no_acepta',
+            aplica_valor_acordado_adicional='si',
+            valor_acordado_adicional='12.00',
+            motivo_valor_acordado_adicional='Revisión avanzada autorizada.',
+            valor_final_cobrado='8.00',
+            metodo_pago_final='mixto',
+            monto_1='5.00',
+            metodo_1='efectivo',
+            monto_2='3.00',
+            metodo_2='transferencia',
+            banco_2='guayaquil',
+            asesora_notificacion=str(self.vendedor.pk),
+        ))
+
+        response = self.client.post(reverse('econotec:ingreso_registrar'), data)
+
+        ingreso = IngresoEquipo.objects.get(cliente=self.cliente_existente)
+        salida = SalidaEquipo.objects.get(ingreso=ingreso)
+        self.assertRedirects(
+            response,
+            reverse('econotec:salida_listo_aviso', kwargs={'pk': salida.pk}),
+        )
+        self.assertEqual(salida.estado_reparacion, 'cliente_no_acepta')
+        self.assertEqual(salida.metodo_pago_final, 'mixto')
+        self.assertEqual(salida.valor_final_cobrado, Decimal('8.00'))
+        self.assertEqual(ingreso.valor_efectivo_a_cobrar, Decimal('12.00'))
+        self.assertEqual(ingreso.diferencia, Decimal('4.00'))
+        notificacion = NotificacionAsesora.objects.get(salida=salida)
+        self.assertEqual(notificacion.tipo, NotificacionAsesora.TIPO_COBRO_ADICIONAL)
+        self.assertEqual(notificacion.valor_acordado, Decimal('4.00'))
+
+        retiro = self.client.post(
+            reverse('econotec:salida_marcar_retirada', kwargs={'pk': salida.pk}),
+        )
+        self.assertRedirects(
+            retiro,
+            reverse('econotec:salida_listo_aviso', kwargs={'pk': salida.pk}),
+        )
+        salida.refresh_from_db()
+        self.assertIsNone(salida.fecha_retiro_real)
 
     def test_lista_filtra_subestado_en_reparacion_simple(self):
         ingreso_reparacion = self.crear_ingreso_reparacion(

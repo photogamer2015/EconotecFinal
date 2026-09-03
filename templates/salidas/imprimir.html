@@ -441,8 +441,28 @@
     <div class="closing-box">
         {% if salida.tiene_valor_acordado_adicional %}
         <div class="additional-value-box">
-            <div class="additional-value-title">Detalle del valor acordado adicional</div>
+            <div class="additional-value-title">
+                {% if salida.estado_reparacion == 'cliente_no_acepta' or salida.estado_reparacion == 'no_reparable' %}
+                    Detalle del cobro adicional
+                {% else %}
+                    Detalle del valor acordado adicional
+                {% endif %}
+            </div>
             <div class="additional-value-grid">
+                {% if salida.estado_reparacion == 'cliente_no_acepta' or salida.estado_reparacion == 'no_reparable' %}
+                <div class="additional-value-item">
+                    <span class="lbl">Resultado base</span>
+                    <span class="val">Sin cobro</span>
+                </div>
+                <div class="additional-value-item">
+                    <span class="lbl">Cobro adicional</span>
+                    <span class="val">{{ salida.valor_acordado_adicional|dinero_signo }}</span>
+                </div>
+                <div class="additional-value-item">
+                    <span class="lbl">Total a cobrar</span>
+                    <span class="val">{{ ingreso.valor_efectivo_a_cobrar|dinero_signo }}</span>
+                </div>
+                {% else %}
                 <div class="additional-value-item">
                     <span class="lbl">Valor acordado original</span>
                     <span class="val">{{ ingreso.valor_acordado|dinero_signo }}</span>
@@ -455,6 +475,7 @@
                     <span class="lbl">Total acordado actualizado</span>
                     <span class="val">{{ ingreso.valor_efectivo_a_cobrar|dinero_signo }}</span>
                 </div>
+                {% endif %}
             </div>
             <div class="additional-value-reason">
                 <strong>Motivo acordado:</strong>
