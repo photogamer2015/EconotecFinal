@@ -653,6 +653,129 @@
         overscroll-behavior: contain;
     }
 
+    .confirmacion-estado-modal {
+        position: fixed;
+        inset: 0;
+        z-index: 10120;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        padding: 16px;
+        background: rgba(17, 24, 39, 0.72);
+        overscroll-behavior: contain;
+    }
+
+    .confirmacion-estado-modal.show {
+        display: flex;
+    }
+
+    .confirmacion-estado-card {
+        width: min(520px, 100%);
+        max-height: calc(100dvh - 32px);
+        overflow-y: auto;
+        border: 1px solid rgba(249, 118, 24, 0.35);
+        border-radius: 8px;
+        background: var(--card-bg);
+        color: var(--text-color);
+        box-shadow: 0 24px 70px rgba(0, 0, 0, 0.34);
+    }
+
+    .confirmacion-estado-head {
+        padding: 18px 20px;
+        border-bottom: 1px solid rgba(249, 118, 24, 0.24);
+    }
+
+    .confirmacion-estado-head h3 {
+        margin: 0;
+        color: var(--primary);
+        font-size: 19px;
+        line-height: 1.3;
+    }
+
+    .confirmacion-estado-body {
+        padding: 20px;
+    }
+
+    .confirmacion-estado-pregunta {
+        margin: 0 0 14px;
+        font-size: 16px;
+        font-weight: 800;
+        line-height: 1.45;
+    }
+
+    .confirmacion-estado-aviso {
+        margin: 0 0 16px;
+        padding: 14px;
+        border: 1px solid #f4c46b;
+        border-radius: 8px;
+        background: #fff7dc;
+        color: #6d4c00;
+        line-height: 1.45;
+    }
+
+    .confirmacion-estado-pagos {
+        display: grid;
+        gap: 8px;
+        margin-top: 12px;
+    }
+
+    .confirmacion-estado-pago {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 14px;
+        font-size: 13px;
+    }
+
+    .confirmacion-estado-pago strong {
+        flex: 0 0 auto;
+        color: #9a3412;
+        font-size: 15px;
+    }
+
+    .confirmacion-estado-total {
+        padding-top: 8px;
+        border-top: 1px solid rgba(109, 76, 0, 0.22);
+        font-weight: 900;
+    }
+
+    .confirmacion-estado-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 10px;
+        margin-top: 18px;
+    }
+
+    body.confirmacion-estado-open {
+        overflow: hidden;
+    }
+
+    [data-theme="dark"] .confirmacion-estado-aviso {
+        border-color: rgba(251, 191, 36, 0.35);
+        background: rgba(120, 53, 15, 0.28);
+        color: #fde68a;
+    }
+
+    [data-theme="dark"] .confirmacion-estado-pago strong {
+        color: #fdba74;
+    }
+
+    @media (max-width: 560px) {
+        .confirmacion-estado-head,
+        .confirmacion-estado-body {
+            padding: 16px;
+        }
+
+        .confirmacion-estado-actions {
+            flex-direction: column-reverse;
+        }
+
+        .confirmacion-estado-actions .btn {
+            width: 100%;
+            justify-content: center;
+        }
+    }
+
     .firma-modal.show {
         display: flex;
     }
@@ -1002,6 +1125,14 @@
 
 <form method="post" class="form-card" id="ingreso-form" autocomplete="off">
     {% csrf_token %}
+    {% if modo == 'editar' %}
+    <input
+        type="hidden"
+        name="confirmar_finalizacion_con_pago"
+        id="id_confirmar_finalizacion_con_pago"
+        value="{% if confirmacion_pago_negativo_aceptada %}1{% else %}0{% endif %}"
+    >
+    {% endif %}
 
     <div class="top-meta">
         <div>
@@ -1525,6 +1656,53 @@
     </div>
 </form>
 
+{% if modo == 'editar' and pago_previo_confirmacion_total > 0 %}
+<div
+    class="confirmacion-estado-modal"
+    id="confirmacion-estado-modal"
+    aria-hidden="true"
+    data-estado-original="{{ estado_original_confirmacion }}"
+    data-subestado-reparacion-original="{{ subestado_reparacion_original_confirmacion }}"
+>
+    <div class="confirmacion-estado-card" role="dialog" aria-modal="true" aria-labelledby="confirmacion-estado-title" aria-describedby="confirmacion-estado-aviso">
+        <div class="confirmacion-estado-head">
+            <h3 id="confirmacion-estado-title">Confirmar cambio de estado</h3>
+        </div>
+        <div class="confirmacion-estado-body">
+            <p class="confirmacion-estado-pregunta" id="confirmacion-estado-pregunta"></p>
+            <div class="confirmacion-estado-aviso" id="confirmacion-estado-aviso">
+                <strong>Recuerda: el cliente ya tiene pagos registrados.</strong>
+                <div class="confirmacion-estado-pagos">
+                    {% if pago_previo_confirmacion_anticipo > 0 %}
+                    <div class="confirmacion-estado-pago">
+                        <span>Abonos / anticipos</span>
+                        <strong>${{ pago_previo_confirmacion_anticipo_texto }}</strong>
+                    </div>
+                    {% endif %}
+                    {% if pago_previo_confirmacion_diagnostico > 0 %}
+                    <div class="confirmacion-estado-pago">
+                        <span>Diagnóstico inmediato</span>
+                        <strong>${{ pago_previo_confirmacion_diagnostico_texto }}</strong>
+                    </div>
+                    {% endif %}
+                    <div class="confirmacion-estado-pago confirmacion-estado-total">
+                        <span>Total pagado</span>
+                        <strong>${{ pago_previo_confirmacion_total_texto }}</strong>
+                    </div>
+                </div>
+            </div>
+            <p style="margin:0; color:var(--text-muted); font-size:13px; line-height:1.45;">
+                Confirma que revisaste este pago antes de continuar con la finalización del equipo.
+            </p>
+            <div class="confirmacion-estado-actions">
+                <button type="button" class="btn btn-secondary" id="confirmacion-estado-no">No estoy de acuerdo</button>
+                <button type="button" class="btn btn-primary" id="confirmacion-estado-si">Sí, estoy de acuerdo</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
 <div class="firma-modal" id="firma-modal" aria-hidden="true">
     <div class="firma-card" role="dialog" aria-modal="true" aria-labelledby="firma-modal-title">
         <div class="firma-head">
@@ -1559,6 +1737,141 @@
 </div>
 
 <script>
+    // Confirma los cierres negativos cuando el equipo ya tiene pagos registrados.
+    (function () {
+        var modal = document.getElementById('confirmacion-estado-modal');
+        var form = document.getElementById('ingreso-form');
+        var estado = document.querySelector('[name="ing-estado"]');
+        var subestadoReparacion = document.querySelector('[name="ing-subestado_reparacion"]');
+        var confirmacion = document.getElementById('id_confirmar_finalizacion_con_pago');
+        var pregunta = document.getElementById('confirmacion-estado-pregunta');
+        var btnNo = document.getElementById('confirmacion-estado-no');
+        var btnSi = document.getElementById('confirmacion-estado-si');
+        if (!modal || !form || !estado || !confirmacion || !btnNo || !btnSi) return;
+
+        var estadosNegativos = [
+            'final_no_quiso_reparar',
+            'final_no_se_pudo_reparar'
+        ];
+        var estadoOriginal = modal.getAttribute('data-estado-original') || estado.value;
+        var subestadoOriginal = modal.getAttribute('data-subestado-reparacion-original') || '';
+        var estadoAceptado = estado.value;
+        var estadoConfirmado = confirmacion.value === '1' ? estado.value : '';
+        var estadoPendiente = '';
+        var etiquetaPendiente = '';
+        var enviarDespues = false;
+
+        function esNegativo(valor) {
+            return estadosNegativos.indexOf(valor) !== -1;
+        }
+
+        function etiquetaDe(valor) {
+            for (var i = 0; i < estado.options.length; i += 1) {
+                if (estado.options[i].value === valor) return estado.options[i].text;
+            }
+            return valor;
+        }
+
+        function abrir(valor, etiqueta, continuarEnvio) {
+            estadoPendiente = valor;
+            etiquetaPendiente = etiqueta || etiquetaDe(valor);
+            enviarDespues = !!continuarEnvio;
+            if (pregunta) {
+                pregunta.textContent = '¿Está de acuerdo con cambiar el estado a “' + etiquetaPendiente + '”?';
+            }
+            modal.classList.add('show');
+            modal.setAttribute('aria-hidden', 'false');
+            document.body.classList.add('confirmacion-estado-open');
+            window.requestAnimationFrame(function () { btnNo.focus(); });
+        }
+
+        function cerrar() {
+            modal.classList.remove('show');
+            modal.setAttribute('aria-hidden', 'true');
+            document.body.classList.remove('confirmacion-estado-open');
+        }
+
+        function cancelar() {
+            confirmacion.value = '0';
+            estadoConfirmado = '';
+            estado.value = estadoAceptado;
+            estadoPendiente = '';
+            enviarDespues = false;
+            cerrar();
+            estado.focus();
+        }
+
+        estado.addEventListener('change', function (event) {
+            var nuevoEstado = estado.value;
+            if (!esNegativo(nuevoEstado)) {
+                confirmacion.value = '0';
+                estadoConfirmado = '';
+                estadoAceptado = nuevoEstado;
+                return;
+            }
+            if (confirmacion.value === '1' && estadoConfirmado === nuevoEstado) {
+                estadoAceptado = nuevoEstado;
+                return;
+            }
+
+            var etiqueta = etiquetaDe(nuevoEstado);
+            event.preventDefault();
+            event.stopImmediatePropagation();
+            estado.value = estadoAceptado;
+            abrir(nuevoEstado, etiqueta, false);
+        }, true);
+
+        form.addEventListener('submit', function (event) {
+            if (
+                esNegativo(estado.value)
+                && !(confirmacion.value === '1' && estadoConfirmado === estado.value)
+            ) {
+                event.preventDefault();
+                event.stopImmediatePropagation();
+                abrir(estado.value, etiquetaDe(estado.value), true);
+            }
+        }, true);
+
+        btnNo.addEventListener('click', cancelar);
+        btnSi.addEventListener('click', function () {
+            var valorAceptado = estadoPendiente;
+            var debeEnviar = enviarDespues;
+            confirmacion.value = '1';
+            estadoConfirmado = valorAceptado;
+            estado.value = valorAceptado;
+            cerrar();
+            estado.dispatchEvent(new Event('change', {bubbles: true}));
+            estadoPendiente = '';
+            enviarDespues = false;
+            if (debeEnviar) {
+                window.setTimeout(function () {
+                    if (typeof form.requestSubmit === 'function') form.requestSubmit();
+                    else form.submit();
+                }, 0);
+            }
+        });
+
+        modal.addEventListener('click', function (event) {
+            if (event.target === modal) cancelar();
+        });
+        document.addEventListener('keydown', function (event) {
+            if (event.key === 'Escape' && modal.classList.contains('show')) cancelar();
+        });
+
+        if (esNegativo(estado.value) && confirmacion.value !== '1') {
+            var estadoInicialPendiente = estado.value;
+            var etiquetaInicialPendiente = etiquetaDe(estadoInicialPendiente);
+            estadoAceptado = estadoOriginal;
+            estado.value = estadoOriginal;
+            if (subestadoReparacion && estadoOriginal === 'en_reparacion') {
+                subestadoReparacion.value = subestadoOriginal;
+            }
+            window.setTimeout(function () {
+                abrir(estadoInicialPendiente, etiquetaInicialPendiente, false);
+            }, 0);
+        }
+    })();
+
     // Firma digital opcional del cliente: mouse, trackpad, tactil o pluma.
     (function () {
         var modal = document.getElementById('firma-modal');
@@ -3505,7 +3818,7 @@
                 const data = JSON.parse(savedData);
                 Object.keys(data).forEach(name => {
                     // Evitar restaurar csrf_token u ocultos raros
-                    if (name === 'csrfmiddlewaretoken') return;
+                    if (name === 'csrfmiddlewaretoken' || name === 'confirmar_finalizacion_con_pago') return;
                     const el = form.querySelector(`[name="${name}"]`);
                     if (el) {
                         if (el.type === 'checkbox' || el.type === 'radio') {
@@ -3546,6 +3859,7 @@
                 const formData = new FormData(form);
                 const data = {};
                 formData.forEach((value, key) => {
+                    if (key === 'confirmar_finalizacion_con_pago') return;
                     data[key] = value;
                 });
                 localStorage.setItem(storageKey, JSON.stringify(data));

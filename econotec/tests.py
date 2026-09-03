@@ -4061,6 +4061,131 @@ class VentasTests(TestCase):
                 )
                 self.assertContains(response, 'id="finalizacion-rapida"')
 
+    def test_editar_ingreso_advierte_pagos_antes_de_resultado_negativo(self):
+        escenarios = (
+            {
+                'nombre': 'anticipo',
+                'abono_anticipo': Decimal('20.00'),
+                'diagnostico_inmediato': 'no',
+                'valor_diagnostico': Decimal('0.00'),
+                'texto': 'Abonos / anticipos',
+                'total': '20.00',
+            },
+            {
+                'nombre': 'diagnostico',
+                'abono_anticipo': Decimal('0.00'),
+                'diagnostico_inmediato': 'si',
+                'valor_diagnostico': Decimal('15.00'),
+                'texto': 'Diagnóstico inmediato',
+                'total': '15.00',
+            },
+        )
+        for escenario in escenarios:
+            with self.subTest(nombre=escenario['nombre']):
+                ingreso = self.crear_ingreso_reparacion(
+                    abono_anticipo=escenario['abono_anticipo'],
+                    diagnostico_inmediato=escenario['diagnostico_inmediato'],
+                    valor_diagnostico=escenario['valor_diagnostico'],
+                )
+
+                response = self.client.get(
+                    reverse('econotec:ingreso_editar', kwargs={'pk': ingreso.pk})
+                )
+
+                self.assertContains(response, 'id="confirmacion-estado-modal"')
+                self.assertContains(response, escenario['texto'])
+                self.assertContains(response, f'${escenario["total"]}')
+                self.assertContains(response, 'No estoy de acuerdo')
+                self.assertContains(response, 'Sí, estoy de acuerdo')
+
+    def test_editar_ingreso_solo_valor_acordado_no_muestra_advertencia(self):
+        ingreso = self.crear_ingreso_reparacion(
+            valor_acordado=Decimal('80.00'),
+            abono_anticipo=Decimal('0.00'),
+            diagnostico_inmediato='no',
+            valor_diagnostico=Decimal('0.00'),
+        )
+
+        response = self.client.get(
+            reverse('econotec:ingreso_editar', kwargs={'pk': ingreso.pk})
+        )
+
+        self.assertNotContains(response, 'id="confirmacion-estado-modal"')
+
+    def test_editar_ingreso_bloquea_resultado_negativo_pagado_sin_confirmacion(self):
+        ingreso = self.crear_ingreso_reparacion(
+            valor_acordado=Decimal('40.00'),
+            abono_anticipo=Decimal('20.00'),
+            estado='en_reparacion',
+            subestado_reparacion='espera_cliente',
+            subestado_entregado='',
+        )
+        data = self.ingreso_edit_post_data(
+            ingreso,
+            **{
+                'ing-estado': IngresoEquipoForm.ESTADO_NO_SE_PUDO_REPARAR,
+                'ing-subestado_reparacion': '',
+                'ing-subestado_entregado': '',
+                'ing-valor_acordado_estado': 'no',
+                'ing-valor_acordado': '',
+                'ing-abono_anticipo': '0.00',
+            },
+        )
+        data.update(self.salida_rapida_post_data(
+            estado_reparacion='no_reparable',
+        ))
+
+        response = self.client.post(
+            reverse('econotec:ingreso_editar', kwargs={'pk': ingreso.pk}),
+            data,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('estado', response.context['ing_form'].errors)
+        self.assertFalse(SalidaEquipo.objects.filter(ingreso=ingreso).exists())
+        ingreso.refresh_from_db()
+        self.assertEqual(ingreso.estado, 'en_reparacion')
+        self.assertEqual(ingreso.subestado_reparacion, 'espera_cliente')
+        self.assertEqual(ingreso.abono_anticipo, Decimal('20.00'))
+
+    def test_editar_ingreso_acepta_resultado_negativo_pagado_confirmado(self):
+        ingreso = self.crear_ingreso_reparacion(
+            valor_acordado=Decimal('40.00'),
+            abono_anticipo=Decimal('20.00'),
+            estado='en_reparacion',
+            subestado_reparacion='espera_cliente',
+            subestado_entregado='',
+        )
+        data = self.ingreso_edit_post_data(
+            ingreso,
+            **{
+                'confirmar_finalizacion_con_pago': '1',
+                'ing-estado': IngresoEquipoForm.ESTADO_NO_QUISO_REPARAR,
+                'ing-subestado_reparacion': '',
+                'ing-subestado_entregado': '',
+                'ing-valor_acordado_estado': 'no',
+                'ing-valor_acordado': '',
+                'ing-abono_anticipo': '0.00',
+            },
+        )
+        data.update(self.salida_rapida_post_data(
+            estado_reparacion='cliente_no_acepta',
+        ))
+
+        response = self.client.post(
+            reverse('econotec:ingreso_editar', kwargs={'pk': ingreso.pk}),
+            data,
+        )
+
+        salida = SalidaEquipo.objects.get(ingreso=ingreso)
+        self.assertRedirects(
+            response,
+            reverse('econotec:salida_listo_aviso', kwargs={'pk': salida.pk}),
+        )
+        ingreso.refresh_from_db()
+        self.assertEqual(ingreso.estado, 'entregado')
+        self.assertEqual(ingreso.subestado_entregado, 'no_quiso_reparar')
+
     def test_editar_ingreso_finaliza_negativo_con_cobro_adicional(self):
         ingreso = self.crear_ingreso_reparacion(
             valor_acordado=Decimal('40.00'),

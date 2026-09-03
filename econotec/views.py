@@ -1810,6 +1810,17 @@ def ingreso_editar(request, pk):
         )
         return redirect('econotec:ingreso_detalle', pk=ingreso.pk)
 
+    abonos_posteriores = ingreso.abonos.aggregate(total=Sum('monto'))['total'] or D('0.00')
+    pago_previo_anticipo = (ingreso.abono_anticipo or D('0.00')) + abonos_posteriores
+    pago_previo_diagnostico = (
+        (ingreso.valor_diagnostico or D('0.00'))
+        if ingreso.diagnostico_inmediato == 'si'
+        else D('0.00')
+    )
+    pago_previo_total = pago_previo_anticipo + pago_previo_diagnostico
+    estado_original_confirmacion = ingreso.estado
+    subestado_reparacion_original_confirmacion = ingreso.subestado_reparacion
+
     identidad_original = _identidad_equipo_de_ingreso(ingreso)
     confirmar_mismo_equipo_cliente = (
         _confirmo_mismo_equipo_cliente(request) if request.method == 'POST' else False
@@ -1846,6 +1857,19 @@ def ingreso_editar(request, pk):
             'siguiente_codigo': ingreso.codigo_equipo,
             'ingreso': ingreso,
             'confirmar_mismo_equipo_cliente': confirmar_mismo_equipo_cliente,
+            'pago_previo_confirmacion_anticipo': pago_previo_anticipo,
+            'pago_previo_confirmacion_anticipo_texto': f'{pago_previo_anticipo:.2f}',
+            'pago_previo_confirmacion_diagnostico': pago_previo_diagnostico,
+            'pago_previo_confirmacion_diagnostico_texto': f'{pago_previo_diagnostico:.2f}',
+            'pago_previo_confirmacion_total': pago_previo_total,
+            'pago_previo_confirmacion_total_texto': f'{pago_previo_total:.2f}',
+            'confirmacion_pago_negativo_aceptada': (
+                request.POST.get('confirmar_finalizacion_con_pago') == '1'
+            ),
+            'estado_original_confirmacion': estado_original_confirmacion,
+            'subestado_reparacion_original_confirmacion': (
+                subestado_reparacion_original_confirmacion
+            ),
         })
 
     if request.method == 'POST':
@@ -1874,6 +1898,21 @@ def ingreso_editar(request, pk):
         subestado_entregado_original = ingreso.subestado_entregado
         reporte_original = (ingreso.reporte_tecnico or '').strip()
         if cli_form.is_valid() and ing_form.is_valid():
+            confirmacion_pago_negativo_aceptada = (
+                request.POST.get('confirmar_finalizacion_con_pago') == '1'
+            )
+            if (
+                es_finalizacion_negativa_rapida
+                and pago_previo_total > 0
+                and not confirmacion_pago_negativo_aceptada
+            ):
+                ing_form.add_error(
+                    'estado',
+                    f'Confirma el cambio de estado: el cliente ya tiene '
+                    f'${pago_previo_total:.2f} en pagos registrados.',
+                )
+                return render_edicion(cli_form, ing_form, salida_form)
+
             cliente_editado = cli_form.save(commit=False)
             ingreso_preview = ing_form.save(commit=False)
             ingreso_preview.cliente = cliente_editado
