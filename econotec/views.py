@@ -14,10 +14,11 @@ from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ValidationError
 from django.core.validators import validate_email
 from django.db import transaction
-from django.db.models import Count, Prefetch, Q, Sum
+from django.db.models import Count, Q, Sum
 from django.db.models.deletion import ProtectedError
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.template.loader import render_to_string
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.html import format_html
@@ -36,9 +37,10 @@ from .busqueda import (
     total_resultados,
 )
 from .models import (
-    Cliente, IngresoEquipo, SalidaEquipo, Abono, SEDES_EQUIPOS,
-    UsuarioActividad, NotificacionAsesora, BitacoraTecnico, InventarioItem,
-    NotificacionInventarioAdmin, VentaInventarioItem, Egreso, CategoriaEgreso,
+    Abono, BitacoraTecnico, CategoriaEgreso, Cliente, Egreso, IngresoEquipo,
+    InventarioItem, NotificacionAsesora, NotificacionInventarioAdmin,
+    SalidaEquipo, SEDE_PREFIJOS, SEDES_EQUIPOS, TIPOS_EQUIPO, UsuarioActividad,
+    VentaInventarioItem,
 )
 from .bitacora import registrar_bitacora, nombre_corto_usuario, construir_bitacora_usuario
 from .date_filters import aplicar_rango_fecha, contexto_rango_fecha, obtener_rango_fecha
@@ -259,8 +261,6 @@ def bienvenida(request):
     )
 
     # ── Equipos más ingresados ──────────────────────────────
-    from .models import TIPOS_EQUIPO
-
     qs_equipos = (
         ingresos_equipos.values('tipo_equipo', 'tipo_equipo_otro')
         .annotate(total=Count('id'))
@@ -712,23 +712,49 @@ def dashboard_details(request, tipo):
     elif tipo == 'clientes':
         titulo = "Directorio de Clientes"
         link_ver_todos = ""
-        ingresos_cliente = ingresos_de_equipo_qs().only(
-            'cliente_id',
-            'sede',
-            'numero_equipo',
-            'tipo_equipo',
-            'tipo_equipo_otro',
-            'fecha_ingreso',
-        ).order_by('-fecha_ingreso', '-creado')
-        qs = Cliente.objects.prefetch_related(
-            Prefetch('ingresos', queryset=ingresos_cliente, to_attr='equipos_dashboard')
-        ).order_by('nombres', 'id')
         columnas = ['Nombre / Razón Social', 'Cédula / RUC', 'WhatsApp', 'Email', 'Equipos']
+        etiquetas_tipo = dict(TIPOS_EQUIPO)
+        equipos_por_cliente = {}
+
+        ingresos_cliente = (
+            ingresos_de_equipo_qs()
+            .values(
+                'cliente_id',
+                'sede',
+                'numero_equipo',
+                'tipo_equipo',
+                'tipo_equipo_otro',
+                'fecha_ingreso',
+            )
+            .order_by('cliente_id', '-fecha_ingreso', '-creado', '-id')
+        )
+        for equipo in ingresos_cliente:
+            sede = equipo['sede']
+            numero = equipo['numero_equipo']
+            if sede == 'ventas':
+                codigo = f'P{numero:03d}'
+            else:
+                codigo = f"{SEDE_PREFIJOS.get(sede, '?')}{numero}"
+
+            tipo = equipo['tipo_equipo']
+            tipo_nombre = (
+                equipo['tipo_equipo_otro']
+                if tipo == 'otro' and equipo['tipo_equipo_otro']
+                else etiquetas_tipo.get(tipo, tipo)
+            )
+            equipos_por_cliente.setdefault(equipo['cliente_id'], []).append({
+                'codigo': codigo,
+                'sede': sede,
+                'tipo': tipo_nombre,
+                'fecha_ingreso': equipo['fecha_ingreso'],
+            })
+
+        qs = Cliente.objects.only('id', 'nombres', 'cedula', 'whatsapp', 'correo').order_by('nombres', 'id')
         for cli in qs:
-            equipos = cli.equipos_dashboard
-            codigos = [equipo.codigo_equipo for equipo in equipos]
-            sedes = sorted({equipo.sede for equipo in equipos})
-            tipos = sorted({equipo.tipo_equipo_display for equipo in equipos}, key=str.casefold)
+            equipos = equipos_por_cliente.get(cli.id, [])
+            codigos = [equipo['codigo'] for equipo in equipos]
+            sedes = sorted({equipo['sede'] for equipo in equipos})
+            tipos = sorted({equipo['tipo'] for equipo in equipos}, key=str.casefold)
             codigos_resumen = ', '.join(codigos[:6]) or 'Sin equipos'
             if len(codigos) > 6:
                 codigos_resumen += f' · +{len(codigos) - 6}'
@@ -751,7 +777,7 @@ def dashboard_details(request, tipo):
                     *codigos,
                     *tipos,
                 ]),
-                fecha_orden=equipos[0].fecha_ingreso if equipos else None,
+                fecha_orden=equipos[0]['fecha_ingreso'] if equipos else None,
                 clave_orden=cli.nombres,
                 destacar_codigo=False,
             )
@@ -773,7 +799,7 @@ def dashboard_details(request, tipo):
         'es_modal_clientes': es_modal_clientes,
         'link_ver_todos': link_ver_todos,
     }
-    return render(request, 'includes/dashboard_modal_content.html', ctx)
+    return HttpResponse(render_to_string('includes/dashboard_modal_content.html', ctx))
 
 @login_required
 def ayuda(request):

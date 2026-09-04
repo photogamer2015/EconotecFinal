@@ -10,7 +10,9 @@ from zoneinfo import ZoneInfo
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.core import mail
+from django.db import connection
 from django.test import TestCase, override_settings
+from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from django.utils import timezone
 
@@ -4531,6 +4533,26 @@ class VentasTests(TestCase):
         self.assertContains(inicio, '@media (max-width: 900px)')
         self.assertContains(inicio, '@media (max-width: 640px)')
         self.assertContains(inicio, '@media (max-width: 420px)')
+
+    def test_dashboard_modal_clientes_usa_consultas_acotadas(self):
+        cliente_extra = Cliente.objects.create(
+            cedula='0912345678',
+            nombres='Cliente Extra',
+            whatsapp='099000111',
+            correo='extra@example.com',
+        )
+        self.crear_ingreso_reparacion(cliente=cliente_extra, sede='guayaquil')
+        self.crear_ingreso_reparacion(cliente=cliente_extra, sede='quito')
+
+        with CaptureQueriesContext(connection) as consultas:
+            response = self.client.get(
+                reverse('econotec:dashboard_details', kwargs={'tipo': 'clientes'})
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertLessEqual(len(consultas.captured_queries), 10)
+        self.assertContains(response, 'Cliente Extra')
+        self.assertNotContains(response, 'name="dashModalSede"')
 
     def test_admin_dashboard_equipos_mes_excluye_ventas_producto(self):
         User = get_user_model()

@@ -9,7 +9,7 @@
 </div>
 
 {% if filas %}
-<div class="dash-modal-filterbar" data-dashboard-filters>
+<div class="dash-modal-filterbar"{% if not es_modal_clientes %} data-dashboard-filters{% endif %}>
     <div class="dash-filter-summary" aria-live="polite">
         <span>Mostrando <strong id="dashModalVisibleCount">{{ total_filas }}</strong> de {{ total_filas }}</span>
     </div>
