@@ -13,6 +13,7 @@
     <div class="dash-filter-summary" aria-live="polite">
         <span>Mostrando <strong id="dashModalVisibleCount">{{ total_filas }}</strong> de {{ total_filas }}</span>
     </div>
+    {% if not es_modal_clientes %}
     <div class="dash-site-filter" role="group" aria-label="Filtrar por sede o prefijo">
         <span class="dash-site-filter-label">Sede</span>
         <div class="dash-site-options">
@@ -30,6 +31,7 @@
             </label>
         </div>
     </div>
+    {% endif %}
 </div>
 {% endif %}
 

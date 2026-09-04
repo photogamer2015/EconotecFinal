@@ -4472,7 +4472,7 @@ class VentasTests(TestCase):
         self.assertContains(response, ingreso.codigo_equipo)
         self.assertNotContains(response, venta.codigo_equipo)
 
-    def test_cinco_modales_dashboard_incluyen_solo_filtro_sede_responsivo(self):
+    def test_modales_dashboard_incluyen_filtro_sede_excepto_clientes(self):
         ingreso_g = self.crear_ingreso_reparacion(
             sede='guayaquil',
             fecha_ingreso=date.today(),
@@ -4493,7 +4493,7 @@ class VentasTests(TestCase):
             registrado_por=self.usuario,
         )
 
-        for tipo in ('equipos_total', 'ingresos_mes', 'pendientes', 'salidas_mes', 'clientes'):
+        for tipo in ('equipos_total', 'ingresos_mes', 'pendientes', 'salidas_mes'):
             with self.subTest(tipo=tipo):
                 response = self.client.get(
                     reverse('econotec:dashboard_details', kwargs={'tipo': tipo})
@@ -4522,6 +4522,9 @@ class VentasTests(TestCase):
         self.assertContains(clientes, ingreso_g.codigo_equipo)
         self.assertContains(clientes, ingreso_u.codigo_equipo)
         self.assertContains(clientes, 'data-sedes="guayaquil|||quito"')
+        self.assertNotContains(clientes, 'name="dashModalSede"')
+        self.assertNotContains(clientes, 'value="guayaquil"')
+        self.assertNotContains(clientes, 'value="quito"')
 
         inicio = self.client.get(reverse('econotec:bienvenida'))
         self.assertContains(inicio, 'function inicializarFiltrosModalDashboard()')
