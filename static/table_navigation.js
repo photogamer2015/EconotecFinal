@@ -9,6 +9,10 @@
     const refreshersByTable = new WeakMap();
     let tableSequence = 0;
 
+    window.econotecRefreshTableNavigation = function () {
+        tableRefreshers.forEach(function (refresh) { refresh(); });
+    };
+
     function normalizeText(value) {
         return (value || '')
             .normalize('NFD')

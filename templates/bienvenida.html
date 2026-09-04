@@ -1159,6 +1159,10 @@
     overscroll-behavior: contain;
     border-radius: 10px;
   }
+  .dash-modal-table-hidden,
+  .table-dash-modal .dash-modal-row-hidden {
+    display: none !important;
+  }
 
   .table-dash-modal {
     width: 100%;
@@ -1304,48 +1308,22 @@
       padding: 12px 14px 18px;
     }
     .dash-modal-table-wrap {
-      overflow: visible;
+      overflow-x: auto;
+      overflow-y: visible;
+      -webkit-overflow-scrolling: touch;
     }
-    .table-dash-modal,
-    .table-dash-modal tbody,
-    .table-dash-modal tr,
+    .table-dash-modal {
+      width: max-content;
+      min-width: 760px;
+    }
+    .table-dash-modal th,
     .table-dash-modal td {
-      display: block;
-      width: 100%;
-      min-width: 0;
-      box-sizing: border-box;
-    }
-    .table-dash-modal thead {
-      display: none;
-    }
-    .table-dash-modal tr {
-      margin-bottom: 12px;
-      overflow: hidden;
-      border: 1px solid var(--border-color);
-      border-left: 4px solid var(--primary);
-      border-radius: 11px;
-      background: var(--card-bg);
-      box-shadow: 0 5px 14px rgba(15, 23, 42, 0.06);
+      padding: 11px 13px;
+      white-space: nowrap;
+      vertical-align: middle;
     }
     .table-dash-modal td {
-      display: grid;
-      grid-template-columns: minmax(104px, 38%) minmax(0, 1fr);
-      gap: 10px;
-      align-items: center;
-      padding: 10px 12px;
-      overflow-wrap: anywhere;
       font-size: 13px;
-    }
-    .table-dash-modal td::before {
-      content: attr(data-label);
-      color: var(--text-muted);
-      font-size: 10px;
-      font-weight: 800;
-      letter-spacing: 0.35px;
-      text-transform: uppercase;
-    }
-    .table-dash-modal tbody tr:hover td {
-      background: transparent;
     }
     .dashboard-modal-action {
       width: fit-content;
@@ -1370,8 +1348,8 @@
     .dash-site-option span {
       min-height: 32px;
     }
-    .table-dash-modal td {
-      grid-template-columns: minmax(90px, 34%) minmax(0, 1fr);
+    .table-dash-modal {
+      min-width: 720px;
     }
   }
 
@@ -2747,6 +2725,12 @@
     const contador = root.querySelector("#dashModalVisibleCount");
     const filas = Array.from(root.querySelectorAll("[data-dashboard-row]"));
 
+    function refrescarNavegacionTabla() {
+      if (typeof window.econotecRefreshTableNavigation === "function") {
+        window.requestAnimationFrame(() => window.econotecRefreshTableNavigation());
+      }
+    }
+
     function sedesDeFila(fila) {
       return (fila.dataset.sedes || "")
         .split("|||")
@@ -2760,13 +2744,21 @@
 
       filas.forEach(fila => {
         const mostrar = !sedeSeleccionada || sedesDeFila(fila).includes(sedeSeleccionada);
-        fila.hidden = !mostrar;
+        fila.classList.toggle("dash-modal-row-hidden", !mostrar);
+        fila.setAttribute("aria-hidden", mostrar ? "false" : "true");
         if (mostrar) visibles += 1;
       });
 
       contador.textContent = String(visibles);
-      tabla.hidden = visibles === 0;
-      vacio.hidden = visibles !== 0;
+      if (tabla) {
+        tabla.classList.toggle("dash-modal-table-hidden", visibles === 0);
+        tabla.setAttribute("aria-hidden", visibles === 0 ? "true" : "false");
+        tabla.scrollLeft = 0;
+        const barraSuperior = tabla.querySelector(".table-scrollbar-top");
+        if (barraSuperior) barraSuperior.scrollLeft = 0;
+      }
+      if (vacio) vacio.hidden = visibles !== 0;
+      refrescarNavegacionTabla();
     }
 
     sedes.forEach(opcion => opcion.addEventListener("change", aplicarFiltros));
