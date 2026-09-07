@@ -38,17 +38,18 @@
 <div class="dash-modal-body">
     {% if filas %}
     <div class="table-responsive dash-modal-table-wrap" role="region" aria-label="{{ titulo }}" tabindex="0">
-        <table class="table-dash-modal">
-            <thead>
-                <tr>
+        <table class="table-dash-modal" data-table-navigation="off" role="table">
+            <thead role="rowgroup">
+                <tr role="row">
                     {% for col in columnas %}
-                    <th>{{ col }}</th>
+                    <th scope="col" role="columnheader">{{ col }}</th>
                     {% endfor %}
                 </tr>
             </thead>
-            <tbody id="dashModalRows">
+            <tbody id="dashModalRows" role="rowgroup">
                 {% for fila in filas %}
                 <tr
+                    role="row"
                     data-dashboard-row
                     data-search="{{ fila.busqueda }}"
                     data-codigo="{{ fila.codigo }}"
@@ -58,7 +59,7 @@
                     data-orden-codigo="{{ fila.orden_codigo }}"
                 >
                     {% for celda in fila.celdas %}
-                    <td data-label="{{ celda.label }}">
+                    <td role="cell" data-label="{{ celda.label }}">
                         {% if celda.es_codigo %}
                             <span class="badge-codigo">{{ celda.valor }}</span>
                         {% else %}
