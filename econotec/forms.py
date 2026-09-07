@@ -174,25 +174,17 @@ class InventarioItemForm(forms.ModelForm):
         else:
             cleaned_data['causa_no_disponible'] = ''
 
-        producto = cleaned_data.get('producto')
         modelo = cleaned_data.get('modelo')
-        producto_normalizado = _normalizar_identidad_inventario(producto)
         modelo_normalizado = _normalizar_identidad_inventario(modelo)
         if self.sede_slug and self.categoria_slug and self.tipo_slug:
             candidatos = InventarioItem.objects.filter(
                 sede=self.sede_slug,
                 categoria=self.categoria_slug,
                 tipo=self.tipo_slug,
-            ).only('pk', 'codigo', 'producto', 'modelo', 'ubicacion')
+            ).only('pk', 'codigo', 'modelo', 'ubicacion')
             if self.instance and self.instance.pk:
                 candidatos = candidatos.exclude(pk=self.instance.pk)
 
-            duplicado_producto = next((
-                item
-                for item in candidatos
-                if producto_normalizado
-                and _normalizar_identidad_inventario(item.producto) == producto_normalizado
-            ), None)
             duplicado_modelo = next((
                 item
                 for item in candidatos
@@ -200,16 +192,6 @@ class InventarioItemForm(forms.ModelForm):
                 and _normalizar_identidad_inventario(item.modelo) == modelo_normalizado
             ), None)
 
-            if duplicado_producto:
-                self.add_error(
-                    'producto',
-                    (
-                        'Ya existe un producto con este mismo nombre '
-                        f'como {duplicado_producto.codigo} en '
-                        f'{duplicado_producto.get_ubicacion_display()}. '
-                        'Usa un nombre diferente o actualiza el registro existente.'
-                    ),
-                )
             if duplicado_modelo:
                 self.add_error(
                     'modelo',

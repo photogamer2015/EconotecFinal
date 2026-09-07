@@ -164,9 +164,6 @@
             <div class="full">
                 <label class="form-label" for="{{ form.producto.id_for_label }}">Producto</label>
                 {{ form.producto }}
-                <small style="display: block; margin-top: 5px; color: var(--text-muted); font-weight: 700;">
-                    El nombre no puede repetirse exactamente en esta sede y tipo. Los nombres parecidos sí se permiten.
-                </small>
                 {% if form.producto.errors %}<div class="field-errors">{{ form.producto.errors }}</div>{% endif %}
             </div>
             <div>

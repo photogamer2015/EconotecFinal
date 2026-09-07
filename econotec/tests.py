@@ -1736,7 +1736,7 @@ class VentasTests(TestCase):
         self.assertContains(tabla, reverse('econotec:inventario_editar', kwargs={'codigo': item.codigo}))
         self.assertContains(tabla, reverse('econotec:inventario_eliminar', kwargs={'codigo': item.codigo}))
 
-    def test_inventario_rechaza_producto_y_modelo_repetidos_sin_importar_formato(self):
+    def test_inventario_solo_rechaza_modelo_repetido_sin_importar_formato(self):
         existente = InventarioItem.objects.create(
             sede='guayaquil',
             categoria='impresora',
@@ -1770,13 +1770,13 @@ class VentasTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(InventarioItem.objects.count(), 1)
-        self.assertIn('producto', response.context['form'].errors)
+        self.assertNotIn('producto', response.context['form'].errors)
         self.assertIn('modelo', response.context['form'].errors)
         self.assertContains(response, existente.codigo)
-        self.assertContains(response, 'Ya existe un producto con este mismo nombre')
+        self.assertNotContains(response, 'Ya existe un producto con este mismo nombre')
         self.assertContains(response, 'Ya existe un producto con este mismo modelo')
 
-    def test_inventario_rechaza_producto_repetido_aunque_cambie_modelo(self):
+    def test_inventario_permite_producto_repetido_al_crear_y_editar(self):
         existente = InventarioItem.objects.create(
             sede='guayaquil',
             categoria='impresora',
@@ -1796,7 +1796,7 @@ class VentasTests(TestCase):
         })
 
         response = self.client.post(registrar_url, {
-            'producto': 'TINTA CYAN',
+            'producto': 'Tinta cyan',
             'marca': 'Genérica',
             'modelo': '500 ml',
             'serie': '',
@@ -1808,10 +1808,29 @@ class VentasTests(TestCase):
             'observacion': '',
         })
 
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(InventarioItem.objects.count(), 1)
-        self.assertIn('producto', response.context['form'].errors)
-        self.assertContains(response, existente.codigo)
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(InventarioItem.objects.count(), 2)
+        nuevo = InventarioItem.objects.exclude(pk=existente.pk).get()
+        self.assertEqual(nuevo.producto, existente.producto)
+        self.assertNotEqual(nuevo.codigo, existente.codigo)
+
+        response = self.client.post(reverse(
+            'econotec:inventario_editar', kwargs={'codigo': nuevo.codigo},
+        ), {
+            'producto': existente.producto,
+            'marca': nuevo.marca,
+            'modelo': nuevo.modelo,
+            'estado': 'disponible',
+            'cantidad': '3',
+            'costo': '15.00',
+            'ubicacion': 'guayaquil_norte',
+        })
+        self.assertEqual(response.status_code, 302)
+        codigo = nuevo.codigo
+        nuevo.refresh_from_db()
+        self.assertEqual(nuevo.producto, existente.producto)
+        self.assertEqual(nuevo.cantidad, 3)
+        self.assertEqual(nuevo.codigo, codigo)
 
     def test_inventario_rechaza_modelo_repetido_aunque_cambie_producto(self):
         existente = InventarioItem.objects.create(
