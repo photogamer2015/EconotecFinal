@@ -196,10 +196,44 @@ address**.
 
 ---
 
+## Perfiles y comunidad
+
+Todos los usuarios autenticados, incluidos administradores, tienen acceso a **Mi perfil**
+en la navegación. Permite elegir entre seis avatares (incluidos Scorpions y el logo de Econotec), su inicial y seis portadas, escribir una
+biografía, gustos musicales, canción favorita y hobbies. En **Comunidad** se pueden
+buscar usuarios activos por nombre o usuario, visitar perfiles, añadir/quitar amigos
+(la relación es mutua e inmediata) y dar/quitar un Me gusta. Estos datos son visibles
+para los usuarios autenticados; solo el propietario puede editar su perfil.
+
+Los perfiles sociales son independientes del ranking, niveles, estadísticas y perfil
+operativo existentes. Para instalar esta actualización en otro equipo, ejecutar
+`python manage.py migrate` y el procedimiento habitual de archivos estáticos.
+
+Los selectores de avatar, portada e información son independientes. Las portadas
+incluyen fotografías de bosque, ciudad nocturna y tecnología, almacenadas localmente.
+El avatar elegido aparece en la cabecera de escritorio y en el acceso móvil.
+Los diálogos se ajustan al espacio disponible y mantienen los botones de guardado
+visibles al desplazar su contenido en pantallas pequeñas y horizontales.
+
+## Actualizar en AWS EC2
+
+La guía completa está en [`docs/AWS_EC2.md`](docs/AWS_EC2.md). Después del
+primer despliegue, el servidor se puede actualizar con:
+
+```bash
+cd /var/www/EconotecFinal
+SERVICE_NAME=econotec bash scripts/aws_update.sh
+```
+
+El script trae los cambios desde `origin/main`, instala dependencias, aplica
+migraciones, ejecuta `collectstatic`, recrea los roles base y reinicia el
+servicio `systemd` si existe.
+
+---
+
 ## 📞 Contacto Econotec
 
 - **Guayaquil:** Sauces 8 Mz 462 Solar / 6 Piso 2 Oficina 2
 - **Quito:** Av. Amazonas y 18 de septiembre / Piso 2 Oficina 102
 - WhatsApp: 0963289727 — 0980758747
 - Web: www.econotec.ec.com — Correo: ventas@econotec.ec.com
-# Econotec

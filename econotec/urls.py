@@ -1,9 +1,13 @@
 from django.urls import path
-from . import views, views_pagos, views_admin, views_print, views_tecnico
+from . import views_perfiles, views, views_pagos, views_admin, views_print, views_tecnico
 
 app_name = 'econotec'
 
 urlpatterns = [
+    path('mi-perfil/', views_perfiles.perfil, name='mi_perfil'),
+    path('comunidad/', views_perfiles.comunidad, name='comunidad'),
+    path('perfiles/<int:usuario_id>/', views_perfiles.perfil, name='perfil_social'),
+    path('perfiles/<int:usuario_id>/reaccion/', views_perfiles.reaccion, name='perfil_reaccion'),
     # ── Páginas base ───────────────────────────────────────
     path('bienvenida/', views.bienvenida, name='bienvenida'),
     path('dashboard-details/<str:tipo>/', views.dashboard_details, name='dashboard_details'),

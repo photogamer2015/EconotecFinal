@@ -2572,3 +2572,27 @@ class NotificacionAsesora(models.Model):
 
     def __str__(self):
         return f'{self.get_tipo_display()} — {self.ingreso.codigo_equipo} — {self.asesora}'
+
+
+class PerfilSocial(models.Model):
+    """Espacio personal independiente de las estadísticas y roles operativos."""
+    AVATARES = [('heisenberg.jpg', 'Heisenberg'), ('harry-potter.jpg', 'Harry Potter'),
+                ('master-chief.webp', 'Master Chief'), ('slytherin.jpg', 'Slytherin'), ('econotec.webp', 'Econotec'), ('scorpions.jpg', 'Scorpions')]
+    PORTADAS = [('aurora', 'Aurora'), ('oceano', 'Océano'), ('atardecer', 'Atardecer'), ('bosque', 'Bosque'), ('ciudad', 'Ciudad nocturna'), ('tecnologia', 'Tecnología')]
+    usuario = models.OneToOneField('auth.User', on_delete=models.CASCADE, related_name='perfil_social')
+    avatar = models.CharField(max_length=40, choices=AVATARES, blank=True)
+    portada = models.CharField(max_length=20, choices=PORTADAS, default='aurora')
+    biografia = models.TextField(max_length=600, blank=True)
+    musica = models.CharField('Gustos musicales', max_length=240, blank=True)
+    hobbies = models.CharField(max_length=240, blank=True)
+    cancion = models.CharField('Canción favorita', max_length=160, blank=True)
+    amigos = models.ManyToManyField('self', blank=True)
+    me_gusta = models.ManyToManyField('auth.User', related_name='perfiles_favoritos', blank=True)
+
+    @property
+    def musicas(self):
+        return [v.strip() for v in self.musica.split(',') if v.strip()]
+
+    @property
+    def intereses(self):
+        return [v.strip() for v in self.hobbies.split(',') if v.strip()]

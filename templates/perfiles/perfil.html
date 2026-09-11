@@ -1,0 +1,38 @@
+{% extends 'base.html' %}{% load static %}
+{% block title %}Perfil · Econotec{% endblock %}
+{% block extra_head %}<link rel="stylesheet" href="{% static 'perfiles/perfiles.css' %}?v=2">{% endblock %}
+{% block content %}
+<div class="social">
+<div class="social-breadcrumb"><a href="{% url 'econotec:bienvenida' %}">Inicio</a> / <a href="{% url 'econotec:comunidad' %}">Comunidad</a> / Perfil</div>
+<article class="social-card">
+<div class="social-cover cover-{{ personal.portada }}"><span>PERSONAS QUE CONECTAN.<br><strong>Talento que transforma.</strong></span>{% if propio %}<button class="social-cover-edit" type="button" data-edit-profile="portada">▧ Cambiar portada</button>{% endif %}</div>
+<div class="social-identity">
+<div class="social-avatar-wrap"><div class="social-avatar">{% if personal.avatar %}<img src="{% static 'perfiles/' %}{{ personal.avatar }}" alt="Avatar de {{ persona.username }}">{% else %}<span>{{ persona.username|first|upper }}</span>{% endif %}</div>{% if propio %}<button type="button" class="social-avatar-edit" data-edit-profile="avatar" aria-label="Cambiar avatar">✎ <span>Cambiar avatar</span></button>{% endif %}</div>
+<div class="social-name"><p class="social-eyebrow">COMUNIDAD ECONOTEC</p><h1>{{ persona.get_full_name|default:persona.username }}</h1><p>@{{ persona.username }}</p></div><span class="social-role">{{ rol_perfil }}</span>
+</div>
+<div class="social-main">
+<div class="social-toolbar"><div><strong>{{ amigos.count }}</strong> Amigos <span>·</span> <strong>{{ personal.me_gusta.count }}</strong> Me gusta</div><div class="social-actions">{% if propio %}<a class="social-btn" href="{% url 'econotec:comunidad' %}">+ Añadir amigos</a>{% else %}<form method="post" action="{% url 'econotec:perfil_reaccion' persona.pk %}">{% csrf_token %}<button class="social-btn" name="accion" value="{% if es_amigo %}quitar_amigo{% else %}amigo{% endif %}">{% if es_amigo %}✓ Amigos · Quitar{% else %}+ Añadir amigo{% endif %}</button><button class="social-btn secondary" name="accion" value="{% if le_gusta %}unlike{% else %}like{% endif %}">{% if le_gusta %}♥ Te gusta{% else %}♡ Me gusta{% endif %}</button></form>{% endif %}</div></div>
+<div class="social-heading"><div><p class="social-eyebrow">UN POCO SOBRE MÍ</p><h2>Mi espacio personal</h2></div>{% if propio %}<button class="social-btn secondary" type="button" data-edit-profile="datos">✎ Editar información</button>{% endif %}</div>
+<p class="social-bio">{{ personal.biografia|default:'Este espacio todavía tiene una historia por contar.'|linebreaksbr }}</p>
+<div class="social-grid"><section><h3>♫ Gustos musicales</h3><div class="social-tags">{% for genero in personal.musicas %}<span>{{ genero }}</span>{% empty %}<p>Aún sin gustos musicales.</p>{% endfor %}</div>{% if personal.cancion %}<div class="social-song"><small>EN MI PLAYLIST</small><p>♫ {{ personal.cancion }}</p></div>{% endif %}</section><section><h3>✦ Hobbies e intereses</h3><div class="social-tags">{% for hobby in personal.intereses %}<span>{{ hobby }}</span>{% empty %}<p>Aún sin intereses.</p>{% endfor %}</div></section></div>
+<section class="social-friends"><div class="social-heading"><h2>Amigos <small>({{ amigos.count }})</small></h2><a href="{% url 'econotec:comunidad' %}">Explorar comunidad →</a></div><div class="social-friend-grid">{% for amigo in amigos %}<a href="{% url 'econotec:perfil_social' amigo.usuario_id %}">{% if amigo.avatar %}<img src="{% static 'perfiles/' %}{{ amigo.avatar }}" alt="">{% else %}<span class="social-initial">{{ amigo.usuario.username|first|upper }}</span>{% endif %}<strong>{{ amigo.usuario.get_full_name|default:amigo.usuario.username }}</strong></a>{% empty %}<p>Conecta con las personas del equipo y descubre qué les gusta.</p>{% endfor %}</div></section>
+{% if propio %}{% if es_tecnico or es_asesor %}<button type="button" class="social-btn secondary" data-perfil-trigger>Ver mi perfil operativo</button>{% endif %}{% endif %}
+</div></article>
+{% if propio %}{% for seccion,titulo,editor in editores %}
+<dialog id="social-editor-{{ seccion }}" class="social-dialog" aria-labelledby="title-{{ seccion }}" {% if editor.errors %}data-has-errors{% endif %}>
+<form method="post" class="social-editor-form">{% csrf_token %}<input type="hidden" name="seccion" value="{{ seccion }}">
+<div class="social-dialog-header"><div><p class="social-eyebrow">TU ESTILO, TU ESPACIO</p><h2 id="title-{{ seccion }}">{{ titulo }}</h2></div><button type="button" class="social-dialog-close" data-close-profile aria-label="Cerrar">✕</button></div>
+<div class="social-dialog-body">{{ editor.non_field_errors }}
+{% if seccion == 'avatar' %}
+<p class="social-editor-hint">Elige la imagen que te representa. También aparecerá en «Mi perfil».</p>
+<div class="social-avatar-options"><label><input type="radio" name="avatar" value="" {% if not editor.avatar.value %}checked{% endif %}><span class="social-avatar-choice"><span class="social-initial">{{ persona.username|first|upper }}</span><strong>Mi inicial</strong></span></label>{% for archivo,nombre in avatares %}<label><input type="radio" name="avatar" value="{{ archivo }}" {% if editor.avatar.value == archivo %}checked{% endif %}><span class="social-avatar-choice"><img src="{% static 'perfiles/' %}{{ archivo }}" alt=""><strong>{{ nombre }}</strong></span></label>{% endfor %}</div>{{ editor.avatar.errors }}
+{% elif seccion == 'portada' %}
+<p class="social-editor-hint">Un fondo para tu mundo. Selecciona una portada y mira cómo queda.</p>
+<div class="social-cover-preview cover-{{ editor.portada.value }}" aria-label="Vista previa de portada"></div>
+<div class="social-cover-options">{% for valor,nombre in portadas %}<label><input type="radio" name="portada" value="{{ valor }}" {% if editor.portada.value == valor %}checked{% endif %}><span class="social-cover-choice"><span class="social-cover-thumb cover-{{ valor }}"></span><strong>{{ nombre }}</strong></span></label>{% endfor %}</div>{{ editor.portada.errors }}
+{% else %}<p class="social-editor-hint">Comparte un poco de ti con el equipo.</p>{% for field in editor %}<div class="social-field">{{ field.label_tag }}{{ field }}<small>{{ field.help_text }}</small>{{ field.errors }}</div>{% endfor %}{% endif %}
+</div><div class="social-dialog-footer"><button type="button" class="social-btn secondary" data-close-profile>Cancelar</button><button class="social-btn" type="submit">Guardar {% if seccion == 'avatar' %}avatar{% elif seccion == 'portada' %}portada{% else %}información{% endif %}</button></div>
+</form></dialog>{% endfor %}{% endif %}
+</div>
+{% endblock %}
+{% block extra_js %}<script src="{% static 'perfiles/perfiles.js' %}?v=2" defer></script>{% endblock %}

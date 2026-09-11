@@ -7,6 +7,10 @@
     <title>{% block title %}Econotec — Reparación de Tecnología{% endblock %}</title>
     <link rel="icon" type="image/jpeg" href="{% static 'logo.jpg' %}">
     <style>
+        header.top a.social-nav-profile { display:inline-flex; align-items:center; justify-content:center; gap:8px; }
+        .social-nav-profile img,.social-nav-initial { width:28px; height:28px; border-radius:50%; object-fit:cover; flex-shrink:0; border:1px solid #ffffff88; }
+        .social-nav-initial { display:inline-grid; place-items:center; background:#ffffff22; font-size:13px; }
+
         @keyframes godTecAnim {
             0% { background-position: 0% 50%; }
             50% { background-position: 100% 50%; }
@@ -1427,15 +1431,16 @@
                         <span class="top-inventory-text" aria-hidden="true">Inventario</span>
                         <span class="visually-hidden">📦 Inventario</span>
                     </a>
-                    {% if es_tecnico or es_asesor %}
-                        <button type="button" id="btn-perfil-mobile" class="mobile-profile-trigger" data-perfil-trigger title="Ver mi perfil" aria-label="Ver mi perfil">
-                            <span aria-hidden="true">👤</span>
-                            <span class="mobile-profile-text" aria-hidden="true">Perfil</span>
-                        </button>
-                    {% endif %}
+                    <a href="{% url 'econotec:mi_perfil' %}" class="mobile-profile-trigger social-mobile-profile" title="Mi perfil" aria-label="Mi perfil">
+                        {% if user.perfil_social.avatar %}<img src="{% static 'perfiles/' %}{{ user.perfil_social.avatar }}" alt="" width="28" height="28" style="border-radius:50%;object-fit:cover;flex-shrink:0;">{% else %}<span class="social-nav-initial">{{ user.username|first|upper }}</span>{% endif %}
+                        <span class="mobile-profile-text">Mi perfil</span>
+                    </a>
                 </div>
             {% endif %}
             {% if user.is_authenticated %}
+                <button type="button" id="mobile-nav-toggle" class="mobile-nav-toggle" aria-controls="main-navigation" aria-expanded="false" aria-label="Abrir menú">
+                    <span class="mobile-nav-toggle-icon" aria-hidden="true"><span></span></span><span class="mobile-nav-toggle-text">Menú</span>
+                </button>
             {% endif %}
         </div>
         
@@ -1461,6 +1466,7 @@
                     {% endif %}
                 </div>
                 <a href="{% url 'econotec:bienvenida' %}">Inicio</a>
+                <a href="{% url 'econotec:mi_perfil' %}" class="social-nav-profile">{% if user.perfil_social.avatar %}<img src="{% static 'perfiles/' %}{{ user.perfil_social.avatar }}" alt="Mi avatar" width="28" height="28">{% else %}<span class="social-nav-initial">{{ user.username|first|upper }}</span>{% endif %}<span>Mi perfil</span></a>
                 {% if es_asesor and notificaciones_asesora_count > 0 %}
                     <div class="noti-bell-wrap">
                         <button type="button" class="noti-bell-btn" id="noti-bell-btn" aria-expanded="false" aria-controls="noti-bell-menu" title="Notificaciones pendientes">

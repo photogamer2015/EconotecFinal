@@ -20,8 +20,6 @@ env_file = BASE_DIR / '.env'
 if env_file.exists():
     environ.Env.read_env(env_file)
 
-import os
-
 SECRET_KEY = env('SECRET_KEY')
 DEBUG = env('DEBUG')
 GEMINI_API_KEY = env('GEMINI_API_KEY', default='')
@@ -58,15 +56,16 @@ if not EMAIL_BACKEND:
         else 'django.core.mail.backends.console.EmailBackend'
     )
 
-ALLOWED_HOSTS = ['127.0.0.1', 'localhost', '*']
+DEFAULT_ALLOWED_HOSTS = ['127.0.0.1', 'localhost', '*']
+ALLOWED_HOSTS = env.list('ALLOWED_HOSTS', default=DEFAULT_ALLOWED_HOSTS)
 
 # Orígenes confiables para formularios POST (CSRF).
 # Necesario al entrar por una IP de red local o por un túnel (Cloudflare/ngrok)
 # desde el celular. Los comodines aceptan los subdominios temporales que generan
 # estas herramientas, así que sirve aunque cambie la URL al reabrir el túnel.
 # IMPORTANTE: en producción reemplaza esto por tu dominio real, p.ej.:
-#   CSRF_TRUSTED_ORIGINS = ['https://econotec.ec.com']
-CSRF_TRUSTED_ORIGINS = [
+#   CSRF_TRUSTED_ORIGINS=https://econotec.ec.com,https://www.econotec.ec.com
+DEFAULT_CSRF_TRUSTED_ORIGINS = [
     'http://192.168.*.*:8000',
     'http://192.168.*.*',
     'http://10.*.*.*:8000',
@@ -76,6 +75,10 @@ CSRF_TRUSTED_ORIGINS = [
     'https://*.ngrok-free.app',
     'https://*.ngrok.io',
 ]
+CSRF_TRUSTED_ORIGINS = env.list(
+    'CSRF_TRUSTED_ORIGINS',
+    default=DEFAULT_CSRF_TRUSTED_ORIGINS,
+)
 
 INSTALLED_APPS = [
     'django.contrib.admin',
