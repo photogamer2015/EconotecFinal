@@ -4,8 +4,9 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
 from django.db.models import Q
 from django.shortcuts import get_object_or_404, redirect, render
-from django.views.decorators.http import require_POST
+from django.views.decorators.http import require_POST, require_http_methods
 from .models import PerfilSocial
+from .views import datos_perfil
 from .permisos import es_admin, es_tecnico, es_asesor
 
 
@@ -25,6 +26,7 @@ def rol(usuario):
 
 
 @login_required
+@require_http_methods(['GET', 'POST'])
 def perfil(request, usuario_id=None):
     usuario = get_object_or_404(get_user_model(), pk=usuario_id or request.user.pk, is_active=True)
     personal, _ = PerfilSocial.objects.get_or_create(usuario=usuario)
@@ -50,9 +52,13 @@ def perfil(request, usuario_id=None):
             form.save()
             messages.success(request, 'Tu perfil se actualizó correctamente.')
             return redirect('econotec:mi_perfil')
+    operativo = datos_perfil(usuario, incluir_privado=propio)
+    proximo = operativo['proximo']
+    umbral = max(n for n in (0, 50, 100, 500, 1000, 4000) if n <= operativo['total'])
+    operativo['porcentaje'] = round(100 * (operativo['total'] - umbral) / (proximo - umbral)) if proximo else 100
     amigos = personal.amigos.filter(usuario__is_active=True).select_related('usuario')
     return render(request, 'perfiles/perfil.html', {
-        'personal': personal, 'persona': usuario, 'propio': propio, 'rol_perfil': rol(usuario),
+        'operativo': operativo, 'personal': personal, 'persona': usuario, 'propio': propio, 'rol_perfil': rol(usuario),
         'form': form, 'avatares': PerfilSocial.AVATARES, 'amigos': amigos,
         'editores': [('avatar', 'Cambiar avatar', formularios['avatar']),
                      ('portada', 'Cambiar portada', formularios['portada']),

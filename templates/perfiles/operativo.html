@@ -1,0 +1,24 @@
+<section class="social-performance" style="--level-color:{{ operativo.color }}" aria-labelledby="performance-title">
+  <div class="social-heading">
+    <div><p class="social-eyebrow">TRAYECTORIA EN ECONOTEC</p><h2 id="performance-title"><span id="perfil-level-color" class="social-level-dot" style="background:{{ operativo.color }}" aria-hidden="true"></span>Nivel: {{ operativo.nivel }}</h2></div>
+    <button type="button" class="social-btn secondary" onclick="mostrarAyudaPerfil()">¿Cómo se calcula?</button>
+  </div>
+  {% if propio %}<p class="social-private-email">{{ operativo.email|default:'Correo no registrado' }}</p>{% endif %}
+  {% if operativo.tipo_perfil == 'tecnico' %}
+  <div class="social-performance-stats">
+    <div><strong class="stat-good">{{ operativo.salidas_buenas }}</strong><span>Salidas buenas</span></div>
+    <div><strong class="stat-product">{{ operativo.salidas_producto }}</strong><span>Salidas de producto</span></div>
+    <div><strong class="stat-bad">{{ operativo.salidas_malas }}</strong><span>Salidas malas</span></div>
+  </div>
+  <progress class="social-level-progress" value="{{ operativo.porcentaje }}" max="100" aria-label="Progreso hacia el siguiente nivel">{{ operativo.porcentaje }}%</progress>
+  <p class="social-progress-caption">{% if operativo.proximo %}{{ operativo.total }} / {{ operativo.proximo }} puntos para el siguiente nivel{% else %}{{ operativo.total }} puntos · Nivel máximo{% endif %}</p>
+  {% endif %}
+  {% if propio %}
+  <div class="social-private-actions" aria-label="Acciones de mi perfil">
+    <a href="{% url 'econotec:ingreso_lista' %}?{% if operativo.tipo_perfil == 'asesor' %}registrador{% else %}tecnico{% endif %}={{ request.user.pk }}&sede=todas" class="social-personal-action"><span aria-hidden="true">📥</span><span>Ver mis equipos recibidos</span><span aria-hidden="true">→</span></a>
+    <a href="{% url 'econotec:salida_lista' %}?tecnico_salida={{ request.user.pk }}" class="social-personal-action"><span aria-hidden="true">🔧</span><span>Ver mis equipos reparados</span><span aria-hidden="true">→</span></a>
+    <button type="button" id="btn-bitacora" class="social-personal-action"><span aria-hidden="true">📝</span><span id="btn-bitacora-text">Generar bitácora ({{ operativo.bitacora_total }})</span><span aria-hidden="true">→</span></button>
+  </div>
+  {% if operativo.tipo_perfil == 'asesor' %}<div class="perfil-color-panel"><p>Cambiar color del nivel</p><div class="perfil-color-options">{% for color in operativo.colores_disponibles %}<button type="button" class="perfil-color-btn{% if color == operativo.color %} is-selected{% endif %}" data-color="{{ color }}" style="background:{{ color }}" aria-label="Seleccionar color {{ color }}"></button>{% endfor %}</div></div>{% endif %}
+  {% endif %}
+</section>

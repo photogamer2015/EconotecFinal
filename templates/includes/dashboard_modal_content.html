@@ -14,6 +14,10 @@
         <span>Mostrando <strong id="dashModalVisibleCount">{{ total_filas }}</strong> de {{ total_filas }}</span>
     </div>
     {% if not es_modal_clientes %}
+    <div class="dash-code-filter">
+        <label class="sr-only" for="dashModalCodigoSearch">Buscar por código</label>
+        <input type="search" id="dashModalCodigoSearch" class="dash-code-input" placeholder="Código" inputmode="search" autocomplete="off">
+    </div>
     <div class="dash-site-filter" role="group" aria-label="Filtrar por sede o prefijo">
         <span class="dash-site-filter-label">Sede</span>
         <div class="dash-site-options">

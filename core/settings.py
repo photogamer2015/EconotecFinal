@@ -56,25 +56,11 @@ if not EMAIL_BACKEND:
         else 'django.core.mail.backends.console.EmailBackend'
     )
 
-DEFAULT_ALLOWED_HOSTS = ['127.0.0.1', 'localhost', '*']
+DEFAULT_ALLOWED_HOSTS = ['127.0.0.1', 'localhost']
 ALLOWED_HOSTS = env.list('ALLOWED_HOSTS', default=DEFAULT_ALLOWED_HOSTS)
 
-# Orígenes confiables para formularios POST (CSRF).
-# Necesario al entrar por una IP de red local o por un túnel (Cloudflare/ngrok)
-# desde el celular. Los comodines aceptan los subdominios temporales que generan
-# estas herramientas, así que sirve aunque cambie la URL al reabrir el túnel.
-# IMPORTANTE: en producción reemplaza esto por tu dominio real, p.ej.:
-#   CSRF_TRUSTED_ORIGINS=https://econotec.ec.com,https://www.econotec.ec.com
-DEFAULT_CSRF_TRUSTED_ORIGINS = [
-    'http://192.168.*.*:8000',
-    'http://192.168.*.*',
-    'http://10.*.*.*:8000',
-    'http://172.16.*.*:8000',
-    # Túneles para probar desde el celular (Cloudflare Tunnel / ngrok).
-    'https://*.trycloudflare.com',
-    'https://*.ngrok-free.app',
-    'https://*.ngrok.io',
-]
+# Solo orígenes concretos configurados por el administrador.
+DEFAULT_CSRF_TRUSTED_ORIGINS = []
 CSRF_TRUSTED_ORIGINS = env.list(
     'CSRF_TRUSTED_ORIGINS',
     default=DEFAULT_CSRF_TRUSTED_ORIGINS,
@@ -96,16 +82,37 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'econotec.middleware.RespuestasPrivadasMiddleware',
+    'econotec.middleware.LimiteAutenticacionMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'econotec.middleware.ActividadUsuarioMiddleware',
 ]
 
-# Sesiones persistentes: no se cierran por inactividad.
-# El cierre normal de sesión ocurre solo al usar el botón "Cerrar sesión".
-SESSION_COOKIE_AGE = 60 * 60 * 24 * 365  # 1 año
+# Caducidad absoluta de la sesión; configurable según la jornada de trabajo.
+SESSION_COOKIE_AGE = env.int('SESSION_COOKIE_AGE', default=60 * 60 * 8)
 SESSION_SAVE_EVERY_REQUEST = False
-SESSION_EXPIRE_AT_BROWSER_CLOSE = False
+SESSION_EXPIRE_AT_BROWSER_CLOSE = True
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SAMESITE = 'Lax'
+SESSION_COOKIE_SECURE = not DEBUG
+CSRF_COOKIE_SECURE = not DEBUG
+SECURE_SSL_REDIRECT = not DEBUG
+SECURE_HSTS_SECONDS = 31536000 if not DEBUG else 0
+SECURE_HSTS_INCLUDE_SUBDOMAINS = env.bool('SECURE_HSTS_INCLUDE_SUBDOMAINS', default=False)
+SECURE_HSTS_PRELOAD = env.bool('SECURE_HSTS_PRELOAD', default=False)
+SECURE_CONTENT_TYPE_NOSNIFF = True
+SECURE_REFERRER_POLICY = 'same-origin'
+X_FRAME_OPTIONS = 'DENY'
+# Activar solo si el proxy controlado elimina la cabecera enviada por el cliente.
+if env.bool('TRUST_PROXY_HTTPS', default=False):
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+if not DEBUG:
+    from django.core.exceptions import ImproperlyConfigured
+    if len(SECRET_KEY) < 50 or SECRET_KEY.startswith(('django-insecure-', 'cambia-')):
+        raise ImproperlyConfigured('Configura una SECRET_KEY privada de al menos 50 caracteres.')
+    if '*' in ALLOWED_HOSTS:
+        raise ImproperlyConfigured('Configura ALLOWED_HOSTS con dominios concretos en producción.')
 
 ROOT_URLCONF = 'core.urls'
 

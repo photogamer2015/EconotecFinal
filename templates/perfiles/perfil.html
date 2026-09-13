@@ -1,6 +1,6 @@
 {% extends 'base.html' %}{% load static %}
 {% block title %}Perfil · Econotec{% endblock %}
-{% block extra_head %}<link rel="stylesheet" href="{% static 'perfiles/perfiles.css' %}?v=2">{% endblock %}
+{% block extra_head %}<link rel="stylesheet" href="{% static 'perfiles/perfiles.css' %}?v=3">{% endblock %}
 {% block content %}
 <div class="social">
 <div class="social-breadcrumb"><a href="{% url 'econotec:bienvenida' %}">Inicio</a> / <a href="{% url 'econotec:comunidad' %}">Comunidad</a> / Perfil</div>
@@ -11,12 +11,13 @@
 <div class="social-name"><p class="social-eyebrow">COMUNIDAD ECONOTEC</p><h1>{{ persona.get_full_name|default:persona.username }}</h1><p>@{{ persona.username }}</p></div><span class="social-role">{{ rol_perfil }}</span>
 </div>
 <div class="social-main">
+{% include "perfiles/operativo.html" %}
 <div class="social-toolbar"><div><strong>{{ amigos.count }}</strong> Amigos <span>·</span> <strong>{{ personal.me_gusta.count }}</strong> Me gusta</div><div class="social-actions">{% if propio %}<a class="social-btn" href="{% url 'econotec:comunidad' %}">+ Añadir amigos</a>{% else %}<form method="post" action="{% url 'econotec:perfil_reaccion' persona.pk %}">{% csrf_token %}<button class="social-btn" name="accion" value="{% if es_amigo %}quitar_amigo{% else %}amigo{% endif %}">{% if es_amigo %}✓ Amigos · Quitar{% else %}+ Añadir amigo{% endif %}</button><button class="social-btn secondary" name="accion" value="{% if le_gusta %}unlike{% else %}like{% endif %}">{% if le_gusta %}♥ Te gusta{% else %}♡ Me gusta{% endif %}</button></form>{% endif %}</div></div>
 <div class="social-heading"><div><p class="social-eyebrow">UN POCO SOBRE MÍ</p><h2>Mi espacio personal</h2></div>{% if propio %}<button class="social-btn secondary" type="button" data-edit-profile="datos">✎ Editar información</button>{% endif %}</div>
 <p class="social-bio">{{ personal.biografia|default:'Este espacio todavía tiene una historia por contar.'|linebreaksbr }}</p>
 <div class="social-grid"><section><h3>♫ Gustos musicales</h3><div class="social-tags">{% for genero in personal.musicas %}<span>{{ genero }}</span>{% empty %}<p>Aún sin gustos musicales.</p>{% endfor %}</div>{% if personal.cancion %}<div class="social-song"><small>EN MI PLAYLIST</small><p>♫ {{ personal.cancion }}</p></div>{% endif %}</section><section><h3>✦ Hobbies e intereses</h3><div class="social-tags">{% for hobby in personal.intereses %}<span>{{ hobby }}</span>{% empty %}<p>Aún sin intereses.</p>{% endfor %}</div></section></div>
 <section class="social-friends"><div class="social-heading"><h2>Amigos <small>({{ amigos.count }})</small></h2><a href="{% url 'econotec:comunidad' %}">Explorar comunidad →</a></div><div class="social-friend-grid">{% for amigo in amigos %}<a href="{% url 'econotec:perfil_social' amigo.usuario_id %}">{% if amigo.avatar %}<img src="{% static 'perfiles/' %}{{ amigo.avatar }}" alt="">{% else %}<span class="social-initial">{{ amigo.usuario.username|first|upper }}</span>{% endif %}<strong>{{ amigo.usuario.get_full_name|default:amigo.usuario.username }}</strong></a>{% empty %}<p>Conecta con las personas del equipo y descubre qué les gusta.</p>{% endfor %}</div></section>
-{% if propio %}{% if es_tecnico or es_asesor %}<button type="button" class="social-btn secondary" data-perfil-trigger>Ver mi perfil operativo</button>{% endif %}{% endif %}
+
 </div></article>
 {% if propio %}{% for seccion,titulo,editor in editores %}
 <dialog id="social-editor-{{ seccion }}" class="social-dialog" aria-labelledby="title-{{ seccion }}" {% if editor.errors %}data-has-errors{% endif %}>
@@ -35,4 +36,4 @@
 </form></dialog>{% endfor %}{% endif %}
 </div>
 {% endblock %}
-{% block extra_js %}<script src="{% static 'perfiles/perfiles.js' %}?v=2" defer></script>{% endblock %}
+{% block extra_js %}<script src="{% static 'perfiles/perfiles.js' %}?v=3" defer></script>{% endblock %}

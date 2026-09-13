@@ -1413,6 +1413,12 @@
     <script src="{% static 'table_navigation.js' %}?v=20260904-1" defer></script>
     <!-- SweetAlert2 -->
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<script>
+        // Revalidar la sesión al restaurar una página desde la caché de navegación.
+        window.addEventListener('pageshow', function(event) {
+            if (event.persisted) window.location.reload();
+        });
+    </script>
 </head>
 <body>
     <header class="top no-print">
@@ -1543,11 +1549,7 @@
                     <a href="/admin/" title="Panel administrativo de Django">Admin</a>
                 {% endif %}
                 
-                {% if es_tecnico or es_asesor %}
-                <button type="button" id="btn-perfil" data-perfil-trigger title="Ver mi perfil" style="background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.3); color: white; border-radius: 20px; padding: 5px 14px; margin-right: 10px; cursor: pointer; transition: 0.2s; font-weight: bold; margin-left: 5px;">
-                    👤 Perfil
-                </button>
-                {% endif %}
+
 
                 <button type="button" class="theme-toggle" id="theme-toggle-btn" title="Alternar modo oscuro">
                     <span class="icon-light" style="display:none;">🌞</span>
@@ -2319,81 +2321,7 @@
         }
     </script>
 
-    <!-- Modal de Perfil (Gamificación) -->
-    <div id="perfil-modal" class="perfil-modal" style="display: none;">
-        <div class="perfil-modal-content" id="perfil-modal-content">
-            <button class="perfil-help" id="perfil-help-btn" onclick="mostrarAyudaPerfil()" title="¿Cómo funciona esto?">?</button>
-            <button class="perfil-close" onclick="document.getElementById('perfil-modal').style.display='none'">×</button>
-            <div class="perfil-header" id="perfil-header" style="background: #ccc; transition: all 0.5s;">
-                <div class="perfil-avatar" id="perfil-avatar-icon" style="display:flex; justify-content:center; align-items:center;">👤</div>
-                <h3 id="perfil-nombre">Cargando...</h3>
-                <p class="perfil-email" id="perfil-email-texto"></p>
-                <p class="perfil-nivel" id="perfil-nivel-texto">Nivel: ---</p>
-                <div id="god-tec-message"></div>
-            </div>
-            <div class="perfil-body" id="perfil-body">
-                <div class="perfil-stats">
-                    <div class="stat-box">
-                        <span class="stat-num" id="stat-buenas" style="color: #28a745;">0</span>
-                        <span class="stat-label">Salidas Buenas</span>
-                    </div>
-                    <div class="stat-box">
-                        <span class="stat-num" id="stat-producto" style="color: #f97618;">0</span>
-                        <span class="stat-label">Salida de producto</span>
-                    </div>
-                    <div class="stat-box">
-                        <span class="stat-num" id="stat-malas" style="color: #dc3545;">0</span>
-                        <span class="stat-label">Salidas Malas</span>
-                    </div>
-                </div>
-                
-                <div class="perfil-progress">
-                    <div class="progress-bar-bg">
-                        <div class="progress-bar-fill" id="perfil-progress-fill"></div>
-                    </div>
-                    <p class="progress-text" id="perfil-progress-text">0 / 10 para el siguiente nivel</p>
-                </div>
-                
-                <div class="perfil-actions">
-                    <a href="{% url 'econotec:ingreso_lista' %}?tecnico={{ request.user.id }}" class="perfil-action">
-                        <span class="perfil-action-icon">📥</span>
-                        <span class="perfil-action-text">Ver mis equipos recibidos</span>
-                        <span class="perfil-action-arrow">➔</span>
-                    </a>
-	                    <a href="{% url 'econotec:salida_lista' %}?tecnico_salida={{ request.user.id }}" class="perfil-action">
-	                        <span class="perfil-action-icon">🔧</span>
-	                        <span class="perfil-action-text">Ver mis equipos reparados</span>
-	                        <span class="perfil-action-arrow">➔</span>
-	                    </a>
-	                    <button type="button" id="btn-bitacora" class="perfil-action perfil-action-button">
-	                        <span class="perfil-action-icon">📝</span>
-	                        <span class="perfil-action-text" id="btn-bitacora-text">Generar bitácora</span>
-	                        <span class="perfil-action-arrow">➔</span>
-	                    </button>
-	                </div>
-	            </div>
-            <div class="perfil-body" id="perfil-asesor-body" style="display: none;">
-                <div class="perfil-actions">
-                    <a href="{% url 'econotec:ingreso_lista' %}?registrador={{ request.user.id }}&sede=todas" class="perfil-action">
-                        <span class="perfil-action-icon">📥</span>
-                        <span class="perfil-action-text">Ver equipos que registré</span>
-                        <span class="perfil-action-arrow">➔</span>
-                    </a>
-                </div>
-                <div class="perfil-color-panel">
-                    <p class="perfil-color-title">Cambiar color del perfil</p>
-                    <div class="perfil-color-options" id="perfil-color-options">
-                        <button type="button" class="perfil-color-btn" data-color="#0d47a1" style="background:#0d47a1;" title="Azul" aria-label="Azul"></button>
-                        <button type="button" class="perfil-color-btn" data-color="#ec4899" style="background:#ec4899;" title="Rosa" aria-label="Rosa"></button>
-                        <button type="button" class="perfil-color-btn" data-color="#c62828" style="background:#c62828;" title="Rojo" aria-label="Rojo"></button>
-                        <button type="button" class="perfil-color-btn" data-color="#f97618" style="background:#f97618;" title="Naranja" aria-label="Naranja"></button>
-                        <button type="button" class="perfil-color-btn" data-color="#2e7d32" style="background:#2e7d32;" title="Verde" aria-label="Verde"></button>
-                        <button type="button" class="perfil-color-btn" data-color="#f9c74f" style="background:#f9c74f;" title="Amarillo" aria-label="Amarillo"></button>
-                    </div>
-                </div>
-            </div>
-	        </div>
-	    </div>
+    <!-- Bitácora personal -->
 
 	    <div id="bitacora-modal" class="bitacora-modal" style="display: none;">
 	        <div class="bitacora-card" role="dialog" aria-modal="true" aria-labelledby="bitacora-title">
@@ -2651,8 +2579,6 @@
         })();
 
         document.addEventListener('DOMContentLoaded', function() {
-	            var botonesPerfil = document.querySelectorAll('[data-perfil-trigger]');
-	            var modalPerfil = document.getElementById('perfil-modal');
 	            var perfilColorButtons = document.querySelectorAll('.perfil-color-btn');
 	            var btnBitacora = document.getElementById('btn-bitacora');
 	            var btnBitacoraText = document.getElementById('btn-bitacora-text');
@@ -2671,7 +2597,8 @@
             }
 
 	            function aplicarColorPerfil(color) {
-	                document.getElementById('perfil-header').style.background = color;
+	                var indicador = document.getElementById('perfil-level-color');
+                    if (indicador) indicador.style.background = color;
 	                marcarColorPerfil(color);
 	            }
 
@@ -2837,87 +2764,7 @@
                 });
             });
             
-	            if (botonesPerfil.length && modalPerfil) {
-	                botonesPerfil.forEach(function(btnPerfil) {
-	                    btnPerfil.addEventListener('click', function() {
-                    modalPerfil.style.display = 'flex';
-                    
-                    fetch('/api/perfil/')
-                        .then(r => r.json())
-                        .then(data => {
-                            var perfilContent = document.getElementById('perfil-modal-content');
-                            var perfilBody = document.getElementById('perfil-body');
-                            var perfilAsesorBody = document.getElementById('perfil-asesor-body');
-                            var perfilHelp = document.getElementById('perfil-help-btn');
 
-                            perfilContent.classList.remove('asesor-simple');
-                            if (perfilBody) perfilBody.style.display = '';
-                            if (perfilAsesorBody) perfilAsesorBody.style.display = 'none';
-                            if (perfilHelp) perfilHelp.style.display = '';
-
-                            document.getElementById('perfil-nombre').textContent = data.nombre;
-                            document.getElementById('perfil-email-texto').textContent = data.email || 'Correo no registrado';
-                            document.getElementById('perfil-nivel-texto').textContent = 'NIVEL: ' + data.nivel;
-	                            document.getElementById('perfil-header').style.background = data.color;
-	                            actualizarBotonBitacora(data.bitacora_total || 0);
-
-	                            if (data.tipo_perfil === 'asesor') {
-                                document.getElementById('perfil-nivel-texto').textContent = 'ASESOR REGISTRADO';
-                                document.getElementById('perfil-header').style.backgroundSize = 'auto';
-                                document.getElementById('perfil-header').style.animation = 'none';
-                                document.getElementById('perfil-avatar-icon').innerHTML = '👤';
-                                document.getElementById('god-tec-message').innerHTML = '';
-                                aplicarColorPerfil(data.color || '#0d47a1');
-                                if (perfilBody) perfilBody.style.display = 'none';
-                                if (perfilAsesorBody) perfilAsesorBody.style.display = '';
-                                if (perfilHelp) perfilHelp.style.display = 'none';
-                                perfilContent.classList.add('asesor-simple');
-                                return;
-                            }
-                            
-                            if (data.nivel === 'God Tec Econotec') {
-                                document.getElementById('perfil-header').style.backgroundSize = '200% 200%';
-                                document.getElementById('perfil-header').style.animation = 'godTecAnim 3s ease infinite';
-                                document.getElementById('perfil-avatar-icon').innerHTML = `<img src="{% static 'logo.jpg' %}" style="width: 100%; height: 100%; border-radius: 50%; border: 3px solid #FFD700; box-shadow: 0 0 20px rgba(255, 215, 0, 0.8); object-fit: cover;">`;
-                                document.getElementById('god-tec-message').innerHTML = '<div style="background: rgba(255,215,0,0.2); padding: 10px; border-radius: 8px; margin-top: 15px; color: #fff; text-shadow: 0 0 5px #ff8c00; font-weight: bold; text-align: center; border: 1px solid #FFD700;">¡Felicidades! Eres una LEYENDA de Econotec.<br>Has alcanzado el nivel máximo y tienes privilegios de ORO.</div>';
-                            } else {
-                                document.getElementById('perfil-header').style.backgroundSize = 'auto';
-                                document.getElementById('perfil-header').style.animation = 'none';
-                                document.getElementById('perfil-avatar-icon').innerHTML = '👤';
-                                document.getElementById('god-tec-message').innerHTML = '';
-                            }
-                            
-                            document.getElementById('stat-buenas').textContent = data.salidas_buenas;
-                            document.getElementById('stat-producto').textContent = data.salidas_producto;
-                            document.getElementById('stat-malas').textContent = data.salidas_malas;
-                            
-                            var fill = document.getElementById('perfil-progress-fill');
-                            var pText = document.getElementById('perfil-progress-text');
-                            
-                            if (data.proximo) {
-                                var prev = 0;
-                                if (data.total >= 4000) prev = 3999;
-                                else if (data.total >= 1000) prev = 999;
-                                else if (data.total >= 500) prev = 499;
-                                else if (data.total >= 100) prev = 99;
-                                else if (data.total >= 50) prev = 49;
-                                var current = data.total - prev;
-                                var needed = data.proximo - 1 - prev + 1; // +1 to include current boundary correctly
-                                var percent = (current / needed) * 100;
-                                if (percent > 100) percent = 100;
-                                
-                                fill.style.width = percent + '%';
-                                fill.style.background = data.color;
-                                pText.textContent = data.total + ' / ' + data.proximo + ' para el siguiente nivel';
-                            } else {
-                                fill.style.width = '100%';
-                                fill.style.background = data.color;
-                                pText.textContent = data.total + ' operaciones (Nivel Máximo)';
-                            }
-	                        });
-	                    });
-	                });
-	            }
         });
 
         function mostrarAyudaPerfil() {
@@ -2925,10 +2772,10 @@
                 title: '¿Cómo funciona tu Perfil?',
                 html: `
                     <div style="text-align: left; font-size: 14px; line-height: 1.6;">
-                        <p>Te saluda con tu nombre de usuario y un icono de avatar.</p>
-                        <p>Contiene estadísticas exactas mostrando tus <b>"Salidas Buenas"</b> y tus <b>"Salidas de producto"</b>. Cada Salida Buena positiva suma 4 puntos y cada Salida de producto suma 1 punto a tu puntuación. ¡Ten cuidado, porque las Salidas Malas marcadas como <b>"No se pudo reparar"</b> te restan 1 punto, y las <b>"Salidas por Garantía"</b> te restan 2 puntos por no hacer bien el trabajo a la primera! <i>(Nota: Si el "Cliente no quiso reparar", no te suma ni te resta puntos, ya que no es tu culpa)</i>.</p>
-                        <p><b>Regla de Oro:</b> Tu nivel se calcula por las salidas en las que tú eres el técnico responsable y por las ventas de producto asignadas como <b>Técnico vendió</b>. Los ingresos normales de equipos no dan puntos.</p>
-                        <p>El color de la cabecera y de tu barra de progreso cambiará automáticamente para reflejar tu nivel desbloqueado:</p>
+                        <p>El perfil reúne tu información personal, estadísticas y nivel. La comunidad puede ver tu progreso; el correo y los accesos a tus equipos y bitácora aparecen solo en tu propio perfil.</p>
+                        <p>Cada <b>salida buena suma 4 puntos</b> y cada <b>salida de producto suma 1</b>. Las salidas malas (no reparable, cliente no acepta y chatarrerización) restan 1 punto. Las garantías se cuentan como salidas buenas. El puntaje nunca baja de cero.</p>
+                        <p>Se cuentan las salidas en las que figuras como técnico responsable y las ventas de producto asignadas a ti. Los ingresos de equipos no dan puntos. Si un administrador reinicia el perfil, se cuentan las operaciones posteriores al reinicio.</p>
+                        <p>El indicador de color representa tu nivel y la barra muestra el avance dentro del nivel actual. Los asesores tienen la categoría Asesor registrado y pueden personalizar su color.</p>
                         <ul style="padding-left: 10px; list-style-type: none; margin-top: 10px;">
                             <li style="margin-bottom: 5px;"><span style="color:#8e8e8e; font-size: 18px; margin-right: 5px;">●</span> <b>Nivel Novato</b> (0-49): Gris</li>
                             <li style="margin-bottom: 5px;"><span style="color:#cd7f32; font-size: 18px; margin-right: 5px;">●</span> <b>Nivel Intermedio</b> (50-99): Bronce</li>

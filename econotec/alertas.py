@@ -30,7 +30,7 @@ from urllib.parse import quote
 from django.urls import reverse
 from django.utils import timezone
 
-from .models import IngresoEquipo, SalidaEquipo
+from .models import IngresoEquipo, SalidaEquipo, SUBESTADOS_ALERTA_REPARACION
 
 
 # Días pasados los cuales un equipo "ingresado" sin diagnosticar genera alerta.
@@ -45,6 +45,10 @@ ESTADOS_ALERTA_DIAGNOSTICO = ['ingresado']
 # Días de gracia después de que un equipo está listo (fecha_salida) antes de
 # acumular cobro de bodegaje.
 UMBRAL_DIAS_BODEGAJE = 5
+
+# Días en un estado de reparación antes de pedir seguimiento.
+UMBRAL_DIAS_REPARACION_TECNICO = 5
+UMBRAL_DIAS_REPARACION_ADMIN = 10
 
 # Costo de bodegaje por día acumulado (USD).
 COSTO_BODEGAJE_DIA = Decimal('1.00')
@@ -108,6 +112,43 @@ def dias_en_taller(ingreso, hoy=None):
     if not ingreso.fecha_ingreso:
         return 0
     return (hoy - ingreso.fecha_ingreso).days
+
+
+# ═════════════════════════════════════════════════════════════════
+# 1b. ALERTA: equipos detenidos en reparación
+# ═════════════════════════════════════════════════════════════════
+
+def equipos_reparacion_demorada_qs(usuario=None, umbral_dias=UMBRAL_DIAS_REPARACION_TECNICO):
+    """
+    Devuelve equipos que llevan varios días en En reparación, Espera de
+    cliente o Espera de repuesto. Se cierra automáticamente al cambiar a
+    diagnóstico, finalización u otro estado fuera de esos subestados.
+    """
+    fecha_limite = date.today() - timedelta(days=umbral_dias)
+
+    qs = (
+        IngresoEquipo.objects
+        .select_related('cliente', 'tecnico_encargado')
+        .filter(estado='en_reparacion')
+        .filter(subestado_reparacion__in=SUBESTADOS_ALERTA_REPARACION)
+        .filter(fecha_alerta_reparacion__lte=fecha_limite)
+        .filter(salida__isnull=True)
+        .order_by('fecha_alerta_reparacion', 'numero_equipo')
+    )
+
+    if usuario is not None and usuario.is_authenticated:
+        qs = qs.filter(tecnico_encargado=usuario)
+
+    return qs
+
+
+def dias_en_estado_reparacion(ingreso, hoy=None):
+    """Cuántos días lleva el equipo en su estado actual de reparación."""
+    if hoy is None:
+        hoy = date.today()
+    if not ingreso.fecha_alerta_reparacion:
+        return 0
+    return (hoy - ingreso.fecha_alerta_reparacion).days
 
 
 # ═════════════════════════════════════════════════════════════════

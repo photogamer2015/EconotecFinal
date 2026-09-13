@@ -80,6 +80,7 @@ SUBESTADO_EN_REPARACION = [
     ('espera_cliente', 'En reparación - Cliente'),
     ('espera_repuesto', 'En reparación - Repuestos'),
 ]
+SUBESTADOS_ALERTA_REPARACION = ('en_reparacion', 'espera_cliente', 'espera_repuesto')
 
 SUBESTADO_ENTREGADO = [
     ('', '— Ninguno —'),
@@ -716,6 +717,13 @@ class IngresoEquipo(models.Model):
                   '"equipos pendientes de diagnóstico" del dashboard. Se '
                   'reactiva automáticamente cuando el estado cambia.',
     )
+    fecha_alerta_reparacion = models.DateField(
+        null=True,
+        blank=True,
+        verbose_name='Fecha de inicio del estado de reparación',
+        help_text='Se actualiza automáticamente cuando el equipo entra a '
+                  'En reparación, Espera de cliente o Espera de repuesto.',
+    )
     creado = models.DateTimeField(auto_now_add=True)
     actualizado = models.DateTimeField(auto_now=True)
 
@@ -1202,6 +1210,20 @@ class IngresoEquipo(models.Model):
         return (self.equipo_garantia_manual or '').strip()
 
     def save(self, *args, **kwargs):
+        estado_anterior = None
+        subestado_anterior = None
+        if self.pk:
+            try:
+                anterior = type(self).objects.only(
+                    'estado',
+                    'subestado_reparacion',
+                    'fecha_alerta_reparacion',
+                ).get(pk=self.pk)
+                estado_anterior = anterior.estado
+                subestado_anterior = anterior.subestado_reparacion
+            except type(self).DoesNotExist:
+                pass
+
         if not self.numero_equipo:
             self.numero_equipo = IngresoEquipo.siguiente_numero_equipo(self.sede)
         if self.estado == 'cortesia':
@@ -1222,6 +1244,28 @@ class IngresoEquipo(models.Model):
         # (el silenciado solo tiene sentido mientras el equipo está pendiente).
         if self.estado != 'ingresado' and self.diagnostico_silenciado:
             self.diagnostico_silenciado = False
+
+        en_alerta_reparacion = (
+            self.estado == 'en_reparacion'
+            and self.subestado_reparacion in SUBESTADOS_ALERTA_REPARACION
+        )
+        cambio_estado_reparacion = (
+            estado_anterior != self.estado
+            or subestado_anterior != self.subestado_reparacion
+        )
+        actualizar_fecha_alerta = False
+        if en_alerta_reparacion:
+            if not self.fecha_alerta_reparacion or (self.pk and cambio_estado_reparacion):
+                self.fecha_alerta_reparacion = date.today()
+                actualizar_fecha_alerta = True
+        elif self.fecha_alerta_reparacion:
+            self.fecha_alerta_reparacion = None
+            actualizar_fecha_alerta = True
+
+        if actualizar_fecha_alerta:
+            update_fields = kwargs.get('update_fields')
+            if update_fields is not None:
+                kwargs['update_fields'] = set(update_fields) | {'fecha_alerta_reparacion'}
         super().save(*args, **kwargs)
 
     def __str__(self):
@@ -2596,3 +2640,10 @@ class PerfilSocial(models.Model):
     @property
     def intereses(self):
         return [v.strip() for v in self.hobbies.split(',') if v.strip()]
+
+
+class LimiteAcceso(models.Model):
+    """Contadores temporales compartidos por todos los procesos del servidor."""
+    clave = models.CharField(max_length=64, primary_key=True)
+    intentos = models.PositiveIntegerField(default=0)
+    expira = models.DateTimeField(db_index=True)

@@ -1236,14 +1236,16 @@ class VentasTests(TestCase):
         self.assertContains(response, '📦 Inventario')
         self.assertContains(response, f'href="{reverse("econotec:inventario_menu")}"')
         self.assertContains(response, 'class="top-inventory-link" title="Abrir inventario" target="_blank" rel="noopener"')
-        self.assertContains(response, 'id="btn-perfil" data-perfil-trigger')
+        self.assertContains(response, 'class="social-nav-profile"')
+        self.assertNotContains(response, 'data-perfil-trigger')
         self.assertContains(response, 'class="mobile-profile-trigger social-mobile-profile"')
         self.assertContains(response, f'href="{reverse("econotec:mi_perfil")}"')
         self.assertContains(response, 'id="mobile-nav-toggle"')
         self.assertContains(response, 'Asesor')
-        self.assertContains(response, 'Ver equipos que registré')
+        response = self.client.get(reverse('econotec:mi_perfil'))
+        self.assertContains(response, 'Ver mis equipos recibidos')
         self.assertContains(response, f'?registrador={self.vendedor.pk}&sede=todas')
-        self.assertContains(response, 'Cambiar color del perfil')
+        self.assertContains(response, 'Cambiar color del nivel')
         self.assertContains(response, 'data-color="#ec4899"')
 
     def test_inventario_menu_muestra_sedes_iniciales(self):
@@ -2384,6 +2386,13 @@ class VentasTests(TestCase):
         data = response.json()
         self.assertEqual(data['salidas_buenas'], 1)
         self.assertEqual(data['total'], 4)
+
+        self.client.force_login(self.vendedor)
+        public = self.client.get(reverse('econotec:perfil_social', args=[self.usuario.pk]))
+        self.assertEqual(public.context['operativo']['total'], 4)
+        self.assertEqual(public.context['operativo']['porcentaje'], 8)
+        self.assertNotContains(public, self.usuario.email)
+        self.assertNotContains(public, 'id="btn-bitacora"')
 
     def test_perfil_no_suma_puntos_de_salida_buena_si_no_es_positiva(self):
         ingreso = self.crear_ingreso_reparacion()
@@ -4527,6 +4536,8 @@ class VentasTests(TestCase):
                 self.assertNotContains(response, 'id="dashModalEquipo"')
                 self.assertNotContains(response, 'id="dashModalOrden"')
                 self.assertNotContains(response, 'id="dashModalClear"')
+                self.assertContains(response, 'id="dashModalCodigoSearch"')
+                self.assertContains(response, 'placeholder="Código"')
                 self.assertContains(response, 'name="dashModalSede"', count=3)
                 self.assertContains(response, 'value="guayaquil"')
                 self.assertContains(response, 'value="quito"')
@@ -4545,6 +4556,7 @@ class VentasTests(TestCase):
         self.assertContains(clientes, ingreso_g.codigo_equipo)
         self.assertContains(clientes, ingreso_u.codigo_equipo)
         self.assertContains(clientes, 'data-sedes="guayaquil|||quito"')
+        self.assertNotContains(clientes, 'id="dashModalCodigoSearch"')
         self.assertNotContains(clientes, 'name="dashModalSede"')
         self.assertNotContains(clientes, 'value="guayaquil"')
         self.assertNotContains(clientes, 'value="quito"')
@@ -4565,6 +4577,8 @@ class VentasTests(TestCase):
         self.crear_ingreso_reparacion(cliente=cliente_extra, sede='guayaquil')
         self.crear_ingreso_reparacion(cliente=cliente_extra, sede='quito')
 
+        # La primera petición inicializa y guarda la caducidad de la sesión.
+        self.client.get(reverse('econotec:dashboard_details', kwargs={'tipo': 'clientes'}))
         with CaptureQueriesContext(connection) as consultas:
             response = self.client.get(
                 reverse('econotec:dashboard_details', kwargs={'tipo': 'clientes'})
@@ -4574,6 +4588,54 @@ class VentasTests(TestCase):
         self.assertLessEqual(len(consultas.captured_queries), 10)
         self.assertContains(response, 'Cliente Extra')
         self.assertNotContains(response, 'name="dashModalSede"')
+
+    def test_alerta_reparacion_tecnico_aparece_desde_quinto_dia(self):
+        ingreso = self.crear_ingreso_reparacion(subestado_reparacion='espera_cliente')
+        IngresoEquipo.objects.filter(pk=ingreso.pk).update(
+            fecha_alerta_reparacion=date.today() - timedelta(days=5),
+        )
+
+        response = self.client.get(reverse('econotec:bienvenida'))
+
+        self.assertEqual(response.context['reparacion_tecnico_total'], 1)
+        self.assertContains(response, ingreso.codigo_equipo)
+        self.assertContains(response, 'Revisa qué pasó con estos equipos')
+        self.assertContains(response, '5 día')
+
+    def test_alerta_reparacion_no_aparece_antes_del_quinto_dia(self):
+        ingreso = self.crear_ingreso_reparacion(subestado_reparacion='espera_repuesto')
+        IngresoEquipo.objects.filter(pk=ingreso.pk).update(
+            fecha_alerta_reparacion=date.today() - timedelta(days=4),
+        )
+
+        response = self.client.get(reverse('econotec:bienvenida'))
+
+        self.assertEqual(response.context['reparacion_tecnico_total'], 0)
+        self.assertNotContains(response, ingreso.codigo_equipo)
+
+    def test_alerta_reparacion_admin_aparece_desde_decimo_dia(self):
+        ingreso = self.crear_ingreso_reparacion(subestado_reparacion='en_reparacion')
+        IngresoEquipo.objects.filter(pk=ingreso.pk).update(
+            fecha_alerta_reparacion=date.today() - timedelta(days=10),
+        )
+        self.client.force_login(self.admin)
+
+        response = self.client.get(reverse('econotec:bienvenida'))
+
+        self.assertEqual(response.context['reparacion_admin_total'], 1)
+        self.assertContains(response, ingreso.codigo_equipo)
+        self.assertContains(response, 'Pide al técnico responsable una explicación')
+
+    def test_fecha_alerta_reparacion_se_limpia_al_volver_a_diagnostico(self):
+        ingreso = self.crear_ingreso_reparacion(subestado_reparacion='espera_cliente')
+        self.assertIsNotNone(ingreso.fecha_alerta_reparacion)
+
+        ingreso.estado = 'ingresado'
+        ingreso.subestado_reparacion = ''
+        ingreso.save(update_fields=['estado', 'subestado_reparacion'])
+
+        ingreso.refresh_from_db()
+        self.assertIsNone(ingreso.fecha_alerta_reparacion)
 
     def test_admin_dashboard_equipos_mes_excluye_ventas_producto(self):
         User = get_user_model()

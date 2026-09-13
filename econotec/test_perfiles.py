@@ -77,3 +77,114 @@ class PerfilesTests(TestCase):
         self.assertContains(self.client.get(url), 'alt="Mi avatar"')
         self.assertContains(self.client.get(url), 'social-editor-portada')
         self.assertEqual(self.client.post(url, {'seccion': 'invalid'}).status_code, 400)
+
+    def test_unified_profile_uses_same_level_as_api_and_owner_actions(self):
+        response = self.client.get(reverse('econotec:mi_perfil'))
+        api = self.client.get(reverse('econotec:api_perfil')).json()
+        self.assertEqual(response.context['operativo']['nivel'], api['nivel'])
+        self.assertContains(response, 'Nivel: Novato')
+        self.assertContains(response, 'Ver mis equipos recibidos')
+        self.assertContains(response, 'Ver mis equipos reparados')
+        self.assertContains(response, 'id="btn-bitacora"', count=1)
+        self.assertNotContains(response, 'id="perfil-modal"')
+        self.assertNotContains(response, 'data-perfil-trigger')
+
+    def test_other_profile_shows_level_but_never_owner_actions_or_email(self):
+        self.other.email = 'owner-only@example.com'
+        self.other.save()
+        response = self.client.get(reverse('econotec:perfil_social', args=[self.other.pk]))
+        self.assertContains(response, 'Nivel: Novato')
+        for private in ['owner-only@example.com', 'Ver mis equipos recibidos',
+                        'Ver mis equipos reparados', 'id="btn-bitacora"', 'data-edit-profile=']:
+            self.assertNotContains(response, private)
+        self.assertEqual(response.context['operativo']['email'], '')
+
+    def test_private_apis_ignore_foreign_user_parameters(self):
+        response = self.client.get(reverse('econotec:api_perfil'), {'usuario_id': self.other.pk})
+        self.assertEqual(response.json()['username'], self.user.username)
+        from unittest.mock import patch
+        with patch('econotec.views.construir_bitacora_usuario', return_value={'total': 0}) as report:
+            self.client.get(reverse('econotec:api_bitacora_hoy'), {'usuario_id': self.other.pk})
+            report.assert_called_once_with(self.user)
+
+    def test_logout_requires_post_csrf_and_invalidates_old_cookie(self):
+        from django.conf import settings
+        url = reverse('logout')
+        self.assertEqual(self.client.get(url).status_code, 405)
+        strict = Client(enforce_csrf_checks=True)
+        strict.force_login(self.user)
+        self.assertEqual(strict.post(url).status_code, 403)
+        old_cookie = self.client.cookies[settings.SESSION_COOKIE_NAME].value
+        response = self.client.post(url)
+        self.assertEqual(response.status_code, 302)
+        self.assertIn('no-store', response.headers['Cache-Control'])
+        self.client.cookies[settings.SESSION_COOKIE_NAME] = old_cookie
+        for name in ['mi_perfil', 'api_perfil', 'api_bitacora_hoy']:
+            self.assertEqual(self.client.get(reverse('econotec:' + name)).status_code, 302)
+
+    def test_private_pages_and_apis_are_not_cacheable(self):
+        for name in ['mi_perfil', 'api_perfil', 'api_bitacora_hoy']:
+            response = self.client.get(reverse('econotec:' + name))
+            self.assertIn('no-store', response.headers['Cache-Control'])
+            self.assertIn('private', response.headers['Cache-Control'])
+
+    def test_no_role_cannot_modify_operational_alerts(self):
+        from unittest.mock import patch
+        for name in ['salida_bodegaje_silenciar', 'ingreso_diagnostico_silenciar']:
+            with patch('econotec.views.get_object_or_404') as lookup:
+                response = self.client.post(reverse('econotec:' + name, args=[123]))
+                self.assertEqual(response.status_code, 302)
+                lookup.assert_not_called()
+
+    def test_alert_redirects_reject_external_and_preserve_local_targets(self):
+        from unittest.mock import patch, MagicMock
+        self.user.groups.add(Group.objects.get_or_create(name='Tecnicos')[0])
+        for name in ['salida_bodegaje_silenciar', 'ingreso_diagnostico_silenciar']:
+            for target, expected in [('https://evil.example/phishing', reverse('econotec:bienvenida')),
+                                     ('//evil.example/', reverse('econotec:bienvenida')),
+                                     ('/mi-perfil/', '/mi-perfil/')]:
+                with patch('econotec.views.get_object_or_404', return_value=MagicMock()):
+                    response = self.client.post(reverse('econotec:' + name, args=[123]), {'next': target})
+                    self.assertEqual(response.url, expected)
+
+    def test_absolute_session_expiry_denies_access_even_with_valid_cookie(self):
+        from django.utils import timezone
+        session = self.client.session
+        session['_econotec_session_deadline'] = timezone.now().timestamp() - 1
+        session.save()
+        response = self.client.get(reverse('econotec:api_perfil'))
+        self.assertEqual(response.status_code, 302)
+        self.assertNotIn('_auth_user_id', self.client.session)
+
+    def test_authentication_limits_are_shared_between_sessions_and_expire(self):
+        from .seguridad import consumir_intento
+        from .models import LimiteAcceso
+        from unittest.mock import patch
+        from django.utils import timezone
+        from datetime import timedelta
+        self.assertTrue(consumir_intento('test-limit', 2))
+        self.assertTrue(consumir_intento('test-limit', 2))
+        self.assertFalse(consumir_intento('test-limit', 2))
+        with patch('econotec.seguridad.timezone.now', return_value=timezone.now() + timedelta(minutes=16)):
+            self.assertTrue(consumir_intento('test-limit', 2))
+        self.assertEqual(LimiteAcceso.objects.count(), 1)
+        for _ in range(20):
+            response = Client().post(reverse('login'), {'username': 'target'})
+            self.assertNotEqual(response.status_code, 429)
+        response = Client().post(reverse('login'), {'username': 'target'})
+        self.assertEqual(response.status_code, 429)
+        self.assertEqual(response.headers['Retry-After'], '900')
+        self.assertIn('no-store', response.headers['Cache-Control'])
+
+    def test_admin_login_uses_same_two_factor_flow(self):
+        from django.urls import resolve
+        from .views_auth import login_con_sede
+        self.assertIs(resolve('/admin/login/').func, login_con_sede)
+        response = Client().get('/admin/login/')
+        self.assertContains(response, 'captcha_respuesta')
+
+    def test_advisor_color_rejects_wrong_json_types(self):
+        self.user.groups.add(Group.objects.get_or_create(name='Asesores')[0])
+        url = reverse('econotec:api_perfil_color')
+        for payload in ['[]', 'null', '{"color":123}', '{"color":[]}']:
+            self.assertEqual(self.client.post(url, data=payload, content_type='application/json').status_code, 400)

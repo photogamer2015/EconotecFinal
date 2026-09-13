@@ -393,6 +393,8 @@ def login_con_sede(request):
     })
 
 
+@never_cache
+@require_http_methods(['POST'])
 def logout_view(request):
     """Cierra la sesión y limpia la sede."""
     if request.user.is_authenticated:

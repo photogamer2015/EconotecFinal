@@ -380,11 +380,23 @@
   .alerta-block.bodegaje {
     border: 2px solid #ffe0b2;
   }
+  .alerta-block.reparacion {
+    border: 2px solid #bfdbfe;
+  }
+  .alerta-block.reparacion-admin {
+    border-color: #fecaca;
+  }
   [data-theme="dark"] .alerta-block.demora {
     border-color: rgba(239, 68, 68, 0.4);
   }
   [data-theme="dark"] .alerta-block.bodegaje {
     border-color: rgba(249, 118, 24, 0.4);
+  }
+  [data-theme="dark"] .alerta-block.reparacion {
+    border-color: rgba(59, 130, 246, 0.42);
+  }
+  [data-theme="dark"] .alerta-block.reparacion-admin {
+    border-color: rgba(239, 68, 68, 0.45);
   }
 
   .alerta-cabecera {
@@ -399,6 +411,12 @@
   }
   .alerta-cabecera.naranja {
     background: linear-gradient(135deg, #f97618, #d7642f);
+  }
+  .alerta-cabecera.azul {
+    background: linear-gradient(135deg, #2563eb, #1e40af);
+  }
+  .alerta-cabecera.rojo-suave {
+    background: linear-gradient(135deg, #dc2626, #991b1b);
   }
   .alerta-cabecera .icono {
     font-size: 36px;
@@ -502,6 +520,12 @@
   .alerta-item.naranja .codigo {
     background: #f97618;
   }
+  .alerta-item.azul .codigo {
+    background: #2563eb;
+  }
+  .alerta-item.rojo-suave .codigo {
+    background: #dc2626;
+  }
 
   .alerta-item .info {
     font-size: 13px;
@@ -530,6 +554,14 @@
   .alerta-item.naranja .pill {
     background: #ffe0b2;
     color: #b54400;
+  }
+  .alerta-item.azul .pill {
+    background: #dbeafe;
+    color: #1e40af;
+  }
+  .alerta-item.rojo-suave .pill {
+    background: #fee2e2;
+    color: #991b1b;
   }
   [data-theme="dark"] .alerta-item.rojo .pill {
     background: rgba(239, 68, 68, 0.25);
@@ -1149,9 +1181,47 @@
     align-items: center;
     color: var(--text-muted);
     font-size: 12px;
+    flex: 0 0 auto;
   }
   .dash-filter-summary strong {
     color: var(--primary-dark);
+  }
+  .dash-code-filter {
+    display: flex;
+    justify-content: flex-end;
+    flex: 1 1 160px;
+    min-width: 120px;
+  }
+  .dash-code-filter .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+  .dash-code-input {
+    width: min(100%, 180px);
+    min-height: 34px;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    background: var(--card-bg);
+    color: var(--text-main);
+    padding: 7px 10px;
+    font: inherit;
+    font-size: 12px;
+    font-weight: 700;
+    outline: none;
+  }
+  .dash-code-input::placeholder {
+    color: var(--text-muted);
+  }
+  .dash-code-input:focus {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(249, 118, 24, 0.16);
   }
   .dash-modal-table-wrap {
     width: 100%;
@@ -1247,6 +1317,9 @@
   [data-theme="dark"] .dash-site-options {
     background: #111827;
   }
+  [data-theme="dark"] .dash-code-input {
+    background: #111827;
+  }
 
   @media (max-width: 900px) {
     .dash-modal-container {
@@ -1292,6 +1365,15 @@
     .dash-modal-filterbar {
       gap: 8px;
       padding: 8px 14px;
+    }
+    .dash-code-filter {
+      order: 3;
+      flex: 1 1 100%;
+      justify-content: stretch;
+    }
+    .dash-code-input {
+      width: 100%;
+      min-height: 40px;
     }
     .dash-filter-summary {
       font-size: 11px;
@@ -1698,6 +1780,14 @@
     border-color: rgba(249, 118, 24, 0.36);
     border-left-color: var(--primary);
   }
+  [data-theme="dark"] .alerta-block.reparacion {
+    border-color: rgba(59, 130, 246, 0.36);
+    border-left-color: #3b82f6;
+  }
+  [data-theme="dark"] .alerta-block.reparacion-admin {
+    border-color: rgba(239, 68, 68, 0.38);
+    border-left-color: #ef4444;
+  }
   [data-theme="dark"] .alerta-cabecera {
     background:
       linear-gradient(180deg, rgba(38, 17, 16, 0.98), rgba(24, 13, 14, 0.96)) !important;
@@ -1713,7 +1803,9 @@
   }
   [data-theme="dark"] .alerta-cabecera .ver-todos,
   [data-theme="dark"] .alerta-cabecera.rojo .ver-todos,
-  [data-theme="dark"] .alerta-cabecera.naranja .ver-todos {
+  [data-theme="dark"] .alerta-cabecera.naranja .ver-todos,
+  [data-theme="dark"] .alerta-cabecera.azul .ver-todos,
+  [data-theme="dark"] .alerta-cabecera.rojo-suave .ver-todos {
     background: #111827;
     border-color: rgba(255, 255, 255, 0.12);
     color: #fff7ed;
@@ -1854,6 +1946,8 @@
     #dashModalContainer .dash-modal-view-all { min-height: 44px; display: inline-flex; align-items: center; }
     #dashModalContainer .dash-modal-filterbar { flex-wrap: wrap; gap: 8px; padding: 8px 12px; }
     #dashModalContainer .dash-site-option span { min-height: 44px; min-width: 44px; }
+    #dashModalContainer .dash-code-filter { flex: 1 1 140px; min-width: 120px; }
+    #dashModalContainer .dash-code-input { width: 100%; min-height: 44px; }
     #dashModalContainer .dash-modal-body { padding: 10px; }
     #dashModalContainer .dash-modal-table-wrap { border-radius: 0; }
     #dashModalContainer .table-dash-modal {
@@ -2257,6 +2351,70 @@
           🔕 No molestar
         </button>
       </form>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% if reparacion_tecnico_total > 0 %}
+<div class="alerta-block reparacion">
+  <div class="alerta-cabecera azul">
+    <div class="icono">🔧</div>
+    <div class="titulo">
+      <h3>
+        {{ reparacion_tecnico_total }} equipo{{ reparacion_tecnico_total|pluralize }} lleva{{ reparacion_tecnico_total|pluralize:"n" }} {{ umbral_reparacion_tecnico }} días o más en reparación
+      </h3>
+      <p>
+        Revisa qué pasó con estos equipos. Si pasan de {{ umbral_reparacion_admin }} días, administración también verá la alerta.
+      </p>
+    </div>
+  </div>
+  {% for item in reparacion_tecnico %}
+  <div class="alerta-item azul">
+    <span class="codigo">{{ item.ingreso.codigo_equipo }}</span>
+    <div class="info">
+      <div class="cli">{{ item.ingreso.cliente.nombres }}</div>
+      <div class="det">
+        {{ item.ingreso.tipo_equipo_display }} {{ item.ingreso.marca }} — {{ item.estado }} desde {{ item.desde|date:"d/m/Y" }}
+      </div>
+    </div>
+    <span class="pill">{{ item.dias }} día{{ item.dias|pluralize }}</span>
+    <div class="acciones">
+      {% if item.escalado_admin %}<span class="pill">Explicar motivo</span>{% endif %}
+      <a class="btn-ver-mini" href="{% url 'econotec:ingreso_detalle' item.ingreso.pk %}">Ver</a>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% if reparacion_admin_total > 0 %}
+<div class="alerta-block reparacion reparacion-admin">
+  <div class="alerta-cabecera rojo-suave">
+    <div class="icono">🛠️</div>
+    <div class="titulo">
+      <h3>
+        {{ reparacion_admin_total }} equipo{{ reparacion_admin_total|pluralize }} supera{{ reparacion_admin_total|pluralize:"n" }} 10 días en reparación
+      </h3>
+      <p>
+        Pide al técnico responsable una explicación y seguimiento. También se le muestra al técnico en su inicio.
+      </p>
+    </div>
+  </div>
+  {% for item in reparacion_admin %}
+  <div class="alerta-item rojo-suave">
+    <span class="codigo">{{ item.ingreso.codigo_equipo }}</span>
+    <div class="info">
+      <div class="cli">{{ item.ingreso.cliente.nombres }}</div>
+      <div class="det">
+        {{ item.ingreso.tipo_equipo_display }} {{ item.ingreso.marca }} — {{ item.estado }} desde {{ item.desde|date:"d/m/Y" }}
+        {% if item.ingreso.tecnico_encargado %} · Téc.: <strong>{{ item.ingreso.tecnico_encargado_nombre }}</strong>{% endif %}
+      </div>
+    </div>
+    <span class="pill">{{ item.dias }} día{{ item.dias|pluralize }}</span>
+    <div class="acciones">
+      <a class="btn-ver-mini" href="{% url 'econotec:ingreso_detalle' item.ingreso.pk %}">Ver</a>
     </div>
   </div>
   {% endfor %}
@@ -2819,6 +2977,7 @@
     if (!filtros) return;
 
     const sedes = Array.from(root.querySelectorAll('input[name="dashModalSede"]'));
+    const codigoInput = root.querySelector("#dashModalCodigoSearch");
     const tabla = root.querySelector(".dash-modal-table-wrap");
     const vacio = root.querySelector("#dashModalFilterEmpty");
     const contador = root.querySelector("#dashModalVisibleCount");
@@ -2839,10 +2998,14 @@
 
     function aplicarFiltros() {
       const sedeSeleccionada = sedes.find(opcion => opcion.checked)?.value || "";
+      const codigoBuscado = (codigoInput?.value || "").trim().toLowerCase();
       let visibles = 0;
 
       filas.forEach(fila => {
-        const mostrar = !sedeSeleccionada || sedesDeFila(fila).includes(sedeSeleccionada);
+        const codigoFila = (fila.dataset.codigo || "").toLowerCase();
+        const coincideSede = !sedeSeleccionada || sedesDeFila(fila).includes(sedeSeleccionada);
+        const coincideCodigo = !codigoBuscado || codigoFila.includes(codigoBuscado);
+        const mostrar = coincideSede && coincideCodigo;
         fila.classList.toggle("dash-modal-row-hidden", !mostrar);
         fila.setAttribute("aria-hidden", mostrar ? "false" : "true");
         if (mostrar) visibles += 1;
@@ -2862,6 +3025,15 @@
     }
 
     sedes.forEach(opcion => opcion.addEventListener("change", aplicarFiltros));
+    if (codigoInput) {
+      codigoInput.addEventListener("input", aplicarFiltros);
+      codigoInput.addEventListener("keydown", event => {
+        if (event.key === "Escape" && codigoInput.value) {
+          codigoInput.value = "";
+          aplicarFiltros();
+        }
+      });
+    }
 
     aplicarFiltros();
   }

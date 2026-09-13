@@ -16,6 +16,8 @@ urlpatterns = [
 
     path('', econotec_views.home, name='home'),
 
+    # El administrador también utiliza captcha y verificación por correo.
+    path('admin/login/', views_auth.login_con_sede),
     path('admin/', admin.site.urls),
 
     path('', include('econotec.urls')),

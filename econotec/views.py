@@ -67,8 +67,12 @@ from .alertas import (
     whatsapp_link_bodegaje,
     whatsapp_link_hoja_ingreso,
     whatsapp_link_venta_producto,
+    equipos_reparacion_demorada_qs,
+    dias_en_estado_reparacion,
     UMBRAL_DIAS_DIAGNOSTICO,
     UMBRAL_DIAS_BODEGAJE,
+    UMBRAL_DIAS_REPARACION_TECNICO,
+    UMBRAL_DIAS_REPARACION_ADMIN,
     COSTO_BODEGAJE_DIA,
 )
 
@@ -320,6 +324,33 @@ def bienvenida(request):
             'wa_link': whatsapp_link_bodegaje(sal),
         })
 
+    # 3. Equipos detenidos en reparación, espera de cliente o espera de repuesto
+    reparacion_tecnico_qs = IngresoEquipo.objects.none()
+    if es_tecnico(request.user) and not es_admin_user:
+        reparacion_tecnico_qs = equipos_reparacion_demorada_qs(
+            usuario=request.user,
+            umbral_dias=UMBRAL_DIAS_REPARACION_TECNICO,
+        )
+
+    reparacion_admin_qs = IngresoEquipo.objects.none()
+    if es_admin_user:
+        reparacion_admin_qs = equipos_reparacion_demorada_qs(
+            usuario=None,
+            umbral_dias=UMBRAL_DIAS_REPARACION_ADMIN,
+        )
+
+    def _items_reparacion(qs):
+        return [{
+            'ingreso': ing,
+            'dias': dias_en_estado_reparacion(ing, hoy=hoy),
+            'desde': ing.fecha_alerta_reparacion,
+            'estado': ing.subestado_visual_display or ing.estado_visual_display,
+            'escalado_admin': dias_en_estado_reparacion(ing, hoy=hoy) >= UMBRAL_DIAS_REPARACION_ADMIN,
+        } for ing in qs[:10]]
+
+    reparacion_tecnico = _items_reparacion(reparacion_tecnico_qs)
+    reparacion_admin = _items_reparacion(reparacion_admin_qs)
+
     # 1b. Diagnósticos silenciados
     from datetime import timedelta as _td
     fecha_limite_diag = date.today() - _td(days=UMBRAL_DIAS_DIAGNOSTICO)
@@ -383,8 +414,14 @@ def bienvenida(request):
         'bodegajes_total': bodegaje_qs.count(),
         'bodegajes_silenciados': bodegajes_silenciados,
         'total_silenciados': len(demorados_silenciados) + len(bodegajes_silenciados),
+        'reparacion_tecnico': reparacion_tecnico,
+        'reparacion_tecnico_total': reparacion_tecnico_qs.count(),
+        'reparacion_admin': reparacion_admin,
+        'reparacion_admin_total': reparacion_admin_qs.count(),
         'umbral_diagnostico': UMBRAL_DIAS_DIAGNOSTICO,
         'umbral_bodegaje': UMBRAL_DIAS_BODEGAJE,
+        'umbral_reparacion_tecnico': UMBRAL_DIAS_REPARACION_TECNICO,
+        'umbral_reparacion_admin': UMBRAL_DIAS_REPARACION_ADMIN,
         'costo_bodegaje_dia': COSTO_BODEGAJE_DIA,
     }
     return render(request, 'bienvenida.html', ctx)
@@ -4555,7 +4592,7 @@ def salida_deshacer_retiro(request, pk):
     return redirect('econotec:salida_lista')
 
 
-@login_required
+@tecnico_requerido
 @require_POST
 def salida_bodegaje_silenciar(request, pk):
     """
@@ -4594,12 +4631,12 @@ def salida_bodegaje_silenciar(request, pk):
 
     # Volver a donde venía: alerta detallada o dashboard
     next_url = request.POST.get('next', '')
-    if next_url:
+    if url_has_allowed_host_and_scheme(next_url, allowed_hosts={request.get_host()}, require_https=request.is_secure()):
         return redirect(next_url)
     return redirect('econotec:bienvenida')
 
 
-@login_required
+@tecnico_requerido
 @require_POST
 def ingreso_diagnostico_silenciar(request, pk):
     """
@@ -4640,7 +4677,7 @@ def ingreso_diagnostico_silenciar(request, pk):
         )
 
     next_url = request.POST.get('next', '')
-    if next_url:
+    if url_has_allowed_host_and_scheme(next_url, allowed_hosts={request.get_host()}, require_https=request.is_secure()):
         return redirect(next_url)
     return redirect('econotec:bienvenida')
 
@@ -5187,9 +5224,8 @@ def _construir_bitacora_usuario(user, dia=None):
     }
 
 
-@login_required
-def api_perfil(request):
-    user = request.user
+def datos_perfil(user, incluir_privado=False):
+    """Estadísticas compartidas; correo y bitácora solo para el propietario."""
 
     if es_asesor(user) and not es_tecnico(user) and not user.is_superuser:
         actividad, _ = UsuarioActividad.objects.get_or_create(user=user)
@@ -5197,10 +5233,10 @@ def api_perfil(request):
         if color not in COLORES_PERFIL_ASESOR:
             color = '#0d47a1'
 
-        return JsonResponse({
+        return {
             'username': user.username,
             'nombre': user.first_name or user.username,
-            'email': user.email or '',
+            'email': (user.email or '') if incluir_privado else '',
             'tipo_perfil': 'asesor',
             'rol': 'Asesor registrado',
             'nivel': 'Asesor registrado',
@@ -5212,8 +5248,8 @@ def api_perfil(request):
             'salidas_malas': 0,
             'total': 0,
             'proximo': None,
-            'bitacora_total': construir_bitacora_usuario(user)['total'],
-        })
+            'bitacora_total': construir_bitacora_usuario(user)['total'] if incluir_privado else 0,
+        }
     
     # Verificar si el usuario tiene una fecha de reinicio
     fecha_reinicio = None
@@ -5297,10 +5333,10 @@ def api_perfil(request):
         color = 'linear-gradient(45deg, #FFD700, #ff8c00)' # Oro
         proximo = None
         
-    return JsonResponse({
+    return {
         'username': user.username,
         'nombre': user.first_name or user.username,
-        'email': user.email or '',
+        'email': (user.email or '') if incluir_privado else '',
         'tipo_perfil': 'tecnico',
         'ingresos': ingresos_count,
         'salidas_buenas': salidas_buenas,
@@ -5310,8 +5346,14 @@ def api_perfil(request):
         'nivel': nivel,
         'color': color,
         'proximo': proximo,
-        'bitacora_total': construir_bitacora_usuario(user)['total'],
-    })
+        'bitacora_total': construir_bitacora_usuario(user)['total'] if incluir_privado else 0,
+    }
+
+
+@login_required
+@require_GET
+def api_perfil(request):
+    return JsonResponse(datos_perfil(request.user, incluir_privado=True))
 
 
 @login_required
@@ -5332,7 +5374,9 @@ def api_perfil_color(request):
     except json.JSONDecodeError:
         payload = {}
 
-    color = (payload.get('color') or '').strip()
+    if not isinstance(payload, dict) or not isinstance(payload.get('color'), str):
+        return JsonResponse({'ok': False, 'error': 'Color no válido.'}, status=400)
+    color = payload['color'].strip()
     if color not in COLORES_PERFIL_ASESOR:
         return JsonResponse({'ok': False, 'error': 'Color no permitido.'}, status=400)
 

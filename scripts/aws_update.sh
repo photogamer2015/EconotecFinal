@@ -40,7 +40,7 @@ if [ ! -d "$VENV_DIR" ]; then
 fi
 
 "$VENV_DIR/bin/python" -m pip install --upgrade pip
-"$VENV_DIR/bin/python" -m pip install -r requirements.txt
+"$VENV_DIR/bin/python" -m pip install -r requirements.lock
 "$VENV_DIR/bin/python" manage.py migrate --noinput
 "$VENV_DIR/bin/python" manage.py collectstatic --noinput
 "$VENV_DIR/bin/python" manage.py setup_roles

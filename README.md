@@ -55,7 +55,7 @@ python -m venv venv
 #   Windows:  venv\Scripts\activate
 #   Linux/Mac: source venv/bin/activate
 
-pip install -r requirements.txt
+pip install -r requirements.lock
 ```
 
 ### 4) Aplicar las migraciones (crea las tablas en la base SQLite por defecto)
@@ -205,8 +205,9 @@ buscar usuarios activos por nombre o usuario, visitar perfiles, añadir/quitar a
 (la relación es mutua e inmediata) y dar/quitar un Me gusta. Estos datos son visibles
 para los usuarios autenticados; solo el propietario puede editar su perfil.
 
-Los perfiles sociales son independientes del ranking, niveles, estadísticas y perfil
-operativo existentes. Para instalar esta actualización en otro equipo, ejecutar
+El perfil social y el operativo se reúnen en una sola página. El nivel y las
+estadísticas son visibles para la comunidad; el correo y los accesos personales
+aparecen solo para el propietario. Para instalar esta actualización en otro equipo, ejecutar
 `python manage.py migrate` y el procedimiento habitual de archivos estáticos.
 
 Los selectores de avatar, portada e información son independientes. Las portadas
@@ -237,3 +238,9 @@ servicio `systemd` si existe.
 - **Quito:** Av. Amazonas y 18 de septiembre / Piso 2 Oficina 102
 - WhatsApp: 0963289727 — 0980758747
 - Web: www.econotec.ec.com — Correo: ventas@econotec.ec.com
+
+### Perfil unificado y protección de acceso
+
+Consulta [la guía de uso, seguridad y despliegue](docs/PERFIL_Y_SEGURIDAD.md).
+La instalación usa `requirements.lock` y requiere aplicar las migraciones
+`0065_limite_acceso` y `0066_alerta_reparacion_estado`.
