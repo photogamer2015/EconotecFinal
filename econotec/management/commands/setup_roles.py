@@ -10,6 +10,7 @@ También crea las categorías de egreso por defecto.
 Ejecutar:  python manage.py setup_roles
 """
 from django.contrib.auth.models import Group
+from django.contrib.auth import get_user_model
 from django.core.management.base import BaseCommand
 
 
@@ -45,6 +46,18 @@ class Command(BaseCommand):
             )
             if created:
                 self.stdout.write(self.style.SUCCESS(f'  ✓ Categoría de egreso "{nombre}" creada.'))
+
+        from econotec.models import PerfilSocial
+        usuarios = get_user_model().objects.filter(is_active=True)
+        perfiles_creados = 0
+        for usuario in usuarios:
+            _, created = PerfilSocial.objects.get_or_create(usuario=usuario)
+            if created:
+                perfiles_creados += 1
+        if perfiles_creados:
+            self.stdout.write(self.style.SUCCESS(f'  ✓ {perfiles_creados} perfil(es) social(es) creado(s).'))
+        else:
+            self.stdout.write('  → Todos los usuarios activos ya tenían perfil social.')
 
         self.stdout.write(self.style.SUCCESS('\n✅ Roles y datos iniciales listos.'))
         self.stdout.write('')

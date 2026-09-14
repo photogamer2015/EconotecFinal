@@ -1,5 +1,6 @@
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
+from django.core.management import call_command
 from django.test import TestCase, Client
 from django.urls import reverse
 from .models import PerfilSocial
@@ -88,6 +89,27 @@ class PerfilesTests(TestCase):
         self.assertContains(response, 'id="btn-bitacora"', count=1)
         self.assertNotContains(response, 'id="perfil-modal"')
         self.assertNotContains(response, 'data-perfil-trigger')
+
+    def test_admin_without_existing_social_profile_keeps_profile_navigation(self):
+        self.client.force_login(self.other)
+        self.assertFalse(PerfilSocial.objects.filter(usuario=self.other).exists())
+
+        response = self.client.get(reverse('econotec:bienvenida'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(PerfilSocial.objects.filter(usuario=self.other).exists())
+        self.assertContains(response, 'class="mobile-profile-trigger social-mobile-profile"')
+        self.assertContains(response, 'class="social-nav-profile"')
+        self.assertContains(response, f'href="{reverse("econotec:mi_perfil")}"')
+
+    def test_setup_roles_creates_missing_social_profiles_for_existing_users(self):
+        self.assertFalse(PerfilSocial.objects.filter(usuario=self.user).exists())
+        self.assertFalse(PerfilSocial.objects.filter(usuario=self.other).exists())
+
+        call_command('setup_roles', verbosity=0)
+
+        self.assertTrue(PerfilSocial.objects.filter(usuario=self.user).exists())
+        self.assertTrue(PerfilSocial.objects.filter(usuario=self.other).exists())
 
     def test_other_profile_shows_level_but_never_owner_actions_or_email(self):
         self.other.email = 'owner-only@example.com'

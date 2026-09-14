@@ -59,6 +59,7 @@ def roles(request):
             'notificaciones_asesora_admin_total': 0,
             'notificaciones_inventario_admin_count': 0,
             'notificaciones_inventario_admin_preview': [],
+            'mi_perfil_social': None,
         }
 
     es_a = _es_admin(user)
@@ -109,6 +110,13 @@ def roles(request):
     notificaciones_asesora_admin_total = 0
     notificaciones_inventario_admin_count = 0
     notificaciones_inventario_admin_preview = []
+    mi_perfil_social = None
+    try:
+        from .models import PerfilSocial
+        mi_perfil_social, _ = PerfilSocial.objects.get_or_create(usuario=user)
+    except Exception:
+        pass
+
     try:
         from .models import NotificacionAsesora, NotificacionInventarioAdmin
         if es_as:
@@ -157,4 +165,5 @@ def roles(request):
         'notificaciones_asesora_admin_total': notificaciones_asesora_admin_total,
         'notificaciones_inventario_admin_count': notificaciones_inventario_admin_count,
         'notificaciones_inventario_admin_preview': notificaciones_inventario_admin_preview,
+        'mi_perfil_social': mi_perfil_social,
     }
