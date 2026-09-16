@@ -662,7 +662,10 @@
         {% if es_tecnico %}
         <button type="button" id="btn-perfil-movil" class="tb-profile">👤 Ver perfil</button>
         {% endif %}
-        <a href="{% url 'logout' %}" class="tb-logout">🚪 Cerrar sesión</a>
+        <form method="post" action="{% url 'logout' %}" style="margin: 0;">
+            {% csrf_token %}
+            <button type="submit" class="tb-logout">🚪 Cerrar sesión</button>
+        </form>
     </div>
 </div>
 

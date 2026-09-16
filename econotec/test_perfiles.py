@@ -169,14 +169,45 @@ class PerfilesTests(TestCase):
                     response = self.client.post(reverse('econotec:' + name, args=[123]), {'next': target})
                     self.assertEqual(response.url, expected)
 
-    def test_absolute_session_expiry_denies_access_even_with_valid_cookie(self):
+    def test_persistent_session_for_all_roles_and_legacy_deadlines(self):
+        from django.conf import settings
         from django.utils import timezone
-        session = self.client.session
-        session['_econotec_session_deadline'] = timezone.now().timestamp() - 1
-        session.save()
-        response = self.client.get(reverse('econotec:api_perfil'))
-        self.assertEqual(response.status_code, 302)
-        self.assertNotIn('_auth_user_id', self.client.session)
+        for group in [None, 'Tecnicos', 'Asesores', 'Asesores Comerciales', 'Administradores']:
+            with self.subTest(group=group):
+                self.user.groups.clear()
+                if group:
+                    self.user.groups.add(Group.objects.get_or_create(name=group)[0])
+                self.client.force_login(self.user)
+                session = self.client.session
+                session['_econotec_session_deadline'] = timezone.now().timestamp() - 1
+                session['sede'] = 'quito'
+                session.save()
+                response = self.client.get(reverse('econotec:api_perfil'))
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(self.client.session['sede'], 'quito')
+                self.assertNotIn('_econotec_session_deadline', self.client.session)
+                cookie = response.cookies[settings.SESSION_COOKIE_NAME]
+                self.assertEqual(cookie['max-age'], 400 * 24 * 60 * 60)
+                self.assertTrue(cookie['expires'])
+                # Simular otro proceso del navegador conservando solo la cookie.
+                reopened = Client()
+                reopened.cookies[settings.SESSION_COOKIE_NAME] = cookie.value
+                self.assertEqual(reopened.get(reverse('econotec:api_perfil')).status_code, 200)
+        self.client.force_login(self.other)
+        self.assertEqual(self.client.get(reverse('econotec:api_perfil')).status_code, 200)
+
+    def test_session_survives_inactivity_and_renews_expiration(self):
+        from datetime import timedelta
+        from unittest.mock import patch
+        from django.contrib.sessions.models import Session
+        from django.utils import timezone
+        self.client.get(reverse('econotec:api_perfil'))
+        key = self.client.session.session_key
+        previous_expiry = Session.objects.get(session_key=key).expire_date
+        later = timezone.now() + timedelta(days=30)
+        with patch('django.utils.timezone.now', return_value=later):
+            self.assertEqual(self.client.get(reverse('econotec:api_perfil')).status_code, 200)
+        self.assertGreater(Session.objects.get(session_key=key).expire_date, previous_expiry)
 
     def test_authentication_limits_are_shared_between_sessions_and_expire(self):
         from .seguridad import consumir_intento

@@ -89,10 +89,11 @@ MIDDLEWARE = [
     'econotec.middleware.ActividadUsuarioMiddleware',
 ]
 
-# Caducidad absoluta de la sesión; configurable según la jornada de trabajo.
-SESSION_COOKIE_AGE = env.int('SESSION_COOKIE_AGE', default=60 * 60 * 8)
-SESSION_SAVE_EVERY_REQUEST = False
-SESSION_EXPIRE_AT_BROWSER_CLOSE = True
+# Sesiones persistentes para todos los roles, renovadas con cada petición.
+# 400 días evita el límite corto anterior y respeta el máximo de los navegadores.
+SESSION_COOKIE_AGE = 60 * 60 * 24 * 400
+SESSION_SAVE_EVERY_REQUEST = True
+SESSION_EXPIRE_AT_BROWSER_CLOSE = False
 SESSION_COOKIE_HTTPONLY = True
 SESSION_COOKIE_SAMESITE = 'Lax'
 SESSION_COOKIE_SECURE = not DEBUG

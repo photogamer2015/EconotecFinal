@@ -33,14 +33,8 @@ class RespuestasPrivadasMiddleware:
         from django.utils.cache import add_never_cache_headers
         privada = request.user.is_authenticated
         if privada:
-            from django.conf import settings
-            from django.contrib.auth import logout
-            ahora = timezone.now().timestamp()
-            limite = request.session.get('_econotec_session_deadline')
-            if limite is None:
-                request.session['_econotec_session_deadline'] = ahora + settings.SESSION_COOKIE_AGE
-            elif not isinstance(limite, (int, float)) or ahora >= limite:
-                logout(request)
+            # Retirar el plazo de versiones anteriores sin cerrar sesiones vigentes.
+            request.session.pop('_econotec_session_deadline', None)
         response = self.get_response(request)
         if privada or request.user.is_authenticated or request.path.startswith(('/login/', '/logout/')):
             add_never_cache_headers(response)
