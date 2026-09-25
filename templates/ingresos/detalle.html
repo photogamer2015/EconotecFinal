@@ -888,9 +888,9 @@
             <div class="field-row"><span class="label">Estado</span><span class="value"><span class="badge badge-{{ salida.estado_operativo_key }}">{{ salida.estado_operativo_display }}</span></span></div>
             <div class="field-row"><span class="label">Cobrado</span><span class="value">{{ salida.valor_final_cobrado|dinero_signo }}</span></div>
             <div class="field-row">
-                <span class="label">Técnico responsable</span>
+                <span class="label">Técnico quien reparó</span>
                 <span class="value">
-                    👤 {{ ingreso.tecnico_encargado_nombre|default:"— Sin asignar —" }}
+                    👤 {{ salida.tecnico_reparo_nombre|default:"— Sin técnico registrado —" }}
                 </span>
             </div>
         </div>
