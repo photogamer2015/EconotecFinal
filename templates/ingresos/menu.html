@@ -4,33 +4,19 @@
 
 {% block content %}
 <style>
-    .ingreso-menu-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-        gap: 20px;
-    }
-    .pending-value-card {
-        border-left: 5px solid var(--warning);
-        position: relative;
-        overflow: hidden;
-    }
     .pending-value-count {
         display: inline-flex;
         align-items: center;
         justify-content: center;
         min-width: 34px;
-        height: 28px;
+        height: 26px;
         padding: 0 10px;
         border-radius: 999px;
-        background: #fff3e0;
-        color: #b45309;
-        font-size: 13px;
-        font-weight: 900;
-        margin-top: 8px;
-    }
-    [data-theme="dark"] .pending-value-count {
-        background: rgba(245, 158, 11, 0.18);
-        color: #fbbf24;
+        background: var(--tint-amber-bg);
+        color: var(--tint-amber-fg);
+        font-size: 12.5px;
+        font-weight: 650;
+        margin-top: 10px;
     }
 </style>
 
@@ -41,48 +27,40 @@
 <h2 class="page-title">Ingreso de <span class="accent">Equipo / Cliente</span></h2>
 <p class="page-subtitle">Registra una nueva Solicitud de Ingreso o consulta los equipos.</p>
 
-<div class="ingreso-menu-grid">
-    <a href="{% url 'econotec:ingreso_registrar' %}" class="card-box" style="text-decoration:none; color:inherit; border-left: 5px solid var(--primary);">
-        <div style="display:flex; align-items:center; gap:14px;">
-            <div style="font-size:38px;">📥</div>
-            <div>
-                <h3 style="color: var(--primary); font-size:18px; margin-bottom:4px;">Nueva Solicitud de Ingreso</h3>
-                <p style="color:#666; font-size:13px;">Llena el formulario tal cual la hoja física de Econotec.</p>
-            </div>
+<div class="menu-grid">
+    <a href="{% url 'econotec:ingreso_registrar' %}" class="menu-card">
+        <span class="menu-card-icon is-orange" aria-hidden="true">📥</span>
+        <div class="menu-card-body">
+            <h3>Nueva Solicitud de Ingreso</h3>
+            <p>Llena el formulario tal cual la hoja física de Econotec.</p>
         </div>
     </a>
 
-    <a href="{% url 'econotec:ingreso_lista' %}" class="card-box" style="text-decoration:none; color:inherit; border-left: 5px solid #1f2937;">
-        <div style="display:flex; align-items:center; gap:14px;">
-            <div style="font-size:38px;">📋</div>
-            <div>
-                <h3 style="color: #1f2937; font-size:18px; margin-bottom:4px;">Ver Lista de Equipos</h3>
-                <p style="color:#666; font-size:13px;">{{ total }} equipos registrados — {{ pendientes }} pendientes.</p>
-            </div>
+    <a href="{% url 'econotec:ingreso_lista' %}" class="menu-card">
+        <span class="menu-card-icon" aria-hidden="true">📋</span>
+        <div class="menu-card-body">
+            <h3>Ver Lista de Equipos</h3>
+            <p>{{ total }} equipos registrados — {{ pendientes }} pendientes.</p>
         </div>
     </a>
 
-    <a href="{% url 'econotec:ingreso_lista' %}?sede=todas&valor=pendiente" class="card-box pending-value-card" style="text-decoration:none; color:inherit;">
-        <div style="display:flex; align-items:center; gap:14px;">
-            <div style="font-size:38px;">⚠</div>
-            <div>
-                <h3 style="color: #b45309; font-size:18px; margin-bottom:4px;">Pendiente de Valores Acordados</h3>
-                <p style="color:#666; font-size:13px;">Lista de equipos sin valor acordado.</p>
-                <span class="pending-value-count">{{ pendientes_valor }} pendiente{{ pendientes_valor|pluralize }}</span>
-            </div>
+    <a href="{% url 'econotec:ingreso_lista' %}?sede=todas&valor=pendiente" class="menu-card pending-value-card">
+        <span class="menu-card-icon is-amber" aria-hidden="true">⚠️</span>
+        <div class="menu-card-body">
+            <h3>Pendiente de Valores Acordados</h3>
+            <p>Lista de equipos sin valor acordado.</p>
+            <span class="pending-value-count">{{ pendientes_valor }} pendiente{{ pendientes_valor|pluralize }}</span>
         </div>
     </a>
 
-    <a href="{% if es_admin %}{% url 'econotec:admin_equipos_administrativos' %}{% else %}{% url 'econotec:equipos_administrativos_general' %}{% endif %}" class="card-box" style="text-decoration:none; color:inherit; border-left:5px solid #0f766e;">
-        <div style="display:flex; align-items:center; gap:14px;">
-            <div style="font-size:38px;">🎁</div>
-            <div>
-                <h3 style="color:#0f766e; font-size:18px; margin-bottom:4px;">Donados / Equipos a comprar</h3>
-                <p style="color:#666; font-size:13px;">
-                    {% if es_admin %}Apartado administrativo para ver solo estos dos estados y sus pagos.
-                    {% else %}Consulta separada para ver únicamente estos dos estados y sus pagos.{% endif %}
-                </p>
-            </div>
+    <a href="{% if es_admin %}{% url 'econotec:admin_equipos_administrativos' %}{% else %}{% url 'econotec:equipos_administrativos_general' %}{% endif %}" class="menu-card">
+        <span class="menu-card-icon is-green" aria-hidden="true">🎁</span>
+        <div class="menu-card-body">
+            <h3>Donados / Equipos a comprar</h3>
+            <p>
+                {% if es_admin %}Apartado administrativo para ver solo estos dos estados y sus pagos.
+                {% else %}Consulta separada para ver únicamente estos dos estados y sus pagos.{% endif %}
+            </p>
         </div>
     </a>
 </div>

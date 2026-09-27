@@ -1,0 +1,204 @@
+/*
+ * Acabado visual compartido de las pantallas de acceso
+ * (login, verificación de código y registro de correo).
+ * Se carga después de los estilos propios de cada página: solo ajusta
+ * colores, bordes y sombras; no cambia estructura, tamaños ni lógica.
+ */
+
+:root {
+    --auth-page-bg: #f7f5f2;
+    --auth-page-glow: rgba(249, 118, 24, 0.16);
+    --auth-card-shadow: 0 1px 2px rgba(28, 25, 23, 0.04), 0 30px 80px -28px rgba(28, 25, 23, 0.3);
+    --auth-ring: 0 0 0 3px rgba(249, 118, 24, 0.18);
+    --auth-heading: #1c1917;
+    --card-bg: #ffffff;
+    --text-main: #292524;
+    --text-sub: #78716c;
+    --border-color: #e7e2dc;
+    --input-bg: #ffffff;
+    --sede-hover: #fdf8f4;
+    --sede-selected-bg: #fff4ec;
+    --btn-cambiar-bg: #f4f1ed;
+}
+
+[data-theme="dark"] {
+    --auth-page-bg: #0f0f11;
+    --auth-page-glow: rgba(249, 118, 24, 0.12);
+    --auth-card-shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 30px 80px -24px rgba(0, 0, 0, 0.75);
+    --auth-ring: 0 0 0 3px rgba(249, 118, 24, 0.28);
+    --auth-heading: #f5f5f4;
+    --card-bg: #18181b;
+    --text-main: #f5f5f4;
+    --text-sub: #a8a29e;
+    --border-color: #2e2e33;
+    --input-bg: #111113;
+    --sede-hover: #202024;
+    --sede-selected-bg: rgba(249, 118, 24, 0.14);
+    --btn-cambiar-bg: #26262b;
+}
+
+body {
+    background:
+        radial-gradient(1100px 520px at 50% -8%, var(--auth-page-glow), transparent 62%),
+        var(--auth-page-bg);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+.login-card,
+.verify-card,
+.setup-card {
+    border: 1px solid var(--border-color);
+    border-radius: 20px;
+    box-shadow: var(--auth-card-shadow);
+}
+
+h1 {
+    color: var(--auth-heading);
+    font-weight: 750;
+    letter-spacing: -0.015em;
+}
+
+/* Marca "ECONOTEC" del login. */
+.login-card h1 {
+    letter-spacing: 0.06em;
+}
+
+.logo-img {
+    padding: 0;
+    box-shadow:
+        0 0 0 5px var(--card-bg),
+        0 0 0 6px var(--border-color),
+        0 16px 34px -14px rgba(28, 25, 23, 0.55);
+}
+
+/* Campos */
+input[type="text"],
+input[type="password"],
+input[type="number"],
+input[type="email"] {
+    border-width: 1px;
+    border-radius: 10px;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+input:focus {
+    border-color: #f97618;
+    box-shadow: var(--auth-ring);
+}
+
+.captcha-question {
+    border-width: 1px;
+    border-color: rgba(249, 118, 24, 0.28);
+    border-radius: 10px;
+    font-weight: 700;
+}
+
+.email-pill {
+    border-width: 1px;
+    border-color: rgba(249, 118, 24, 0.26);
+    border-radius: 10px;
+    font-weight: 600;
+}
+
+/* Selector de sede */
+.sede-card {
+    border-width: 1px;
+    border-radius: 14px;
+}
+
+.sede-card.selected {
+    box-shadow: var(--auth-ring);
+}
+
+/* Botones */
+button.primary,
+.primary {
+    border-radius: 10px;
+    background: #f97618;
+    font-weight: 650;
+    box-shadow: none;
+    transition: background-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+button.primary:hover,
+.primary:hover {
+    background: #ea670f;
+    transform: none;
+    box-shadow: none;
+}
+
+button.primary:focus-visible,
+.primary:focus-visible {
+    outline: none;
+    box-shadow: var(--auth-ring);
+}
+
+button.primary:disabled,
+.primary:disabled {
+    background: #d6d3d1;
+    color: #ffffff;
+}
+
+[data-theme="dark"] button.primary:disabled,
+[data-theme="dark"] .primary:disabled {
+    background: #3a3a40;
+    color: #a8a29e;
+}
+
+.modal-actions .btn-confirmar,
+.confirm-actions .confirm-submit {
+    background: #f97618;
+    border-radius: 10px;
+}
+
+.modal-actions .btn-confirmar:hover,
+.confirm-actions .confirm-submit:hover {
+    background: #ea670f;
+    transform: none;
+    box-shadow: none;
+}
+
+.modal-actions .btn-cambiar {
+    border-width: 1px;
+    border-radius: 10px;
+}
+
+.modal-card,
+.confirm-card {
+    border: 1px solid var(--border-color);
+    border-radius: 20px;
+    box-shadow: var(--auth-card-shadow);
+}
+
+.modal-card h2,
+.confirm-card h2 {
+    color: var(--auth-heading);
+    letter-spacing: -0.01em;
+}
+
+.error,
+.message {
+    border-radius: 10px;
+}
+
+/* Pie y selector de tema */
+.footer-link,
+.theme-toggle-btn {
+    border-width: 1px;
+}
+
+.footer-link:hover {
+    transform: none;
+    box-shadow: none;
+}
+
+@media (max-width: 520px) {
+    .login-card,
+    .verify-card,
+    .setup-card,
+    .modal-card,
+    .confirm-card {
+        border-radius: 16px;
+    }
+}

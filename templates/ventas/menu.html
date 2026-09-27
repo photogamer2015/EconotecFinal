@@ -10,53 +10,46 @@
 <h2 class="page-title">Venta de <span class="accent">Producto</span></h2>
 <p class="page-subtitle">Registra una nueva Venta o consulta el historial de ventas.</p>
 
-<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px;">
-    <a href="{% url 'econotec:venta_registrar' %}" class="card-box" style="text-decoration:none; color:inherit; border-left: 5px solid var(--primary);">
-        <div style="display:flex; align-items:center; gap:14px;">
-            <div>
-                <h3 style="color: var(--primary); font-size:18px; margin-bottom:4px;">Nueva Venta</h3>
-                <p style="color:#666; font-size:13px;">Registra una venta directa de un producto o accesorio.</p>
-            </div>
+<div class="menu-grid">
+    <a href="{% url 'econotec:venta_registrar' %}" class="menu-card">
+        <span class="menu-card-icon is-orange" aria-hidden="true">🛒</span>
+        <div class="menu-card-body">
+            <h3>Nueva Venta</h3>
+            <p>Registra una venta directa de un producto o accesorio.</p>
         </div>
     </a>
 
-    <a href="{% url 'econotec:venta_lista' %}" class="card-box" style="text-decoration:none; color:inherit; border-left: 5px solid #1f2937;">
-        <div style="display:flex; align-items:center; gap:14px;">
-            <div style="font-size:38px;">📋</div>
-            <div>
-                <h3 style="color: #1f2937; font-size:18px; margin-bottom:4px;">Lista de Ventas</h3>
-                <p style="color:#666; font-size:13px;">Revisa solo ventas con pago completo, reimprime PDF y envía la hoja.</p>
-            </div>
+    <a href="{% url 'econotec:venta_lista' %}" class="menu-card">
+        <span class="menu-card-icon" aria-hidden="true">📋</span>
+        <div class="menu-card-body">
+            <h3>Lista de Ventas</h3>
+            <p>Revisa solo ventas con pago completo, reimprime PDF y envía la hoja.</p>
         </div>
-        <div style="margin-top:14px; padding-top:10px; border-top:1px solid #eee; display:flex; justify-content:space-between; align-items:center;">
-            <span style="font-size:12px; font-weight:700; color:#2e7d32;">Completas: {{ total_completas }}</span>
+        <div class="menu-card-footer">
+            <span class="is-ok">Completas: {{ total_completas }}</span>
         </div>
     </a>
 
-    <a href="{% url 'econotec:venta_lista_parciales' %}" class="card-box" style="text-decoration:none; color:inherit; border-left: 5px solid #d97706;">
-        <div style="display:flex; align-items:center; gap:14px;">
-            <div style="font-size:38px;">🧾</div>
-            <div>
-                <h3 style="color: #d97706; font-size:18px; margin-bottom:4px;">Lista de Ventas con Pago Parcial</h3>
-                <p style="color:#666; font-size:13px;">Consulta solo las ventas registradas con abono inicial o historial de abonos.</p>
-            </div>
+    <a href="{% url 'econotec:venta_lista_parciales' %}" class="menu-card">
+        <span class="menu-card-icon is-amber" aria-hidden="true">🧾</span>
+        <div class="menu-card-body">
+            <h3>Lista de Ventas con Pago Parcial</h3>
+            <p>Consulta solo las ventas registradas con abono inicial o historial de abonos.</p>
         </div>
-        <div style="margin-top:14px; padding-top:10px; border-top:1px solid #eee; display:flex; justify-content:space-between; align-items:center;">
-            <span style="font-size:12px; font-weight:700; color:#888;">Parciales: {{ total_parciales }}</span>
+        <div class="menu-card-footer">
+            <span class="is-muted">Parciales: {{ total_parciales }}</span>
         </div>
     </a>
 
-    <a href="{% url 'econotec:pagos_ventas_menu' %}" class="card-box" style="text-decoration:none; color:inherit; border-left: 5px solid #2e7d32;">
-        <div style="display:flex; align-items:center; gap:14px;">
-            <div style="font-size:38px;">💳</div>
-            <div>
-                <h3 style="color: #2e7d32; font-size:18px; margin-bottom:4px;">Control de Pago de Ventas</h3>
-                <p style="color:#666; font-size:13px;">Organiza las ventas por pago completo o pagos parciales antes de revisar el detalle.</p>
-            </div>
+    <a href="{% url 'econotec:pagos_ventas_menu' %}" class="menu-card">
+        <span class="menu-card-icon is-green" aria-hidden="true">💳</span>
+        <div class="menu-card-body">
+            <h3>Control de Pago de Ventas</h3>
+            <p>Organiza las ventas por pago completo o pagos parciales antes de revisar el detalle.</p>
         </div>
-        <div style="margin-top:14px; padding-top:10px; border-top:1px solid #eee; display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap;">
-            <span style="font-size:12px; font-weight:700; color:#2e7d32;">Completas: {{ total_completas }}</span>
-            <span style="font-size:12px; font-weight:700; color:#d97706;">Parciales: {{ total_parciales }}</span>
+        <div class="menu-card-footer">
+            <span class="is-ok">Completas: {{ total_completas }}</span>
+            <span class="is-warn">Parciales: {{ total_parciales }}</span>
         </div>
     </a>
 </div>

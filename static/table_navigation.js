@@ -4,6 +4,7 @@
     const TABLE_SELECTOR = 'table:not([data-table-navigation="off"])';
     const HOST_SELECTOR = '.table-wrap, .table-responsive, [class*="table-wrap"]';
     const enhancedTables = new WeakSet();
+    const enhancedTableList = [];
     const resizeObservers = new WeakMap();
     const tableRefreshers = [];
     const refreshersByTable = new WeakMap();
@@ -192,6 +193,7 @@
         if (host.dataset.tableNavigationOwner && host.dataset.tableNavigationOwner !== table.id) return;
 
         enhancedTables.add(table);
+        enhancedTableList.push(table);
         tableSequence += 1;
         if (!table.id) table.id = 'econotec-table-' + tableSequence;
 
@@ -359,6 +361,14 @@
                 });
             });
             observer.observe(document.body, { childList: true, subtree: true });
+
+            // El encabezado cambia de color con el tema: recalcula la columna fija.
+            const themeObserver = new MutationObserver(function () {
+                enhancedTableList.forEach(function (table) {
+                    if (table.isConnected) markContextColumn(table, getHeaders(table));
+                });
+            });
+            themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
         }
     }
 

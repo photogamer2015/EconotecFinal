@@ -31,3 +31,6 @@
 @media(max-width:480px){.social-performance{padding:16px}.social-performance-stats{gap:6px}.social-performance-stats>div{padding:16px 4px}.social-performance-stats span{font-size:11px}.social-performance-stats strong{font-size:26px}.social-main{padding:20px 12px}.social-performance .social-heading h2{font-size:21px}.social-performance .social-btn{font-size:12px}.social-identity{padding:0 16px}.social-name{min-width:0;flex-basis:120px}}
 
 .social-level-progress::-moz-progress-bar{background:var(--level-color,#e66c24);border-radius:10px}
+
+/* El botón de búsqueda no debe partirse en dos líneas. */
+.social-search .social-btn{flex-shrink:0;white-space:nowrap;overflow-wrap:normal}
