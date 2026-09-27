@@ -1,0 +1,86 @@
+{% load static %}
+{# EconoBot: asistente del sistema. Solo se incluye para roles con acceso a equipos o pagos. #}
+<div id="econobot" class="econobot no-print"
+     data-endpoint="{% url 'econotec:econobot_mensaje' %}"
+     data-estado="{% url 'econotec:econobot_estado' %}"
+     data-csrf="{{ csrf_token }}"
+     data-usuario="{{ user.pk }}"
+     data-nombre="{{ user.first_name|default:user.username }}">
+    <button type="button" class="econobot-launcher" id="econobot-launcher"
+            aria-controls="econobot-panel" aria-expanded="false" title="Abrir EconoBot">
+        <span class="econobot-avatar" aria-hidden="true">
+            <picture><source srcset="{% static 'econobot/econobot-rostro.webp' %}" type="image/webp"><img src="{% static 'econobot/econobot-rostro.png' %}" alt="" width="32" height="32" decoding="async"></picture>
+        </span>
+        <span class="econobot-launcher-text">EconoBot</span>
+        <span class="econobot-launcher-dot" id="econobot-launcher-dot" hidden></span>
+    </button>
+
+    <section class="econobot-panel" id="econobot-panel" role="dialog" aria-labelledby="econobot-title" hidden>
+        <header class="econobot-head">
+            <span class="econobot-avatar econobot-avatar-lg" aria-hidden="true">
+                <picture><source srcset="{% static 'econobot/econobot-rostro.webp' %}" type="image/webp"><img src="{% static 'econobot/econobot-rostro.png' %}" alt="" width="40" height="40" decoding="async"></picture>
+            </span>
+            <div class="econobot-head-text">
+                <strong id="econobot-title">EconoBot</strong>
+                <span class="econobot-status" id="econobot-status">Asistente de Econotec</span>
+            </div>
+            <div class="econobot-head-actions">
+                <button type="button" class="econobot-icon-btn" id="econobot-voz" aria-pressed="true" hidden
+                        title="Leer en voz alta las respuestas cuando hablas por micrófono">🔊</button>
+                <button type="button" class="econobot-icon-btn" id="econobot-nuevo" title="Nueva conversación" aria-label="Nueva conversación">
+                    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 12a8 8 0 1 0 2.4-5.7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M4 4.5v4.2h4.2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
+                <button type="button" class="econobot-icon-btn" id="econobot-cerrar" title="Cerrar" aria-label="Cerrar EconoBot">
+                    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
+                </button>
+            </div>
+        </header>
+
+        <div class="econobot-banner" id="econobot-banner" hidden>
+            <span class="econobot-banner-text">📝 <span id="econobot-banner-flujo">Registro</span> en curso</span>
+            <span class="econobot-banner-acciones">
+                <button type="button" data-econobot-enviar="atrás" data-econobot-etiqueta="← Atrás">← Atrás</button>
+                <button type="button" data-econobot-enviar="cancelar" data-econobot-etiqueta="Cancelar">Cancelar</button>
+            </span>
+        </div>
+
+        <div class="econobot-mensajes" id="econobot-mensajes" role="log" aria-live="polite" aria-relevant="additions"></div>
+        <template id="econobot-hero-plantilla">
+            <div class="econobot-hero" aria-hidden="true">
+                <picture>
+                    <source srcset="{% static 'econobot/econobot-mascota.webp' %}" type="image/webp">
+                    <img src="{% static 'econobot/econobot-mascota.png' %}" alt="" width="310" height="400" decoding="async">
+                </picture>
+            </div>
+        </template>
+
+        <div class="econobot-firma" id="econobot-firma" hidden>
+            <div class="econobot-firma-cabecera">
+                <strong>✍️ Firma del cliente</strong>
+                <span>Firma con el dedo o el mouse dentro del recuadro.</span>
+            </div>
+            <canvas class="econobot-firma-lienzo" id="econobot-firma-lienzo" aria-label="Recuadro para la firma del cliente"></canvas>
+            <div class="econobot-firma-acciones">
+                <button type="button" id="econobot-firma-limpiar">Limpiar</button>
+                <button type="button" id="econobot-firma-no">No firma</button>
+                <button type="button" id="econobot-firma-guardar" class="is-principal" disabled>Guardar firma</button>
+            </div>
+        </div>
+
+        <div class="econobot-opciones" id="econobot-opciones" hidden></div>
+
+        <form class="econobot-form" id="econobot-form" autocomplete="off">
+            <textarea id="econobot-texto" rows="1" maxlength="2000"
+                      placeholder="Escribe un mensaje…"
+                      aria-label="Mensaje para EconoBot"></textarea>
+            <button type="button" class="econobot-mic" id="econobot-mic" title="Dictar por voz" aria-label="Dictar por voz" hidden>
+                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="9" y="3" width="6" height="11" rx="3" fill="currentColor"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+            </button>
+            <button type="submit" class="econobot-enviar" id="econobot-enviar" title="Enviar" aria-label="Enviar">
+                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4.5 12h14M13 6.5l5.5 5.5-5.5 5.5" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
+        </form>
+        <p class="econobot-pie">Nada se guarda sin tu confirmación.</p>
+    </section>
+</div>
+<script src="{% static 'econobot/econobot.js' %}?v=20260927-4" defer></script>

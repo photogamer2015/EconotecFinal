@@ -1,5 +1,5 @@
 from django.urls import path
-from . import views_perfiles, views, views_pagos, views_admin, views_print, views_tecnico
+from . import views_perfiles, views, views_pagos, views_admin, views_print, views_tecnico, views_econobot
 
 app_name = 'econotec'
 
@@ -31,6 +31,10 @@ urlpatterns = [
     path('api/perfil/', views.api_perfil, name='api_perfil'),
     path('api/perfil/color/', views.api_perfil_color, name='api_perfil_color'),
     path('api/bitacora/hoy/', views.api_bitacora_hoy, name='api_bitacora_hoy'),
+
+    # ── EconoBot (asistente del sistema) ───────────────────
+    path('econobot/mensaje/', views_econobot.econobot_mensaje, name='econobot_mensaje'),
+    path('econobot/estado/', views_econobot.econobot_estado, name='econobot_estado'),
 
     # ── Alertas y Bot ──────────────────────────────────────────
     path('alertas/demoras/', views.alertas_demora, name='alertas_demora'),

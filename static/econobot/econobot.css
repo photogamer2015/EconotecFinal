@@ -1,0 +1,683 @@
+/* ─────────────────────────────────────────────────────────────
+   EconoBot — asistente del sistema.
+   Usa los tokens de diseño definidos en base.html (claro y oscuro).
+   ───────────────────────────────────────────────────────────── */
+
+.econobot {
+    /* Espacio al final de la página: el botón flotante nunca tapa el último contenido. */
+    height: 64px;
+    --eb-extra-bottom: 0px;
+    --eb-naranja: var(--primary, #f97618);
+    font-family: inherit;
+}
+
+/* ── Avatar ─────────────────────────────────────────────────── */
+.econobot-avatar {
+    width: 30px;
+    height: 30px;
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    border-radius: 50%;
+    /* Fondo claro propio (también fuera del widget): la cara se ve igual en el menú oscuro y en ambos temas. */
+    background: radial-gradient(circle at 50% 30%, #fffaf3 0%, #ffe8d1 100%);
+    box-shadow: inset 0 0 0 1px rgba(249, 118, 24, 0.28);
+}
+.econobot-avatar picture,
+.econobot-avatar img {
+    display: block;
+    width: 100%;
+    height: 100%;
+}
+.econobot-avatar img {
+    max-width: none;
+    object-fit: cover;
+}
+.econobot-avatar-lg {
+    width: 40px;
+    height: 40px;
+}
+
+/* ── Botón flotante ─────────────────────────────────────────── */
+.econobot-launcher {
+    position: fixed;
+    right: 22px;
+    bottom: calc(22px + var(--eb-extra-bottom) + env(safe-area-inset-bottom, 0px));
+    z-index: 1040;
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 18px 8px 8px;
+    border: 0;
+    border-radius: 999px;
+    background: var(--header-bg, #161412);
+    color: #ffffff;
+    font: inherit;
+    font-size: 14px;
+    font-weight: 650;
+    letter-spacing: 0.01em;
+    cursor: pointer;
+    box-shadow: 0 10px 28px -8px rgba(28, 25, 23, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.06);
+    transition: transform 0.2s ease, box-shadow 0.2s ease, bottom 0.2s ease;
+}
+.econobot-launcher:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 14px 32px -8px rgba(28, 25, 23, 0.5), 0 0 0 1px rgba(249, 118, 24, 0.35);
+}
+.econobot-launcher:focus-visible {
+    outline: 3px solid rgba(249, 118, 24, 0.55);
+    outline-offset: 3px;
+}
+.econobot-launcher .econobot-avatar {
+    width: 32px;
+    height: 32px;
+}
+.econobot-launcher-dot {
+    position: absolute;
+    top: 4px;
+    left: 30px;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #22c55e;
+    border: 2px solid var(--header-bg, #161412);
+}
+.econobot.is-open .econobot-launcher {
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(8px) scale(0.96);
+}
+[data-theme="dark"] .econobot-launcher {
+    background: #1f1f23;
+    box-shadow: 0 12px 30px -10px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255, 255, 255, 0.1);
+}
+[data-theme="dark"] .econobot-launcher-dot { border-color: #1f1f23; }
+
+/* ── Panel ──────────────────────────────────────────────────── */
+.econobot-panel {
+    position: fixed;
+    right: 22px;
+    bottom: calc(22px + env(safe-area-inset-bottom, 0px));
+    z-index: 1050;
+    width: 400px;
+    max-width: calc(100vw - 32px);
+    height: min(680px, calc(100vh - 96px));
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background: var(--card-bg, #ffffff);
+    color: var(--text-main, #1c1917);
+    border: 1px solid var(--border-color, #ebe6e1);
+    border-radius: 20px;
+    box-shadow: var(--shadow-lg, 0 24px 60px -16px rgba(28, 25, 23, 0.28));
+    transform-origin: bottom right;
+    animation: econobot-entrar 0.22s ease-out;
+}
+.econobot-panel[hidden] { display: none; }
+
+/* Solo la conversación cede espacio; cabecera, opciones y caja de texto conservan su alto. */
+.econobot-head,
+.econobot-banner,
+.econobot-firma,
+.econobot-opciones,
+.econobot-form,
+.econobot-pie {
+    flex-shrink: 0;
+}
+
+@keyframes econobot-entrar {
+    from { opacity: 0; transform: translateY(12px) scale(0.98); }
+    to { opacity: 1; transform: none; }
+}
+
+/* Cabecera */
+.econobot-head {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    padding: 13px 12px 12px 16px;
+    border-bottom: 1px solid var(--border-color, #ebe6e1);
+    background: var(--card-bg, #ffffff);
+}
+.econobot-head-text {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    flex: 1 1 auto;
+    line-height: 1.2;
+}
+.econobot-head-text strong {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--text-main, #1c1917);
+}
+.econobot-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 3px;
+    font-size: 12px;
+    color: var(--text-muted, #78716c);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.econobot-status::before {
+    content: '';
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #22c55e;
+    flex: 0 0 auto;
+}
+.econobot.is-busy .econobot-status::before {
+    background: var(--eb-naranja);
+    animation: econobot-latido 1s ease-in-out infinite;
+}
+@keyframes econobot-latido {
+    50% { opacity: 0.35; }
+}
+.econobot-head-actions {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+}
+.econobot-icon-btn {
+    width: 34px;
+    height: 34px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border: 0;
+    border-radius: 10px;
+    background: transparent;
+    color: var(--text-muted, #78716c);
+    font-size: 15px;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+}
+.econobot-icon-btn svg {
+    width: 18px;
+    height: 18px;
+}
+.econobot-icon-btn:hover {
+    background: var(--surface-muted, #f4f1ed);
+    color: var(--text-main, #1c1917);
+}
+.econobot-icon-btn:focus-visible,
+.econobot-chip:focus-visible,
+.econobot-enlace:focus-visible,
+.econobot-banner button:focus-visible,
+.econobot-firma-acciones button:focus-visible {
+    outline: 2px solid rgba(249, 118, 24, 0.6);
+    outline-offset: 2px;
+}
+.econobot-icon-btn[aria-pressed="false"] { opacity: 0.55; }
+
+/* Registro en curso */
+.econobot-banner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 8px 12px 8px 16px;
+    background: var(--tint-orange-bg, #ffedd5);
+    color: var(--tint-orange-fg, #c2410c);
+    font-size: 12.5px;
+    font-weight: 600;
+    border-bottom: 1px solid rgba(249, 118, 24, 0.18);
+}
+.econobot-banner[hidden] { display: none; }
+.econobot-banner-text {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.econobot-banner-acciones {
+    display: flex;
+    gap: 6px;
+    flex: 0 0 auto;
+}
+.econobot-banner button {
+    padding: 4px 10px;
+    border: 1px solid rgba(249, 118, 24, 0.35);
+    border-radius: 999px;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+}
+.econobot-banner button:hover { background: rgba(249, 118, 24, 0.12); }
+
+/* Conversación */
+.econobot-mensajes {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 16px 14px 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    background: var(--bg, #f7f5f2);
+    scrollbar-width: thin;
+}
+.econobot-msg {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+    max-width: 100%;
+}
+.econobot-msg-yo { align-items: flex-end; }
+.econobot-burbuja {
+    max-width: 88%;
+    padding: 10px 13px;
+    border-radius: 16px 16px 16px 6px;
+    background: var(--card-bg, #ffffff);
+    border: 1px solid var(--border-color, #ebe6e1);
+    color: var(--text-main, #1c1917);
+    font-size: 14px;
+    line-height: 1.5;
+    white-space: pre-line;
+    overflow-wrap: anywhere;
+    box-shadow: 0 1px 2px rgba(28, 25, 23, 0.04);
+}
+.econobot-msg-yo .econobot-burbuja {
+    background: var(--eb-naranja);
+    border-color: transparent;
+    color: #ffffff;
+    border-radius: 16px 16px 6px 16px;
+}
+.econobot-msg.is-error .econobot-burbuja {
+    background: var(--tint-red-bg, #fee2e2);
+    border-color: transparent;
+    color: var(--tint-red-fg, #b91c1c);
+}
+.econobot-hora {
+    font-size: 10.5px;
+    color: var(--text-muted, #78716c);
+    padding: 0 4px;
+}
+.econobot-enlaces {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    max-width: 92%;
+}
+.econobot-enlace {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 6px 11px;
+    border: 1px solid var(--border-color, #ebe6e1);
+    border-radius: 999px;
+    background: var(--card-bg, #ffffff);
+    color: var(--primary-dark, #c2410c);
+    font-size: 12.5px;
+    font-weight: 600;
+    line-height: 1.2;
+    text-decoration: none;
+    transition: background 0.15s, border-color 0.15s;
+}
+.econobot-enlace:hover {
+    background: var(--hover-bg, #fcf6f1);
+    border-color: rgba(249, 118, 24, 0.35);
+    text-decoration: none;
+}
+.econobot-enlace-nueva::after {
+    content: '↗';
+    font-size: 11px;
+    opacity: 0.75;
+}
+.econobot-enlace-wa {
+    color: var(--tint-green-fg, #15803d);
+}
+.econobot-enlace-wa::before {
+    content: '';
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #25d366;
+}
+
+/* Presentación: la mascota saluda al inicio de la conversación. */
+.econobot-hero {
+    flex: 0 0 auto;
+    display: flex;
+    justify-content: center;
+    padding: 4px 0 2px;
+}
+.econobot-hero picture {
+    display: block;
+}
+.econobot-hero img {
+    display: block;
+    width: 108px;
+    height: auto;
+    filter: drop-shadow(0 12px 14px rgba(28, 25, 23, 0.16));
+    animation: econobot-flotar 4s ease-in-out infinite;
+}
+[data-theme="dark"] .econobot-hero img {
+    filter: drop-shadow(0 12px 16px rgba(0, 0, 0, 0.55));
+}
+@keyframes econobot-flotar {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-5px); }
+}
+
+/* Escribiendo… */
+.econobot-escribiendo .econobot-burbuja {
+    display: inline-flex;
+    gap: 4px;
+    padding: 13px 14px;
+}
+.econobot-escribiendo span {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--text-muted, #78716c);
+    animation: econobot-punto 1.2s infinite ease-in-out both;
+}
+.econobot-escribiendo span:nth-child(2) { animation-delay: 0.15s; }
+.econobot-escribiendo span:nth-child(3) { animation-delay: 0.3s; }
+@keyframes econobot-punto {
+    0%, 80%, 100% { transform: scale(0.55); opacity: 0.4; }
+    40% { transform: scale(1); opacity: 1; }
+}
+
+/* Opciones rápidas */
+.econobot-opciones {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    max-height: 142px;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    padding: 10px 14px 2px;
+    border-top: 1px solid var(--border-color, #ebe6e1);
+    background: var(--card-bg, #ffffff);
+}
+.econobot-opciones[hidden] { display: none; }
+.econobot-chip {
+    padding: 7px 12px;
+    border: 1px solid rgba(249, 118, 24, 0.28);
+    border-radius: 999px;
+    background: var(--primary-light, #fff1e6);
+    color: var(--tint-orange-fg, #c2410c);
+    font: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1.2;
+    text-align: left;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s, transform 0.1s;
+}
+.econobot-chip:hover {
+    background: rgba(249, 118, 24, 0.18);
+    border-color: rgba(249, 118, 24, 0.45);
+}
+.econobot-chip:active { transform: scale(0.97); }
+
+/* Firma */
+.econobot-firma {
+    padding: 10px 14px 4px;
+    border-top: 1px solid var(--border-color, #ebe6e1);
+    background: var(--card-bg, #ffffff);
+}
+.econobot-firma[hidden] { display: none; }
+.econobot-firma-cabecera {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    margin-bottom: 8px;
+    font-size: 13px;
+}
+.econobot-firma-cabecera span {
+    font-size: 12px;
+    color: var(--text-muted, #78716c);
+}
+.econobot-firma-lienzo {
+    display: block;
+    width: 100%;
+    height: 170px;
+    background: #ffffff;
+    border: 1.5px dashed var(--input-border, #e0d9d2);
+    border-radius: 12px;
+    touch-action: none;
+    cursor: crosshair;
+}
+.econobot-firma-acciones {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+    margin-top: 8px;
+}
+.econobot-firma-acciones button {
+    padding: 8px 13px;
+    border: 1px solid var(--border-color, #ebe6e1);
+    border-radius: 10px;
+    background: var(--card-bg, #ffffff);
+    color: var(--text-main, #1c1917);
+    font: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+}
+.econobot-firma-acciones button:hover { background: var(--surface-muted, #f4f1ed); }
+.econobot-firma-acciones button.is-principal {
+    background: var(--eb-naranja);
+    border-color: transparent;
+    color: #ffffff;
+}
+.econobot-firma-acciones button.is-principal:hover { background: var(--primary-hover, #ea670f); }
+.econobot-firma-acciones button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* Escribir */
+.econobot-form {
+    display: flex;
+    align-items: flex-end;
+    gap: 8px;
+    padding: 10px 12px 6px;
+    background: var(--card-bg, #ffffff);
+}
+.econobot-opciones[hidden] + .econobot-form,
+.econobot-firma:not([hidden]) + .econobot-opciones[hidden] + .econobot-form {
+    border-top: 1px solid var(--border-color, #ebe6e1);
+}
+.econobot-form textarea {
+    flex: 1 1 auto;
+    min-width: 0;
+    min-height: 42px;
+    max-height: 132px;
+    margin: 0;
+    padding: 10px 13px;
+    resize: none;
+    overflow-y: hidden;
+    border: 1px solid var(--input-border, #e0d9d2);
+    border-radius: 14px;
+    background: var(--card-bg, #ffffff);
+    color: var(--text-main, #1c1917);
+    font: inherit;
+    font-size: 14px;
+    line-height: 1.4;
+    box-shadow: none;
+    transition: border-color 0.15s, box-shadow 0.15s;
+}
+.econobot-form textarea::placeholder { color: var(--text-muted, #78716c); }
+.econobot-form textarea:focus {
+    outline: none;
+    border-color: var(--eb-naranja);
+    box-shadow: var(--ring, 0 0 0 3px rgba(249, 118, 24, 0.18));
+}
+.econobot-mic,
+.econobot-enviar {
+    width: 42px;
+    height: 42px;
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    cursor: pointer;
+    transition: background 0.15s, transform 0.1s, opacity 0.15s;
+}
+.econobot-mic[hidden] { display: none; }
+.econobot-mic svg,
+.econobot-enviar svg {
+    width: 20px;
+    height: 20px;
+}
+.econobot-mic {
+    background: var(--surface-muted, #f4f1ed);
+    color: var(--text-soft, #57534e);
+}
+.econobot-mic:hover { background: var(--hover-bg, #fcf6f1); color: var(--text-main, #1c1917); }
+.econobot-mic.is-escuchando {
+    background: #dc2626;
+    color: #ffffff;
+    animation: econobot-escucha 1.2s ease-in-out infinite;
+}
+@keyframes econobot-escucha {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.45); }
+    50% { box-shadow: 0 0 0 7px rgba(220, 38, 38, 0); }
+}
+.econobot-enviar {
+    background: var(--eb-naranja);
+    color: #ffffff;
+}
+.econobot-enviar:hover { background: var(--primary-hover, #ea670f); }
+.econobot-enviar:active,
+.econobot-mic:active { transform: scale(0.95); }
+.econobot-enviar:disabled {
+    opacity: 0.55;
+    cursor: default;
+}
+.econobot-pie {
+    margin: 0;
+    padding: 0 14px 10px;
+    background: var(--card-bg, #ffffff);
+    color: var(--text-muted, #78716c);
+    font-size: 11px;
+    text-align: center;
+}
+
+/* ── Accesos en el menú y en el Inicio ──────────────────────── */
+header.top a.econobot-nav-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    color: #fdba74;
+}
+header.top a.econobot-nav-link:hover { color: #ffffff; }
+.econobot-nav-link .econobot-avatar {
+    width: 22px;
+    height: 22px;
+    box-shadow: none;
+}
+.card-box.card-box-econobot .card-icon {
+    overflow: hidden;
+    background: var(--tint-orange-bg, #ffedd5);
+}
+.card-box.card-box-econobot .card-icon picture,
+.card-box.card-box-econobot .card-icon img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    max-width: none;
+    object-fit: cover;
+}
+/* En escritorio el enlace se compacta u oculta si agregaría otra fila al menú. */
+@media (min-width: 901px) {
+    header.top a.econobot-nav-link.econobot-nav-compacto {
+        padding-left: 9px;
+        padding-right: 9px;
+    }
+    header.top a.econobot-nav-link.econobot-nav-compacto .econobot-nav-texto {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip: rect(0 0 0 0);
+        white-space: nowrap;
+    }
+    header.top a.econobot-nav-link.econobot-nav-oculto {
+        display: none;
+    }
+}
+
+/* ── Modo oscuro ────────────────────────────────────────────── */
+[data-theme="dark"] .econobot-burbuja { box-shadow: none; }
+[data-theme="dark"] .econobot-chip {
+    border-color: rgba(249, 118, 24, 0.3);
+}
+[data-theme="dark"] .econobot-enlace { color: #fdba74; }
+[data-theme="dark"] .econobot-enlace-wa { color: var(--tint-green-fg, #86efac); }
+[data-theme="dark"] .econobot-firma-lienzo { border-color: #52525b; }
+
+/* ── Celular: pantalla completa ─────────────────────────────── */
+@media (max-width: 600px) {
+    .econobot-launcher {
+        right: 14px;
+        bottom: calc(14px + var(--eb-extra-bottom) + env(safe-area-inset-bottom, 0px));
+        z-index: 2900;
+        padding: 7px 15px 7px 7px;
+        font-size: 13.5px;
+    }
+    .econobot-panel {
+        inset: 0;
+        right: 0;
+        bottom: 0;
+        z-index: 3500;
+        width: 100%;
+        max-width: none;
+        height: 100vh;
+        height: 100dvh;
+        border: 0;
+        border-radius: 0;
+        box-shadow: none;
+        animation-name: econobot-entrar-movil;
+    }
+    @keyframes econobot-entrar-movil {
+        from { opacity: 0; transform: translateY(24px); }
+        to { opacity: 1; transform: none; }
+    }
+    .econobot-head {
+        padding-top: max(12px, env(safe-area-inset-top, 0px));
+    }
+    .econobot-burbuja { max-width: 92%; }
+    .econobot-form textarea { font-size: 16px; }
+    .econobot-pie { padding-bottom: max(10px, env(safe-area-inset-bottom, 0px)); }
+    .econobot-firma-lienzo { height: 190px; }
+    html.econobot-bloqueo,
+    html.econobot-bloqueo body {
+        overflow: hidden;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .econobot-panel,
+    .econobot-launcher,
+    .econobot-hero img,
+    .econobot-escribiendo span,
+    .econobot-mic.is-escuchando,
+    .econobot.is-busy .econobot-status::before {
+        animation: none;
+        transition: none;
+    }
+}
+
+@media print {
+    .econobot { display: none !important; }
+}
