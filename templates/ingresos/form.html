@@ -2414,6 +2414,16 @@
         });
         window.__actualizarFinalizacionRapida = actualizar;
         actualizar();
+
+        // Retención de la factura: sobre el saldo del cobro adicional antes del pago de ahora.
+        if (window.EconotecRetencion) {
+            window.EconotecRetencion.montar(document.getElementById('fin-retencion'), {
+                factura: factura,
+                obtenerBase: function () {
+                    return Math.max(numero(valorAdicional) - numero(abono), 0);
+                },
+            });
+        }
     })();
 
     // Valor acordado: reemplaza el punto manual por una decisión clara.

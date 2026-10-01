@@ -19,6 +19,7 @@ from django.utils import timezone
 from .models import IngresoEquipo, SalidaEquipo
 from .permisos import tecnico_requerido
 from .qr_utils import qr_data_uri_para_ingreso, url_hoja_movil, qr_png_bytes_para_ingreso
+from .retencion import porcentajes_retencion
 
 
 # ═════════════════════════════════════════════════════════════════
@@ -1784,6 +1785,34 @@ def salida_factura_pdf(request, pk):
         draw_right(totals_x + 92, totals_y, label, 'Helvetica-Bold', 9)
         draw_right(totals_x + 150, totals_y, value, 'Helvetica', 9)
         totals_y -= 15
+
+    if salida.tiene_retencion:
+        pct = porcentajes_retencion()
+        filas_retencion = [
+            ('Subtotal a facturar:', _money_text_es(salida.retencion_subtotal)),
+            (f'IVA {pct["iva"]}%:', _money_text_es(salida.retencion_iva)),
+            ('Total factura:', _money_text_es(salida.valor_con_retencion)),
+            (f'Ret. IVA {pct["retencion_iva"]}%:', '-' + _money_text_es(salida.retencion_iva_retenido)),
+            (f'Ret. Renta {pct["retencion_renta"]}%:', '-' + _money_text_es(salida.retencion_renta_retenida)),
+            ('Valor a recibir:', _money_text_es(salida.retencion_valor_recibido)),
+        ]
+        # Columna izquierda, debajo de la descripción (a la derecha van los totales).
+        ret_x = margin_x + 4
+        ret_w = 250
+        ret_y = y - 46
+        # Que el bloque no pise las firmas: si no cabe, va en una hoja nueva.
+        if ret_y - 16 - len(filas_retencion) * 14 < 150:
+            c.showPage()
+            ret_y = height - 70
+        draw_text(ret_x, ret_y, 'RETENCIÓN APLICADA', 'Helvetica-Bold', 9, brand)
+        c.setStrokeColor(line_color)
+        c.setLineWidth(0.6)
+        c.line(ret_x, ret_y - 5, ret_x + ret_w, ret_y - 5)
+        ret_y -= 18
+        for label, value in filas_retencion:
+            draw_text(ret_x, ret_y, label, 'Helvetica-Bold', 9)
+            draw_right(ret_x + ret_w, ret_y, value, 'Helvetica', 9)
+            ret_y -= 14
 
     # Firmas del comprobante: técnico con imagen fija, cliente solo con línea.
     sig_y = 95

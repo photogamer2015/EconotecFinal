@@ -76,3 +76,10 @@ def dinero_signo(valor, vacio='$0,00'):
 def dinero_o_cero(valor):
     """Alias de dinero_signo sin vacío especial."""
     return f'${_formatear_es(_a_decimal(valor))}'
+
+
+@register.simple_tag
+def retencion_porcentajes():
+    """Porcentajes de la retención en facturas (IVA, ret. IVA, ret. renta)."""
+    from ..retencion import porcentajes_retencion
+    return porcentajes_retencion()

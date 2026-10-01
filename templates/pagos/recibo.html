@@ -66,6 +66,8 @@
             margin: 16px 0;
         }
 
+        .retencion { margin: 10px 0; padding: 8px 10px; border: 1px solid #c7d2fe; border-radius: 6px; background: #f5f7ff; }
+        .retencion-titulo { font-size: 11px; font-weight: 800; color: #1d4ed8; text-transform: uppercase; letter-spacing: .5px; margin-bottom: 2px; }
         .footer { text-align: center; font-size: 10px; color: #888; margin-top: 18px; padding-top: 14px; border-top: 1px dashed #ccc; }
         .firma { margin-top: 32px; text-align: center; }
         .firma .line { border-top: 1px solid #555; padding-top: 4px; font-size: 10px; color: var(--naranja); font-weight: 700; max-width: 240px; margin: 0 auto; }
@@ -105,6 +107,18 @@
     </div>
 
     <div class="row"><span class="lbl">Método de pago:</span><span class="val">{{ abono.get_metodo_display }}</span></div>
+    {% if abono.tiene_retencion %}
+    {% retencion_porcentajes as ret_pct %}
+    <div class="retencion">
+        <div class="retencion-titulo">Factura con retención</div>
+        <div class="row"><span class="lbl">Subtotal a facturar:</span><span class="val">{{ abono.retencion_subtotal|dinero_signo }}</span></div>
+        <div class="row"><span class="lbl">IVA {{ ret_pct.iva }}%:</span><span class="val">{{ abono.retencion_iva|dinero_signo }}</span></div>
+        <div class="row"><span class="lbl">Total factura:</span><span class="val">{{ abono.valor_con_retencion|dinero_signo }}</span></div>
+        <div class="row"><span class="lbl">Ret. IVA {{ ret_pct.retencion_iva }}%:</span><span class="val">-{{ abono.retencion_iva_retenido|dinero_signo }}</span></div>
+        <div class="row"><span class="lbl">Ret. Renta {{ ret_pct.retencion_renta }}%:</span><span class="val">-{{ abono.retencion_renta_retenida|dinero_signo }}</span></div>
+        <div class="row"><span class="lbl">Valor a recibir:</span><span class="val">{{ abono.retencion_valor_recibido|dinero_signo }}</span></div>
+    </div>
+    {% endif %}
     {% if abono.banco %}
     <div class="row"><span class="lbl">Banco:</span><span class="val">{{ abono.get_banco_display }}</span></div>
     {% endif %}

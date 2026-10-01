@@ -298,10 +298,111 @@ class NotificacionInventarioAdmin(models.Model):
 
 
 # ─────────────────────────────────────────────────────────
+# Retención en facturas (abonos, finalizaciones y ventas)
+# ─────────────────────────────────────────────────────────
+
+class RetencionFactura(models.Model):
+    """
+    Retención opcional de una factura con datos.
+
+    `valor_con_retencion` es el total de la factura (editable). El desglose se
+    guarda al momento de emitirla para que no cambie si luego cambia el IVA.
+    """
+    CAMPOS_RETENCION = (
+        'aplica_retencion',
+        'valor_con_retencion',
+        'retencion_subtotal',
+        'retencion_iva',
+        'retencion_iva_retenido',
+        'retencion_renta_retenida',
+    )
+
+    aplica_retencion = models.CharField(
+        max_length=2, choices=[('no', 'No'), ('si', 'Sí')], default='no',
+        verbose_name='¿Aplicar retención?',
+    )
+    valor_con_retencion = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True,
+        verbose_name='Valor con retención (total factura)',
+    )
+    retencion_subtotal = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True,
+        verbose_name='Subtotal a facturar',
+    )
+    retencion_iva = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True,
+        verbose_name='IVA de la factura con retención',
+    )
+    retencion_iva_retenido = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True,
+        verbose_name='Retención del IVA',
+    )
+    retencion_renta_retenida = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True,
+        verbose_name='Retención de renta',
+    )
+
+    class Meta:
+        abstract = True
+
+    @property
+    def tiene_retencion(self):
+        return (
+            self.factura_realizada == 'si'
+            and self.aplica_retencion == 'si'
+            and self.valor_con_retencion is not None
+        )
+
+    @property
+    def retencion_valor_recibido(self):
+        if not self.tiene_retencion:
+            return None
+        return (
+            self.valor_con_retencion
+            - (self.retencion_iva_retenido or Decimal('0.00'))
+            - (self.retencion_renta_retenida or Decimal('0.00'))
+        )
+
+    def _sincronizar_retencion(self):
+        """Deja el desglose coherente con el total, o limpia todo si no aplica."""
+        from .retencion import desglose_retencion
+
+        if (
+            self.factura_realizada == 'si'
+            and self.aplica_retencion == 'si'
+            and self.valor_con_retencion is not None
+        ):
+            desglose = desglose_retencion(self.valor_con_retencion)
+            self.valor_con_retencion = desglose['total']
+            self.retencion_subtotal = desglose['subtotal']
+            self.retencion_iva = desglose['iva']
+            self.retencion_iva_retenido = desglose['iva_retenido']
+            self.retencion_renta_retenida = desglose['renta_retenida']
+            return
+        self.aplica_retencion = 'no'
+        self.valor_con_retencion = None
+        self.retencion_subtotal = None
+        self.retencion_iva = None
+        self.retencion_iva_retenido = None
+        self.retencion_renta_retenida = None
+
+    def save(self, *args, **kwargs):
+        update_fields = kwargs.get('update_fields')
+        if update_fields is None:
+            self._sincronizar_retencion()
+        else:
+            campos = set(update_fields)
+            if campos & {'factura_realizada', *self.CAMPOS_RETENCION}:
+                self._sincronizar_retencion()
+                kwargs['update_fields'] = campos | set(self.CAMPOS_RETENCION)
+        super().save(*args, **kwargs)
+
+
+# ─────────────────────────────────────────────────────────
 # Ingreso de equipo (la "Solicitud de Ingreso")
 # ─────────────────────────────────────────────────────────
 
-class IngresoEquipo(models.Model):
+class IngresoEquipo(RetencionFactura):
     """
     Cada equipo entrante con su Solicitud de Ingreso.
     Es el documento principal del flujo de Econotec: equivale a la hoja
@@ -1319,7 +1420,7 @@ class VentaInventarioItem(models.Model):
 # Abonos parciales (pagos por reparación)
 # ─────────────────────────────────────────────────────────
 
-class Abono(models.Model):
+class Abono(RetencionFactura):
     """
     Cada pago parcial que hace el cliente para su reparación.
     El primer pago suele estar en `IngresoEquipo.abono_anticipo`;
@@ -1515,7 +1616,7 @@ class Abono(models.Model):
 # Salida de equipo
 # ─────────────────────────────────────────────────────────
 
-class SalidaEquipo(models.Model):
+class SalidaEquipo(RetencionFactura):
     """
     Documento de salida del equipo cuando se entrega al cliente.
 

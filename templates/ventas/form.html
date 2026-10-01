@@ -1125,6 +1125,7 @@
                     Selecciona Sí para habilitar los campos de factura.
                 </small>
             </div>
+            {% include 'includes/retencion_factura.html' with ret_id='venta' nombre_aplica='venta_aplica_retencion' nombre_valor='venta_valor_con_retencion' aplica=venta_pago_form.aplica_retencion valor=venta_pago_form.valor_con_retencion etiqueta_base='el valor cobrado ahora' %}
         </div>
 
         <!-- Campos ocultos de estado (ya vienen seteados a entregado en la vista) -->
@@ -2939,6 +2940,22 @@
             form.addEventListener('change', window.__checkRequired);
             setTimeout(window.__checkRequired, 100);
             setTimeout(window.__checkRequired, 500);
+        }
+
+        // Retención de la factura: sobre lo que se cobra ahora (total o abono inicial).
+        if (window.EconotecRetencion) {
+            window.EconotecRetencion.montar(document.getElementById('venta-retencion'), {
+                factura: selFactura,
+                obtenerBase: function () {
+                    var campo = selPagoModalidad && selPagoModalidad.value === 'abono'
+                        ? inpAbono
+                        : inpValorVenta;
+                    return campo ? campo.value : 0;
+                },
+                alCambiar: function () {
+                    if (window.__checkRequired) window.__checkRequired();
+                },
+            });
         }
     })();
 </script>

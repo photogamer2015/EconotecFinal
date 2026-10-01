@@ -197,6 +197,7 @@
                 {{ salida_form.factura_correo.errors }}
             </div>
         </div>
+        {% include 'includes/retencion_factura.html' with ret_id='fin' nombre_aplica=salida_form.aplica_retencion.html_name nombre_valor=salida_form.valor_con_retencion.html_name aplica=salida_form.aplica_retencion.value valor=salida_form.valor_con_retencion.value etiqueta_base='el saldo del cobro adicional' errores_aplica=salida_form.aplica_retencion.errors errores_valor=salida_form.valor_con_retencion.errors %}
     </div>
 
     <div style="margin-top:14px;">

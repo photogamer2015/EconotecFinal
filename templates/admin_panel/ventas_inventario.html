@@ -577,6 +577,9 @@
                                     <span class="avi-badge {{ venta.estado_pago_clase_admin }}">{{ venta.estado_pago_admin }}</span>
                                     {% if venta.factura_realizada == 'si' %}
                                         <small>Factura con datos</small>
+                                        {% if venta.tiene_retencion %}
+                                            <small>Con retención: {{ venta.valor_con_retencion|dinero_signo }}</small>
+                                        {% endif %}
                                     {% endif %}
                                 </td>
                                 <td>

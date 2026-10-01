@@ -566,6 +566,7 @@
                 <div></div>
             </div>
         </div>
+        {% include 'includes/retencion_factura.html' with ret_id='salida' nombre_aplica=form.aplica_retencion.html_name nombre_valor=form.valor_con_retencion.html_name aplica=form.aplica_retencion.value valor=form.valor_con_retencion.value etiqueta_base='el saldo pendiente' errores_aplica=form.aplica_retencion.errors errores_valor=form.valor_con_retencion.errors %}
     </div>
     {% endif %}
 
@@ -1216,6 +1217,36 @@
                 }
             }
         }
+    })();
+
+    // Retención de la factura: se calcula sobre el saldo pendiente mostrado.
+    (function() {
+        if (!window.EconotecRetencion) return;
+        var saldoDisplay = document.getElementById('saldo-display');
+        var selEstado = document.querySelector('[name="estado_reparacion"]');
+        var aplicaAdicional = document.querySelector('[name="aplica_valor_acordado_adicional"]');
+        var inputCobrado = document.querySelector('input[name="valor_final_cobrado"]');
+        window.EconotecRetencion.montar(document.getElementById('salida-retencion'), {
+            factura: document.getElementById('id_factura_realizada'),
+            obtenerBase: function() {
+                var saldo = saldoDisplay
+                    ? window.EconotecRetencion.numeroDesdeTexto(saldoDisplay.textContent)
+                    : 0;
+                // En el cobro adicional el saldo mostrado ya descuenta el pago
+                // de ahora; la factura cubre ambos.
+                var estado = selEstado ? selEstado.value : '';
+                if (
+                    (estado === 'cliente_no_acepta' || estado === 'no_reparable')
+                    && aplicaAdicional && aplicaAdicional.value === 'si' && inputCobrado
+                ) {
+                    saldo += parseFloat(String(inputCobrado.value || '0').replace(',', '.')) || 0;
+                }
+                return saldo;
+            },
+            alCambiar: function() {
+                if (window.__checkRequired) window.__checkRequired();
+            },
+        });
     })();
 </script>
 {% endblock %}

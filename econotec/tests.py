@@ -1740,7 +1740,7 @@ class VentasTests(TestCase):
         self.assertContains(tabla, reverse('econotec:inventario_editar', kwargs={'codigo': item.codigo}))
         self.assertContains(tabla, reverse('econotec:inventario_eliminar', kwargs={'codigo': item.codigo}))
 
-    def test_inventario_solo_rechaza_modelo_repetido_sin_importar_formato(self):
+    def test_inventario_permite_registrar_nombre_marca_y_modelo_duplicados(self):
         existente = InventarioItem.objects.create(
             sede='guayaquil',
             categoria='impresora',
@@ -1772,13 +1772,11 @@ class VentasTests(TestCase):
             'observacion': '',
         })
 
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(InventarioItem.objects.count(), 1)
-        self.assertNotIn('producto', response.context['form'].errors)
-        self.assertIn('modelo', response.context['form'].errors)
-        self.assertContains(response, existente.codigo)
-        self.assertNotContains(response, 'Ya existe un producto con este mismo nombre')
-        self.assertContains(response, 'Ya existe un producto con este mismo modelo')
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(InventarioItem.objects.count(), 2)
+        nuevo = InventarioItem.objects.exclude(pk=existente.pk).get()
+        self.assertEqual(' '.join(nuevo.producto.casefold().split()), 'tarjeta logica')
+        self.assertNotEqual(nuevo.codigo, existente.codigo)
 
     def test_inventario_permite_producto_repetido_al_crear_y_editar(self):
         existente = InventarioItem.objects.create(
@@ -1836,7 +1834,7 @@ class VentasTests(TestCase):
         self.assertEqual(nuevo.cantidad, 3)
         self.assertEqual(nuevo.codigo, codigo)
 
-    def test_inventario_rechaza_modelo_repetido_aunque_cambie_producto(self):
+    def test_inventario_permite_mismo_modelo_para_productos_de_distinto_color(self):
         existente = InventarioItem.objects.create(
             sede='guayaquil',
             categoria='impresora',
@@ -1868,10 +1866,11 @@ class VentasTests(TestCase):
             'observacion': '',
         })
 
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(InventarioItem.objects.count(), 1)
-        self.assertIn('modelo', response.context['form'].errors)
-        self.assertContains(response, existente.codigo)
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(InventarioItem.objects.count(), 2)
+        nuevo = InventarioItem.objects.exclude(pk=existente.pk).get()
+        self.assertEqual(nuevo.modelo.casefold(), existente.modelo.casefold())
+        self.assertNotEqual(nuevo.producto, existente.producto)
 
     def test_inventario_permite_producto_y_modelo_parecidos(self):
         InventarioItem.objects.create(
@@ -5710,6 +5709,90 @@ class VentasTests(TestCase):
             ingreso.codigo_equipo,
         )
 
+    @override_settings(SALIDA_EMAIL_AUTOMATICO=False)
+    def test_detalle_finalizado_sin_saldo_permite_retirar_equipo(self):
+        ingreso = self.crear_ingreso_reparacion(valor_acordado=Decimal('0.00'))
+        salida = SalidaEquipo.objects.create(
+            ingreso=ingreso,
+            fecha_salida=date.today(),
+            estado_reparacion='pendiente_retiro',
+            tecnico_reparo=self.usuario,
+            valor_final_cobrado=Decimal('0.00'),
+            metodo_pago_final='sin_pago',
+            registrado_por=self.usuario,
+        )
+        detalle_url = reverse('econotec:ingreso_detalle', kwargs={'pk': ingreso.pk})
+        retirar_url = reverse('econotec:salida_marcar_retirada', kwargs={'pk': salida.pk})
+
+        detalle = self.client.get(detalle_url)
+
+        self.assertContains(detalle, '✅ Editar finalización')
+        self.assertContains(detalle, f'action="{retirar_url}"')
+        self.assertContains(detalle, '🚚 Retirar equipo')
+        self.assertContains(detalle, f'<input type="hidden" name="next" value="{detalle_url}">')
+        self.assertContains(
+            detalle,
+            f"confirmarCierre(event, this, '{ingreso.codigo_equipo}', false, 0.00, 0);",
+        )
+        self.assertNotContains(detalle, 'Retirar equipo — saldo pendiente')
+
+        response = self.client.post(retirar_url, {'aplicar_bodegaje': '', 'next': detalle_url})
+
+        self.assertRedirects(response, detalle_url)
+        salida.refresh_from_db()
+        self.assertEqual(salida.fecha_retiro_real, date.today())
+        self.assertEqual(salida.estado_reparacion, 'retirado')
+
+        detalle = self.client.get(detalle_url)
+        self.assertContains(detalle, 'Ya este equipo fue retirado por el cliente')
+        self.assertNotContains(detalle, f'action="{retirar_url}"')
+        self.assertNotContains(detalle, '🚚 Retirar equipo')
+
+    def test_detalle_finalizado_con_saldo_bloquea_retirar_equipo(self):
+        ingreso = self.crear_ingreso_reparacion(valor_acordado=Decimal('25.00'))
+        salida = SalidaEquipo.objects.create(
+            ingreso=ingreso,
+            fecha_salida=date.today(),
+            estado_reparacion='pendiente_retiro',
+            tecnico_reparo=self.usuario,
+            valor_final_cobrado=Decimal('0.00'),
+            metodo_pago_final='sin_pago',
+            registrado_por=self.usuario,
+        )
+        self.assertGreater(ingreso.diferencia, 0)
+
+        detalle = self.client.get(reverse('econotec:ingreso_detalle', kwargs={'pk': ingreso.pk}))
+
+        self.assertContains(detalle, '💳 Retirar equipo — saldo pendiente')
+        self.assertContains(detalle, 'onclick="alertaSaldoPendienteRetiro()"')
+        self.assertNotContains(
+            detalle,
+            reverse('econotec:salida_marcar_retirada', kwargs={'pk': salida.pk}),
+        )
+
+    def test_detalle_finalizado_pasa_bodegaje_al_retirar_equipo(self):
+        ingreso = self.crear_ingreso_reparacion(valor_acordado=Decimal('0.00'))
+        SalidaEquipo.objects.create(
+            ingreso=ingreso,
+            fecha_salida=date.today() - timedelta(days=20),
+            estado_reparacion='pendiente_retiro',
+            tecnico_reparo=self.usuario,
+            valor_final_cobrado=Decimal('0.00'),
+            metodo_pago_final='sin_pago',
+            registrado_por=self.usuario,
+        )
+        ingreso.refresh_from_db()
+        monto = ingreso.bodegaje_pendiente
+        dias = ingreso.bodegaje_dias_pendiente
+        self.assertGreater(monto, 0)
+
+        detalle = self.client.get(reverse('econotec:ingreso_detalle', kwargs={'pk': ingreso.pk}))
+
+        self.assertContains(
+            detalle,
+            f"confirmarCierre(event, this, '{ingreso.codigo_equipo}', true, {monto:.2f}, {dias});",
+        )
+
     @override_settings(
         EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend',
         SALIDA_EMAIL_AUTOMATICO=True,
@@ -9009,3 +9092,303 @@ class VentasTests(TestCase):
         ingresos = list(response.context['ingresos'])
         self.assertEqual(ingresos, [ingreso_reparacion])
         self.assertContains(response, '↳ En reparación')
+
+    # ── Retención en facturas ─────────────────────────────
+
+    def abono_retencion_post_data(self, **overrides):
+        data = {
+            'fecha': date.today().isoformat(),
+            'monto': '35.00',
+            'metodo': 'efectivo',
+            'banco': '',
+            'banco_otro': '',
+            'tarjeta_app': '',
+            'comprobante_url': '',
+            'numero_recibo': '',
+            'observaciones': '',
+            'factura_realizada': 'si',
+            'factura_nombres': 'Yandri Guevara',
+            'factura_cedula': '1207342716',
+            'factura_correo': 'factura@example.com',
+            'aplica_retencion': 'si',
+            'valor_con_retencion': '44.72',
+            'bodegaje_decision': 'na',
+            'bodegaje_monto_aplicado': '0.00',
+            'accion_abono': 'registrar',
+        }
+        data.update(overrides)
+        return data
+
+    def test_retencion_coincide_con_tabla_de_facturacion(self):
+        from .retencion import desglose_retencion, total_con_retencion
+
+        tabla = [
+            # neto, subtotal, IVA, total factura, ret. renta
+            ('35', '38.89', '5.83', '44.72', '3.89'),
+            ('40', '44.44', '6.67', '51.11', '4.44'),
+            ('50', '55.56', '8.33', '63.89', '5.56'),
+            ('60', '66.67', '10.00', '76.67', '6.67'),
+            ('70', '77.78', '11.67', '89.45', '7.78'),
+            ('80', '88.89', '13.33', '102.22', '8.89'),
+            ('90', '100.00', '15.00', '115.00', '10.00'),
+            ('100', '111.11', '16.67', '127.78', '11.11'),
+        ]
+        for neto, subtotal, iva, total, renta in tabla:
+            with self.subTest(neto=neto):
+                self.assertEqual(total_con_retencion(Decimal(neto)), Decimal(total))
+                desglose = desglose_retencion(Decimal(total))
+                self.assertEqual(desglose['subtotal'], Decimal(subtotal))
+                self.assertEqual(desglose['iva'], Decimal(iva))
+                self.assertEqual(desglose['iva_retenido'], Decimal(iva))
+                self.assertEqual(desglose['renta_retenida'], Decimal(renta))
+                self.assertEqual(desglose['recibido'], Decimal(neto))
+
+    def test_formulario_abono_muestra_opcion_de_retencion(self):
+        ingreso = self.crear_ingreso_reparacion(valor_acordado=Decimal('35.00'))
+
+        response = self.client.get(
+            reverse('econotec:abono_crear', kwargs={'ingreso_pk': ingreso.pk})
+        )
+
+        self.assertContains(response, '¿Aplicar retención?')
+        self.assertContains(response, 'id="abono-retencion"')
+        self.assertContains(response, 'name="aplica_retencion"')
+        self.assertContains(response, 'name="valor_con_retencion"')
+        self.assertContains(response, 'Si deseas, puedes editar este valor.')
+        self.assertContains(response, 'retencion.js')
+
+    def test_abono_con_factura_y_retencion_guarda_desglose_y_cobra_el_monto(self):
+        ingreso = self.crear_ingreso_reparacion(valor_acordado=Decimal('35.00'))
+
+        response = self.client.post(
+            reverse('econotec:abono_crear', kwargs={'ingreso_pk': ingreso.pk}),
+            self.abono_retencion_post_data(),
+        )
+
+        self.assertRedirects(response, reverse('econotec:ingreso_abonos', kwargs={'pk': ingreso.pk}))
+        abono = ingreso.abonos.get()
+        self.assertEqual(abono.monto, Decimal('35.00'))
+        self.assertEqual(abono.aplica_retencion, 'si')
+        self.assertEqual(abono.valor_con_retencion, Decimal('44.72'))
+        self.assertEqual(abono.retencion_subtotal, Decimal('38.89'))
+        self.assertEqual(abono.retencion_iva, Decimal('5.83'))
+        self.assertEqual(abono.retencion_iva_retenido, Decimal('5.83'))
+        self.assertEqual(abono.retencion_renta_retenida, Decimal('3.89'))
+        self.assertEqual(abono.retencion_valor_recibido, Decimal('35.00'))
+        ingreso.refresh_from_db()
+        self.assertEqual(ingreso.diferencia, Decimal('0.00'))
+
+        lista = self.client.get(reverse('econotec:ingreso_abonos', kwargs={'pk': ingreso.pk}))
+        self.assertContains(lista, 'Con retención: $44,72')
+        recibo = self.client.get(reverse('econotec:abono_recibo', kwargs={'abono_pk': abono.pk}))
+        self.assertContains(recibo, 'Factura con retención')
+        self.assertContains(recibo, '-$3,89')
+        self.assertContains(recibo, 'Valor a recibir:')
+
+    def test_abono_con_retencion_respeta_valor_editado(self):
+        ingreso = self.crear_ingreso_reparacion(valor_acordado=Decimal('35.00'))
+
+        self.client.post(
+            reverse('econotec:abono_crear', kwargs={'ingreso_pk': ingreso.pk}),
+            self.abono_retencion_post_data(valor_con_retencion='45.00'),
+        )
+
+        abono = ingreso.abonos.get()
+        self.assertEqual(abono.monto, Decimal('35.00'))
+        self.assertEqual(abono.valor_con_retencion, Decimal('45.00'))
+        self.assertEqual(abono.retencion_subtotal, Decimal('39.13'))
+        self.assertEqual(abono.retencion_iva, Decimal('5.87'))
+        self.assertEqual(abono.retencion_renta_retenida, Decimal('3.91'))
+        self.assertEqual(abono.retencion_valor_recibido, Decimal('35.22'))
+
+    def test_abono_con_retencion_sin_valor_lo_calcula_desde_el_monto(self):
+        ingreso = self.crear_ingreso_reparacion(valor_acordado=Decimal('35.00'))
+
+        self.client.post(
+            reverse('econotec:abono_crear', kwargs={'ingreso_pk': ingreso.pk}),
+            self.abono_retencion_post_data(monto='10.00', valor_con_retencion=''),
+        )
+
+        abono = ingreso.abonos.get()
+        self.assertEqual(abono.valor_con_retencion, Decimal('12.78'))
+        self.assertEqual(abono.retencion_valor_recibido, Decimal('10.00'))
+
+    def test_abono_sin_factura_no_guarda_retencion(self):
+        ingreso = self.crear_ingreso_reparacion(valor_acordado=Decimal('35.00'))
+
+        self.client.post(
+            reverse('econotec:abono_crear', kwargs={'ingreso_pk': ingreso.pk}),
+            self.abono_retencion_post_data(
+                factura_realizada='no',
+                factura_nombres='',
+                factura_cedula='',
+                factura_correo='',
+            ),
+        )
+
+        abono = ingreso.abonos.get()
+        self.assertEqual(abono.aplica_retencion, 'no')
+        self.assertIsNone(abono.valor_con_retencion)
+        self.assertIsNone(abono.retencion_subtotal)
+        self.assertFalse(abono.tiene_retencion)
+
+    def test_abono_mixto_guarda_la_retencion_del_total_en_la_primera_parte(self):
+        ingreso = self.crear_ingreso_reparacion(valor_acordado=Decimal('35.00'))
+
+        self.client.post(
+            reverse('econotec:abono_crear', kwargs={'ingreso_pk': ingreso.pk}),
+            self.abono_retencion_post_data(
+                metodo='mixto',
+                abono_monto_1='20.00',
+                abono_metodo_1='efectivo',
+                abono_monto_2='15.00',
+                abono_metodo_2='tarjeta',
+            ),
+        )
+
+        parte_1, parte_2 = ingreso.abonos.order_by('pk')
+        self.assertEqual(parte_1.valor_con_retencion, Decimal('44.72'))
+        self.assertEqual(parte_1.retencion_renta_retenida, Decimal('3.89'))
+        self.assertFalse(parte_2.tiene_retencion)
+
+    def test_finalizacion_con_retencion_se_ve_en_factura_pdf_y_reporte(self):
+        ingreso = self.crear_ingreso_reparacion(valor_acordado=Decimal('0.00'))
+
+        response = self.client.post(
+            reverse('econotec:salida_registrar', kwargs={'ingreso_pk': ingreso.pk}),
+            self.salida_post_data(
+                metodo_pago_final='sin_pago',
+                factura_realizada='si',
+                factura_nombres='Yandri Guevara',
+                factura_cedula='1207342716',
+                factura_correo='factura@example.com',
+                aplica_retencion='si',
+                valor_con_retencion='44.72',
+            ),
+        )
+
+        self.assertEqual(response.status_code, 302)
+        salida = SalidaEquipo.objects.get(ingreso=ingreso)
+        self.assertTrue(salida.tiene_retencion)
+        self.assertEqual(salida.valor_con_retencion, Decimal('44.72'))
+        self.assertEqual(salida.retencion_valor_recibido, Decimal('35.00'))
+
+        factura = self.client.get(reverse('econotec:salida_factura_imprimir', kwargs={'pk': salida.pk}))
+        self.assertContains(factura, 'Retención aplicada')
+        self.assertContains(factura, '$38,89')
+        self.assertContains(factura, '$44,72')
+        self.assertContains(factura, '-$5,83')
+        self.assertContains(factura, '-$3,89')
+        pdf = self.client.get(reverse('econotec:salida_factura_pdf', kwargs={'pk': salida.pk}))
+        self.assertEqual(pdf.status_code, 200)
+        self.assertTrue(pdf.content.startswith(b'%PDF-'))
+
+        acta = self.client.get(reverse('econotec:salida_imprimir', kwargs={'pk': salida.pk}))
+        self.assertContains(acta, 'Con retención: total factura $44,72')
+
+        self.client.force_login(self.admin)
+        reporte = self.client.get(
+            reverse('econotec:salida_facturas_lista'),
+            {'ano': '2026', 'mes': '7'},
+        )
+        self.assertContains(reporte, 'Con retención: $44,72')
+
+    def test_finalizacion_con_retencion_sin_valor_muestra_error(self):
+        ingreso = self.crear_ingreso_reparacion(valor_acordado=Decimal('0.00'))
+
+        response = self.client.post(
+            reverse('econotec:salida_registrar', kwargs={'ingreso_pk': ingreso.pk}),
+            self.salida_post_data(
+                metodo_pago_final='sin_pago',
+                factura_realizada='si',
+                factura_nombres='Yandri Guevara',
+                factura_cedula='1207342716',
+                factura_correo='factura@example.com',
+                aplica_retencion='si',
+                valor_con_retencion='',
+            ),
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Ingresa el valor con retención (mayor a $0.00).')
+        self.assertFalse(SalidaEquipo.objects.filter(ingreso=ingreso).exists())
+
+    def test_finalizacion_sin_campos_de_retencion_sigue_funcionando(self):
+        ingreso = self.crear_ingreso_reparacion(valor_acordado=Decimal('0.00'))
+        datos = self.salida_post_data(metodo_pago_final='sin_pago')
+        datos.pop('aplica_retencion', None)
+        datos.pop('valor_con_retencion', None)
+
+        response = self.client.post(
+            reverse('econotec:salida_registrar', kwargs={'ingreso_pk': ingreso.pk}),
+            datos,
+        )
+
+        self.assertEqual(response.status_code, 302)
+        salida = SalidaEquipo.objects.get(ingreso=ingreso)
+        self.assertEqual(salida.aplica_retencion, 'no')
+        self.assertIsNone(salida.valor_con_retencion)
+
+    def test_quitar_factura_limpia_la_retencion_guardada(self):
+        ingreso = self.crear_ingreso_reparacion(valor_acordado=Decimal('35.00'))
+        abono = Abono.objects.create(
+            ingreso=ingreso,
+            fecha=date.today(),
+            monto=Decimal('35.00'),
+            metodo='efectivo',
+            factura_realizada='si',
+            aplica_retencion='si',
+            valor_con_retencion=Decimal('44.72'),
+            registrado_por=self.usuario,
+        )
+        self.assertEqual(abono.retencion_subtotal, Decimal('38.89'))
+
+        abono.factura_realizada = 'no'
+        abono.save(update_fields=['factura_realizada'])
+
+        abono.refresh_from_db()
+        self.assertEqual(abono.aplica_retencion, 'no')
+        self.assertIsNone(abono.valor_con_retencion)
+        self.assertIsNone(abono.retencion_subtotal)
+
+    def test_venta_con_factura_y_retencion_guarda_y_se_puede_editar(self):
+        response = self.client.post(
+            reverse('econotec:venta_registrar'),
+            self.venta_post_data(**{
+                'venta_factura_realizada': 'si',
+                'venta_factura_nombres': 'Yandri Guevara',
+                'venta_factura_cedula': '1207342716',
+                'venta_factura_correo': 'factura@example.com',
+                'venta_aplica_retencion': 'si',
+                'venta_valor_con_retencion': '31.95',
+            }),
+        )
+
+        self.assertRedirects(response, reverse('econotec:venta_lista'))
+        venta = IngresoEquipo.objects.get(sede='ventas')
+        self.assertEqual(venta.abono_anticipo, Decimal('25.00'))
+        self.assertTrue(venta.tiene_retencion)
+        self.assertEqual(venta.valor_con_retencion, Decimal('31.95'))
+        self.assertEqual(venta.retencion_subtotal, Decimal('27.78'))
+        self.assertEqual(venta.retencion_valor_recibido, Decimal('25.00'))
+
+        editar = self.client.get(reverse('econotec:venta_editar', kwargs={'pk': venta.pk}))
+        self.assertContains(editar, 'name="venta_aplica_retencion"')
+        self.assertContains(editar, 'value="31.95"')
+
+    def test_venta_con_retencion_sin_valor_valido_muestra_error(self):
+        response = self.client.post(
+            reverse('econotec:venta_registrar'),
+            self.venta_post_data(**{
+                'venta_factura_realizada': 'si',
+                'venta_factura_nombres': 'Yandri Guevara',
+                'venta_factura_cedula': '1207342716',
+                'venta_factura_correo': 'factura@example.com',
+                'venta_aplica_retencion': 'si',
+                'venta_valor_con_retencion': 'abc',
+            }),
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Ingresa el valor con retención (mayor a $0.00).')
+        self.assertFalse(IngresoEquipo.objects.filter(sede='ventas').exists())

@@ -61,6 +61,9 @@
         color: var(--text-muted);
         font-weight: 700;
     }
+    .invoice-data .invoice-retencion {
+        color: var(--info);
+    }
     [data-theme="dark"] .invoice-badge.yes {
         background: rgba(16, 185, 129, 0.18);
         color: #6ee7b7;
@@ -135,6 +138,16 @@
                         <strong>{{ s.factura_nombres|default:"—" }}</strong>
                         <span>RUC/Cédula: {{ s.factura_cedula|default:"—" }}</span>
                         <span>Correo: {{ s.factura_correo|default:"—" }}</span>
+                        {% if s.tiene_retencion %}
+                            <span class="invoice-retencion">
+                                🧾 Con retención: {{ s.valor_con_retencion|dinero_signo }}
+                                · Ret. IVA -{{ s.retencion_iva_retenido|dinero_signo }}
+                                · Ret. Renta -{{ s.retencion_renta_retenida|dinero_signo }}
+                                · Recibes {{ s.retencion_valor_recibido|dinero_signo }}
+                            </span>
+                        {% else %}
+                            <span>Retención: No</span>
+                        {% endif %}
                     </div>
                 </td>
                 <td>

@@ -148,6 +148,11 @@
         background: #c4c9d1 !important;
         transform: none;
     }
+    .retirar-equipo-form { margin: 0; }
+    .retirar-equipo-form .btn {
+        width: 100%;
+        justify-content: center;
+    }
     .ingreso-edit-bloqueado {
         background: #d1d5db !important;
         border-color: #d1d5db !important;
@@ -946,6 +951,24 @@
                 {% if ingreso.sede != 'ventas' %}
                     {% if salida %}
                         <a href="{% url 'econotec:salida_editar' pk=salida.pk %}" class="btn btn-warning">✅ Editar finalización</a>
+                        {% if salida.pendiente_de_retiro_fisico and not ingreso.retirado_por_cliente %}
+                            {% if ingreso.diferencia > 0 %}
+                                <button type="button" class="btn btn-salida-bloqueada" onclick="alertaSaldoPendienteRetiro()" title="Saldo pendiente: {{ ingreso.diferencia|dinero_signo }}">
+                                    💳 Retirar equipo — saldo pendiente
+                                </button>
+                            {% else %}
+                                <form method="post" action="{% url 'econotec:salida_marcar_retirada' pk=salida.pk %}"
+                                      class="retirar-equipo-form"
+                                      onsubmit="confirmarCierre(event, this, '{{ ingreso.codigo_equipo|escapejs }}', {% if ingreso.bodegaje_pendiente > 0 %}true{% else %}false{% endif %}, {{ ingreso.bodegaje_pendiente|default:0|stringformat:'.2f' }}, {{ ingreso.bodegaje_dias_pendiente|default:0 }});">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="aplicar_bodegaje" value="">
+                                    <input type="hidden" name="next" value="{% url 'econotec:ingreso_detalle' pk=ingreso.pk %}">
+                                    <button type="submit" class="btn btn-info" aria-label="Confirmar que el equipo {{ ingreso.codigo_equipo }} salió de la oficina">
+                                        🚚 Retirar equipo
+                                    </button>
+                                </form>
+                            {% endif %}
+                        {% endif %}
                         <a href="{% url 'econotec:salida_pdf' pk=salida.pk %}" class="btn btn-primary">📄 PDF del equipo</a>
                     {% else %}
                         {% if ingreso.valor_acordado is None %}
@@ -1008,6 +1031,20 @@
                 text: mensaje,
                 confirmButtonText: 'Entendido',
                 confirmButtonColor: '#f97618'
+            });
+        } else {
+            alert(mensaje);
+        }
+    }
+
+    function alertaSaldoPendienteRetiro() {
+        var mensaje = 'No se puede retirar. El cliente tiene un saldo pendiente de {{ ingreso.diferencia|dinero_signo|escapejs }}. Debe pagar todo antes de retirar el equipo.';
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                icon: 'error',
+                title: 'Saldo Pendiente',
+                text: mensaje,
+                confirmButtonColor: '#d33'
             });
         } else {
             alert(mensaje);

@@ -3,7 +3,7 @@ Vistas principales de Econotec.
 Maneja: bienvenida, ayuda, ingresos de equipos, salidas y clientes.
 """
 from datetime import date, timedelta
-from decimal import Decimal as D
+from decimal import Decimal as D, InvalidOperation
 from io import BytesIO
 import json
 import unicodedata
@@ -2928,6 +2928,10 @@ def _venta_pago_contexto(post_data=None, venta=None):
             'factura_nombres': (post_data.get('venta_factura_nombres') or '').strip(),
             'factura_cedula': (post_data.get('venta_factura_cedula') or '').strip(),
             'factura_correo': (post_data.get('venta_factura_correo') or '').strip(),
+            'aplica_retencion': (
+                'si' if (post_data.get('venta_aplica_retencion') or '').strip() == 'si' else 'no'
+            ),
+            'valor_con_retencion': (post_data.get('venta_valor_con_retencion') or '').strip(),
         }
     if venta is not None:
         valor = venta.valor_efectivo_a_cobrar or D('0.00')
@@ -2940,6 +2944,8 @@ def _venta_pago_contexto(post_data=None, venta=None):
             'factura_nombres': venta.factura_nombres or '',
             'factura_cedula': venta.factura_cedula or '',
             'factura_correo': venta.factura_correo or '',
+            'aplica_retencion': venta.aplica_retencion or 'no',
+            'valor_con_retencion': venta.valor_con_retencion,
         }
     return {
         'modalidad': 'directo',
@@ -2948,7 +2954,20 @@ def _venta_pago_contexto(post_data=None, venta=None):
         'factura_nombres': '',
         'factura_cedula': '',
         'factura_correo': '',
+        'aplica_retencion': 'no',
+        'valor_con_retencion': '',
     }
+
+
+def _valor_retencion_venta(texto):
+    """Convierte el valor con retención escrito en la venta; None si no es válido."""
+    try:
+        valor = D(str(texto or '').strip().replace(',', '.'))
+    except (InvalidOperation, ValueError):
+        return None
+    if not valor.is_finite() or valor <= D('0.00') or valor >= D('100000000'):
+        return None
+    return valor.quantize(D('0.01'))
 
 
 def _agregar_error_pago_venta(ing_form, mensaje):
@@ -3036,6 +3055,11 @@ def _validar_pago_venta(post_data, ing_form):
                 validate_email(factura['factura_correo'])
             except ValidationError:
                 _agregar_error_pago_venta(ing_form, 'Ingresa un correo válido para la factura.')
+        if (
+            factura['aplica_retencion'] == 'si'
+            and _valor_retencion_venta(factura['valor_con_retencion']) is None
+        ):
+            _agregar_error_pago_venta(ing_form, 'Ingresa el valor con retención (mayor a $0.00).')
 
 
 def _limpiar_pago_venta(venta):
@@ -3082,6 +3106,13 @@ def _aplicar_pago_venta(venta, post_data):
         venta.factura_nombres = ''
         venta.factura_cedula = ''
         venta.factura_correo = ''
+
+    if factura['factura_realizada'] == 'si' and factura['aplica_retencion'] == 'si':
+        venta.aplica_retencion = 'si'
+        venta.valor_con_retencion = _valor_retencion_venta(factura['valor_con_retencion'])
+    else:
+        venta.aplica_retencion = 'no'
+        venta.valor_con_retencion = None
 
 
 @tecnico_requerido

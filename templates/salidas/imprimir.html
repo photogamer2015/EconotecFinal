@@ -432,6 +432,14 @@
                 <span class="val">{{ salida.factura_correo|default:"—" }}</span>
             </div>
         </div>
+        {% if salida.tiene_retencion %}
+        <div class="invoice-retencion" style="margin-top:8px; font-size:11px; font-weight:700;">
+            Con retención: total factura {{ salida.valor_con_retencion|dinero_signo }}
+            · Ret. IVA -{{ salida.retencion_iva_retenido|dinero_signo }}
+            · Ret. Renta -{{ salida.retencion_renta_retenida|dinero_signo }}
+            · Valor a recibir {{ salida.retencion_valor_recibido|dinero_signo }}
+        </div>
+        {% endif %}
     </div>
     {% endif %}
 

@@ -193,6 +193,21 @@
             width: 90px;
             white-space: nowrap;
         }
+        .retencion-box {
+            width: 300px;
+            margin: 18px 0 0 auto;
+            padding: 10px 12px;
+            border: 1px solid #333;
+            page-break-inside: avoid;
+        }
+        .retencion-box h3 {
+            margin: 0 0 6px;
+            font-size: 12px;
+            font-weight: 900;
+            text-transform: uppercase;
+        }
+        .retencion-box .menos .value { color: #b91c1c; }
+        .retencion-box .recibido td { border-top: 1px solid #333; padding-top: 6px; }
         .signatures {
             display: grid;
             grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -391,6 +406,39 @@
                 </tr>
             </table>
         </section>
+
+        {% if salida.tiene_retencion %}
+        {% retencion_porcentajes as ret_pct %}
+        <section class="retencion-box">
+            <h3>Retención aplicada</h3>
+            <table class="totals-table">
+                <tr>
+                    <td class="label">Subtotal a facturar:</td>
+                    <td class="value">{{ salida.retencion_subtotal|dinero_signo }}</td>
+                </tr>
+                <tr>
+                    <td class="label">IVA {{ ret_pct.iva }}%:</td>
+                    <td class="value">{{ salida.retencion_iva|dinero_signo }}</td>
+                </tr>
+                <tr>
+                    <td class="label">Total factura (valor con retención):</td>
+                    <td class="value">{{ salida.valor_con_retencion|dinero_signo }}</td>
+                </tr>
+                <tr class="menos">
+                    <td class="label">Ret. IVA {{ ret_pct.retencion_iva }}%:</td>
+                    <td class="value">-{{ salida.retencion_iva_retenido|dinero_signo }}</td>
+                </tr>
+                <tr class="menos">
+                    <td class="label">Ret. Renta {{ ret_pct.retencion_renta }}%:</td>
+                    <td class="value">-{{ salida.retencion_renta_retenida|dinero_signo }}</td>
+                </tr>
+                <tr class="recibido">
+                    <td class="label">Valor a recibir:</td>
+                    <td class="value">{{ salida.retencion_valor_recibido|dinero_signo }}</td>
+                </tr>
+            </table>
+        </section>
+        {% endif %}
 
         <section class="signatures">
             <div class="signature-box">

@@ -1,0 +1,71 @@
+{% load static l10n econotec_extras %}{% retencion_porcentajes as ret_pct %}
+{% comment %}
+Retención de la factura. Solo se muestra cuando la factura es "Sí".
+Parámetros: ret_id, nombre_aplica, nombre_valor, aplica, valor, etiqueta_base,
+errores_aplica, errores_valor. La pantalla conecta el bloque con
+EconotecRetencion.montar(...) indicando de dónde sale el saldo / monto base.
+{% endcomment %}
+<style>
+    .retencion-factura { margin-top: 14px; }
+    .retencion-panel {
+        margin-top: 12px; padding: 14px; border-radius: 10px;
+        border: 1px solid rgba(37, 99, 235, 0.28); background: var(--card-bg);
+    }
+    .retencion-base { margin-bottom: 10px; color: var(--text-muted); font-size: 12px; }
+    .retencion-base strong { color: var(--text-main); }
+    .retencion-linea {
+        display: flex; justify-content: space-between; gap: 12px;
+        padding: 6px 2px; border-bottom: 1px dashed var(--border-color);
+        color: var(--text-main); font-size: 13px;
+    }
+    .retencion-linea strong { font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .retencion-linea.is-total, .retencion-linea.is-total strong { font-weight: 800; }
+    .retencion-linea.is-menos strong { color: var(--danger); }
+    .retencion-linea.is-recibido { border-bottom: none; color: var(--success); font-weight: 800; }
+    .retencion-linea.is-recibido strong { font-weight: 800; }
+    .retencion-valor { margin-top: 12px; }
+    .retencion-valor-fila { display: flex; gap: 8px; align-items: center; }
+    .retencion-valor-fila .form-input { flex: 1; min-width: 0; font-weight: 800; }
+    .retencion-valor-fila .btn { white-space: nowrap; }
+    .retencion-ayuda { display: block; margin-top: 6px; color: var(--text-muted); font-size: 11px; line-height: 1.4; }
+</style>
+<div class="retencion-factura" data-retencion id="{{ ret_id }}-retencion"
+     data-iva="{{ ret_pct.iva }}"
+     data-retencion-iva="{{ ret_pct.retencion_iva }}"
+     data-retencion-renta="{{ ret_pct.retencion_renta }}">
+    <label class="form-label" for="{{ ret_id }}-aplica-retencion">¿Aplicar retención?</label>
+    <select name="{{ nombre_aplica }}" id="{{ ret_id }}-aplica-retencion" class="form-input" data-ret-aplica>
+        <option value="no"{% if aplica != 'si' %} selected{% endif %}>No</option>
+        <option value="si"{% if aplica == 'si' %} selected{% endif %}>Sí</option>
+    </select>
+    {{ errores_aplica }}
+
+    <div class="retencion-panel" data-ret-panel>
+        <div class="retencion-base">
+            Calculado sobre {{ etiqueta_base|default:"el saldo" }}: <strong data-ret-base>$0,00</strong>
+        </div>
+        <div class="retencion-desglose">
+            <div class="retencion-linea"><span>Subtotal a facturar</span><strong data-ret-subtotal>$0,00</strong></div>
+            <div class="retencion-linea"><span>IVA {{ ret_pct.iva }}%</span><strong data-ret-iva>$0,00</strong></div>
+            <div class="retencion-linea is-total"><span>Total factura</span><strong data-ret-total>$0,00</strong></div>
+            <div class="retencion-linea is-menos"><span>Ret. IVA {{ ret_pct.retencion_iva }}%</span><strong data-ret-iva-retenido>$0,00</strong></div>
+            <div class="retencion-linea is-menos"><span>Ret. Renta {{ ret_pct.retencion_renta }}%</span><strong data-ret-renta>$0,00</strong></div>
+            <div class="retencion-linea is-recibido"><span>Recibes</span><strong data-ret-recibido>$0,00</strong></div>
+        </div>
+
+        <div class="retencion-valor">
+            <label class="form-label" for="{{ ret_id }}-valor-retencion">Valor con retención (total factura) *</label>
+            <div class="retencion-valor-fila">
+                <input type="number" name="{{ nombre_valor }}" id="{{ ret_id }}-valor-retencion"
+                       class="form-input" step="0.01" min="0.01" inputmode="decimal"
+                       value="{{ valor|default_if_none:''|unlocalize }}" data-ret-valor>
+                <button type="button" class="btn btn-secondary btn-sm" data-ret-recalcular style="display:none;">↻ Recalcular</button>
+            </div>
+            <small class="retencion-ayuda">
+                Se calcula automáticamente. Si deseas, puedes editar este valor.
+            </small>
+            {{ errores_valor }}
+        </div>
+    </div>
+</div>
+<script src="{% static 'retencion.js' %}?v=20260930-3"></script>

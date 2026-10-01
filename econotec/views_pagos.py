@@ -460,6 +460,9 @@ def abono_crear(request, ingreso_pk):
                         factura_nombres=abono.factura_nombres,
                         factura_cedula=abono.factura_cedula,
                         factura_correo=abono.factura_correo,
+                        # La retención se calculó sobre el total del abono mixto.
+                        aplica_retencion=abono.aplica_retencion,
+                        valor_con_retencion=abono.valor_con_retencion,
                         registrado_por=request.user,
                     )
                     a1.save()

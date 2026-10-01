@@ -3,7 +3,6 @@ Formularios de Econotec.
 """
 import base64
 import binascii
-import unicodedata
 
 from django import forms
 from django.contrib.auth import get_user_model
@@ -14,6 +13,7 @@ from .models import (
     CategoriaEgreso, Egreso, AvisoPanel, NotificacionAsesora, InventarioItem,
 )
 from .permisos import GRUPOS_TECNICO, GRUPOS_ADMIN, GRUPOS_ASESOR_COMERCIAL
+from .retencion import total_con_retencion
 
 
 User = get_user_model()
@@ -56,17 +56,6 @@ def _queryset_asesores():
 # ─────────────────────────────────────────────────────────
 # Inventario
 # ─────────────────────────────────────────────────────────
-
-def _normalizar_identidad_inventario(valor):
-    """Compara nombres/modelos sin depender de mayúsculas, acentos o espacios."""
-    texto = ' '.join(str(valor or '').strip().casefold().split())
-    texto = unicodedata.normalize('NFD', texto)
-    return ''.join(
-        caracter
-        for caracter in texto
-        if unicodedata.category(caracter) != 'Mn'
-    )
-
 
 class InventarioItemForm(forms.ModelForm):
     class Meta:
@@ -174,34 +163,6 @@ class InventarioItemForm(forms.ModelForm):
         else:
             cleaned_data['causa_no_disponible'] = ''
 
-        modelo = cleaned_data.get('modelo')
-        modelo_normalizado = _normalizar_identidad_inventario(modelo)
-        if self.sede_slug and self.categoria_slug and self.tipo_slug:
-            candidatos = InventarioItem.objects.filter(
-                sede=self.sede_slug,
-                categoria=self.categoria_slug,
-                tipo=self.tipo_slug,
-            ).only('pk', 'codigo', 'modelo', 'ubicacion')
-            if self.instance and self.instance.pk:
-                candidatos = candidatos.exclude(pk=self.instance.pk)
-
-            duplicado_modelo = next((
-                item
-                for item in candidatos
-                if modelo_normalizado
-                and _normalizar_identidad_inventario(item.modelo) == modelo_normalizado
-            ), None)
-
-            if duplicado_modelo:
-                self.add_error(
-                    'modelo',
-                    (
-                        'Ya existe un producto con este mismo modelo '
-                        f'como {duplicado_modelo.codigo} en '
-                        f'{duplicado_modelo.get_ubicacion_display()}. '
-                        'Usa un modelo diferente o actualiza el registro existente.'
-                    ),
-                )
         return cleaned_data
 
 
@@ -996,11 +957,37 @@ class ValorAcordadoPagoForm(forms.Form):
         return monto.quantize(Decimal('0.01'))
 
 
+class RetencionFacturaFormMixin:
+    """Retención opcional: solo se guarda con factura Sí y retención Sí."""
+
+    def _preparar_campos_retencion(self):
+        self.fields['aplica_retencion'].required = False
+        self.fields['valor_con_retencion'].required = False
+
+    def _limpiar_retencion(self, cleaned, base=None):
+        aplica = cleaned.get('aplica_retencion') or 'no'
+        if cleaned.get('factura_realizada') != 'si' or aplica != 'si':
+            cleaned['aplica_retencion'] = 'no'
+            cleaned['valor_con_retencion'] = None
+            return
+
+        valor = cleaned.get('valor_con_retencion')
+        if valor is None and base:
+            valor = total_con_retencion(base)
+        cleaned['aplica_retencion'] = 'si'
+        cleaned['valor_con_retencion'] = valor
+        if valor is None or valor <= Decimal('0.00'):
+            self.add_error(
+                'valor_con_retencion',
+                'Ingresa el valor con retención (mayor a $0.00).',
+            )
+
+
 # ─────────────────────────────────────────────────────────
 # Abono
 # ─────────────────────────────────────────────────────────
 
-class AbonoForm(forms.ModelForm):
+class AbonoForm(RetencionFacturaFormMixin, forms.ModelForm):
     METODOS_PAGO_MIXTO = [
         (codigo, etiqueta)
         for codigo, etiqueta in Abono.METODOS_PAGO
@@ -1067,6 +1054,7 @@ class AbonoForm(forms.ModelForm):
             'factura_realizada',
             'factura_nombres',
             'factura_cedula', 'factura_correo',
+            'aplica_retencion', 'valor_con_retencion',
             # Bodegaje
             'bodegaje_decision', 'bodegaje_monto_aplicado',
         ]
@@ -1137,6 +1125,7 @@ class AbonoForm(forms.ModelForm):
         # bodegaje_monto_aplicado es un campo oculto: nunca lo escribe el usuario,
         # se rellena automáticamente en clean() según la decisión.
         self.fields['bodegaje_monto_aplicado'].required = False
+        self._preparar_campos_retencion()
 
         # Placeholder para el select de bancos (sólo se muestra si método=transferencia)
         self.fields['banco'].choices = [
@@ -1276,6 +1265,9 @@ class AbonoForm(forms.ModelForm):
             cleaned['factura_nombres'] = ''
             cleaned['factura_cedula'] = ''
             cleaned['factura_correo'] = ''
+
+        # ── Retención: se calcula sobre el monto del abono ──
+        self._limpiar_retencion(cleaned, base=cleaned.get('monto'))
 
         # ── Validación: bodegaje ──
         bodegaje_pend = Decimal('0.00')
@@ -1423,7 +1415,7 @@ class CobroBodegajeForm(forms.Form):
 # Salida de equipo
 # ─────────────────────────────────────────────────────────
 
-class SalidaEquipoForm(forms.ModelForm):
+class SalidaEquipoForm(RetencionFacturaFormMixin, forms.ModelForm):
     ESTADOS_REVISION_PENDIENTE = ('cliente_no_acepta', 'no_reparable')
     ESTADOS_COBRO_ADICIONAL = ('pendiente_retiro', *ESTADOS_REVISION_PENDIENTE)
     ESTADO_REVISION = 'revision'
@@ -1469,6 +1461,7 @@ class SalidaEquipoForm(forms.ModelForm):
             'monto_2', 'metodo_2', 'banco_2',
             'factura_realizada', 'factura_nombres',
             'factura_cedula', 'factura_correo',
+            'aplica_retencion', 'valor_con_retencion',
         ]
         widgets = {
             'fecha_salida': forms.DateInput(attrs={'class': 'form-input', 'type': 'date'}, format='%Y-%m-%d'),
@@ -1546,6 +1539,7 @@ class SalidaEquipoForm(forms.ModelForm):
         self.notificacion_asesora_mensaje_default = ''
         self.fields['aplica_valor_acordado_adicional'].required = False
         self.fields['valor_acordado_adicional'].required = False
+        self._preparar_campos_retencion()
         self.fields['aplica_valor_acordado_adicional'].choices = [
             ('no', 'No'),
             ('si', 'Sí'),
@@ -1828,6 +1822,13 @@ class SalidaEquipoForm(forms.ModelForm):
         return pendiente if pendiente > 0 else Decimal('0.00')
 
     def clean(self):
+        cleaned = self._clean_finalizacion()
+        # Cortesía y demás cierres sin factura llegan con factura "no" y la
+        # retención queda limpia; el valor lo calcula la pantalla sobre el saldo.
+        self._limpiar_retencion(cleaned)
+        return cleaned
+
+    def _clean_finalizacion(self):
         cleaned = super().clean()
         estado_reparacion = cleaned.get('estado_reparacion')
         self.notificacion_asesora_tipo = None

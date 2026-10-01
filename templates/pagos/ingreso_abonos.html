@@ -167,6 +167,15 @@
             font-size: 13px;
         }
     }
+
+    .retencion-mini {
+        display: inline-block;
+        margin-top: 3px;
+        color: var(--info);
+        font-size: 11px;
+        font-weight: 700;
+        line-height: 1.4;
+    }
 </style>
 {% endblock %}
 
@@ -267,6 +276,14 @@
             <div><strong style="color:var(--text-main);">Cédula/RUC:</strong> {{ ingreso.factura_cedula|default:"—" }}</div>
             <div><strong style="color:var(--text-main);">Correo:</strong> {{ ingreso.factura_correo|default:"—" }}</div>
         </div>
+        {% if ingreso.tiene_retencion %}
+            <div class="retencion-mini" style="margin-top: 10px;">
+                🧾 Con retención: total factura {{ ingreso.valor_con_retencion|dinero_signo }}
+                · Ret. IVA -{{ ingreso.retencion_iva_retenido|dinero_signo }}
+                · Ret. Renta -{{ ingreso.retencion_renta_retenida|dinero_signo }}
+                · Recibes {{ ingreso.retencion_valor_recibido|dinero_signo }}
+            </div>
+        {% endif %}
     {% endif %}
 </div>
 {% endif %}
@@ -371,7 +388,12 @@
             <tr>
                 <td><strong style="color: var(--primary);">{{ a.numero_recibo }}</strong></td>
                 <td>{{ a.fecha|date:"d/m/Y" }}</td>
-                <td style="color: var(--success); font-weight: 700;">{{ a.monto|dinero_signo }}</td>
+                <td style="color: var(--success); font-weight: 700;">
+                    {{ a.monto|dinero_signo }}
+                    {% if a.tiene_retencion %}
+                        <br><small class="retencion-mini" title="Total de la factura con retención">🧾 Con retención: {{ a.valor_con_retencion|dinero_signo }}</small>
+                    {% endif %}
+                </td>
                 <td>{{ a.get_metodo_display }}</td>
                 <td>{{ a.get_banco_display|default:"—" }}</td>
                 <td>{{ a.observaciones|truncatechars:40|default:"—" }}</td>
@@ -394,7 +416,12 @@
             <tr>
                 <td><strong style="color: var(--primary);">SALIDA</strong></td>
                 <td>{{ salida.fecha_salida|date:"d/m/Y" }}</td>
-                <td style="color: var(--success); font-weight: 700;">{{ salida.valor_final_cobrado|dinero_signo }}</td>
+                <td style="color: var(--success); font-weight: 700;">
+                    {{ salida.valor_final_cobrado|dinero_signo }}
+                    {% if salida.tiene_retencion %}
+                        <br><small class="retencion-mini" title="Total de la factura con retención">🧾 Con retención: {{ salida.valor_con_retencion|dinero_signo }}</small>
+                    {% endif %}
+                </td>
                 <td>
                     {{ salida.get_metodo_pago_final_display }}{% if salida.metodo_pago_final == 'tarjeta' %} ({{ salida.tarjeta_app }}){% endif %}
                     {% if salida.metodo_pago_final == 'mixto' and salida.pago_mixto_partes %}
