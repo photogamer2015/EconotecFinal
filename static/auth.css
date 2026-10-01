@@ -202,3 +202,52 @@ button.primary:disabled,
         border-radius: 16px;
     }
 }
+
+/* Graphite identity across all authentication steps. */
+:root {
+    --auth-page-bg: #182425;
+    --card-bg: #f0f2ee;
+    --input-bg: #fafbf8;
+    --border-color: #ccd5cd;
+    --text-main: #263630;
+    --text-sub: #5c6d64;
+    --auth-heading: #21332b;
+}
+[data-theme="dark"] {
+    --auth-page-bg: #101a1b;
+    --card-bg: #1e2c2d;
+    --input-bg: #152223;
+    --border-color: #3b504b;
+    --text-main: #edf3ed;
+    --text-sub: #b0c2b8;
+    --auth-heading: #edf3ed;
+}
+body { background: radial-gradient(ellipse at 0 0, #365149 0, transparent 65%), var(--auth-page-bg); }
+.auth-login { gap: clamp(36px, 7vw, 110px); padding: 40px 6vw; }
+.auth-story { color: #eef4ef; width: min(510px, 45%); align-self: stretch; display: flex; flex-direction: column; justify-content: space-between; padding: 25px 0; }
+.auth-wordmark { font-size: 21px; font-weight: 800; letter-spacing: .15em; }
+.auth-wordmark span { display: block; font-size: 9px; letter-spacing: .22em; color: #b4c4ba; margin-top: 10px; }
+.auth-story-copy { padding: 65px 0; }
+.auth-eyebrow { color: #fba46b; font-size: 10px; letter-spacing: .18em; font-weight: 700; }
+.auth-story h2 { font-size: clamp(34px, 3.7vw, 55px); line-height: 1.12; letter-spacing: -.045em; margin: 24px 0; font-weight: 650; }
+.auth-story h2 em { color: #ff984f; font-style: normal; }
+.auth-story p { font-size: 15px; line-height: 1.8; max-width: 380px; color: #baccc1; }
+.auth-capabilities { display: grid; gap: 16px; margin-top: 34px; color: #dce6df; font-size: 12px; }
+.auth-capabilities span { padding-bottom: 16px; border-bottom: 1px solid #ffffff16; }
+.auth-story-footer { font-size: 10px; letter-spacing: .16em; color: #b4c4ba; }
+.auth-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #f97618; margin-right: 8px; }
+.auth-login .login-card { margin: 0; flex-shrink: 0; border-radius: 24px; border-top: 3px solid #f97618; padding: 28px 34px; box-shadow: 0 28px 70px #07100d55; }
+.auth-login .logo-img { width: 78px; height: 78px; }
+.auth-login .login-card h1 { font-size: 21px; }
+.auth-login .sub { line-height: 1.6; }
+button.primary, .primary, .modal-actions .btn-confirmar { color: #251c14; font-weight: 750; }
+button.primary:disabled, .primary:disabled { background: #d2d9d3; color: #5e6e62; }
+input:focus-visible, button:focus-visible, a:focus-visible { outline: 2px solid #e86c16; outline-offset: 3px; }
+@media (max-width: 850px) {
+    .auth-login { flex-direction: column; padding: 24px 16px; gap: 22px; }
+    .auth-story { width: 100%; max-width: 460px; align-self: center; padding: 0; }
+    .auth-wordmark { font-size: 16px; }
+    .auth-wordmark span { font-size: 8px; }
+    .auth-story-copy, .auth-story-footer { display: none; }
+    .auth-login .login-card { padding: 26px 24px; }
+}
