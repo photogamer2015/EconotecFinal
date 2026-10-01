@@ -8939,13 +8939,346 @@ class VentasTests(TestCase):
         self.assertEqual(nuevo_ingreso.cliente, self.cliente_existente)
         self.assertEqual(nuevo_ingreso.marca, 'MacBook M4 S')
 
+    def test_registrar_equipo_repetido_sin_respuesta_pregunta_si_o_no(self):
+        self.activar_sede_guayaquil()
+        anterior = self.crear_ingreso_reparacion(
+            marca='MacBook M4 S',
+            modelo_serie='MacBook M4 S',
+            serie='C02XK1',
+        )
+
+        response = self.client.post(
+            reverse('econotec:ingreso_registrar'),
+            self.ingreso_registro_post_data(**{'ing-serie': 'OTRA-123'}),
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(IngresoEquipo.objects.count(), 1)
+        errores = ' '.join(response.context['ing_form'].errors['modelo_serie'])
+        self.assertIn(f'ESTE EQUIPO YA SE ENCUENTRA REGISTRADO PARA ESTE CLIENTE — HOJA {anterior.codigo_equipo}', errores)
+        self.assertIn('Es el mismo equipo de este cliente', errores)
+        self.assertContains(
+            response,
+            'Si deseas hacer la diferencia entre el equipo ya registrado',
+        )
+        self.assertContains(response, 'ingresa el número de serie de este equipo. ¿Deseas ingresarlo?')
+        self.assertContains(response, 'id="id_equipo_repetido_serie"')
+
+    def test_registrar_equipo_repetido_responde_no_lo_registra_asi(self):
+        self.activar_sede_guayaquil()
+        anterior = self.crear_ingreso_reparacion(
+            marca='MacBook M4 S',
+            modelo_serie='MacBook M4 S',
+            serie='C02XK1',
+        )
+
+        response = self.client.post(
+            reverse('econotec:ingreso_registrar'),
+            self.ingreso_registro_post_data(**{'equipo_repetido': 'no'}),
+            follow=True,
+        )
+
+        nuevo = IngresoEquipo.objects.exclude(pk=anterior.pk).get()
+        self.assertRedirects(
+            response,
+            reverse('econotec:ingreso_detalle', kwargs={'pk': nuevo.pk}),
+        )
+        self.assertEqual(nuevo.cliente, self.cliente_existente)
+        self.assertEqual(nuevo.serie, '')
+        self.assertContains(
+            response,
+            f'Equipo registrado: es el mismo equipo de este cliente que ya se encuentra en la hoja {anterior.codigo_equipo}.',
+        )
+
+    def test_registrar_equipo_repetido_responde_si_sin_serie_registra(self):
+        self.activar_sede_guayaquil()
+        anterior = self.crear_ingreso_reparacion(
+            marca='MacBook M4 S',
+            modelo_serie='MacBook M4 S',
+            serie='C02XK1',
+        )
+
+        response = self.client.post(
+            reverse('econotec:ingreso_registrar'),
+            self.ingreso_registro_post_data(**{'equipo_repetido': 'si', 'ing-serie': '   '}),
+            follow=True,
+        )
+
+        nuevo = IngresoEquipo.objects.exclude(pk=anterior.pk).get()
+        self.assertRedirects(
+            response,
+            reverse('econotec:ingreso_detalle', kwargs={'pk': nuevo.pk}),
+        )
+        self.assertEqual(nuevo.serie, '')
+        self.assertContains(
+            response,
+            f'Equipo registrado: es el mismo equipo de este cliente que ya se encuentra en la hoja {anterior.codigo_equipo}.',
+        )
+
+    def test_registrar_equipo_repetido_conserva_respuesta_si_al_volver_con_error(self):
+        self.activar_sede_guayaquil()
+        self.crear_ingreso_reparacion(
+            marca='MacBook M4 S',
+            modelo_serie='MacBook M4 S',
+            serie='C02XK1',
+        )
+
+        response = self.client.post(
+            reverse('econotec:ingreso_registrar'),
+            self.ingreso_registro_post_data(**{'equipo_repetido': 'si', 'ing-serie': 'C02XK1'}),
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn('modelo_serie', response.context['ing_form'].errors)
+        self.assertEqual(response.context['equipo_repetido_opcion'], 'si')
+        self.assertRegex(response.content.decode(), r'name="equipo_repetido"\s+value="si"\s+checked')
+        self.assertContains(response, 'Número de serie de este equipo <span class="serie-opcional">(opcional)</span>')
+        self.assertIn(
+            'Ese número de serie ya pertenece a la hoja',
+            ' '.join(response.context['ing_form'].errors['serie']),
+        )
+
+    def test_registrar_equipo_repetido_responde_si_con_la_misma_serie_bloquea(self):
+        self.activar_sede_guayaquil()
+        anterior = self.crear_ingreso_reparacion(
+            marca='MacBook M4 S',
+            modelo_serie='MacBook M4 S',
+            serie='C02-XK1',
+        )
+
+        response = self.client.post(
+            reverse('econotec:ingreso_registrar'),
+            self.ingreso_registro_post_data(**{'equipo_repetido': 'si', 'ing-serie': ' c02 xk1 '}),
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(IngresoEquipo.objects.count(), 1)
+        errores = ' '.join(response.context['ing_form'].errors['serie'])
+        self.assertIn(f'Ese número de serie ya pertenece a la hoja {anterior.codigo_equipo}', errores)
+
+    def test_registrar_equipo_repetido_compara_serie_con_todos_los_del_modelo(self):
+        self.activar_sede_guayaquil()
+        self.crear_ingreso_reparacion(
+            marca='MacBook M4 S',
+            modelo_serie='MacBook M4 S',
+            serie='SERIE-UNO',
+        )
+        segundo = self.crear_ingreso_reparacion(
+            marca='MacBook M4 S',
+            modelo_serie='MacBook M4 S',
+            serie='SERIE-DOS',
+        )
+
+        response = self.client.post(
+            reverse('econotec:ingreso_registrar'),
+            self.ingreso_registro_post_data(**{'equipo_repetido': 'si', 'ing-serie': 'serie-dos'}),
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(IngresoEquipo.objects.count(), 2)
+        errores = ' '.join(response.context['ing_form'].errors['serie'])
+        self.assertIn(segundo.codigo_equipo, errores)
+
+    def test_registrar_equipo_repetido_responde_si_con_serie_diferente_registra(self):
+        self.activar_sede_guayaquil()
+        anterior = self.crear_ingreso_reparacion(
+            marca='MacBook M4 S',
+            modelo_serie='MacBook M4 S',
+            serie='C02XK1',
+        )
+
+        response = self.client.post(
+            reverse('econotec:ingreso_registrar'),
+            self.ingreso_registro_post_data(**{'equipo_repetido': 'si', 'ing-serie': 'C02ZZ9'}),
+            follow=True,
+        )
+
+        nuevo = IngresoEquipo.objects.exclude(pk=anterior.pk).get()
+        self.assertRedirects(
+            response,
+            reverse('econotec:ingreso_detalle', kwargs={'pk': nuevo.pk}),
+        )
+        self.assertEqual(nuevo.cliente, self.cliente_existente)
+        self.assertEqual(nuevo.modelo_serie, 'MacBook M4 S')
+        self.assertEqual(nuevo.serie, 'C02ZZ9')
+        self.assertContains(
+            response,
+            f'Equipo registrado con número de serie C02ZZ9: se diferencia del equipo de la hoja {anterior.codigo_equipo} del mismo cliente.',
+        )
+
+    def test_mismo_equipo_sin_serie_del_mismo_cliente_no_o_si_con_serie(self):
+        self.activar_sede_guayaquil()
+        datos_epson = {
+            'ing-tipo_equipo': 'impresora',
+            'ing-marca': 'Epson',
+            'ing-modelo_serie': 'L3410',
+            'ing-serie': '',
+        }
+        primera = self.client.post(
+            reverse('econotec:ingreso_registrar'),
+            self.ingreso_registro_post_data(**datos_epson),
+        )
+        primero = IngresoEquipo.objects.get(cliente=self.cliente_existente)
+        self.assertRedirects(primera, reverse('econotec:ingreso_detalle', kwargs={'pk': primero.pk}))
+
+        # El mismo equipo otra vez: aparece el aviso con la hoja anterior.
+        sin_respuesta = self.client.post(
+            reverse('econotec:ingreso_registrar'),
+            self.ingreso_registro_post_data(**datos_epson),
+        )
+        self.assertEqual(sin_respuesta.status_code, 200)
+        self.assertIn(
+            f'HOJA {primero.codigo_equipo}',
+            ' '.join(sin_respuesta.context['ing_form'].errors['modelo_serie']),
+        )
+
+        # «No», sin serie: se guarda sin ningún error como el mismo equipo.
+        con_no = self.client.post(
+            reverse('econotec:ingreso_registrar'),
+            self.ingreso_registro_post_data(**{**datos_epson, 'equipo_repetido': 'no'}),
+            follow=True,
+        )
+        segundo = IngresoEquipo.objects.filter(cliente=self.cliente_existente).latest('pk')
+        self.assertRedirects(con_no, reverse('econotec:ingreso_detalle', kwargs={'pk': segundo.pk}))
+        self.assertContains(con_no, f'es el mismo equipo de este cliente que ya se encuentra en la hoja {primero.codigo_equipo}')
+
+        # «Sí» con serie: la serie hace la diferencia y se guarda.
+        con_serie = self.client.post(
+            reverse('econotec:ingreso_registrar'),
+            self.ingreso_registro_post_data(**{**datos_epson, 'equipo_repetido': 'si', 'ing-serie': 'X3410-B'}),
+            follow=True,
+        )
+        tercero = IngresoEquipo.objects.filter(cliente=self.cliente_existente).latest('pk')
+        self.assertRedirects(con_serie, reverse('econotec:ingreso_detalle', kwargs={'pk': tercero.pk}))
+        self.assertEqual(tercero.serie, 'X3410-B')
+        self.assertIn(
+            f'Equipo registrado con número de serie X3410-B: se diferencia del equipo de la hoja '
+            f'{segundo.codigo_equipo} del mismo cliente.',
+            [str(m) for m in con_serie.context['messages']],
+        )
+        self.assertEqual(IngresoEquipo.objects.filter(cliente=self.cliente_existente).count(), 3)
+
+    def test_mismo_equipo_en_clientes_distintos_solo_valida_al_mismo_cliente(self):
+        self.activar_sede_guayaquil()
+        yaciel = Cliente.objects.create(cedula='0922222222', nombres='Yaciel Bustos')
+        equipo_yaciel = self.crear_ingreso_reparacion(
+            cliente=yaciel,
+            tipo_equipo='impresora',
+            marca='Epson',
+            modelo_serie='L3410',
+        )
+        datos_epson = {
+            'ing-tipo_equipo': 'impresora',
+            'ing-marca': 'Epson',
+            'ing-modelo_serie': 'L3410',
+        }
+
+        # Yandri Guevara trae la misma Epson L3410 que Yaciel: clientes distintos, no se avisa.
+        primera = self.client.post(
+            reverse('econotec:ingreso_registrar'),
+            self.ingreso_registro_post_data(**datos_epson),
+        )
+        equipo_yandri = IngresoEquipo.objects.get(cliente=self.cliente_existente)
+        self.assertRedirects(
+            primera,
+            reverse('econotec:ingreso_detalle', kwargs={'pk': equipo_yandri.pk}),
+        )
+
+        # La búsqueda por cédula solo devuelve los equipos de ese cliente.
+        busqueda = self.client.get(
+            reverse('econotec:cliente_buscar_por_cedula'),
+            {'cedula': self.cliente_existente.cedula},
+        ).json()
+        self.assertEqual([eq['id'] for eq in busqueda['equipos']], [equipo_yandri.pk])
+
+        # Yandri vuelve con otra Epson L3410: mismo cliente y mismo modelo, ahí sí se pregunta.
+        segunda = self.client.post(
+            reverse('econotec:ingreso_registrar'),
+            self.ingreso_registro_post_data(**datos_epson),
+        )
+        self.assertEqual(segunda.status_code, 200)
+        errores = ' '.join(segunda.context['ing_form'].errors['modelo_serie'])
+        self.assertIn(equipo_yandri.codigo_equipo, errores)
+        self.assertNotIn(equipo_yaciel.codigo_equipo, errores)
+        self.assertEqual(IngresoEquipo.objects.filter(cliente=self.cliente_existente).count(), 1)
+
+        # Yaciel también puede volver a traer su equipo: solo se compara con lo suyo.
+        tercera = self.client.post(
+            reverse('econotec:ingreso_registrar'),
+            self.ingreso_registro_post_data(**{
+                **datos_epson,
+                'cli-cedula': yaciel.cedula,
+                'cli-nombres': yaciel.nombres,
+                'cli-whatsapp': '',
+                'cli-correo': '',
+                'cli-sector': '',
+                'cli-sector_otro': '',
+                'equipo_repetido': 'no',
+            }),
+        )
+        self.assertEqual(tercera.status_code, 302)
+        self.assertEqual(IngresoEquipo.objects.filter(cliente=yaciel).count(), 2)
+
+    def test_registrar_mismo_modelo_de_otro_cliente_no_pregunta(self):
+        self.activar_sede_guayaquil()
+        otro_cliente = Cliente.objects.create(cedula='0911111111', nombres='Otro Cliente')
+        self.crear_ingreso_reparacion(
+            cliente=otro_cliente,
+            marca='MacBook M4 S',
+            modelo_serie='MacBook M4 S',
+        )
+
+        response = self.client.post(
+            reverse('econotec:ingreso_registrar'),
+            self.ingreso_registro_post_data(),
+        )
+
+        nuevo = IngresoEquipo.objects.get(cliente=self.cliente_existente)
+        self.assertRedirects(
+            response,
+            reverse('econotec:ingreso_detalle', kwargs={'pk': nuevo.pk}),
+        )
+
+    def test_editar_a_modelo_repetido_con_si_valida_la_serie(self):
+        self.crear_ingreso_reparacion(
+            marca='MacBook M4 S',
+            modelo_serie='MacBook M4 S',
+            serie='C02XK1',
+        )
+        ingreso = self.crear_ingreso_reparacion(marca='HP', modelo_serie='Elitebook')
+        cambios = {
+            'ing-marca': 'MacBook M4 S',
+            'ing-modelo_serie': 'MacBook M4 S',
+            'equipo_repetido': 'si',
+        }
+
+        misma_serie = self.client.post(
+            reverse('econotec:ingreso_editar', kwargs={'pk': ingreso.pk}),
+            self.ingreso_edit_post_data(ingreso, **{**cambios, 'ing-serie': 'C02XK1'}),
+        )
+        self.assertEqual(misma_serie.status_code, 200)
+        self.assertIn('serie', misma_serie.context['ing_form'].errors)
+        ingreso.refresh_from_db()
+        self.assertEqual(ingreso.modelo_serie, 'Elitebook')
+
+        otra_serie = self.client.post(
+            reverse('econotec:ingreso_editar', kwargs={'pk': ingreso.pk}),
+            self.ingreso_edit_post_data(ingreso, **{**cambios, 'ing-serie': 'C02ZZ9'}),
+        )
+        self.assertRedirects(
+            otra_serie,
+            reverse('econotec:ingreso_detalle', kwargs={'pk': ingreso.pk}),
+        )
+        ingreso.refresh_from_db()
+        self.assertEqual((ingreso.modelo_serie, ingreso.serie), ('MacBook M4 S', 'C02ZZ9'))
+
     def test_nueva_solicitud_no_restaura_borrador_localstorage(self):
         self.activar_sede_guayaquil()
 
         response = self.client.get(reverse('econotec:ingreso_registrar'))
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'name="confirmar_mismo_equipo_cliente"')
+        self.assertContains(response, 'name="equipo_repetido"')
         self.assertContains(response, 'name="ing-valor_acordado_estado"')
         self.assertContains(response, '¿El técnico ya tiene el valor acordado?')
         self.assertContains(response, 'No / pendiente de valor')

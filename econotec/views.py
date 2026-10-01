@@ -178,8 +178,64 @@ def _equipo_duplicado_para_cliente(cliente, datos_ingreso, excluir_pk=None):
     return duplicados[0] if duplicados else None
 
 
-def _confirmo_mismo_equipo_cliente(request):
-    return request.POST.get('confirmar_mismo_equipo_cliente') == '1'
+MENSAJE_EQUIPO_REPETIDO = 'ESTE EQUIPO YA SE ENCUENTRA REGISTRADO PARA ESTE CLIENTE'
+
+
+def _opcion_equipo_repetido(request):
+    """Respuesta a «¿registrar este equipo repetido con diferente número de serie?».
+
+    'si' → se ingresa (opcional) el número de serie que lo diferencia.
+    'no' → se registra tal cual, como el mismo equipo del cliente.
+    '' → todavía no se respondió.
+    """
+    if request.method != 'POST':
+        return ''
+    opcion = (request.POST.get('equipo_repetido') or '').strip().lower()
+    if opcion in ('si', 'no'):
+        return opcion
+    # Compatibilidad con la confirmación anterior (casilla y EconoBot).
+    if request.POST.get('confirmar_mismo_equipo_cliente') == '1':
+        return 'no'
+    return ''
+
+
+def _normalizar_serie(valor):
+    """Compara series sin importar mayúsculas, espacios, guiones ni puntos."""
+    return ''.join(c for c in _normalizar_comparacion(valor) if c.isalnum())
+
+
+def _errores_equipo_repetido(duplicados, opcion, serie):
+    """Valida el ingreso de un modelo que el mismo cliente ya tiene registrado.
+
+    Solo se llama con equipos del mismo cliente: el mismo modelo de otro
+    cliente nunca es un equipo repetido. La serie es opcional; si se escribe
+    con «Sí» para diferenciarlo, no puede ser la de un equipo ya registrado.
+    Devuelve {campo: mensaje}; vacío cuando se puede guardar.
+    """
+    if not duplicados or opcion == 'no':
+        return {}
+    duplicado = duplicados[0]
+    if opcion != 'si':
+        return {
+            'modelo_serie': (
+                f'{MENSAJE_EQUIPO_REPETIDO} — HOJA {duplicado.codigo_equipo}. '
+                'Es el mismo equipo de este cliente. Indica si deseas ingresar el número '
+                'de serie para diferenciarlo (Sí) o registrarlo así (No).'
+            ),
+        }
+    serie_nueva = _normalizar_serie(serie)
+    if not serie_nueva:
+        return {}
+    for equipo in duplicados:
+        if serie_nueva == _normalizar_serie(equipo.serie):
+            return {
+                'serie': (
+                    f'Ese número de serie ya pertenece a la hoja {equipo.codigo_equipo}: '
+                    'es el mismo equipo. Corrige la serie, déjala vacía o elige «No» '
+                    'para registrarlo así.'
+                ),
+            }
+    return {}
 
 
 # ═════════════════════════════════════════════════════════════════
@@ -1702,9 +1758,7 @@ def ingreso_registrar(request):
         messages.error(request, 'Tu sesión no tiene una sede asignada. Vuelve a iniciar sesión.')
         return redirect('login')
 
-    confirmar_mismo_equipo_cliente = (
-        _confirmo_mismo_equipo_cliente(request) if request.method == 'POST' else False
-    )
+    equipo_repetido_opcion = _opcion_equipo_repetido(request)
 
     if request.method == 'POST':
         cedula = (request.POST.get('cli-cedula') or '').strip()
@@ -1741,26 +1795,24 @@ def ingreso_registrar(request):
             else:
                 salida_valida = True
 
-            duplicado = (
-                _equipo_duplicado_para_cliente(
+            duplicados = (
+                _equipos_duplicados_para_cliente(
                     cliente_existente,
                     ing_form.cleaned_data,
                 )
                 if cliente_existente
-                else None
+                else []
             )
-            if duplicado and not confirmar_mismo_equipo_cliente:
-                mensaje_duplicado = (
-                    'ESTE EQUIPO YA SE ENCUENTRA REGISTRADO, POR FAVOR VERIFICA EN LA LISTA DE EQUIPOS.'
-                )
-                ing_form.add_error(
-                    'modelo_serie',
-                    f'{mensaje_duplicado} Coincide con el equipo {duplicado.codigo_equipo}.',
-                )
-                messages.error(
-                    request,
-                    f'{mensaje_duplicado} Coincide con {duplicado.codigo_equipo}.',
-                )
+            duplicado = duplicados[0] if duplicados else None
+            errores_repetido = _errores_equipo_repetido(
+                duplicados,
+                equipo_repetido_opcion,
+                ing_form.cleaned_data.get('serie'),
+            )
+            if errores_repetido:
+                for campo, mensaje in errores_repetido.items():
+                    ing_form.add_error(campo, mensaje)
+                messages.error(request, ' '.join(errores_repetido.values()))
             elif salida_valida:
                 cliente = cli_form.save()
                 ingreso = ingreso_preview
@@ -1790,10 +1842,17 @@ def ingreso_registrar(request):
                     ),
                 )
                 _programar_correo_ingreso_automatico(request, ingreso)
-                if duplicado and confirmar_mismo_equipo_cliente:
+                if duplicado and equipo_repetido_opcion == 'si' and ingreso.serie.strip():
                     messages.info(
                         request,
-                        f'Reingreso confirmado: mismo cliente y mismo equipo que {duplicado.codigo_equipo}.',
+                        f'Equipo registrado con número de serie {ingreso.serie.strip()}: se diferencia '
+                        f'del equipo de la hoja {duplicado.codigo_equipo} del mismo cliente.',
+                    )
+                elif duplicado:
+                    messages.info(
+                        request,
+                        f'Equipo registrado: es el mismo equipo de este cliente que ya se encuentra '
+                        f'en la hoja {duplicado.codigo_equipo}.',
                     )
                 if salida:
                     request.session['confirmar_ubicacion_salida_id'] = salida.pk
@@ -1856,7 +1915,7 @@ def ingreso_registrar(request):
         'titulo': 'Nueva Solicitud de Ingreso',
         'siguiente_numero': siguiente_numero,
         'siguiente_codigo': siguiente_codigo,
-        'confirmar_mismo_equipo_cliente': confirmar_mismo_equipo_cliente,
+        'equipo_repetido_opcion': equipo_repetido_opcion,
     })
 
 
@@ -1885,9 +1944,7 @@ def ingreso_editar(request, pk):
     subestado_reparacion_original_confirmacion = ingreso.subestado_reparacion
 
     identidad_original = _identidad_equipo_de_ingreso(ingreso)
-    confirmar_mismo_equipo_cliente = (
-        _confirmo_mismo_equipo_cliente(request) if request.method == 'POST' else False
-    )
+    equipo_repetido_opcion = _opcion_equipo_repetido(request)
 
     # Mapeo subestado_entregado → estado_reparacion de SalidaEquipo
     _MAPA_SALIDA = {
@@ -1919,7 +1976,7 @@ def ingreso_editar(request, pk):
             'siguiente_numero': ingreso.numero_equipo,
             'siguiente_codigo': ingreso.codigo_equipo,
             'ingreso': ingreso,
-            'confirmar_mismo_equipo_cliente': confirmar_mismo_equipo_cliente,
+            'equipo_repetido_opcion': equipo_repetido_opcion,
             'pago_previo_confirmacion_anticipo': pago_previo_anticipo,
             'pago_previo_confirmacion_anticipo_texto': f'{pago_previo_anticipo:.2f}',
             'pago_previo_confirmacion_diagnostico': pago_previo_diagnostico,
@@ -1983,22 +2040,22 @@ def ingreso_editar(request, pk):
                 _identidad_equipo_normalizada(ing_form.cleaned_data)
                 == identidad_original
             )
-            duplicado = None
+            duplicados = []
             if not identidad_sin_cambios:
-                duplicado = _equipo_duplicado_para_cliente(
+                duplicados = _equipos_duplicados_para_cliente(
                     cliente_editado,
                     ing_form.cleaned_data,
                     excluir_pk=ingreso.pk,
                 )
-            if duplicado and not confirmar_mismo_equipo_cliente:
-                mensaje_duplicado = (
-                    'ESTE EQUIPO YA SE ENCUENTRA REGISTRADO, POR FAVOR VERIFICA EN LA LISTA DE EQUIPOS.'
-                )
-                ing_form.add_error('modelo_serie', f'{mensaje_duplicado} Coincide con el equipo {duplicado.codigo_equipo}.')
-                messages.error(
-                    request,
-                    f'{mensaje_duplicado} Coincide con {duplicado.codigo_equipo}.'
-                )
+            errores_repetido = _errores_equipo_repetido(
+                duplicados,
+                equipo_repetido_opcion,
+                ing_form.cleaned_data.get('serie'),
+            )
+            if errores_repetido:
+                for campo, mensaje in errores_repetido.items():
+                    ing_form.add_error(campo, mensaje)
+                messages.error(request, ' '.join(errores_repetido.values()))
                 return render_edicion(cli_form, ing_form, salida_form)
 
             if es_finalizacion_negativa_rapida:

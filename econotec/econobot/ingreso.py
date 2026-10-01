@@ -69,7 +69,8 @@ ALIAS = {
     'valor del diagnostico': 'valor_diagnostico', 'valor diagnostico': 'valor_diagnostico',
     'abono': 'abono_anticipo', 'anticipo': 'abono_anticipo', 'abono / anticipo': 'abono_anticipo',
     'firma': 'firma_cliente_opcion', 'firma del cliente': 'firma_cliente_opcion',
-    'reingreso': 'reingreso', 'reingreso del mismo equipo': 'reingreso',
+    'equipo repetido': 'equipo_repetido', 'otra serie': 'equipo_repetido',
+    'serie diferente': 'equipo_repetido', 'diferente serie': 'equipo_repetido',
 }
 
 
@@ -138,11 +139,11 @@ class FlujoIngreso(Flujo):
             for eq in cliente.ingresos.order_by('-creado')[:12]
         ])
 
-    def duplicado(self):
+    def duplicados(self):
         cliente = self.cliente_existente()
         if not cliente or not self.datos.get('modelo_serie'):
-            return None
-        return self.cache('duplicado', lambda: vistas._equipo_duplicado_para_cliente(
+            return []
+        return self.cache('duplicados', lambda: vistas._equipos_duplicados_para_cliente(
             cliente, {
                 'tipo_equipo': self.datos.get('tipo_equipo', ''),
                 'tipo_equipo_otro': self.datos.get('tipo_equipo_otro', ''),
@@ -150,6 +151,10 @@ class FlujoIngreso(Flujo):
                 'modelo_serie': self.datos.get('modelo_serie', ''),
             },
         ))
+
+    def duplicado(self):
+        duplicados = self.duplicados()
+        return duplicados[0] if duplicados else None
 
     def al_capturar(self, clave, valor):
         d = self.datos
@@ -161,7 +166,7 @@ class FlujoIngreso(Flujo):
             for campo in d.pop('_precargados', []):
                 d.pop(campo, None)
             d.pop('_cliente_pk', None)
-            d.pop('reingreso', None)
+            d.pop('equipo_repetido', None)
             if cliente:
                 d['_cliente_pk'] = cliente.pk
                 precargados = []
@@ -195,7 +200,10 @@ class FlujoIngreso(Flujo):
         elif clave == 'firma_cliente_opcion' and valor == 'no':
             d.pop('firma_cliente_imagen', None)
         elif clave in ('modelo_serie', 'marca', 'tipo_equipo'):
-            d.pop('reingreso', None)
+            d.pop('equipo_repetido', None)
+        elif clave == 'equipo_repetido' and valor == 'si' and not (d.get('serie') or '').strip():
+            # Se vuelve a ofrecer la serie (opcional) para el nuevo equipo.
+            d.pop('serie', None)
         elif clave == 'anticipo__monto_1':
             completar_monto_2('anticipo', d, d.get('abono_anticipo'))
         elif clave == 'diagnostico__monto_1':
@@ -248,21 +256,30 @@ class FlujoIngreso(Flujo):
             p.append(Pregunta('tipo_equipo_otro', 'Tipo (otro)', '¿Qué equipo es? Especifícalo.', libre=True))
         p.append(Pregunta('marca', 'Marca', '¿Marca del equipo?', libre=True))
         p.append(Pregunta('modelo_serie', 'Modelo', '¿Modelo del equipo?', libre=True))
-        p.append(Pregunta('serie', 'Serie', '¿Número de serie?', opcional=True, libre=True))
+        dup = self.duplicado()
+        if dup and d.get('equipo_repetido') == 'si':
+            p.append(Pregunta(
+                'serie', 'Serie',
+                '¿Número de serie de este equipo? Si lo escribes, debe ser diferente al de la hoja '
+                f'{dup.codigo_equipo}' + (f' ({dup.serie}).' if dup.serie else '.'),
+                opcional=True, libre=True,
+            ))
+        else:
+            p.append(Pregunta('serie', 'Serie', '¿Número de serie?', opcional=True, libre=True))
         p.append(Pregunta('trajo_accesorios', 'Trajo accesorios',
                           '¿El cliente dejó accesorios (cargador, cable, control…)?', tipo='sino'))
         if d.get('trajo_accesorios') == 'si':
             p.append(Pregunta('accesorios_entregados', 'Accesorios', '¿Qué accesorios dejó?', libre=True))
         p.append(Pregunta('problema_reportado', 'Problema reportado',
                           '¿Qué problema reporta el cliente?', tipo='texto_largo'))
-        if self.duplicado():
-            dup = self.duplicado()
+        if dup:
             p.append(Pregunta(
-                'reingreso', 'Reingreso del mismo equipo',
-                f'⚠️ Este cliente ya tiene registrado el mismo equipo ({dup.codigo_equipo} — '
-                f'{dup.tipo_equipo_display} {dup.marca} {dup.modelo_serie}). '
-                '¿Es un reingreso del mismo equipo? Si respondes «sí» se registrará como un ingreso nuevo '
-                'y se conservará el historial anterior.',
+                'equipo_repetido', 'Diferenciar con número de serie',
+                f'⚠️ Este equipo ya se encuentra registrado para este cliente en la hoja {dup.codigo_equipo} '
+                f'({dup.tipo_equipo_display} {dup.marca} {dup.modelo_serie}'
+                + (f' · Serie {dup.serie}' if dup.serie else '') + '): es el mismo equipo. '
+                'Si deseas hacer la diferencia, ingresa el número de serie de este equipo. '
+                '¿Deseas ingresarlo? Responde «sí» para escribirlo (es opcional) o «no» para registrarlo así.',
                 tipo='sino',
             ))
         p.append(Pregunta('estado', 'Estado', '¿En qué estado ingresa el equipo?', tipo='opcion',
@@ -366,8 +383,8 @@ class FlujoIngreso(Flujo):
             post.update(post_pago('diagnostico', d, 'ing-'))
         if estado not in ESTADOS_SIN_ANTICIPO and _decimal(d.get('abono_anticipo')) > 0:
             post.update(post_pago('anticipo', d, 'ing-'))
-        if d.get('reingreso') == 'si':
-            post['confirmar_mismo_equipo_cliente'] = '1'
+        if d.get('equipo_repetido') in ('si', 'no') and 'equipo_repetido' in activos:
+            post['equipo_repetido'] = d['equipo_repetido']
         post['trajo_accesorios'] = d.get('trajo_accesorios', '')
         return post
 
@@ -402,11 +419,12 @@ class FlujoIngreso(Flujo):
             errores.setdefault(clave, []).extend(str(e) for e in lista)
         for grupo in ('anticipo', 'diagnostico', 'compra'):
             errores.update(errores_pago(grupo, ing_form.errors))
-        if d.get('reingreso') == 'no' and self.duplicado():
-            errores.setdefault('modelo_serie', []).append(
-                f'Ese modelo coincide con {self.duplicado().codigo_equipo} del mismo cliente. '
-                'Corrige el modelo o, si es el mismo equipo, confirma el reingreso.'
-            )
+        # Sin respuesta todavía no es error: falta la pregunta «equipo_repetido».
+        if d.get('equipo_repetido') in ('si', 'no'):
+            for campo, mensaje in vistas._errores_equipo_repetido(
+                self.duplicados(), d['equipo_repetido'], d.get('serie'),
+            ).items():
+                errores.setdefault(campo, []).append(mensaje)
         return errores
 
     # ── Resumen y guardado ───────────────────────────────────────────
@@ -437,8 +455,11 @@ class FlujoIngreso(Flujo):
             texto_estado += f' — Motivo: {d.get("motivo_garantia", "—")}'
             if d.get('equipo_garantia'):
                 texto_estado += f' ({etiqueta_de(self.equipos_previos(), d["equipo_garantia"])})'
-        if d.get('reingreso') == 'si':
-            texto_estado += ' · Reingreso confirmado'
+        dup = self.duplicado()
+        if dup and d.get('equipo_repetido') == 'si' and (d.get('serie') or '').strip():
+            texto_estado += f' · Se diferencia de la hoja {dup.codigo_equipo} por su número de serie'
+        elif dup and d.get('equipo_repetido') in ('si', 'no'):
+            texto_estado += f' · Mismo equipo de este cliente (hoja {dup.codigo_equipo})'
         lineas.append(f'• Estado: {texto_estado}')
         lineas.append(f'• Asesora: {d.get("asesor_comercial") or "—"} · Técnico: '
                       f'{etiqueta_de(opciones_tecnicos(), d.get("tecnico_encargado"))} · Fecha: '
