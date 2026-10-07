@@ -1189,7 +1189,12 @@ def _draw_anexo_economico_salida(c, width, height, salida, pagos):
 
     saldo = max(ingreso.diferencia, Decimal('0.00'))
     resumen = [
-        ('Valor total del servicio', ingreso.valor_efectivo_a_cobrar),
+        (
+            'Servicio + bodegaje cobrado'
+            if ingreso.bodegaje_cobrado_en_abonos > 0
+            else 'Valor total del servicio',
+            ingreso.valor_total_con_bodegaje,
+        ),
         ('Total de pagos registrados', ingreso.total_abonado),
         ('Saldo pendiente', saldo),
     ]

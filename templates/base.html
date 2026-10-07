@@ -1089,6 +1089,23 @@
         [data-theme="dark"] .swal2-popup:not([style*="background"]) .swal2-html-container {
             color: var(--text-main) !important;
         }
+        /* Opción «Poner yo mismo un valor de bodegaje» dentro del aviso de salida. */
+        .swal-bod-personalizado {
+            display: block;
+            width: 100%;
+            margin-top: 16px;
+            padding: 11px 14px;
+            border: 1.5px dashed var(--primary);
+            border-radius: 10px;
+            background: rgba(249, 118, 24, 0.08);
+            color: var(--primary-dark);
+            font-family: inherit;
+            font-size: 14px;
+            font-weight: 700;
+            line-height: 1.3;
+        }
+        .swal-bod-personalizado:hover { background: rgba(249, 118, 24, 0.16); }
+        .swal-bod-personalizado:focus-visible { outline: none; box-shadow: var(--ring); }
 
         /* BASE RESPONSIVE */
         @media (max-width: 1180px) {
@@ -2086,7 +2103,9 @@
 
                 Swal.fire({
                     title: '¿Desea aplicar el valor de bodegaje?',
-                    html: detalle + '<br><br>Equipo <b>' + codigo + '</b>. ¿Cobrar el bodegaje al cliente o perdonarlo?',
+                    html: detalle + '<br><br>Equipo <b>' + codigo + '</b>. ¿Cobrar el bodegaje al cliente o perdonarlo?'
+                        + '<button type="button" class="swal-bod-personalizado" id="swal-bod-personalizado">'
+                        + '✏️ Poner yo mismo un valor de bodegaje</button>',
                     icon: 'question',
                     showDenyButton: true,
                     showCancelButton: true,
@@ -2096,6 +2115,14 @@
                     confirmButtonColor: '#f97618',
                     denyButtonColor: '#4caf50',
                     cancelButtonColor: '#888',
+                    didOpen: () => {
+                        const botonPersonalizado = document.getElementById('swal-bod-personalizado');
+                        if (botonPersonalizado) {
+                            botonPersonalizado.addEventListener('click', function () {
+                                pedirBodegajePersonalizado(form, codigo, montoFmt, diasTxt);
+                            });
+                        }
+                    },
                 }).then((result) => {
                     if (result.isConfirmed) {
                         Swal.fire({
@@ -2126,6 +2153,7 @@
                         }).then((confirmRes) => {
                             if(confirmRes.isConfirmed) {
                                 form.querySelector('input[type=hidden][name=aplicar_bodegaje]').value = '';
+                                limpiarBodegajePersonalizado(form);
                                 form.submit();
                             }
                         });
@@ -2144,10 +2172,70 @@
                 }).then((result) => {
                     if (result.isConfirmed) {
                         form.querySelector('input[type=hidden][name=aplicar_bodegaje]').value = '';
+                        limpiarBodegajePersonalizado(form);
                         form.submit();
                     }
                 });
             }
+        }
+
+        // «Poner yo mismo un valor de bodegaje»: se cobra el valor escrito
+        // en lugar del acumulado y luego se elige el método de pago.
+        function limpiarBodegajePersonalizado(form) {
+            const campo = form.querySelector('input[type=hidden][name=bodegaje_monto_personalizado]');
+            if (campo) campo.value = '';
+        }
+
+        function pedirBodegajePersonalizado(form, codigo, montoFmt, diasTxt) {
+            Swal.fire({
+                title: 'Valor de bodegaje a cobrar',
+                html: 'Acumulado: <b>$' + montoFmt + '</b>' + (diasTxt ? ' (' + diasTxt + ')' : '') + '.'
+                    + '<br>Escribe el valor que deseas cobrar al cliente por bodegaje.',
+                icon: 'question',
+                input: 'number',
+                inputPlaceholder: 'Ej.: 20.00',
+                inputAttributes: {
+                    min: '0.01',
+                    step: '0.01',
+                    inputmode: 'decimal',
+                    'aria-label': 'Valor de bodegaje a cobrar (USD)',
+                },
+                showCancelButton: true,
+                confirmButtonText: 'Continuar',
+                cancelButtonText: 'Cancelar',
+                confirmButtonColor: '#f97618',
+                cancelButtonColor: '#888',
+                inputValidator: (valor) => {
+                    const numero = parseFloat(String(valor || '').replace(',', '.'));
+                    if (!Number.isFinite(numero) || Math.round(numero * 100) <= 0) {
+                        return 'Ingresa un valor mayor a $0.00.';
+                    }
+                    if (numero >= 100000000) {
+                        return 'El valor es demasiado alto.';
+                    }
+                    return null;
+                },
+            }).then((resultado) => {
+                if (!resultado.isConfirmed) return;
+                const valorFmt = (Math.round(parseFloat(String(resultado.value).replace(',', '.')) * 100) / 100).toFixed(2);
+                Swal.fire({
+                    title: '¿Está seguro?',
+                    html: 'Va a cobrar <b>$' + valorFmt + '</b> de bodegaje al equipo <b>' + codigo + '</b>'
+                        + ' (valor puesto por usted; acumulado $' + montoFmt + ').'
+                        + '<br>A continuación elegirá el método de pago.',
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonText: 'Sí, continuar',
+                    cancelButtonText: 'Cancelar',
+                    confirmButtonColor: '#f97618',
+                    cancelButtonColor: '#888',
+                }).then((confirmRes) => {
+                    if (confirmRes.isConfirmed) {
+                        bodegajeTargetForm = form;
+                        abrirModalPagoBodegaje(valorFmt, diasTxt, montoFmt);
+                    }
+                });
+            });
         }
 
         function confirmarSilenciar(event, form, codigo, tipo) {
@@ -2311,6 +2399,8 @@
         }
         .bodegaje-total span { display: block; color: var(--text-muted); font-size: 12px; }
         .bodegaje-total strong { color: var(--primary-dark, #c2410c); font-size: 25px; font-weight: 700; }
+        .bodegaje-total .bod-monto-nota { margin-top: 4px; color: var(--primary-dark, #c2410c); font-size: 12px; font-weight: 650; }
+        .bodegaje-total .bod-monto-nota:empty { display: none; }
         .bod-field { margin-bottom: 13px; }
         .bod-field label { display: block; margin-bottom: 5px; color: var(--text-soft); font-size: 13px; font-weight: 600; }
         .bod-field .form-input { width: 100%; min-width: 0; box-sizing: border-box; }
@@ -2352,6 +2442,7 @@
             <div class="bodegaje-total">
                 <span>Valor total de bodegaje a cobrar</span>
                 <strong id="bod_monto_label">$0.00</strong>
+                <span id="bod_monto_nota" class="bod-monto-nota"></span>
             </div>
             <p>Selecciona cómo cancela el cliente. Si usa dos formas de pago, elige <strong>Pago mixto</strong> y distribuye exactamente el valor total.</p>
 
@@ -2489,6 +2580,8 @@
     <script>
         let bodegajeTargetForm = null;
         let bodegajeMontoActual = 0;
+        // Valor escrito a mano («Poner yo mismo un valor»); vacío = se cobra el acumulado.
+        let bodegajeMontoPersonalizado = '';
 
         function bodElemento(id) { return document.getElementById(id); }
         function bodCentavos(valor) {
@@ -2507,9 +2600,15 @@
             error.textContent = '';
             error.style.display = 'none';
         }
-        function abrirModalPagoBodegaje(montoFmt, diasTxt) {
+        function abrirModalPagoBodegaje(montoFmt, diasTxt, acumuladoFmt) {
             bodegajeMontoActual = parseFloat(montoFmt) || 0;
-            bodElemento('bod_monto_label').textContent = '$' + montoFmt + (diasTxt ? ' (' + diasTxt + ')' : '');
+            bodegajeMontoPersonalizado = acumuladoFmt ? montoFmt : '';
+            bodElemento('bod_monto_label').textContent = acumuladoFmt
+                ? '$' + montoFmt
+                : '$' + montoFmt + (diasTxt ? ' (' + diasTxt + ')' : '');
+            bodElemento('bod_monto_nota').textContent = acumuladoFmt
+                ? 'Valor puesto por usted · acumulado $' + acumuladoFmt + (diasTxt ? ' (' + diasTxt + ')' : '')
+                : '';
             bodElemento('bod_metodo').value = 'efectivo';
             ['bod_monto_1', 'bod_monto_2', 'bod_banco_otro', 'bod_banco_otro_1', 'bod_banco_otro_2',
              'bod_comprobante_url', 'bod_comprobante_url_1', 'bod_comprobante_url_2'].forEach(function(id) {
@@ -2527,6 +2626,7 @@
         function cerrarModalPagoBodegaje() {
             bodElemento('bodegaje-modal').style.display = 'none';
             bodegajeTargetForm = null;
+            bodegajeMontoPersonalizado = '';
             limpiarErrorBodegaje();
         }
         function toggleDetallePagoBodegaje(sufijo) {
@@ -2619,6 +2719,7 @@
             campos.forEach(function(campo) {
                 addHiddenInput('pago_bod_' + campo, bodElemento('bod_' + campo).value);
             });
+            addHiddenInput('bodegaje_monto_personalizado', bodegajeMontoPersonalizado);
             addHiddenInput('aplicar_bodegaje', 'on');
 
             const boton = bodElemento('bod_submit');

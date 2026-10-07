@@ -7,11 +7,12 @@ from decimal import Decimal as D, InvalidOperation
 from io import BytesIO
 import json
 import unicodedata
+import uuid
 
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from django.core.exceptions import ValidationError
+from django.core.exceptions import NON_FIELD_ERRORS, ValidationError
 from django.core.validators import validate_email
 from django.db import transaction
 from django.db.models import Count, Q, Sum
@@ -459,6 +460,7 @@ def bienvenida(request):
     ctx = {
         'usuario': request.user,
         'es_admin': es_admin_user,
+        'ingreso_registrado': _aviso_ingreso_registrado(request),
         'stats': stats,
         'resumen_movimientos': resumen_movimientos,
         'equipos_top': equipos_top,
@@ -1681,6 +1683,94 @@ def _programar_correo_ingreso_automatico(request, ingreso):
     )
 
 
+# El formulario web envía un token por cada solicitud nueva. Con él no se
+# registra dos veces el mismo equipo si se vuelve a tocar «Registrar Ingreso»
+# mientras termina el primer envío (por ejemplo, enviando el correo).
+# EconoBot usa la misma vista sin token y conserva su flujo de siempre.
+REGISTRO_TOKEN_CAMPO = 'registro_token'
+REGISTRO_TOKENS_SESION = 'ingresos_registrados_por_token'
+REGISTRO_TOKENS_MAXIMO = 30
+
+
+def _token_registro(request):
+    token = (request.POST.get(REGISTRO_TOKEN_CAMPO) or '').strip().lower()
+    if len(token) == 32 and all(c in '0123456789abcdef' for c in token):
+        return token
+    return ''
+
+
+def _ingreso_registrado_con_token(request, token):
+    """Ingreso que ya guardó este mismo formulario (envío repetido)."""
+    if not token:
+        return None
+    for par in request.session.get(REGISTRO_TOKENS_SESION, []):
+        if isinstance(par, (list, tuple)) and len(par) == 2 and par[0] == token:
+            return IngresoEquipo.objects.filter(pk=par[1]).first()
+    return None
+
+
+def _recordar_token_registro(request, token, ingreso):
+    """Anota el token dentro de la misma transacción del ingreso.
+
+    La sesión se guarda aquí y no al final de la respuesta: así un segundo
+    envío que llegue mientras se manda el correo ya encuentra el registro.
+    """
+    registrados = [
+        par for par in request.session.get(REGISTRO_TOKENS_SESION, [])
+        if isinstance(par, (list, tuple)) and len(par) == 2 and par[0] != token
+    ]
+    registrados.append([token, ingreso.pk])
+    request.session[REGISTRO_TOKENS_SESION] = registrados[-REGISTRO_TOKENS_MAXIMO:]
+    try:
+        request.session.save()
+    except Exception:
+        # El ingreso ya quedó guardado; la sesión se guarda al final como siempre.
+        pass
+
+
+def _url_menu_ingreso_registrado(ingreso):
+    """Menú principal con el aviso del código recién registrado."""
+    return f"{reverse('econotec:bienvenida')}?registrado={ingreso.pk}"
+
+
+def _aviso_ingreso_registrado(request):
+    """Ingreso que el usuario acaba de registrar, para el aviso del menú principal."""
+    valor = (request.GET.get('registrado') or '').strip()
+    if not (valor.isascii() and valor.isdigit() and len(valor) <= 18):
+        return None
+    ingreso = (
+        IngresoEquipo.objects.select_related('cliente')
+        .filter(pk=int(valor), registrado_por=request.user)
+        .first()
+    )
+    if ingreso is None or timezone.now() - ingreso.creado > timedelta(hours=1):
+        return None
+    return ingreso
+
+
+def _resumen_errores_formularios(*formularios):
+    """Todos los errores en una lista para mostrarlos arriba del formulario.
+
+    Varios campos (correo, WhatsApp, asesor…) no muestran su error junto al
+    campo; sin este resumen la página volvía arriba sin decir qué faltaba.
+    """
+    resumen = []
+    vistos = set()
+    for formulario in formularios:
+        for campo, errores in formulario.errors.items():
+            etiqueta, campo_id = '', ''
+            if campo != NON_FIELD_ERRORS and campo in formulario.fields:
+                campo_form = formulario[campo]
+                etiqueta = str(campo_form.label or campo)
+                campo_id = campo_form.id_for_label
+            for mensaje in errores:
+                if (etiqueta, mensaje) in vistos:
+                    continue
+                vistos.add((etiqueta, mensaje))
+                resumen.append({'campo': etiqueta, 'campo_id': campo_id, 'mensaje': mensaje})
+    return resumen
+
+
 _MAPA_ESTADO_FINALIZACION_RAPIDA = {
     'entregado': 'pendiente_retiro',
     IngresoEquipoForm.ESTADO_NO_QUISO_REPARAR: 'cliente_no_acepta',
@@ -1759,8 +1849,20 @@ def ingreso_registrar(request):
         return redirect('login')
 
     equipo_repetido_opcion = _opcion_equipo_repetido(request)
+    token_registro = ''
+    errores_formulario = []
 
     if request.method == 'POST':
+        token_registro = _token_registro(request)
+        ingreso_previo = _ingreso_registrado_con_token(request, token_registro)
+        if ingreso_previo is not None:
+            # El mismo formulario llegó otra vez (doble toque): no se duplica.
+            salida_previa = SalidaEquipo.objects.filter(ingreso=ingreso_previo).first()
+            if salida_previa is not None:
+                request.session['confirmar_ubicacion_salida_id'] = salida_previa.pk
+                return redirect('econotec:salida_listo_aviso', pk=salida_previa.pk)
+            return redirect(_url_menu_ingreso_registrado(ingreso_previo))
+
         cedula = (request.POST.get('cli-cedula') or '').strip()
         cliente_existente = Cliente.objects.filter(cedula=cedula).first() if cedula else None
         cli_form = ClienteForm(
@@ -1774,6 +1876,7 @@ def ingreso_registrar(request):
             permitir_finalizacion_rapida=True,
         )
         salida_form = _form_salida_rapida(request, request.user)
+        salida_validada = False
 
         cliente_valido = cli_form.is_valid()
         ingreso_valido = ing_form.is_valid()
@@ -1792,6 +1895,7 @@ def ingreso_registrar(request):
                     ingreso=ingreso_preview,
                 )
                 salida_valida = salida_form.is_valid()
+                salida_validada = True
             else:
                 salida_valida = True
 
@@ -1833,14 +1937,17 @@ def ingreso_registrar(request):
                         ingreso,
                         request.user,
                     )
-                messages.success(
-                    request,
-                    (
-                        f'Equipo {ingreso.codigo_equipo} ingresado y finalizado para {cliente.nombres}.'
-                        if salida
-                        else f'Equipo {ingreso.codigo_equipo} ingresado para {cliente.nombres}.'
-                    ),
-                )
+                # Desde el formulario web, el aviso del menú principal confirma el código.
+                registro_web = bool(token_registro)
+                if salida or not registro_web:
+                    messages.success(
+                        request,
+                        (
+                            f'Equipo {ingreso.codigo_equipo} ingresado y finalizado para {cliente.nombres}.'
+                            if salida
+                            else f'Equipo {ingreso.codigo_equipo} ingresado para {cliente.nombres}.'
+                        ),
+                    )
                 _programar_correo_ingreso_automatico(request, ingreso)
                 if duplicado and equipo_repetido_opcion == 'si' and ingreso.serie.strip():
                     messages.info(
@@ -1856,8 +1963,19 @@ def ingreso_registrar(request):
                     )
                 if salida:
                     request.session['confirmar_ubicacion_salida_id'] = salida.pk
+                if registro_web:
+                    _recordar_token_registro(request, token_registro, ingreso)
+                if salida:
                     return redirect('econotec:salida_listo_aviso', pk=salida.pk)
+                if registro_web:
+                    return redirect(_url_menu_ingreso_registrado(ingreso))
                 return redirect('econotec:ingreso_detalle', pk=ingreso.pk)
+
+        errores_formulario = _resumen_errores_formularios(
+            cli_form,
+            ing_form,
+            *([salida_form] if salida_validada else []),
+        )
 
     else:
         cli_initial = {
@@ -1916,6 +2034,8 @@ def ingreso_registrar(request):
         'siguiente_numero': siguiente_numero,
         'siguiente_codigo': siguiente_codigo,
         'equipo_repetido_opcion': equipo_repetido_opcion,
+        'registro_token': token_registro or uuid.uuid4().hex,
+        'errores_formulario': errores_formulario,
     })
 
 
@@ -4456,8 +4576,38 @@ def _programar_correo_salida_fisica(request, salida, abono_pks=()):
     )
 
 
-def _crear_abonos_bodegaje(salida, pago, monto_bodegaje, dias_bodegaje, usuario):
+BODEGAJE_PERSONALIZADO_CAMPO = 'bodegaje_monto_personalizado'
+
+
+def _bodegaje_personalizado(datos):
+    """Valor de bodegaje que el usuario escribió a mano al confirmar la salida.
+
+    Devuelve (monto, error). Sin valor escrito: (None, '') y se cobra el acumulado.
+    """
+    texto = (datos.get(BODEGAJE_PERSONALIZADO_CAMPO) or '').strip().replace(',', '.')
+    if not texto:
+        return None, ''
+    try:
+        monto = D(texto)
+    except (InvalidOperation, ValueError):
+        return None, 'El valor de bodegaje escrito no es un número válido.'
+    if not monto.is_finite() or monto <= 0:
+        return None, 'El valor de bodegaje debe ser mayor a $0.00.'
+    monto = monto.quantize(D('0.01'))
+    if monto <= 0 or monto >= D('100000000'):
+        return None, 'El valor de bodegaje debe ser mayor a $0.00.'
+    return monto, ''
+
+
+def _crear_abonos_bodegaje(salida, pago, monto_bodegaje, dias_bodegaje, usuario, monto_acumulado=None):
     """Registra uno o dos abonos según el método elegido para el bodegaje."""
+    if monto_acumulado is not None and monto_acumulado != monto_bodegaje:
+        detalle_cobro = (
+            f'Cobro de bodegaje con valor puesto por el usuario (acumulado ${monto_acumulado:.2f} '
+            f'por {dias_bodegaje} día(s)) al retirar el equipo.'
+        )
+    else:
+        detalle_cobro = f'Cobro por {dias_bodegaje} día(s) de bodegaje al retirar el equipo.'
     metodo = pago['pago_bod_metodo']
     if metodo == 'mixto':
         partes = [
@@ -4512,10 +4662,7 @@ def _crear_abonos_bodegaje(salida, pago, monto_bodegaje, dias_bodegaje, usuario)
             comprobante_url=(
                 parte['comprobante_url'] if metodo_parte == 'transferencia' else ''
             ),
-            observaciones=(
-                f'Cobro por {dias_bodegaje} día(s) de bodegaje al retirar el equipo.'
-                f'{detalle_mixto}'
-            ),
+            observaciones=f'{detalle_cobro}{detalle_mixto}',
             bodegaje_decision='si' if indice == 1 else 'na',
             bodegaje_monto_aplicado=(
                 monto_bodegaje if indice == 1 else D('0.00')
@@ -4572,12 +4719,28 @@ def salida_marcar_retirada(request, pk):
 
     bod = salida.calcular_bodegaje()
     aplicar = request.POST.get('aplicar_bodegaje') == 'on'
+    # Si el bodegaje ya se cobró o perdonó en un abono, se respeta esa decisión:
+    # no se vuelve a cobrar ni se marca como perdonado lo que ya se cobró.
+    bodegaje_ya_decidido = bool(bod.get('cerrado'))
+    if bodegaje_ya_decidido:
+        aplicar = salida.bodegaje_aplicado_al_pago
+    # Lo que se cobra: el acumulado, o el valor que el usuario escribió a mano.
+    monto_cobro = bod['monto']
 
     pago_bodegaje = None
-    if bod['monto'] > 0 and aplicar:
+    if bod['monto'] > 0 and aplicar and not bodegaje_ya_decidido:
+        monto_personalizado, error_personalizado = _bodegaje_personalizado(request.POST)
+        if error_personalizado:
+            messages.error(
+                request,
+                f'No se confirmó la salida: {error_personalizado}',
+            )
+            return redirect(_url_retorno_salida(request, 'salida_lista'))
+        if monto_personalizado is not None:
+            monto_cobro = monto_personalizado
         pago_bodegaje = CobroBodegajeForm(
             request.POST,
-            monto_esperado=bod['monto'],
+            monto_esperado=monto_cobro,
         )
         if not pago_bodegaje.is_valid():
             errores = ' '.join(
@@ -4597,7 +4760,7 @@ def salida_marcar_retirada(request, pk):
     if salida.estado_reparacion == 'pendiente_retiro':
         salida.estado_reparacion = 'retirado'
     salida.bodegaje_dias_congelado = bod['dias']
-    salida.bodegaje_monto_congelado = bod['monto']
+    salida.bodegaje_monto_congelado = monto_cobro
     salida.bodegaje_aplicado_al_pago = aplicar
     salida.save(update_fields=[
         'fecha_retiro_real',
@@ -4612,9 +4775,10 @@ def salida_marcar_retirada(request, pk):
         abonos_bodegaje = _crear_abonos_bodegaje(
             salida,
             pago_bodegaje.cleaned_data,
-            bod['monto'],
+            monto_cobro,
             bod['dias'],
             request.user,
+            monto_acumulado=bod['monto'],
         )
 
     _programar_correo_salida_fisica(
@@ -4623,8 +4787,25 @@ def salida_marcar_retirada(request, pk):
         [abono.pk for abono in abonos_bodegaje],
     )
 
-    if bod['monto'] > 0:
-        if aplicar:
+    if bodegaje_ya_decidido and bod['monto'] > 0:
+        messages.success(
+            request,
+            f'Salida de la oficina confirmada para el equipo {salida.ingreso.codigo_equipo}. '
+            + (
+                f'El bodegaje de ${bod["monto"]} ya se había cobrado en un abono.'
+                if aplicar
+                else f'El bodegaje de ${bod["monto"]} ya se había perdonado en un abono.'
+            )
+        )
+    elif bod['monto'] > 0:
+        if aplicar and monto_cobro != bod['monto']:
+            messages.success(
+                request,
+                f'Salida de la oficina confirmada para el equipo {salida.ingreso.codigo_equipo}. '
+                f'Se cobraron ${monto_cobro} de bodegaje (valor puesto por ti; '
+                f'acumulado ${bod["monto"]} por {bod["dias"]} días).'
+            )
+        elif aplicar:
             messages.success(
                 request,
                 f'Salida de la oficina confirmada para el equipo {salida.ingreso.codigo_equipo}. '

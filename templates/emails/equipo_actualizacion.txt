@@ -17,7 +17,7 @@ Valor recibido: ${{ monto_evento|floatformat:2 }}
 {% for abono in abonos_evento %}- {{ abono.fecha|date:"d/m/Y" }} · ${{ abono.monto|floatformat:2 }} · {{ abono.metodo }} · {{ abono.detalle }}
 {% endfor %}
 {% endif %}RESUMEN ECONÓMICO
-Valor total registrado: ${{ valor_total|floatformat:2 }}
+Valor total registrado: ${{ valor_total|floatformat:2 }}{% if bodegaje_cobrado > 0 %} (incluye ${{ bodegaje_cobrado|floatformat:2 }} de bodegaje cobrado){% endif %}
 Total de pagos registrados: ${{ total_pagado|floatformat:2 }}
 Saldo restante: ${{ saldo_pendiente|floatformat:2 }}
 

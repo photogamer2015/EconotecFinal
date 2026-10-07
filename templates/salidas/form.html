@@ -620,6 +620,8 @@
         // Datos del ingreso (vienen de Django)
         var valorDiagnostico = parseFloat("{{ ingreso.valor_diagnostico|default:0 }}") || 0;
         var totalAbonado = parseFloat("{{ ingreso.total_abonado|default:0 }}") || 0;
+        // El bodegaje cobrado en abonos no es pago del servicio: no reduce este saldo.
+        totalAbonado -= parseFloat("{{ ingreso.bodegaje_cobrado_en_abonos|default:0|stringformat:'f' }}") || 0;
         var diferenciaNormal = parseFloat("{{ ingreso.valor_acordado|default:0 }}") - totalAbonado;
 
         // Estados considerados "positivos" → permiten enviar la hoja

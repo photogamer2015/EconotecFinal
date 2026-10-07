@@ -156,6 +156,110 @@
         margin-top: 24px;
     }
 
+    .form-errores-resumen {
+        margin: 0 0 18px;
+        padding: 14px 16px;
+        border: 1px solid #fecaca;
+        border-left: 4px solid var(--danger);
+        border-radius: 10px;
+        background: #fef2f2;
+        color: #7f1d1d;
+        font-size: 13px;
+        line-height: 1.45;
+    }
+
+    .form-errores-resumen:focus {
+        outline: none;
+        box-shadow: var(--ring);
+    }
+
+    .form-errores-resumen strong {
+        display: block;
+        margin-bottom: 6px;
+        font-size: 14px;
+        font-weight: 800;
+    }
+
+    .form-errores-resumen ul {
+        margin: 0;
+        padding-left: 18px;
+    }
+
+    .form-errores-resumen li + li {
+        margin-top: 3px;
+    }
+
+    .form-errores-resumen a {
+        color: #b91c1c;
+        font-weight: 800;
+    }
+
+    [data-theme="dark"] .form-errores-resumen {
+        border-color: rgba(239, 68, 68, 0.35);
+        background: rgba(127, 29, 29, 0.28);
+        color: #fecaca;
+    }
+
+    [data-theme="dark"] .form-errores-resumen a {
+        color: #fca5a5;
+    }
+
+    .guardando-overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 10150;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        padding: 16px;
+        background: rgba(17, 24, 39, 0.55);
+    }
+
+    .guardando-overlay.show {
+        display: flex;
+    }
+
+    .guardando-card {
+        width: min(360px, 100%);
+        display: grid;
+        justify-items: center;
+        gap: 8px;
+        padding: 24px 22px;
+        border-radius: 12px;
+        background: var(--card-bg);
+        color: var(--text-main);
+        text-align: center;
+        box-shadow: var(--shadow-lg);
+    }
+
+    .guardando-card strong {
+        font-size: 16px;
+        font-weight: 800;
+    }
+
+    .guardando-detalle {
+        color: var(--text-muted);
+        font-size: 13px;
+        line-height: 1.45;
+    }
+
+    .guardando-spinner {
+        width: 34px;
+        height: 34px;
+        border: 3px solid var(--border-color);
+        border-top-color: var(--primary);
+        border-radius: 50%;
+        animation: guardando-giro 0.8s linear infinite;
+    }
+
+    @keyframes guardando-giro {
+        to { transform: rotate(360deg); }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        .guardando-spinner { animation-duration: 2.4s; }
+    }
+
     .equipo-duplicado-alerta {
         display: none;
         margin: 16px 0 18px;
@@ -1213,6 +1317,9 @@
 
 <form method="post" class="form-card" id="ingreso-form" autocomplete="off">
     {% csrf_token %}
+    {% if modo == 'registrar' %}
+    <input type="hidden" name="registro_token" value="{{ registro_token }}">
+    {% endif %}
     {% if modo == 'editar' %}
     <input
         type="hidden"
@@ -1233,6 +1340,17 @@
         <div class="num-equipo">EQUIPO {{ siguiente_codigo|default:siguiente_numero }}</div>
     </div>
 
+    {% if errores_formulario %}
+    <div class="form-errores-resumen" id="form-errores-resumen" role="alert" tabindex="-1">
+        <strong>No se guardó el ingreso. Corrige {% if errores_formulario|length == 1 %}este dato{% else %}estos {{ errores_formulario|length }} datos{% endif %} y vuelve a registrar:</strong>
+        <ul>
+            {% for error in errores_formulario %}
+            <li>{% if error.campo %}{% if error.campo_id %}<a href="#{{ error.campo_id }}">{{ error.campo }}</a>{% else %}{{ error.campo }}{% endif %}: {% endif %}{{ error.mensaje }}</li>
+            {% endfor %}
+        </ul>
+    </div>
+    {% endif %}
+
     <!-- Datos del personal -->
     <div class="form-section">
         <h3>Personal Econotec</h3>
@@ -1240,10 +1358,12 @@
             <div>
                 <label class="form-label">Asesor Comercial *</label>
                 {{ ing_form.asesor_comercial }}
+                {{ ing_form.asesor_comercial.errors }}
             </div>
             <div>
                 <label class="form-label">Técnico Recibido *</label>
                 {{ ing_form.tecnico_encargado }}
+                {{ ing_form.tecnico_encargado.errors }}
             </div>
             <div>
                 <label class="form-label">Fecha de Ingreso *</label>
@@ -1255,6 +1375,7 @@
             <div>
                 <label class="form-label">Factura N° (opcional)</label>
                 {{ ing_form.numero_factura }}
+                {{ ing_form.numero_factura.errors }}
             </div>
         </div>
     </div>
@@ -1289,20 +1410,24 @@
             <div>
                 <label class="form-label">WhatsApp</label>
                 {{ cli_form.whatsapp }}
+                {{ cli_form.whatsapp.errors }}
             </div>
             <div>
                 <label class="form-label">Correo</label>
                 {{ cli_form.correo }}
+                {{ cli_form.correo.errors }}
             </div>
         </div>
         <div class="form-row cols-2" style="margin-top:14px;">
             <div>
                 <label class="form-label">Sector</label>
                 {{ cli_form.sector }}
+                {{ cli_form.sector.errors }}
             </div>
             <div>
                 <label class="form-label">Sector (otro)</label>
                 {{ cli_form.sector_otro }}
+                {{ cli_form.sector_otro.errors }}
             </div>
         </div>
     </div>
@@ -1319,6 +1444,7 @@
             <div>
                 <label class="form-label">Tipo "Otro" (especificar)</label>
                 {{ ing_form.tipo_equipo_otro }}
+                {{ ing_form.tipo_equipo_otro.errors }}
             </div>
         </div>
         <div class="form-row cols-3" style="margin-top:14px;">
@@ -1402,6 +1528,7 @@
             <div id="accesorios-wrap" style="opacity: 0.3; pointer-events: none; transition: 0.3s;">
                 <label class="form-label">Detalle de accesorios entregados</label>
                 {{ ing_form.accesorios_entregados }}
+                {{ ing_form.accesorios_entregados.errors }}
             </div>
         </div>
     </div>
@@ -1423,10 +1550,12 @@
             <div>
                 <label class="form-label">Diagnóstico inmediato</label>
                 {{ ing_form.diagnostico_inmediato }}
+                {{ ing_form.diagnostico_inmediato.errors }}
             </div>
             <div>
                 <label class="form-label">Valor del diagnóstico (USD)</label>
                 {{ ing_form.valor_diagnostico }}
+                {{ ing_form.valor_diagnostico.errors }}
             </div>
         </div>
         {% if ing_form.estado_bloqueado_por_salida %}
@@ -1661,6 +1790,7 @@
             <div>
                 <label class="form-label">Abono / Anticipo (USD)</label>
                 {{ ing_form.abono_anticipo }}
+                {{ ing_form.abono_anticipo.errors }}
                 <small style="color:#888; font-size:11px; display:block; margin-top:4px;">Este valor es aparte del diagnóstico inmediato. Si no recibe anticipo, déjalo en 0.</small>
             </div>
         </div>
@@ -1851,6 +1981,14 @@
                 <button type="button" class="firma-btn aceptar" id="firma-aviso-ok">Entendido</button>
             </div>
         </div>
+    </div>
+</div>
+
+<div class="guardando-overlay" id="guardando-overlay" aria-hidden="true">
+    <div class="guardando-card" role="status" aria-live="polite">
+        <span class="guardando-spinner" aria-hidden="true"></span>
+        <strong>{% if modo == 'editar' %}Guardando los cambios…{% else %}Guardando el ingreso…{% endif %}</strong>
+        <span class="guardando-detalle" id="guardando-detalle">Espera un momento, no cierres ni recargues esta página.</span>
     </div>
 </div>
 
@@ -2103,7 +2241,7 @@
             if (status) {
                 if (!decision) {
                     status.textContent = 'Selecciona Sí o No para continuar.';
-                    setValidezFirma('');
+                    setValidezFirma('Selecciona Sí o No firma para continuar.');
                 } else if (decision === 'no') {
                     status.textContent = 'No firma seleccionado. Se imprimirá la línea en blanco.';
                     setValidezFirma('');
@@ -3190,6 +3328,11 @@
                         if (inpCorreo) inpCorreo.value = c.correo || '';
                         if (selSector) selSector.value = c.sector || '';
                         if (inpSectorOtro) inpSectorOtro.value = c.sector_otro || '';
+                        // Al rellenar por código no hay evento input: se quita un aviso
+                        // de validación anterior para que no bloquee el envío.
+                        [inpWhatsapp, inpCorreo].forEach(function (el) {
+                            if (el) el.setCustomValidity('');
+                        });
 
                         if (aviso && avisoTxt) {
                             var n = data.num_equipos_anteriores || 0;
@@ -3243,6 +3386,15 @@
 
         inpCedula.addEventListener('input', programarBusqueda);
         inpCedula.addEventListener('blur', buscar);
+
+        // WhatsApp acepta solo números: se quitan espacios, guiones, paréntesis,
+        // puntos y el «+» al escribir o pegar (ej. +593 99 123 4567).
+        if (inpWhatsapp) {
+            inpWhatsapp.addEventListener('input', function () {
+                var limpio = inpWhatsapp.value.replace(/[\s\-().+]/g, '');
+                if (limpio !== inpWhatsapp.value) inpWhatsapp.value = limpio;
+            });
+        }
 
         // Si el form ya viene con cédula al cargar (ej. modo editar o validación con error), búscala
         if (inpCedula.value && inpCedula.value.trim().length >= 5) {
@@ -4147,5 +4299,76 @@
         });
     })();
 
+</script>
+<script>
+    // Un solo envío: al tocar el botón se bloquea y se muestra «Guardando…»,
+    // así no se registra dos veces el mismo equipo. Va en su propio bloque
+    // para que funcione aunque falle otro script de la página.
+    (function () {
+        var form = document.getElementById('ingreso-form');
+        var boton = document.getElementById('btn-registrar');
+        var overlay = document.getElementById('guardando-overlay');
+        var detalle = document.getElementById('guardando-detalle');
+        if (!form || !boton) return;
+        var textoBoton = boton.textContent.trim();
+        var textoDetalle = detalle ? detalle.textContent : '';
+        var enviando = false;
+        var temporizadores = [];
+
+        function liberar() {
+            enviando = false;
+            temporizadores.forEach(clearTimeout);
+            temporizadores = [];
+            boton.disabled = false;
+            boton.removeAttribute('aria-busy');
+            boton.textContent = textoBoton;
+            if (detalle) detalle.textContent = textoDetalle;
+            if (overlay) {
+                overlay.classList.remove('show');
+                overlay.setAttribute('aria-hidden', 'true');
+            }
+            // Devuelve el bloqueo propio de «equipo repetido», si corresponde.
+            if (window.__evaluarEquipoDuplicado) window.__evaluarEquipoDuplicado();
+        }
+
+        form.addEventListener('submit', function (event) {
+            if (event.defaultPrevented) return;
+            if (enviando) {
+                event.preventDefault();
+                return;
+            }
+            enviando = true;
+            boton.disabled = true;
+            boton.setAttribute('aria-busy', 'true');
+            boton.textContent = 'Guardando…';
+            if (overlay) {
+                overlay.classList.add('show');
+                overlay.setAttribute('aria-hidden', 'false');
+            }
+            temporizadores.push(setTimeout(function () {
+                if (detalle) {
+                    detalle.textContent = 'Está tardando un poco más de lo normal. No cierres esta página.';
+                }
+            }, 8000));
+            // Si la página no avanza (p. ej. se cayó la conexión), se puede volver
+            // a intentar: el servidor reconoce el mismo formulario y no lo duplica.
+            temporizadores.push(setTimeout(liberar, 45000));
+        });
+
+        window.addEventListener('pageshow', function (event) {
+            if (event.persisted) liberar();
+        });
+
+        // Si el servidor devolvió errores, se muestran arriba en un solo resumen.
+        var resumen = document.getElementById('form-errores-resumen');
+        if (resumen) {
+            resumen.scrollIntoView({ block: 'center' });
+            try {
+                resumen.focus({ preventScroll: true });
+            } catch (e) {
+                resumen.focus();
+            }
+        }
+    })();
 </script>
 {% endblock %}

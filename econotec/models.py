@@ -1216,13 +1216,37 @@ class IngresoEquipo(RetencionFactura):
         return _q2(valor_reparacion)
 
     @property
+    def bodegaje_cobrado_en_abonos(self):
+        """
+        Bodegaje que se decidió cobrar en los abonos (opción «Sí» o valor propio).
+        Ese dinero entra en total_abonado, así que también forma parte de lo que
+        el cliente debe pagar; sin esto el saldo quedaba en negativo.
+        """
+        if self.pk is None:
+            return Decimal('0.00')
+        return _q2(sum(
+            (
+                abono.bodegaje_monto_aplicado or Decimal('0.00')
+                for abono in self.abonos.all()
+                if abono.bodegaje_decision == 'si'
+            ),
+            Decimal('0.00'),
+        ))
+
+    @property
+    def valor_total_con_bodegaje(self):
+        """Valor del servicio más el bodegaje que se decidió cobrar."""
+        return _q2(self.valor_efectivo_a_cobrar + self.bodegaje_cobrado_en_abonos)
+
+    @property
     def diferencia(self):
         """
         Saldo pendiente.
         Si el cliente no quiso reparar o no se pudo reparar, el saldo se calcula
         sobre el valor del diagnóstico, no sobre el valor acordado original.
+        El bodegaje cobrado en abonos se suma a lo que debe el cliente.
         """
-        return _q2(self.valor_efectivo_a_cobrar - self.total_abonado)
+        return _q2(self.valor_total_con_bodegaje - self.total_abonado)
 
     @property
     def bodegaje_pendiente(self):
@@ -1284,7 +1308,7 @@ class IngresoEquipo(RetencionFactura):
         if self.valor_acordado is None and not self.reparacion_cancelada:
             return 'Pendiente'
 
-        base = self.valor_efectivo_a_cobrar
+        base = self.valor_total_con_bodegaje
         if base <= 0:
             return 'Pagado'
         if self.diferencia <= 0:
