@@ -217,8 +217,19 @@
             </label>
             {{ form.bodegaje_decision }}
             {{ form.bodegaje_decision.errors }}
+            <div id="wrap-bodegaje-personalizado" class="hidden" style="margin-top: 12px;">
+                <label class="form-label required-now-label" for="id_bodegaje_monto_personalizado">
+                    Valor de bodegaje a cobrar (USD) <span class="req-star">*</span>
+                </label>
+                {{ form.bodegaje_monto_personalizado }}
+                {{ form.bodegaje_monto_personalizado.errors }}
+                <div class="helper-text">
+                    Acumulado: {{ ingreso.bodegaje_pendiente|dinero_signo }}. Escribe el valor que deseas cobrar; se suma al saldo pendiente.
+                </div>
+            </div>
             <div class="helper-text">
                 <strong>Sí</strong>: el bodegaje se suma automáticamente al monto del abono y se cobra al cliente.<br>
+                <strong>Poner yo mismo un valor</strong>: escribes cuánto cobrar de bodegaje y se suma al monto del abono.<br>
                 <strong>No</strong>: el bodegaje se perdona automáticamente (no se cobra) y deja de acumular.
             </div>
             <div id="monto-resumen-bodegaje" class="monto-resumen hidden">
@@ -228,6 +239,15 @@
         {{ form.bodegaje_monto_aplicado }}
     </div>
     {% else %}
+        {% if modo == 'editar' and abono.bodegaje_decision == 'si' %}
+        <div class="bod-banner">
+            📦 Este abono incluye <strong>{{ abono.bodegaje_monto_aplicado|dinero_signo }}</strong> de bodegaje cobrado. Se conserva al guardar los cambios.
+        </div>
+        {% elif modo == 'editar' and abono.bodegaje_decision == 'no' %}
+        <div class="bod-banner">
+            📦 En este abono se perdonó el bodegaje. Se conserva al guardar los cambios.
+        </div>
+        {% endif %}
         {# Sin bodegaje: mantener los campos ocultos para que el form sea consistente #}
         <div style="display:none;">
             {{ form.bodegaje_decision }}
@@ -446,6 +466,8 @@
 
     const decision = document.getElementById('id_bodegaje_decision');
     const decisionMonto = document.getElementById('id_bodegaje_monto_aplicado');
+    const wrapBodPersonalizado = document.getElementById('wrap-bodegaje-personalizado');
+    const bodPersonalizado = document.getElementById('id_bodegaje_monto_personalizado');
     const monto = document.getElementById('id_monto');
     const resumenBod = document.getElementById('monto-resumen-bodegaje');
     const resumenTexto = document.getElementById('resumen-bodegaje-texto');
@@ -709,15 +731,32 @@
     if (factura) factura.addEventListener('change', actualizarFactura);
 
     // ──────── BODEGAJE ────────
+    // Último monto que puso el sistema: si el usuario no lo cambió, se recalcula.
+    let montoAutoBodegaje = null;
+
+    function igual(a, b) { return b !== null && Math.abs(a - b) < 0.01; }
+
+    function valorBodegajePersonalizado() {
+        const valor = parseFloat(String(bodPersonalizado ? bodPersonalizado.value : '').replace(',', '.'));
+        return Number.isFinite(valor) && valor > 0 ? valor : 0;
+    }
+
+    function ponerMontoAutomatico(valor) {
+        monto.value = valor.toFixed(2);
+        montoAutoBodegaje = valor;
+    }
+
     function actualizarBodegaje() {
         if (!decision || BODEGAJE_PENDIENTE <= 0) return;
         const v = decision.value;
+        const actual = parseFloat(monto.value) || 0;
+        const esPersonalizado = v === 'pe';
+        if (wrapBodPersonalizado) wrapBodPersonalizado.classList.toggle('hidden', !esPersonalizado);
+        setRequired(bodPersonalizado, null, esPersonalizado);
         if (v === 'si') {
             if (decisionMonto) decisionMonto.value = BODEGAJE_PENDIENTE.toFixed(2);
-            const actual = parseFloat(monto.value) || 0;
-            if (actual === 0 || Math.abs(actual - SALDO_BASE) < 0.01) {
-                const total = SALDO_BASE + BODEGAJE_PENDIENTE;
-                monto.value = total.toFixed(2);
+            if (actual === 0 || igual(actual, SALDO_BASE) || igual(actual, montoAutoBodegaje)) {
+                ponerMontoAutomatico(SALDO_BASE + BODEGAJE_PENDIENTE);
             }
             resumenTexto.innerHTML =
                 '✅ Se cobrará el bodegaje. Monto sugerido: <strong>$' +
@@ -725,11 +764,33 @@
                 '</strong> (saldo $' + SALDO_BASE.toFixed(2) +
                 ' + bodegaje $' + BODEGAJE_PENDIENTE.toFixed(2) + ').';
             show(resumenBod);
+        } else if (esPersonalizado) {
+            const valor = valorBodegajePersonalizado();
+            if (decisionMonto) decisionMonto.value = valor.toFixed(2);
+            if (valor > 0) {
+                const total = SALDO_BASE + valor;
+                if (
+                    actual === 0
+                    || igual(actual, SALDO_BASE)
+                    || igual(actual, SALDO_BASE + BODEGAJE_PENDIENTE)
+                    || igual(actual, montoAutoBodegaje)
+                ) {
+                    ponerMontoAutomatico(total);
+                }
+                resumenTexto.innerHTML =
+                    '✏️ Se cobrará un bodegaje de <strong>$' + valor.toFixed(2) +
+                    '</strong> (valor puesto por ti; acumulado $' + BODEGAJE_PENDIENTE.toFixed(2) +
+                    '). Monto sugerido: <strong>$' + total.toFixed(2) +
+                    '</strong> (saldo $' + SALDO_BASE.toFixed(2) +
+                    ' + bodegaje $' + valor.toFixed(2) + ').';
+            } else {
+                resumenTexto.innerHTML = '✏️ Escribe el valor de bodegaje que deseas cobrar.';
+            }
+            show(resumenBod);
         } else if (v === 'no') {
             if (decisionMonto) decisionMonto.value = '0.00';
-            const actual = parseFloat(monto.value) || 0;
-            if (Math.abs(actual - (SALDO_BASE + BODEGAJE_PENDIENTE)) < 0.01) {
-                monto.value = SALDO_BASE.toFixed(2);
+            if (igual(actual, SALDO_BASE + BODEGAJE_PENDIENTE) || igual(actual, montoAutoBodegaje)) {
+                ponerMontoAutomatico(SALDO_BASE);
             }
             resumenTexto.innerHTML =
                 '✖️ Se perdona el bodegaje. Solo se cobra el saldo de reparación.';
@@ -741,6 +802,7 @@
         updateSubmitState();
     }
     if (decision) decision.addEventListener('change', actualizarBodegaje);
+    if (bodPersonalizado) bodPersonalizado.addEventListener('input', actualizarBodegaje);
 
     if (form) {
         form.querySelectorAll('input, select, textarea').forEach((field) => {

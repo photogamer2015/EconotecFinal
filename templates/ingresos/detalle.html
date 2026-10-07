@@ -904,6 +904,13 @@
                     </div>
                 </div>
             {% endif %}
+            {% with bodegaje_cobrado=ingreso.bodegaje_cobrado_en_abonos %}
+            {% if bodegaje_cobrado > 0 %}
+                <div style="text-align:center; margin-top:10px; font-size:12px; color:#e65100; font-weight:700;">
+                    📦 Incluye {{ bodegaje_cobrado|dinero_signo }} de bodegaje cobrado: se suma a lo que paga el cliente.
+                </div>
+            {% endif %}
+            {% endwith %}
         </div>
         {% endif %}
 

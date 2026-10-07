@@ -2483,7 +2483,125 @@
     #dashModalContainer .table-dash-modal td:last-child { border-bottom: 0; }
     #dashModalContainer .badge-codigo { justify-self: start; }
   }
+
+  /* Aviso al volver de «Registrar Ingreso» */
+  .ingreso-registrado-aviso {
+    max-width: 980px;
+    margin: 0 auto 22px;
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+    padding: 14px 16px;
+    border: 1px solid rgba(21, 128, 61, 0.28);
+    border-left: 4px solid var(--success);
+    border-radius: 12px;
+    background: var(--tint-green-bg);
+    color: var(--text-main);
+  }
+  .ingreso-registrado-icono {
+    flex: 0 0 auto;
+    width: 30px;
+    height: 30px;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    background: var(--success);
+    color: #ffffff;
+    font-size: 16px;
+    font-weight: 800;
+  }
+  .ingreso-registrado-cuerpo {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+  .ingreso-registrado-cuerpo strong {
+    display: block;
+    color: var(--tint-green-fg);
+    font-size: 15px;
+    font-weight: 800;
+  }
+  .ingreso-registrado-cuerpo p {
+    margin: 3px 0 0;
+    color: var(--text-soft);
+    font-size: 13.5px;
+    line-height: 1.45;
+    overflow-wrap: anywhere;
+  }
+  .ingreso-registrado-codigo {
+    color: var(--text-main);
+    font-size: 15px;
+    font-weight: 800;
+    letter-spacing: 0.02em;
+  }
+  .ingreso-registrado-acciones {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 18px;
+    margin-top: 8px;
+  }
+  .ingreso-registrado-acciones a {
+    padding: 4px 0;
+    color: var(--tint-green-fg);
+    font-size: 13px;
+    font-weight: 700;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+  .ingreso-registrado-cerrar {
+    flex: 0 0 auto;
+    width: 34px;
+    height: 34px;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 22px;
+    line-height: 1;
+  }
+  .ingreso-registrado-cerrar:hover {
+    background: var(--hover-bg);
+    color: var(--text-main);
+  }
 </style>
+
+{% if ingreso_registrado %}
+<div class="ingreso-registrado-aviso" id="ingreso-registrado-aviso" role="status" aria-live="polite">
+  <span class="ingreso-registrado-icono" aria-hidden="true">✓</span>
+  <div class="ingreso-registrado-cuerpo">
+    <strong>Se ha guardado exitosamente</strong>
+    <p>
+      Código de registro <span class="ingreso-registrado-codigo">{{ ingreso_registrado.codigo_equipo }}</span>
+      · {{ ingreso_registrado.cliente.nombres }}
+      · {{ ingreso_registrado.tipo_equipo_display }} {{ ingreso_registrado.marca }} {{ ingreso_registrado.modelo_serie }}
+    </p>
+    <div class="ingreso-registrado-acciones">
+      <a href="{% url 'econotec:ingreso_detalle' pk=ingreso_registrado.pk %}">Ver hoja de ingreso</a>
+      <a href="{% url 'econotec:ingreso_imprimir' pk=ingreso_registrado.pk %}" target="_blank" rel="noopener">Imprimir hoja</a>
+      <a href="{% url 'econotec:ingreso_registrar' %}">Registrar otro equipo</a>
+    </div>
+  </div>
+  <button type="button" class="ingreso-registrado-cerrar" id="ingreso-registrado-cerrar" aria-label="Cerrar aviso">×</button>
+</div>
+<script>
+  (function () {
+    // Quita ?registrado= de la dirección para que el aviso no se repita al recargar.
+    try {
+      var url = new URL(window.location.href);
+      if (url.searchParams.has('registrado')) {
+        url.searchParams.delete('registrado');
+        window.history.replaceState(window.history.state, '', url.pathname + url.search + url.hash);
+      }
+    } catch (e) {}
+    var aviso = document.getElementById('ingreso-registrado-aviso');
+    var cerrar = document.getElementById('ingreso-registrado-cerrar');
+    if (aviso && cerrar) {
+      cerrar.addEventListener('click', function () {
+        aviso.parentNode.removeChild(aviso);
+      });
+    }
+  })();
+</script>
+{% endif %}
 
 {% if avisos_vigentes %}
 <div class="avisos-panel-inicio" style="max-width: 980px; margin: 0 auto 26px;">

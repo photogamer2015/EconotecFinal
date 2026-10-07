@@ -204,6 +204,8 @@ class ClienteForm(forms.ModelForm):
             }),
             'correo': forms.EmailInput(attrs={
                 'class': 'form-input', 'placeholder': 'Ej.: cliente@correo.com',
+                # El navegador acepta «cliente@gmail»; el servidor exige el dominio completo.
+                'pattern': r'[^@\s]+@[^@\s]+\.[^@\s.]{2,}',
                 'inputmode': 'email',
                 'autocomplete': 'email',
                 'autocapitalize': 'off',
@@ -1042,6 +1044,23 @@ class AbonoForm(RetencionFacturaFormMixin, forms.ModelForm):
         widget=forms.Select(attrs={'class': 'form-input', 'id': 'abono_banco_2'}),
     )
 
+    # «Poner yo mismo un valor de bodegaje»: solo existe en el formulario.
+    # Se guarda como bodegaje aplicado ('si') con el valor escrito, así
+    # recibos, PDF, correos y reportes muestran lo que realmente se cobró.
+    BODEGAJE_PERSONALIZADO = 'pe'
+    bodegaje_monto_personalizado = forms.DecimalField(
+        required=False,
+        min_value=Decimal('0.01'),
+        max_digits=10,
+        decimal_places=2,
+        label='Valor de bodegaje a cobrar (USD)',
+        widget=forms.NumberInput(attrs={
+            'class': 'form-input', 'step': '0.01', 'min': '0.01',
+            'inputmode': 'decimal', 'placeholder': 'Ej.: 20.00',
+            'id': 'id_bodegaje_monto_personalizado',
+        }),
+    )
+
     class Meta:
         model = Abono
         fields = [
@@ -1160,6 +1179,7 @@ class AbonoForm(RetencionFacturaFormMixin, forms.ModelForm):
             self.fields['bodegaje_decision'].choices = [
                 ('', '— Selecciona una opción —'),
                 ('si', 'Sí — aplicar bodegaje (sumar al monto)'),
+                (self.BODEGAJE_PERSONALIZADO, 'Poner yo mismo un valor de bodegaje'),
                 ('no', 'No — perdonar bodegaje'),
             ]
             self.fields['bodegaje_decision'].required = True
@@ -1169,6 +1189,21 @@ class AbonoForm(RetencionFacturaFormMixin, forms.ModelForm):
         # ya quedó cerrado/congelado entre que abrió y envió el formulario,
         # se respete su decisión y se cobre el monto correcto igualmente.
         self._bodegaje_pend_inicial = bodegaje_pend
+
+        # Al editar un abono que ya cobró o perdonó el bodegaje, esa decisión
+        # se conserva tal cual: antes se borraba y el saldo quedaba mal.
+        self._bodegaje_ya_decidido = None
+        decision_previa = self.instance.bodegaje_decision if self.instance.pk else ''
+        if decision_previa in ('si', 'no') and bodegaje_pend <= 0:
+            self._bodegaje_ya_decidido = (
+                decision_previa,
+                self.instance.bodegaje_monto_aplicado or Decimal('0.00'),
+            )
+            self.fields['bodegaje_decision'].choices = [
+                (decision_previa, dict(Abono.BODEGAJE_DECISION)[decision_previa]),
+            ]
+            self.fields['bodegaje_decision'].initial = decision_previa
+            self.fields['bodegaje_decision'].disabled = True
 
     def clean(self):
         cleaned = super().clean()
@@ -1270,6 +1305,10 @@ class AbonoForm(RetencionFacturaFormMixin, forms.ModelForm):
         self._limpiar_retencion(cleaned, base=cleaned.get('monto'))
 
         # ── Validación: bodegaje ──
+        if self._bodegaje_ya_decidido:
+            cleaned['bodegaje_decision'], cleaned['bodegaje_monto_aplicado'] = self._bodegaje_ya_decidido
+            return cleaned
+
         bodegaje_pend = Decimal('0.00')
         if self.ingreso is not None:
             try:
@@ -1290,6 +1329,16 @@ class AbonoForm(RetencionFacturaFormMixin, forms.ModelForm):
             monto_bod = bodegaje_pend if bodegaje_pend > 0 else bodegaje_mostrado
             cleaned['bodegaje_decision'] = 'si'
             cleaned['bodegaje_monto_aplicado'] = monto_bod
+        elif decision == self.BODEGAJE_PERSONALIZADO:
+            # Se cobra el valor que escribió el usuario en lugar del acumulado.
+            monto_personalizado = cleaned.get('bodegaje_monto_personalizado')
+            if monto_personalizado is None and 'bodegaje_monto_personalizado' not in self.errors:
+                self.add_error(
+                    'bodegaje_monto_personalizado',
+                    'Escribe el valor de bodegaje que deseas cobrar.',
+                )
+            cleaned['bodegaje_decision'] = 'si'
+            cleaned['bodegaje_monto_aplicado'] = monto_personalizado or Decimal('0.00')
         elif decision == 'no':
             # Perdonar explícitamente.
             cleaned['bodegaje_decision'] = 'no'
@@ -1798,7 +1847,8 @@ class SalidaEquipoForm(RetencionFacturaFormMixin, forms.ModelForm):
 
         ingreso = self.instance.ingreso
         if ingreso.pk:
-            total = ingreso.total_abonado
+            # El bodegaje cobrado en abonos no es pago del servicio.
+            total = ingreso.total_abonado - ingreso.bodegaje_cobrado_en_abonos
         else:
             total = ingreso.abono_anticipo or Decimal('0.00')
         if self.instance.pk and self.instance.valor_final_cobrado:

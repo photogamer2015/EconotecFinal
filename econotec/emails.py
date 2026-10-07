@@ -241,7 +241,8 @@ def _contexto_correo_actualizacion(ingreso, *, tipo, abonos_evento, adjunto_incl
             }
             for abono in abonos_evento
         ],
-        'valor_total': ingreso.valor_efectivo_a_cobrar,
+        'valor_total': ingreso.valor_total_con_bodegaje,
+        'bodegaje_cobrado': ingreso.bodegaje_cobrado_en_abonos,
         'total_pagado': ingreso.total_abonado,
         'saldo_pendiente': saldo,
         'pagos': pagos,

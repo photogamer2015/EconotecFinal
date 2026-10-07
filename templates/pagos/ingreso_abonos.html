@@ -247,6 +247,15 @@
         </div>
         <div style="font-size: 22px; font-weight: 800; color: #555; margin-top: 4px;">{{ ingreso.abono_anticipo|dinero_signo }}</div>
     </div>
+    {% with bodegaje_cobrado=ingreso.bodegaje_cobrado_en_abonos %}
+    {% if bodegaje_cobrado > 0 %}
+    <div class="card-box" style="border-left: 4px solid #e65100; padding: 16px;">
+        <div style="font-size: 11px; color: #888; text-transform: uppercase;">📦 Bodegaje cobrado</div>
+        <div style="font-size: 22px; font-weight: 800; color: #e65100; margin-top: 4px;">{{ bodegaje_cobrado|dinero_signo }}</div>
+        <div style="font-size: 11px; color: #888; margin-top: 4px;">Se suma a lo que paga el cliente.</div>
+    </div>
+    {% endif %}
+    {% endwith %}
     <div class="card-box" style="border-left: 4px solid var(--success); padding: 16px;">
         <div style="font-size: 11px; color: #888; text-transform: uppercase;">Total Abonado</div>
         <div style="font-size: 22px; font-weight: 800; color: var(--success); margin-top: 4px;">{{ ingreso.total_abonado|dinero_signo }}</div>

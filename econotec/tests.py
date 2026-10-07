@@ -5973,6 +5973,354 @@ class VentasTests(TestCase):
         self.assertFalse(salida.cliente_ya_retiro)
         self.assertEqual(ingreso.abonos.count(), 0)
 
+    # ── Bodegaje: «Poner yo mismo un valor de bodegaje» ──────────────
+    def crear_salida_con_bodegaje(self, valor_acordado=Decimal('0.00'), dias=10):
+        ingreso = self.crear_ingreso_reparacion(valor_acordado=valor_acordado)
+        salida = SalidaEquipo.objects.create(
+            ingreso=ingreso,
+            fecha_salida=date.today() - timedelta(days=dias),
+            estado_reparacion='pendiente_retiro',
+            tecnico_reparo=self.usuario,
+            valor_final_cobrado=Decimal('0.00'),
+            metodo_pago_final='sin_pago',
+            registrado_por=self.usuario,
+        )
+        return ingreso, salida
+
+    def abono_bodegaje_post_data(self, **overrides):
+        data = {
+            'fecha': date.today().isoformat(),
+            'monto': '0.00',
+            'metodo': 'efectivo',
+            'banco': '',
+            'banco_otro': '',
+            'tarjeta_app': '',
+            'comprobante_url': '',
+            'numero_recibo': '',
+            'observaciones': '',
+            'factura_realizada': 'no',
+            'factura_nombres': '',
+            'factura_cedula': '',
+            'factura_correo': '',
+            'bodegaje_decision': '',
+            'bodegaje_monto_aplicado': '0.00',
+            'bodegaje_monto_personalizado': '',
+        }
+        data.update(overrides)
+        return data
+
+    def test_formulario_abono_ofrece_poner_valor_de_bodegaje(self):
+        ingreso, _salida = self.crear_salida_con_bodegaje(valor_acordado=Decimal('25.00'))
+
+        response = self.client.get(reverse('econotec:abono_crear', kwargs={'ingreso_pk': ingreso.pk}))
+
+        opciones = list(response.context['form'].fields['bodegaje_decision'].choices)
+        self.assertEqual(
+            [valor for valor, _texto in opciones],
+            ['', 'si', 'pe', 'no'],
+        )
+        self.assertContains(response, 'Poner yo mismo un valor de bodegaje')
+        self.assertContains(response, 'id="id_bodegaje_monto_personalizado"')
+
+    def test_abono_con_valor_de_bodegaje_propio_cobra_lo_escrito(self):
+        ingreso, salida = self.crear_salida_con_bodegaje(valor_acordado=Decimal('25.00'))
+        self.assertEqual(ingreso.bodegaje_pendiente, Decimal('6.00'))
+
+        response = self.client.post(
+            reverse('econotec:abono_crear', kwargs={'ingreso_pk': ingreso.pk}),
+            self.abono_bodegaje_post_data(
+                monto='29.50',
+                bodegaje_decision='pe',
+                bodegaje_monto_personalizado='4.50',
+            ),
+        )
+
+        self.assertRedirects(response, reverse('econotec:ingreso_abonos', kwargs={'pk': ingreso.pk}))
+        abono = ingreso.abonos.get()
+        self.assertEqual(abono.monto, Decimal('29.50'))
+        self.assertEqual(abono.bodegaje_decision, 'si')
+        self.assertEqual(abono.bodegaje_monto_aplicado, Decimal('4.50'))
+        salida.refresh_from_db()
+        self.assertTrue(salida.bodegaje_aplicado_al_pago)
+        self.assertEqual(salida.bodegaje_monto_congelado, Decimal('4.50'))
+        ingreso.refresh_from_db()
+        self.assertEqual(ingreso.bodegaje_pendiente, Decimal('0.00'))
+
+    def test_abono_con_valor_de_bodegaje_propio_exige_el_valor(self):
+        ingreso, salida = self.crear_salida_con_bodegaje(valor_acordado=Decimal('25.00'))
+
+        for valor in ('', '0'):
+            response = self.client.post(
+                reverse('econotec:abono_crear', kwargs={'ingreso_pk': ingreso.pk}),
+                self.abono_bodegaje_post_data(
+                    monto='25.00',
+                    bodegaje_decision='pe',
+                    bodegaje_monto_personalizado=valor,
+                ),
+            )
+
+            self.assertEqual(response.status_code, 200)
+            self.assertIn('bodegaje_monto_personalizado', response.context['form'].errors)
+            self.assertNotIn('bodegaje_decision', response.context['form'].errors)
+        self.assertEqual(ingreso.abonos.count(), 0)
+        salida.refresh_from_db()
+        self.assertIsNone(salida.bodegaje_dias_congelado)
+
+    def test_abono_bodegaje_si_y_no_siguen_igual(self):
+        ingreso, salida = self.crear_salida_con_bodegaje(valor_acordado=Decimal('25.00'))
+
+        self.client.post(
+            reverse('econotec:abono_crear', kwargs={'ingreso_pk': ingreso.pk}),
+            self.abono_bodegaje_post_data(
+                monto='31.00',
+                bodegaje_decision='si',
+                bodegaje_monto_personalizado='99.00',
+            ),
+        )
+
+        abono = ingreso.abonos.get()
+        self.assertEqual(abono.bodegaje_decision, 'si')
+        self.assertEqual(abono.bodegaje_monto_aplicado, Decimal('6.00'))
+        salida.refresh_from_db()
+        self.assertEqual(salida.bodegaje_monto_congelado, Decimal('6.00'))
+
+    def test_aviso_de_salida_incluye_poner_valor_de_bodegaje(self):
+        response = self.client.get(reverse('econotec:salida_lista'))
+
+        self.assertContains(response, 'Poner yo mismo un valor de bodegaje')
+        self.assertContains(response, 'function pedirBodegajePersonalizado(')
+        self.assertContains(response, "addHiddenInput('bodegaje_monto_personalizado', bodegajeMontoPersonalizado);")
+
+    def test_salida_fisica_cobra_valor_de_bodegaje_propio(self):
+        ingreso, salida = self.crear_salida_con_bodegaje()
+        bodegaje = salida.calcular_bodegaje()
+        self.assertEqual(bodegaje['monto'], Decimal('6.00'))
+
+        response = self.client.post(
+            reverse('econotec:salida_marcar_retirada', kwargs={'pk': salida.pk}),
+            {
+                'aplicar_bodegaje': 'on',
+                'bodegaje_monto_personalizado': '4.00',
+                'pago_bod_metodo': 'efectivo',
+            },
+        )
+
+        self.assertRedirects(response, reverse('econotec:salida_retiros_lista'))
+        salida.refresh_from_db()
+        self.assertTrue(salida.cliente_ya_retiro)
+        self.assertTrue(salida.bodegaje_aplicado_al_pago)
+        self.assertEqual(salida.bodegaje_monto_congelado, Decimal('4.00'))
+        self.assertEqual(salida.bodegaje_dias_congelado, bodegaje['dias'])
+        abono = ingreso.abonos.get()
+        self.assertEqual(abono.monto, Decimal('4.00'))
+        self.assertEqual(abono.bodegaje_decision, 'si')
+        self.assertEqual(abono.bodegaje_monto_aplicado, Decimal('4.00'))
+        self.assertIn('valor puesto por el usuario', abono.observaciones)
+        self.assertIn('acumulado $6.00', abono.observaciones)
+
+    def test_salida_fisica_mixto_suma_el_valor_de_bodegaje_propio(self):
+        ingreso, salida = self.crear_salida_con_bodegaje()
+
+        response = self.client.post(
+            reverse('econotec:salida_marcar_retirada', kwargs={'pk': salida.pk}),
+            {
+                'aplicar_bodegaje': 'on',
+                'bodegaje_monto_personalizado': '10.00',
+                'pago_bod_metodo': 'mixto',
+                'pago_bod_monto_1': '4.00',
+                'pago_bod_metodo_1': 'efectivo',
+                'pago_bod_monto_2': '6.00',
+                'pago_bod_metodo_2': 'transferencia',
+                'pago_bod_banco_2': 'pichincha',
+            },
+        )
+
+        self.assertRedirects(response, reverse('econotec:salida_retiros_lista'))
+        salida.refresh_from_db()
+        self.assertEqual(salida.bodegaje_monto_congelado, Decimal('10.00'))
+        abonos = list(ingreso.abonos.order_by('pk'))
+        self.assertEqual([abono.monto for abono in abonos], [Decimal('4.00'), Decimal('6.00')])
+        self.assertEqual(abonos[0].bodegaje_monto_aplicado, Decimal('10.00'))
+
+    def test_salida_fisica_valor_de_bodegaje_propio_invalido_no_confirma(self):
+        ingreso, salida = self.crear_salida_con_bodegaje()
+
+        for valor in ('abc', '0', '-5', 'NaN', 'Infinity'):
+            response = self.client.post(
+                reverse('econotec:salida_marcar_retirada', kwargs={'pk': salida.pk}),
+                {
+                    'aplicar_bodegaje': 'on',
+                    'bodegaje_monto_personalizado': valor,
+                    'pago_bod_metodo': 'efectivo',
+                },
+            )
+
+            self.assertRedirects(response, reverse('econotec:salida_lista'))
+        salida.refresh_from_db()
+        self.assertFalse(salida.cliente_ya_retiro)
+        self.assertEqual(ingreso.abonos.count(), 0)
+
+    def test_salida_fisica_perdonar_ignora_valor_de_bodegaje_propio(self):
+        ingreso, salida = self.crear_salida_con_bodegaje()
+
+        self.client.post(
+            reverse('econotec:salida_marcar_retirada', kwargs={'pk': salida.pk}),
+            {'aplicar_bodegaje': '', 'bodegaje_monto_personalizado': '4.00'},
+        )
+
+        salida.refresh_from_db()
+        self.assertTrue(salida.cliente_ya_retiro)
+        self.assertFalse(salida.bodegaje_aplicado_al_pago)
+        self.assertEqual(salida.bodegaje_monto_congelado, Decimal('6.00'))
+        self.assertEqual(ingreso.abonos.count(), 0)
+
+    # ── Saldo: el bodegaje cobrado se suma a lo que debe el cliente ──
+    def cobrar_bodegaje_en_abono(self, ingreso, monto, decision='si', personalizado=''):
+        return self.client.post(
+            reverse('econotec:abono_crear', kwargs={'ingreso_pk': ingreso.pk}),
+            self.abono_bodegaje_post_data(
+                monto=monto,
+                bodegaje_decision=decision,
+                bodegaje_monto_personalizado=personalizado,
+            ),
+        )
+
+    def test_saldo_queda_en_cero_al_cobrar_bodegaje_en_abono(self):
+        ingreso, _salida = self.crear_salida_con_bodegaje(valor_acordado=Decimal('25.00'))
+
+        self.cobrar_bodegaje_en_abono(ingreso, '31.00')
+
+        ingreso = IngresoEquipo.objects.get(pk=ingreso.pk)
+        self.assertEqual(ingreso.bodegaje_cobrado_en_abonos, Decimal('6.00'))
+        self.assertEqual(ingreso.valor_total_con_bodegaje, Decimal('31.00'))
+        self.assertEqual(ingreso.total_abonado, Decimal('31.00'))
+        self.assertEqual(ingreso.diferencia, Decimal('0.00'))
+        self.assertEqual(ingreso.estado_pago, 'Pagado')
+
+    def test_saldo_queda_en_cero_con_valor_de_bodegaje_propio(self):
+        ingreso, _salida = self.crear_salida_con_bodegaje(valor_acordado=Decimal('25.00'))
+
+        self.cobrar_bodegaje_en_abono(ingreso, '40.00', decision='pe', personalizado='15.00')
+
+        ingreso = IngresoEquipo.objects.get(pk=ingreso.pk)
+        self.assertEqual(ingreso.diferencia, Decimal('0.00'))
+        self.assertEqual(ingreso.estado_pago, 'Pagado')
+
+    def test_bodegaje_cobrado_sin_pagarlo_queda_como_saldo(self):
+        ingreso, _salida = self.crear_salida_con_bodegaje(valor_acordado=Decimal('25.00'))
+
+        self.cobrar_bodegaje_en_abono(ingreso, '25.00')
+
+        ingreso = IngresoEquipo.objects.get(pk=ingreso.pk)
+        self.assertEqual(ingreso.diferencia, Decimal('6.00'))
+        self.assertEqual(ingreso.estado_pago, 'Parcial')
+
+    def test_perdonar_bodegaje_no_cambia_el_saldo(self):
+        ingreso, _salida = self.crear_salida_con_bodegaje(valor_acordado=Decimal('25.00'))
+
+        self.cobrar_bodegaje_en_abono(ingreso, '25.00', decision='no')
+
+        ingreso = IngresoEquipo.objects.get(pk=ingreso.pk)
+        self.assertEqual(ingreso.bodegaje_cobrado_en_abonos, Decimal('0.00'))
+        self.assertEqual(ingreso.diferencia, Decimal('0.00'))
+
+    def test_saldo_queda_en_cero_al_cobrar_bodegaje_en_salida_fisica(self):
+        ingreso, salida = self.crear_salida_con_bodegaje()
+
+        self.client.post(
+            reverse('econotec:salida_marcar_retirada', kwargs={'pk': salida.pk}),
+            {'aplicar_bodegaje': 'on', 'pago_bod_metodo': 'efectivo'},
+        )
+
+        ingreso = IngresoEquipo.objects.get(pk=ingreso.pk)
+        self.assertEqual(ingreso.total_abonado, Decimal('6.00'))
+        self.assertEqual(ingreso.diferencia, Decimal('0.00'))
+
+    def test_editar_abono_conserva_el_bodegaje_cobrado(self):
+        ingreso, salida = self.crear_salida_con_bodegaje(valor_acordado=Decimal('25.00'))
+        self.cobrar_bodegaje_en_abono(ingreso, '31.00')
+        abono = ingreso.abonos.get()
+
+        formulario = self.client.get(
+            reverse('econotec:abono_editar', kwargs={'ingreso_pk': ingreso.pk, 'abono_pk': abono.pk}),
+        )
+        self.assertContains(formulario, 'de bodegaje cobrado. Se conserva al guardar los cambios.')
+
+        response = self.client.post(
+            reverse('econotec:abono_editar', kwargs={'ingreso_pk': ingreso.pk, 'abono_pk': abono.pk}),
+            self.abono_bodegaje_post_data(
+                monto='31.00',
+                observaciones='Corrección de nota',
+                bodegaje_decision='na',
+            ),
+        )
+
+        self.assertRedirects(response, reverse('econotec:ingreso_abonos', kwargs={'pk': ingreso.pk}))
+        abono.refresh_from_db()
+        self.assertEqual(abono.observaciones, 'Corrección de nota')
+        self.assertEqual(abono.bodegaje_decision, 'si')
+        self.assertEqual(abono.bodegaje_monto_aplicado, Decimal('6.00'))
+        salida.refresh_from_db()
+        self.assertTrue(salida.bodegaje_aplicado_al_pago)
+        self.assertEqual(salida.bodegaje_monto_congelado, Decimal('6.00'))
+        self.assertEqual(IngresoEquipo.objects.get(pk=ingreso.pk).diferencia, Decimal('0.00'))
+
+    def test_editar_abono_conserva_el_bodegaje_perdonado(self):
+        ingreso, salida = self.crear_salida_con_bodegaje(valor_acordado=Decimal('25.00'))
+        self.cobrar_bodegaje_en_abono(ingreso, '25.00', decision='no')
+        abono = ingreso.abonos.get()
+
+        self.client.post(
+            reverse('econotec:abono_editar', kwargs={'ingreso_pk': ingreso.pk, 'abono_pk': abono.pk}),
+            self.abono_bodegaje_post_data(monto='25.00', bodegaje_decision='na'),
+        )
+
+        abono.refresh_from_db()
+        self.assertEqual(abono.bodegaje_decision, 'no')
+        salida.refresh_from_db()
+        self.assertFalse(salida.bodegaje_aplicado_al_pago)
+        self.assertEqual(salida.bodegaje_dias_congelado, 0)
+
+    def test_salida_fisica_respeta_bodegaje_cobrado_en_abono(self):
+        ingreso, salida = self.crear_salida_con_bodegaje(valor_acordado=Decimal('25.00'))
+        self.cobrar_bodegaje_en_abono(ingreso, '31.00')
+
+        response = self.client.post(
+            reverse('econotec:salida_marcar_retirada', kwargs={'pk': salida.pk}),
+            {'aplicar_bodegaje': ''},
+            follow=True,
+        )
+
+        salida.refresh_from_db()
+        self.assertTrue(salida.cliente_ya_retiro)
+        self.assertTrue(salida.bodegaje_aplicado_al_pago)
+        self.assertEqual(salida.bodegaje_monto_congelado, Decimal('6.00'))
+        self.assertEqual(ingreso.abonos.count(), 1)
+        self.assertContains(response, 'ya se había cobrado en un abono')
+
+    def test_salida_fisica_no_cobra_dos_veces_el_bodegaje_ya_cobrado(self):
+        ingreso, salida = self.crear_salida_con_bodegaje(valor_acordado=Decimal('25.00'))
+        self.cobrar_bodegaje_en_abono(ingreso, '31.00')
+
+        self.client.post(
+            reverse('econotec:salida_marcar_retirada', kwargs={'pk': salida.pk}),
+            {'aplicar_bodegaje': 'on', 'pago_bod_metodo': 'efectivo'},
+        )
+
+        salida.refresh_from_db()
+        self.assertTrue(salida.cliente_ya_retiro)
+        self.assertEqual(ingreso.abonos.count(), 1)
+        self.assertEqual(IngresoEquipo.objects.get(pk=ingreso.pk).diferencia, Decimal('0.00'))
+
+    def test_pagina_de_abonos_muestra_bodegaje_cobrado(self):
+        ingreso, _salida = self.crear_salida_con_bodegaje(valor_acordado=Decimal('25.00'))
+        self.cobrar_bodegaje_en_abono(ingreso, '31.00')
+
+        response = self.client.get(reverse('econotec:ingreso_abonos', kwargs={'pk': ingreso.pk}))
+
+        self.assertContains(response, '📦 Bodegaje cobrado')
+        self.assertContains(response, 'Se suma a lo que paga el cliente.')
+
     @override_settings(SALIDA_EMAIL_AUTOMATICO=True)
     @patch('econotec.emails.EmailMultiAlternatives.send', side_effect=OSError('SMTP no disponible'))
     def test_fallo_correo_salida_fisica_no_revierte_el_retiro(self, _send):
@@ -9284,6 +9632,175 @@ class VentasTests(TestCase):
         self.assertContains(response, 'No / pendiente de valor')
         self.assertContains(response, "localStorage.removeItem('econotec_ingreso_form_nuevo')")
         self.assertNotContains(response, "localStorage.getItem('econotec_ingreso_form_nuevo')")
+
+    # ── Registro desde el formulario web: menú principal y doble envío ──
+    REGISTRO_TOKEN = '0123456789abcdef0123456789abcdef'
+
+    def datos_registro_cliente_nuevo(self, **overrides):
+        data = self.ingreso_registro_post_data(**{
+            'cli-cedula': '0912345678',
+            'cli-nombres': 'Cliente Nuevo',
+            'cli-whatsapp': '0991234567',
+            'cli-correo': 'cliente.nuevo@correo.com',
+            'cli-sector': 'norte',
+            'cli-sector_otro': '',
+            'registro_token': self.REGISTRO_TOKEN,
+        })
+        data.update(overrides)
+        return data
+
+    def url_menu_registrado(self, ingreso):
+        return f"{reverse('econotec:bienvenida')}?registrado={ingreso.pk}"
+
+    def test_nueva_solicitud_incluye_token_y_aviso_de_guardado(self):
+        self.activar_sede_guayaquil()
+
+        response = self.client.get(reverse('econotec:ingreso_registrar'))
+
+        token = response.context['registro_token']
+        self.assertRegex(token, r'^[0-9a-f]{32}$')
+        self.assertContains(response, f'name="registro_token" value="{token}"')
+        self.assertContains(response, 'id="guardando-overlay"')
+        self.assertContains(response, 'Guardando el ingreso…')
+        self.assertContains(response, 'pattern="[^@\\s]+@[^@\\s]+\\.[^@\\s.]{2,}"')
+        self.assertNotContains(response, 'id="form-errores-resumen"')
+
+    def test_registro_web_vuelve_al_menu_principal_con_codigo(self):
+        self.activar_sede_guayaquil()
+
+        response = self.client.post(
+            reverse('econotec:ingreso_registrar'),
+            self.datos_registro_cliente_nuevo(),
+        )
+
+        ingreso = IngresoEquipo.objects.get(cliente__cedula='0912345678')
+        self.assertRedirects(response, self.url_menu_registrado(ingreso))
+        menu = self.client.get(self.url_menu_registrado(ingreso))
+        self.assertEqual(menu.context['ingreso_registrado'], ingreso)
+        self.assertContains(menu, 'Se ha guardado exitosamente')
+        self.assertContains(
+            menu,
+            f'Código de registro <span class="ingreso-registrado-codigo">{ingreso.codigo_equipo}</span>',
+        )
+        self.assertContains(menu, reverse('econotec:ingreso_detalle', kwargs={'pk': ingreso.pk}))
+        self.assertContains(menu, reverse('econotec:ingreso_imprimir', kwargs={'pk': ingreso.pk}))
+
+    @override_settings(
+        EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend',
+        INGRESO_EMAIL_AUTOMATICO=True,
+        INGRESO_EMAIL_ADJUNTAR_PDF=False,
+    )
+    def test_registro_web_enviado_dos_veces_no_duplica_ni_reenvia_correo(self):
+        self.activar_sede_guayaquil()
+        mail.outbox.clear()
+        data = self.datos_registro_cliente_nuevo()
+
+        with self.captureOnCommitCallbacks(execute=True):
+            primera = self.client.post(reverse('econotec:ingreso_registrar'), data)
+        with self.captureOnCommitCallbacks(execute=True):
+            segunda = self.client.post(reverse('econotec:ingreso_registrar'), data)
+
+        ingreso = IngresoEquipo.objects.get(cliente__cedula='0912345678')
+        self.assertRedirects(primera, self.url_menu_registrado(ingreso))
+        self.assertRedirects(segunda, self.url_menu_registrado(ingreso))
+        self.assertEqual(Cliente.objects.filter(cedula='0912345678').count(), 1)
+        self.assertEqual(len(mail.outbox), 1)
+
+    def test_registro_web_con_otro_formulario_sigue_validando_equipo_repetido(self):
+        self.activar_sede_guayaquil()
+        self.client.post(reverse('econotec:ingreso_registrar'), self.datos_registro_cliente_nuevo())
+
+        response = self.client.post(
+            reverse('econotec:ingreso_registrar'),
+            self.datos_registro_cliente_nuevo(registro_token='f' * 32),
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(IngresoEquipo.objects.filter(cliente__cedula='0912345678').count(), 1)
+        self.assertIn('modelo_serie', response.context['ing_form'].errors)
+        self.assertContains(response, 'No se guardó el ingreso')
+
+    def test_registro_con_error_sin_mensaje_junto_al_campo_se_muestra_arriba(self):
+        self.activar_sede_guayaquil()
+
+        response = self.client.post(
+            reverse('econotec:ingreso_registrar'),
+            self.datos_registro_cliente_nuevo(**{'cli-correo': 'cliente@gmail'}),
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(Cliente.objects.filter(cedula='0912345678').exists())
+        self.assertEqual(
+            [error['campo'] for error in response.context['errores_formulario']],
+            ['Correo'],
+        )
+        self.assertContains(response, 'id="form-errores-resumen"')
+        self.assertContains(response, 'No se guardó el ingreso. Corrige este dato')
+        self.assertContains(response, 'href="#id_cli-correo"')
+        self.assertContains(response, 'Introduzca una dirección de correo electrónico válida.')
+        # El reintento usa el mismo formulario: si luego se guarda, no se duplica.
+        self.assertEqual(response.context['registro_token'], self.REGISTRO_TOKEN)
+
+    def test_registro_sin_token_conserva_redireccion_al_detalle(self):
+        """EconoBot usa la misma vista sin token y espera el detalle del equipo."""
+        self.activar_sede_guayaquil()
+
+        response = self.client.post(
+            reverse('econotec:ingreso_registrar'),
+            self.ingreso_registro_post_data(),
+        )
+
+        ingreso = IngresoEquipo.objects.get(cliente=self.cliente_existente)
+        self.assertRedirects(
+            response,
+            reverse('econotec:ingreso_detalle', kwargs={'pk': ingreso.pk}),
+        )
+
+    def test_registro_web_con_finalizacion_rapida_mantiene_aviso_de_salida(self):
+        self.activar_sede_guayaquil()
+        data = self.ingreso_registro_post_data(**{
+            'ing-estado': IngresoEquipoForm.ESTADO_NO_SE_PUDO_REPARAR,
+            'ing-subestado_reparacion': '',
+            'ing-subestado_entregado': '',
+            'ing-valor_acordado_estado': 'no',
+            'ing-valor_acordado': '',
+            'registro_token': self.REGISTRO_TOKEN,
+        })
+        data.update(self.salida_rapida_post_data(
+            estado_reparacion='no_reparable',
+            aplica_valor_acordado_adicional='no',
+            valor_acordado_adicional='0.00',
+            valor_final_cobrado='0.00',
+            metodo_pago_final='sin_pago',
+        ))
+
+        primera = self.client.post(reverse('econotec:ingreso_registrar'), data)
+        segunda = self.client.post(reverse('econotec:ingreso_registrar'), data)
+
+        salida = SalidaEquipo.objects.get(ingreso__cliente=self.cliente_existente)
+        aviso = reverse('econotec:salida_listo_aviso', kwargs={'pk': salida.pk})
+        self.assertRedirects(primera, aviso)
+        self.assertRedirects(segunda, aviso)
+
+    def test_menu_principal_avisa_solo_ingresos_recientes_del_mismo_usuario(self):
+        ingreso = self.crear_ingreso_reparacion()
+        url = self.url_menu_registrado(ingreso)
+
+        self.assertEqual(self.client.get(url).context['ingreso_registrado'], ingreso)
+        self.assertIsNone(
+            self.client.get(f"{reverse('econotec:bienvenida')}?registrado=abc").context['ingreso_registrado']
+        )
+
+        IngresoEquipo.objects.filter(pk=ingreso.pk).update(
+            creado=timezone.now() - timedelta(hours=2),
+        )
+        self.assertIsNone(self.client.get(url).context['ingreso_registrado'])
+
+        IngresoEquipo.objects.filter(pk=ingreso.pk).update(creado=timezone.now())
+        self.client.force_login(self.admin)
+        menu_otro_usuario = self.client.get(url)
+        self.assertIsNone(menu_otro_usuario.context['ingreso_registrado'])
+        self.assertNotContains(menu_otro_usuario, 'Se ha guardado exitosamente')
 
     def test_nueva_solicitud_muestra_resultados_negativos_y_cobro_opcional(self):
         self.activar_sede_guayaquil()
