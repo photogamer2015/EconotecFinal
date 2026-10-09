@@ -151,7 +151,7 @@ def _factura_items_salida(salida):
     if salida.estado_reparacion == 'revision':
         agregar(
             f'Revisión técnica - Equipo {ingreso.codigo_equipo}',
-            ingreso.valor_efectivo_a_cobrar,
+            ingreso.valor_servicio_a_cobrar,
             equipo,
             ingreso.codigo_equipo,
         )
@@ -163,14 +163,14 @@ def _factura_items_salida(salida):
             detalle = salida.motivo_valor_acordado_adicional or equipo
         agregar(
             descripcion,
-            ingreso.valor_efectivo_a_cobrar,
+            ingreso.valor_servicio_a_cobrar,
             detalle,
             ingreso.codigo_equipo,
         )
     else:
         agregar(
             f'Servicio técnico y reparación - Equipo {ingreso.codigo_equipo}',
-            ingreso.valor_acordado or ingreso.valor_efectivo_a_cobrar,
+            ingreso.valor_acordado or ingreso.valor_servicio_a_cobrar,
             equipo,
             ingreso.codigo_equipo,
         )
@@ -181,6 +181,9 @@ def _factura_items_salida(salida):
                 salida.motivo_valor_acordado_adicional,
                 'ADIC',
             )
+
+    agregar('Valor a domicilio', ingreso.valor_domicilio_aplicable,
+            'Servicio a domicilio.', 'DOM')
 
     bodegaje_cobrado = sum(
         (
@@ -860,18 +863,18 @@ def generar_ingreso_pdf_bytes(ingreso):
         y -= 22
     else:
         _draw_label_value(c, margen, y, 'Asesora Comercial:', ingreso.asesor_comercial, label_w=120, line_w=line_w)
-        y -= 22
+        y -= 19
         _draw_label_value(c, margen, y, 'Técnico Encargado:', ingreso.tecnico_encargado_nombre, label_w=120, line_w=line_w)
-        y -= 22
+        y -= 19
         _draw_label_value(c, margen, y, 'Fecha de Ingreso:', ingreso.fecha_ingreso.strftime('%d/%m/%Y'), label_w=120, line_w=line_w)
-        y -= 22
+        y -= 19
 
     _draw_label_value(c, margen, y, 'Nombres del Cliente:', cliente.nombres, label_w=120, line_w=line_w)
-    y -= 22
+    y -= 22 if es_venta else 19
     _draw_label_value(c, margen, y, 'Cédula o Ruc / Para la emisión de la factura:', cliente.cedula, label_w=240, line_w=260)
-    y -= 22
+    y -= 22 if es_venta else 19
     _draw_label_value(c, margen, y, 'WhatsApp:', cliente.whatsapp, label_w=80, line_w=420)
-    y -= 22
+    y -= 22 if es_venta else 19
 
     # Correo + Sector en una línea
     c.setFillColor(naranja)
@@ -890,6 +893,9 @@ def generar_ingreso_pdf_bytes(ingreso):
     c.setFillColor(black)
     c.setFont('Helvetica', 9)
     c.drawString(margen + 364, y + 1, cliente.sector_display)
+    if not es_venta:
+        y -= 18
+        _draw_label_value(c, margen, y, 'A domicilio:', ingreso.get_a_domicilio_display(), label_w=80, line_w=420)
     y -= 30
 
     if es_venta:
@@ -1031,12 +1037,20 @@ def generar_ingreso_pdf_bytes(ingreso):
             c.setFillColor(naranja)
             c.setFont('Helvetica-Bold', 9)
 
+        c.setFont('Helvetica-Bold', 8)
         c.drawString(margen + 200, y, 'Valor del Diagnóstico:')
         c.setStrokeColor(Color(0.6, 0.6, 0.6))
-        c.line(margen + 320, y - 1, margen + 420, y - 1)
+        c.line(margen + 290, y - 1, margen + 340, y - 1)
         c.setFillColor(black)
-        c.setFont('Helvetica', 9)
-        c.drawString(margen + 324, y + 1, f'$ {ingreso.valor_diagnostico:.2f}')
+        c.setFont('Helvetica', 8)
+        c.drawString(margen + 294, y + 1, f'$ {ingreso.valor_diagnostico:.2f}')
+        c.setFillColor(naranja)
+        c.setFont('Helvetica-Bold', 8)
+        c.drawString(margen + 350, y, 'Valor a domicilio:')
+        c.line(margen + 420, y - 1, margen + 510, y - 1)
+        c.setFillColor(black)
+        c.setFont('Helvetica', 8)
+        c.drawString(margen + 424, y + 1, f'$ {ingreso.valor_domicilio_aplicable:.2f}')
 
         y -= 22
 
@@ -1062,11 +1076,11 @@ def generar_ingreso_pdf_bytes(ingreso):
 
         c.setFillColor(naranja)
         c.setFont('Helvetica-Bold', 9)
-        c.drawString(margen + 410, y, 'Diferencia:')
+        c.drawString(margen + 400, y, 'Diferencia:')
         c.setStrokeColor(Color(0.6, 0.6, 0.6))
-        c.line(margen + 478, y - 1, margen + 555, y - 1)
-        val_dif_str = f'$ {ingreso.diferencia:.2f}' if ingreso.valor_acordado is not None else '—'
-        c.drawString(margen + 482, y + 1, val_dif_str)
+        c.line(margen + 448, y - 1, margen + 510, y - 1)
+        val_dif_str = f'$ {ingreso.diferencia:.2f}' if ingreso.valor_acordado is not None or ingreso.valor_domicilio_aplicable else '—'
+        c.drawString(margen + 452, y + 1, val_dif_str)
 
         y -= 22
 

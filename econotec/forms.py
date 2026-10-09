@@ -231,6 +231,30 @@ class IngresoEquipoForm(forms.ModelForm):
     Formulario que replica fielmente la hoja "Solicitud de Ingreso" de Econotec.
     El cliente NO se incluye aquí; se maneja aparte (ClienteForm) en la vista.
     """
+    a_domicilio = forms.ChoiceField(
+        choices=[('si', 'Sí'), ('no', 'No')],
+        initial='no',
+        required=False,
+        widget=forms.RadioSelect,
+        label='A domicilio',
+    )
+
+    def clean_a_domicilio(self):
+        # Los formularios anteriores que omitan el campo conservan su valor.
+        return self.cleaned_data.get('a_domicilio') or self.instance.a_domicilio
+
+    valor_domicilio = forms.DecimalField(
+        max_digits=10, decimal_places=2, min_value=Decimal('0.00'),
+        initial=Decimal('10.00'), required=False, label='Valor a domicilio (USD)',
+        widget=forms.NumberInput(attrs={
+            'class': 'form-input', 'step': '0.01', 'min': '0', 'readonly': True,
+        }),
+    )
+
+    def clean_valor_domicilio(self):
+        valor = self.cleaned_data.get('valor_domicilio')
+        return self.instance.valor_domicilio if valor is None else valor
+
     CAMPOS_DIAGNOSTICO = [
         'diagnostico_inmediato',
         'valor_diagnostico',
@@ -289,7 +313,7 @@ class IngresoEquipoForm(forms.ModelForm):
         fields = [
             'numero_factura',
             'asesor_comercial', 'tecnico_encargado', 'fecha_ingreso',
-            'tipo_equipo', 'tipo_equipo_otro',
+            'a_domicilio', 'valor_domicilio', 'tipo_equipo', 'tipo_equipo_otro',
             'marca', 'modelo_serie', 'serie', 'accesorios_entregados',
             'problema_reportado', 'firma_cliente', 'firma_cliente_imagen',
             'diagnostico_inmediato', 'valor_diagnostico',
@@ -1836,6 +1860,7 @@ class SalidaEquipoForm(RetencionFacturaFormMixin, forms.ModelForm):
         valor_total = (
             (ingreso.valor_acordado or Decimal('0.00'))
             + (valor_acordado_adicional or Decimal('0.00'))
+            + ingreso.valor_domicilio_aplicable
         )
         abonado_previo = self._total_abonado_previo()
         pendiente = valor_total - abonado_previo - (valor_pagado_ahora or Decimal('0.00'))
@@ -1866,6 +1891,7 @@ class SalidaEquipoForm(RetencionFacturaFormMixin, forms.ModelForm):
         abonado_previo = self._total_abonado_previo()
         pendiente = (
             (valor_adicional or Decimal('0.00'))
+            + self.instance.ingreso.valor_domicilio_aplicable
             - abonado_previo
             - (valor_pagado_ahora or Decimal('0.00'))
         )

@@ -2961,6 +2961,97 @@ class VentasTests(TestCase):
         self.assertEqual(ingreso.abonos.count(), 1)
         self.assertEqual(ingreso.diferencia, Decimal('20.00'))
 
+    def test_domicilio_formulario_y_saldo_al_finalizar(self):
+        from .forms import SalidaEquipoForm
+        self.activar_sede_guayaquil()
+        response = self.client.get(reverse('econotec:ingreso_registrar'))
+        self.assertContains(response, 'Editar valor a domicilio')
+        self.assertContains(response, 'name="ing-valor_domicilio"')
+        ingreso = self.crear_ingreso_reparacion(a_domicilio='si', valor_acordado=Decimal('50'), abono_anticipo=Decimal('50'))
+        salida = SalidaEquipo(ingreso=ingreso)
+        form = SalidaEquipoForm(instance=salida)
+        self.assertEqual(form._saldo_pendiente_despues_de_pago(Decimal('0')), Decimal('10'))
+        self.assertEqual(form._saldo_pendiente_despues_de_pago(Decimal('10')), Decimal('0'))
+        ingreso.estado = 'cortesia'
+        ingreso.save()
+        self.assertEqual(ingreso.diferencia, Decimal('10'))
+        response = self.client.get(reverse('econotec:abono_crear', kwargs={'ingreso_pk': ingreso.pk}))
+        self.assertEqual(response.status_code, 200)
+
+    def test_valor_domicilio_default_edicion_y_validacion(self):
+        ingreso = self.crear_ingreso_reparacion(a_domicilio='si')
+        self.assertEqual(ingreso.valor_domicilio, Decimal('10.00'))
+        form = IngresoEquipoForm(data=self.ingreso_form_data(a_domicilio='si'), instance=ingreso)
+        self.assertTrue(form.is_valid(), form.errors)
+        self.assertEqual(form.save().valor_domicilio, Decimal('10.00'))
+        form = IngresoEquipoForm(data=self.ingreso_form_data(a_domicilio='si', valor_domicilio='17.50'), instance=ingreso)
+        self.assertTrue(form.is_valid(), form.errors)
+        form.save()
+        ingreso.refresh_from_db()
+        self.assertEqual(ingreso.valor_domicilio, Decimal('17.50'))
+        self.assertEqual(IngresoEquipoForm(instance=ingreso)['valor_domicilio'].value(), Decimal('17.50'))
+        form = IngresoEquipoForm(data=self.ingreso_form_data(a_domicilio='si', valor_domicilio='-1'), instance=ingreso)
+        self.assertFalse(form.is_valid())
+        self.assertIn('valor_domicilio', form.errors)
+
+    def test_valor_domicilio_suma_al_saldo_solo_si_aplica(self):
+        ingreso = self.crear_ingreso_reparacion(a_domicilio='si', valor_acordado=Decimal('50'), abono_anticipo=Decimal('10'))
+        self.assertEqual(ingreso.valor_efectivo_a_cobrar, Decimal('60.00'))
+        self.assertEqual(ingreso.diferencia, Decimal('50.00'))
+        ingreso.valor_domicilio = Decimal('17.50')
+        self.assertEqual(ingreso.diferencia, Decimal('57.50'))
+        ingreso.abono_anticipo = Decimal('67.50')
+        self.assertEqual(ingreso.diferencia, Decimal('0.00'))
+        self.assertEqual(ingreso.estado_pago, 'Pagado')
+        ingreso.a_domicilio = 'no'
+        ingreso.abono_anticipo = Decimal('10')
+        self.assertEqual(ingreso.valor_domicilio_aplicable, Decimal('0.00'))
+        self.assertEqual(ingreso.diferencia, Decimal('40.00'))
+        ingreso.a_domicilio = 'si'
+        ingreso.valor_acordado = None
+        self.assertEqual(ingreso.diferencia, Decimal('7.50'))
+
+    def test_valor_domicilio_en_pdf_hoja_y_factura_sin_duplicar(self):
+        ingreso = self.crear_ingreso_reparacion(a_domicilio='si', valor_domicilio=Decimal('12.50'))
+        response = self.client.get(reverse('econotec:ingreso_imprimir', kwargs={'pk': ingreso.pk}))
+        self.assertContains(response, 'Valor a domicilio:')
+        with patch('reportlab.pdfgen.canvas.Canvas.drawString') as draw:
+            views_print.generar_ingreso_pdf_bytes(ingreso)
+        textos = [call.args[2] for call in draw.call_args_list]
+        self.assertIn('Valor a domicilio:', textos)
+        self.assertIn('$ 12.50', textos)
+        salida = SalidaEquipo.objects.create(ingreso=ingreso, fecha_salida=date(2026, 10, 9), estado_reparacion='pendiente_retiro')
+        items = views_print._factura_items_salida(salida)
+        self.assertEqual(sum(item['total'] for item in items), Decimal('37.50'))
+        self.assertEqual(len([item for item in items if item['codigo'] == 'DOM']), 1)
+        self.assertEqual(ingreso.diferencia, Decimal('37.50'))
+
+    def test_ingreso_a_domicilio_por_defecto_y_edicion(self):
+        ingreso = self.crear_ingreso_reparacion()
+        self.assertEqual(ingreso.a_domicilio, 'no')
+        self.assertEqual(IngresoEquipoForm()['a_domicilio'].value(), 'no')
+        for valor in ('si', 'no'):
+            with self.subTest(valor=valor):
+                form = IngresoEquipoForm(
+                    data=self.ingreso_form_data(a_domicilio=valor), instance=ingreso,
+                )
+                self.assertTrue(form.is_valid(), form.errors)
+                form.save()
+                ingreso.refresh_from_db()
+                self.assertEqual(ingreso.a_domicilio, valor)
+                self.assertEqual(IngresoEquipoForm(instance=ingreso)['a_domicilio'].value(), valor)
+
+    def test_ingreso_a_domicilio_aparece_en_hoja_y_pdf(self):
+        for valor, etiqueta in [('no', 'No'), ('si', 'Sí')]:
+            with self.subTest(valor=valor):
+                ingreso = self.crear_ingreso_reparacion(a_domicilio=valor)
+                response = self.client.get(reverse('econotec:ingreso_imprimir', kwargs={'pk': ingreso.pk}))
+                self.assertContains(response, f'A domicilio:</span><span class="value">{etiqueta}</span>')
+                with patch('econotec.views_print._draw_label_value', wraps=views_print._draw_label_value) as draw:
+                    pdf = views_print.generar_ingreso_pdf_bytes(ingreso)
+                self.assertTrue(pdf.startswith(b'%PDF'))
+                self.assertIn(('A domicilio:', etiqueta), [(c.args[3], c.args[4]) for c in draw.call_args_list])
+
     def test_ingreso_imprimir_muestra_firma_cliente_si_existe(self):
         ingreso = self.crear_ingreso_reparacion(
             firma_cliente=True,

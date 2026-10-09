@@ -12,6 +12,7 @@ from datetime import date, time
 from decimal import Decimal, ROUND_HALF_UP
 import uuid
 
+from django.core.validators import MinValueValidator
 from django.db import models
 from django.utils import timezone
 
@@ -447,6 +448,17 @@ class IngresoEquipo(RetencionFactura):
         Cliente, on_delete=models.PROTECT,
         related_name='ingresos',
         verbose_name='Cliente',
+    )
+
+    a_domicilio = models.CharField(
+        max_length=2, choices=[('si', 'Sí'), ('no', 'No')], default='no',
+        verbose_name='A domicilio',
+    )
+
+    valor_domicilio = models.DecimalField(
+        max_digits=10, decimal_places=2, default=Decimal('10.00'),
+        validators=[MinValueValidator(Decimal('0.00'))],
+        verbose_name='Valor a domicilio',
     )
 
     # ── Detalles del equipo ──────────────────────────────
@@ -1172,7 +1184,16 @@ class IngresoEquipo(RetencionFactura):
         return False
 
     @property
+    def valor_domicilio_aplicable(self):
+        return _q2(self.valor_domicilio) if self.a_domicilio == 'si' else Decimal('0.00')
+
+    @property
     def valor_efectivo_a_cobrar(self):
+        """Servicio y domicilio, sin duplicar el cargo al registrar pagos."""
+        return _q2(self.valor_servicio_a_cobrar + self.valor_domicilio_aplicable)
+
+    @property
+    def valor_servicio_a_cobrar(self):
         """
         Valor que realmente se le cobra al cliente por la REPARACIÓN / SALIDA:
         - Si salió por Revisión: el valor acordado propio de esa salida.
@@ -1301,7 +1322,7 @@ class IngresoEquipo(RetencionFactura):
 
     @property
     def estado_pago(self):
-        if self.estado == 'cortesia':
+        if self.estado == 'cortesia' and not self.valor_domicilio_aplicable:
             return 'Cortesía'
 
         # Si aún no hay valor acordado (es nulo) y la reparación no fue cancelada

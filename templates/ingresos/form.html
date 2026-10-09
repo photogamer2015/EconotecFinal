@@ -1514,6 +1514,18 @@
             </span>
         </div>
         <div style="margin-top:14px;">
+            <span class="form-label" id="a-domicilio-label">A domicilio</span>
+            <div class="accesorios-opciones" role="radiogroup" aria-labelledby="a-domicilio-label">
+                {% for radio in ing_form.a_domicilio %}
+                <label for="{{ radio.id_for_label }}" style="display:flex; align-items:center; gap:6px; cursor:pointer;">
+                    {{ radio.tag }}
+                    <span style="font-weight:600;">{{ radio.choice_label }}</span>
+                </label>
+                {% endfor %}
+            </div>
+            {{ ing_form.a_domicilio.errors }}
+        </div>
+        <div style="margin-top:14px;">
             <label class="form-label" style="margin-bottom:8px;">¿Trajo accesorios? *</label>
             <div class="accesorios-opciones">
                 <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
@@ -1636,6 +1648,15 @@
     <!-- Valor y estado -->
     <div class="form-section">
         <h3>Valor y Estado del Equipo</h3>
+        <div id="valor-domicilio-panel" style="margin-bottom:18px;" {% if ing_form.a_domicilio.value != 'si' %}hidden{% endif %}>
+            <label class="form-label" for="{{ ing_form.valor_domicilio.id_for_label }}">Valor a domicilio (USD)</label>
+            <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+                <div style="flex:1; min-width:160px;">{{ ing_form.valor_domicilio }}</div>
+                <button type="button" class="btn btn-secondary" id="editar-valor-domicilio" aria-controls="{{ ing_form.valor_domicilio.id_for_label }}">Editar valor a domicilio</button>
+            </div>
+            {{ ing_form.valor_domicilio.errors }}
+            <small>Este valor se suma al saldo del equipo.</small>
+        </div>
         <div class="form-row cols-2">
             <div class="valor-acordado-panel {% if ing_form.estado_bloqueado_por_salida %}valor-bloqueado{% endif %}" id="panel-valor-acordado">
                 <div id="valor-acordado-decision">
@@ -2598,14 +2619,17 @@
                 if (metodo) metodo.value = 'sin_pago';
             }
 
-            var base = usaAdicional ? numero(valorAdicional) : 0;
+            var domicilioSi = document.querySelector('[name="ing-a_domicilio"]:checked');
+            var domicilio = domicilioSi && domicilioSi.value === 'si'
+                ? numero(document.querySelector('[name="ing-valor_domicilio"]')) : 0;
+            var base = (usaAdicional ? numero(valorAdicional) : 0) + domicilio;
             var abonadoPrevio = numero(abono);
             var pagoActual = mostrarEconomico ? numero(pagado) : 0;
             var saldo = Math.max(base - abonadoPrevio - pagoActual, 0);
             var saldoTexto = document.getElementById('fin-saldo-valor');
             if (saldoTexto) saldoTexto.textContent = '$' + saldo.toFixed(2);
 
-            var valorPendienteReparado = Math.max(numero(valorAcordado) - abonadoPrevio, 0);
+            var valorPendienteReparado = Math.max(numero(valorAcordado) + domicilio - abonadoPrevio, 0);
             var notificar = esRevision || (usaAdicional && saldo > 0.004) || (esReparado && valorPendienteReparado > 0.004);
             mostrar('fin-notificacion', notificar);
             requerido(asesora, notificar);
@@ -2676,7 +2700,10 @@
             window.EconotecRetencion.montar(document.getElementById('fin-retencion'), {
                 factura: factura,
                 obtenerBase: function () {
-                    return Math.max(numero(valorAdicional) - numero(abono), 0);
+                    var aplicaDomicilio = document.querySelector('[name="ing-a_domicilio"]:checked');
+                    var domicilio = aplicaDomicilio && aplicaDomicilio.value === 'si'
+                        ? numero(document.querySelector('[name="ing-valor_domicilio"]')) : 0;
+                    return Math.max(numero(valorAdicional) + domicilio - numero(abono), 0);
                 },
             });
         }
@@ -3716,6 +3743,32 @@
                 }
             });
         }
+    })();
+
+    (function() {
+        var panel = document.getElementById('valor-domicilio-panel');
+        var valor = document.querySelector('[name="{{ ing_form.valor_domicilio.html_name }}"]');
+        var boton = document.getElementById('editar-valor-domicilio');
+        var opciones = document.querySelectorAll('[name="{{ ing_form.a_domicilio.html_name }}"]');
+        if (!panel || !valor || !boton) return;
+        function actualizarDomicilio() {
+            var aplica = Array.from(opciones).some(function(radio) { return radio.checked && radio.value === 'si'; });
+            panel.hidden = !aplica;
+            valor.disabled = !aplica;
+            valor.required = aplica;
+            if (aplica && valor.value === '') valor.value = '10.00';
+            if (window.__actualizarFinalizacionRapida) window.__actualizarFinalizacionRapida();
+        }
+        opciones.forEach(function(radio) { radio.addEventListener('change', actualizarDomicilio); });
+        boton.addEventListener('click', function() {
+            valor.readOnly = !valor.readOnly;
+            boton.textContent = valor.readOnly ? 'Editar valor a domicilio' : 'Fijar valor a domicilio';
+            if (!valor.readOnly) { valor.focus(); valor.select(); }
+        });
+        valor.addEventListener('input', function() {
+            if (window.__actualizarFinalizacionRapida) window.__actualizarFinalizacionRapida();
+        });
+        actualizarDomicilio();
     })();
 
     (function() {

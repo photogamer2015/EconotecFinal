@@ -204,7 +204,7 @@
 
         .diag-row {
             display: grid;
-            grid-template-columns: 1.4fr 0.5fr 0.5fr 1.4fr;
+            grid-template-columns: 1.3fr 1fr 1fr;
             gap: 8px;
             align-items: center;
             margin-top: 8px;
@@ -346,6 +346,8 @@
         <div class="field-line"><span class="label">Sector:</span><span class="value">{{ cliente.sector_display }}</span></div>
     </div>
 
+    <div class="field-line"><span class="label">A domicilio:</span><span class="value">{{ ingreso.get_a_domicilio_display }}</span></div>
+
     <!-- DETALLES DEL EQUIPO -->
     <div class="section-header">DETALLES DEL EQUIPO</div>
 
@@ -398,9 +400,8 @@
             SI <span class="check-box">{% if ingreso.diagnostico_inmediato == 'si' %}X{% endif %}</span>
             NO <span class="check-box">{% if ingreso.diagnostico_inmediato == 'no' %}X{% endif %}</span>
         </div>
-        <div></div>
-        <div></div>
         <div class="field-line" style="border:none;"><span class="label">Valor del Diagnóstico:</span><span class="value">{{ ingreso.valor_diagnostico|dinero_signo }}</span></div>
+        <div class="field-line" style="border:none;"><span class="label">Valor a domicilio:</span><span class="value">{{ ingreso.valor_domicilio_aplicable|dinero_signo }}</span></div>
     </div>
 
     <!-- VALORES -->

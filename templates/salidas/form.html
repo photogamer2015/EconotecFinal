@@ -622,7 +622,8 @@
         var totalAbonado = parseFloat("{{ ingreso.total_abonado|default:0 }}") || 0;
         // El bodegaje cobrado en abonos no es pago del servicio: no reduce este saldo.
         totalAbonado -= parseFloat("{{ ingreso.bodegaje_cobrado_en_abonos|default:0|stringformat:'f' }}") || 0;
-        var diferenciaNormal = parseFloat("{{ ingreso.valor_acordado|default:0 }}") - totalAbonado;
+        var valorDomicilio = parseFloat("{{ ingreso.valor_domicilio_aplicable }}".replace(',', '.')) || 0;
+        var diferenciaNormal = (parseFloat("{{ ingreso.valor_acordado|default:0 }}") || 0) + valorDomicilio - totalAbonado;
 
         // Estados considerados "positivos" → permiten enviar la hoja
         var ESTADOS_POSITIVOS = ['pendiente_retiro', 'garantia', 'garantia_fallos_adicionales', 'reparado_parcial', 'retirado'];
@@ -735,7 +736,7 @@
 
             // ── Lógica del saldo ──────────────────────────
             if (saldoDisplay) {
-                var saldoCancelado = valorDiagnostico - totalAbonado;
+                var saldoCancelado = valorDiagnostico + valorDomicilio - totalAbonado;
                 if (saldoCancelado < 0) saldoCancelado = 0;
 
                 var inputCobrado = document.querySelector('input[name="valor_final_cobrado"]');
@@ -804,7 +805,7 @@
                     setNotificacionAsesora(true, 'revision');
 
                     var valorRevision = valorInputCobrado(inputValorRevision);
-                    var saldoRevision = Math.max(valorRevision - totalAbonado, 0);
+                    var saldoRevision = Math.max(valorRevision + valorDomicilio - totalAbonado, 0);
                     saldoDisplay.textContent = '$' + saldoRevision.toFixed(2);
                     saldoDisplay.style.color = saldoRevision > 0 ? 'var(--danger)' : 'var(--success)';
                     if (saldoNota) {
@@ -832,11 +833,12 @@
                         if (sectionCierreEconomico) sectionCierreEconomico.style.display = 'none';
                         if (wrapPagoFinal) wrapPagoFinal.style.display = 'none';
                         if (wrapNumeroRecibo) wrapNumeroRecibo.style.display = 'none';
-                        saldoDisplay.textContent = '$0.00';
-                        saldoDisplay.style.color = 'var(--success)';
+                        var saldoDomicilio = Math.max(valorDomicilio - totalAbonado, 0);
+                        saldoDisplay.textContent = '$' + saldoDomicilio.toFixed(2);
+                        saldoDisplay.style.color = saldoDomicilio > 0 ? 'var(--danger)' : 'var(--success)';
                         if (saldoNota) {
                             saldoNota.style.display = '';
-                            saldoNota.textContent = 'Finalización sin cobro adicional.';
+                            saldoNota.textContent = saldoDomicilio > 0 ? 'Valor a domicilio pendiente de pago.' : 'Finalización sin cobro adicional.';
                         }
                         if (inputCobrado) {
                             inputCobrado.value = '0';
@@ -860,12 +862,12 @@
                             inputCobrado.setAttribute('min', '0');
                             inputCobrado.setAttribute(
                                 'max',
-                                Math.max(valorCargoAdicional - totalAbonado, 0).toFixed(2)
+                                Math.max(valorCargoAdicional + valorDomicilio - totalAbonado, 0).toFixed(2)
                             );
                         }
                         var valorPagadoAhora = valorInputCobrado(inputCobrado);
                         var saldoCobroAdicional = Math.max(
-                            valorCargoAdicional - totalAbonado - valorPagadoAhora,
+                            valorCargoAdicional + valorDomicilio - totalAbonado - valorPagadoAhora,
                             0
                         );
                         saldoDisplay.textContent = '$' + saldoCobroAdicional.toFixed(2);

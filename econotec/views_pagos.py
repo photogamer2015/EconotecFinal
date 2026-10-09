@@ -344,7 +344,7 @@ def ingreso_abonos(request, pk):
         'salida': salida,
         'venta_con_historial_abonos': venta_con_historial_abonos,
         'puede_editar_valor_acordado': puede_editar_valor_acordado,
-        'puede_registrar_abono': ingreso.estado != 'cortesia' and (
+        'puede_registrar_abono': (ingreso.estado != 'cortesia' or ingreso.valor_domicilio_aplicable > 0) and (
             ingreso.sede != 'ventas' or (
                 venta_con_historial_abonos and ingreso.diferencia > Decimal('0.00')
             )
@@ -409,7 +409,7 @@ def abono_crear(request, ingreso_pk):
     """Registrar un nuevo abono para un ingreso."""
     ingreso = get_object_or_404(IngresoEquipo, pk=ingreso_pk)
 
-    if ingreso.estado == 'cortesia':
+    if ingreso.estado == 'cortesia' and not ingreso.valor_domicilio_aplicable:
         messages.info(
             request,
             'Este equipo fue ingresado como cortesía y no admite pagos ni abonos.',
