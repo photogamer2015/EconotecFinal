@@ -2501,6 +2501,10 @@ def ingreso_detalle(request, pk):
             reparacion_check_fecha,
         )
     from .qr_utils import qr_data_uri_para_ingreso, url_hoja_movil
+    simulacion = None
+    if ingreso.sede != 'ventas' and ingreso.estado not in ('donado', 'equipo_a_comprar'):
+        from .simulacion import construir_simulacion
+        simulacion = construir_simulacion(ingreso)
     return render(request, 'ingresos/detalle.html', {
         'ingreso': ingreso,
         'abonos': abonos,
@@ -2512,6 +2516,7 @@ def ingreso_detalle(request, pk):
         'reparacion_check_hecho': reparacion_check_hecho,
         'reparacion_check_fecha': reparacion_check_fecha.isoformat(),
         'reparacion_check_tecnico_nombre': nombre_corto_usuario(usuario_bitacora_check),
+        'simulacion': simulacion,
     })
 
 

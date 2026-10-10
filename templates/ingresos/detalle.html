@@ -1,7 +1,13 @@
 {% extends 'base.html' %}
-{% load econotec_extras %}
+{% load static econotec_extras %}
 
 {% block title %}Equipo {{ ingreso.codigo_equipo }} — Econotec{% endblock %}
+
+{% block extra_head %}
+{% if simulacion %}
+<link rel="stylesheet" href="{% static 'simulacion/simulacion.css' %}?v=20261010-1">
+{% endif %}
+{% endblock %}
 
 {% block content %}
 <style>
@@ -535,6 +541,10 @@
         <a href="{% url 'econotec:ingreso_editar' pk=ingreso.pk %}" class="btn btn-secondary">✏ Editar</a>
         {% endif %}
         <button type="button" class="btn btn-secondary" onclick="document.getElementById('qr-modal').style.display='flex'">📱 Ver QR</button>
+        {% if simulacion %}
+        <button type="button" id="sim-abrir" class="btn btn-simulacion" aria-haspopup="dialog"
+                data-mascota="{% static 'econobot/econobot-mascota.webp' %}">🎮 Ver simulación</button>
+        {% endif %}
     </div>
 </div>
 
@@ -1174,4 +1184,8 @@
         setInterval(resetearSiCambioDia, 60000);
     })();
 </script>
+{% if simulacion %}
+{{ simulacion|json_script:"simulacion-data" }}
+<script src="{% static 'simulacion/simulacion.js' %}?v=20261010-1" defer></script>
+{% endif %}
 {% endblock %}
