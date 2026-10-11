@@ -121,6 +121,21 @@ class LoginCaptchaTests(TestCase):
         self.assertEqual(int(self.client.session['_auth_user_id']), self.usuario.pk)
         self.assertNotIn(LOGIN_2FA_SESSION_KEY, self.client.session)
 
+    def test_doble_factor_correcto_no_suena_musica(self):
+        respuesta = self._captcha_answer()
+        self.client.post(reverse('login'), {
+            'username': self.usuario.username,
+            'password': 'testpass123',
+            'sede': 'quito',
+            'captcha_respuesta': respuesta,
+        })
+        codigo = re.search(r'\b(\d{6})\b', mail.outbox[0].body).group(1)
+        self.client.post(reverse('login_2fa'), {'codigo': codigo})
+
+        menu = self.client.get(reverse('econotec:bienvenida'))
+        self.assertEqual(menu.status_code, 200)
+        self.assertNotContains(menu, 'sonidos/sonidos.js')
+
     def test_doble_factor_rechaza_codigo_incorrecto(self):
         respuesta = self._captcha_answer()
         self.client.post(reverse('login'), {
@@ -9775,6 +9790,31 @@ class VentasTests(TestCase):
         )
         self.assertContains(menu, reverse('econotec:ingreso_detalle', kwargs={'pk': ingreso.pk}))
         self.assertContains(menu, reverse('econotec:ingreso_imprimir', kwargs={'pk': ingreso.pk}))
+
+    def test_registro_web_suena_musica_corta_una_sola_vez(self):
+        self.activar_sede_guayaquil()
+
+        response = self.client.post(
+            reverse('econotec:ingreso_registrar'),
+            self.datos_registro_cliente_nuevo(),
+        )
+
+        menu = self.client.get(response.url)
+        self.assertContains(menu, 'sonidos/tetris-registro.mp3')
+
+        recarga = self.client.get(response.url)
+        self.assertNotContains(recarga, 'sonidos/sonidos.js')
+
+    def test_musica_pendiente_vencida_no_suena(self):
+        self.activar_sede_guayaquil()
+        session = self.client.session
+        session['sonido_pendiente'] = ['registro_equipo', 0]
+        session.save()
+
+        menu = self.client.get(reverse('econotec:bienvenida'))
+
+        self.assertNotContains(menu, 'sonidos/sonidos.js')
+        self.assertNotIn('sonido_pendiente', self.client.session)
 
     @override_settings(
         EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend',

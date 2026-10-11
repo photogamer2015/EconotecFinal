@@ -83,3 +83,13 @@ def retencion_porcentajes():
     """Porcentajes de la retención en facturas (IVA, ret. IVA, ret. renta)."""
     from ..retencion import porcentajes_retencion
     return porcentajes_retencion()
+
+
+@register.simple_tag(takes_context=True)
+def sonido_pendiente(context):
+    """URL del clip de música que dejó la vista anterior (una sola vez), o ''."""
+    from django.templatetags.static import static
+    from ..sonidos import tomar_sonido_pendiente
+    request = context.get('request')
+    ruta = tomar_sonido_pendiente(request) if request is not None else ''
+    return static(ruta) if ruta else ''
