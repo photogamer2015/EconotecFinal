@@ -51,6 +51,7 @@ from .emails import (
     enviar_correo_salida_fisica_seguro,
 )
 from .pagination import paginar_resultados
+from .sonidos import programar_sonido
 from .permisos import admin_requerido, tecnico_requerido, es_admin, es_asesor, es_tecnico
 from .gamificacion import (
     SALIDA_BUENA_ESTADOS,
@@ -1949,6 +1950,7 @@ def ingreso_registrar(request):
                         ),
                     )
                 _programar_correo_ingreso_automatico(request, ingreso)
+                programar_sonido(request, 'registro_equipo')
                 if duplicado and equipo_repetido_opcion == 'si' and ingreso.serie.strip():
                     messages.info(
                         request,

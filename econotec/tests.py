@@ -121,6 +121,21 @@ class LoginCaptchaTests(TestCase):
         self.assertEqual(int(self.client.session['_auth_user_id']), self.usuario.pk)
         self.assertNotIn(LOGIN_2FA_SESSION_KEY, self.client.session)
 
+    def test_doble_factor_correcto_no_suena_musica(self):
+        respuesta = self._captcha_answer()
+        self.client.post(reverse('login'), {
+            'username': self.usuario.username,
+            'password': 'testpass123',
+            'sede': 'quito',
+            'captcha_respuesta': respuesta,
+        })
+        codigo = re.search(r'\b(\d{6})\b', mail.outbox[0].body).group(1)
+        self.client.post(reverse('login_2fa'), {'codigo': codigo})
+
+        menu = self.client.get(reverse('econotec:bienvenida'))
+        self.assertEqual(menu.status_code, 200)
+        self.assertNotContains(menu, 'sonidos/sonidos.js')
+
     def test_doble_factor_rechaza_codigo_incorrecto(self):
         respuesta = self._captcha_answer()
         self.client.post(reverse('login'), {
@@ -9776,6 +9791,31 @@ class VentasTests(TestCase):
         self.assertContains(menu, reverse('econotec:ingreso_detalle', kwargs={'pk': ingreso.pk}))
         self.assertContains(menu, reverse('econotec:ingreso_imprimir', kwargs={'pk': ingreso.pk}))
 
+    def test_registro_web_suena_musica_corta_una_sola_vez(self):
+        self.activar_sede_guayaquil()
+
+        response = self.client.post(
+            reverse('econotec:ingreso_registrar'),
+            self.datos_registro_cliente_nuevo(),
+        )
+
+        menu = self.client.get(response.url)
+        self.assertContains(menu, 'sonidos/tetris-registro.mp3')
+
+        recarga = self.client.get(response.url)
+        self.assertNotContains(recarga, 'sonidos/sonidos.js')
+
+    def test_musica_pendiente_vencida_no_suena(self):
+        self.activar_sede_guayaquil()
+        session = self.client.session
+        session['sonido_pendiente'] = ['registro_equipo', 0]
+        session.save()
+
+        menu = self.client.get(reverse('econotec:bienvenida'))
+
+        self.assertNotContains(menu, 'sonidos/sonidos.js')
+        self.assertNotIn('sonido_pendiente', self.client.session)
+
     @override_settings(
         EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend',
         INGRESO_EMAIL_AUTOMATICO=True,
@@ -10061,10 +10101,10 @@ class VentasTests(TestCase):
         return data
 
     def test_retencion_coincide_con_tabla_de_facturacion(self):
-        from .retencion import desglose_retencion, total_con_retencion
+        from .retencion import desglose_retencion
 
         tabla = [
-            # neto, subtotal, IVA, total factura, ret. renta
+            # recibido, subtotal, IVA, total factura, ret. renta
             ('35', '38.89', '5.83', '44.72', '3.89'),
             ('40', '44.44', '6.67', '51.11', '4.44'),
             ('50', '55.56', '8.33', '63.89', '5.56'),
@@ -10076,7 +10116,6 @@ class VentasTests(TestCase):
         ]
         for neto, subtotal, iva, total, renta in tabla:
             with self.subTest(neto=neto):
-                self.assertEqual(total_con_retencion(Decimal(neto)), Decimal(total))
                 desglose = desglose_retencion(Decimal(total))
                 self.assertEqual(desglose['subtotal'], Decimal(subtotal))
                 self.assertEqual(desglose['iva'], Decimal(iva))
@@ -10095,8 +10134,12 @@ class VentasTests(TestCase):
         self.assertContains(response, 'id="abono-retencion"')
         self.assertContains(response, 'name="aplica_retencion"')
         self.assertContains(response, 'name="valor_con_retencion"')
-        self.assertContains(response, 'Si deseas, puedes editar este valor.')
+        self.assertContains(response, 'Escribe el valor total de la factura con retención.')
         self.assertContains(response, 'retencion.js')
+        # Sin cálculo automático: solo el campo para escribir el valor.
+        self.assertNotContains(response, 'Calculado sobre')
+        self.assertNotContains(response, 'Subtotal a facturar')
+        self.assertNotContains(response, 'Recalcular')
 
     def test_abono_con_factura_y_retencion_guarda_desglose_y_cobra_el_monto(self):
         ingreso = self.crear_ingreso_reparacion(valor_acordado=Decimal('35.00'))
@@ -10142,17 +10185,17 @@ class VentasTests(TestCase):
         self.assertEqual(abono.retencion_renta_retenida, Decimal('3.91'))
         self.assertEqual(abono.retencion_valor_recibido, Decimal('35.22'))
 
-    def test_abono_con_retencion_sin_valor_lo_calcula_desde_el_monto(self):
+    def test_abono_con_retencion_sin_valor_pide_escribirlo(self):
         ingreso = self.crear_ingreso_reparacion(valor_acordado=Decimal('35.00'))
 
-        self.client.post(
+        response = self.client.post(
             reverse('econotec:abono_crear', kwargs={'ingreso_pk': ingreso.pk}),
             self.abono_retencion_post_data(monto='10.00', valor_con_retencion=''),
         )
 
-        abono = ingreso.abonos.get()
-        self.assertEqual(abono.valor_con_retencion, Decimal('12.78'))
-        self.assertEqual(abono.retencion_valor_recibido, Decimal('10.00'))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Ingresa el valor con retención (mayor a $0.00).')
+        self.assertFalse(ingreso.abonos.exists())
 
     def test_abono_sin_factura_no_guarda_retencion(self):
         ingreso = self.crear_ingreso_reparacion(valor_acordado=Decimal('35.00'))

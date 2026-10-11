@@ -2,16 +2,11 @@
 Retención en facturas.
 
 Cuando la factura lleva retención, el cliente retiene el IVA (100 %) y el
-10 % de renta. Para que el taller reciba el valor neto deseado se factura
-por encima de ese valor:
+10 % de renta. El valor con retención (total de la factura) lo escribe el
+usuario; el desglose que se guarda y se imprime se deriva de ese total:
 
-    subtotal = neto ÷ 0,90
-    IVA 15 % = subtotal × 0,15
-    total factura (valor con retención) = subtotal + IVA
-    recibe = total − retención del IVA − retención de renta  (= neto)
-
-El valor con retención (total de la factura) se puede editar; el desglose
-siempre se deriva de ese total para que cuadre con lo que se emitió.
+    subtotal = total ÷ 1,15 · IVA 15 % = total − subtotal
+    recibe   = total − retención del IVA − retención de renta
 """
 from decimal import Decimal, ROUND_HALF_UP
 
@@ -24,16 +19,6 @@ CERO = Decimal('0.00')
 
 def _q2(valor):
     return Decimal(valor).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
-
-
-def total_con_retencion(neto):
-    """Total de factura necesario para recibir `neto` después de las retenciones."""
-    neto = _q2(neto or CERO)
-    if neto <= CERO:
-        return CERO
-    factor_recibido = 1 + IVA - (IVA * RETENCION_IVA) - RETENCION_RENTA
-    subtotal = _q2(neto / factor_recibido)
-    return subtotal + _q2(subtotal * IVA)
 
 
 def desglose_retencion(total):

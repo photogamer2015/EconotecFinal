@@ -2695,16 +2695,10 @@
         window.__actualizarFinalizacionRapida = actualizar;
         actualizar();
 
-        // Retención de la factura: sobre el saldo del cobro adicional antes del pago de ahora.
+        // Retención de la factura: el valor con retención se escribe a mano.
         if (window.EconotecRetencion) {
             window.EconotecRetencion.montar(document.getElementById('fin-retencion'), {
                 factura: factura,
-                obtenerBase: function () {
-                    var aplicaDomicilio = document.querySelector('[name="ing-a_domicilio"]:checked');
-                    var domicilio = aplicaDomicilio && aplicaDomicilio.value === 'si'
-                        ? numero(document.querySelector('[name="ing-valor_domicilio"]')) : 0;
-                    return Math.max(numero(valorAdicional) + domicilio - numero(abono), 0);
-                },
             });
         }
     })();
