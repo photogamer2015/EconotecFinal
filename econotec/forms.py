@@ -13,7 +13,6 @@ from .models import (
     CategoriaEgreso, Egreso, AvisoPanel, NotificacionAsesora, InventarioItem,
 )
 from .permisos import GRUPOS_TECNICO, GRUPOS_ADMIN, GRUPOS_ASESOR_COMERCIAL
-from .retencion import total_con_retencion
 
 
 User = get_user_model()
@@ -984,13 +983,17 @@ class ValorAcordadoPagoForm(forms.Form):
 
 
 class RetencionFacturaFormMixin:
-    """Retención opcional: solo se guarda con factura Sí y retención Sí."""
+    """Retención opcional: solo se guarda con factura Sí y retención Sí.
+
+    El valor con retención (total de la factura) se escribe a mano; no se
+    calcula desde el monto.
+    """
 
     def _preparar_campos_retencion(self):
         self.fields['aplica_retencion'].required = False
         self.fields['valor_con_retencion'].required = False
 
-    def _limpiar_retencion(self, cleaned, base=None):
+    def _limpiar_retencion(self, cleaned):
         aplica = cleaned.get('aplica_retencion') or 'no'
         if cleaned.get('factura_realizada') != 'si' or aplica != 'si':
             cleaned['aplica_retencion'] = 'no'
@@ -998,8 +1001,6 @@ class RetencionFacturaFormMixin:
             return
 
         valor = cleaned.get('valor_con_retencion')
-        if valor is None and base:
-            valor = total_con_retencion(base)
         cleaned['aplica_retencion'] = 'si'
         cleaned['valor_con_retencion'] = valor
         if valor is None or valor <= Decimal('0.00'):
@@ -1325,8 +1326,8 @@ class AbonoForm(RetencionFacturaFormMixin, forms.ModelForm):
             cleaned['factura_cedula'] = ''
             cleaned['factura_correo'] = ''
 
-        # ── Retención: se calcula sobre el monto del abono ──
-        self._limpiar_retencion(cleaned, base=cleaned.get('monto'))
+        # ── Retención: valor escrito a mano ──
+        self._limpiar_retencion(cleaned)
 
         # ── Validación: bodegaje ──
         if self._bodegaje_ya_decidido:
