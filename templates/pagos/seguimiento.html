@@ -1,0 +1,452 @@
+{% extends 'base.html' %}
+{% load econotec_extras %}
+
+{% block title %}Seguimiento de pago · {{ etiqueta }} — Econotec{% endblock %}
+
+{% block extra_head %}
+<style>
+    .sp-encabezado { margin-bottom: 18px; }
+    .sp-encabezado .page-subtitle { margin-bottom: 4px; }
+    .sp-estado {
+        display: inline-block;
+        margin-left: 6px;
+        padding: 2px 10px;
+        border-radius: 999px;
+        font-size: 12px;
+        font-weight: 800;
+        vertical-align: middle;
+    }
+    .sp-estado.is-abierta { background: var(--tint-green-bg); color: var(--tint-green-fg); }
+    .sp-estado.is-cerrada { background: var(--surface-muted); color: var(--text-soft); }
+    .sp-estado.is-futura { background: var(--tint-amber-bg); color: var(--tint-amber-fg); }
+    .sp-reinicio { margin: 0; color: var(--text-muted); font-size: 13px; font-weight: 600; }
+    .sp-tabs {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px;
+        width: fit-content;
+        max-width: 100%;
+        margin-top: 16px;
+        padding: 4px;
+        border-radius: 12px;
+        background: var(--surface-muted);
+        border: 1px solid var(--border-color);
+    }
+    .sp-tabs a {
+        padding: 8px 16px;
+        border-radius: 9px;
+        color: var(--text-soft);
+        font-size: 14px;
+        font-weight: 650;
+        text-decoration: none;
+        white-space: nowrap;
+    }
+    .sp-tabs a:hover { color: var(--text-main); background: var(--hover-bg); }
+    .sp-tabs a.is-activa {
+        background: var(--card-bg);
+        color: var(--text-main);
+        font-weight: 800;
+        box-shadow: var(--shadow);
+    }
+
+    .sp-resumen {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+        gap: 12px;
+        margin-bottom: 14px;
+    }
+    .sp-card {
+        background: var(--card-bg);
+        border: 1px solid var(--border-color);
+        border-left: 5px solid #1565c0;
+        border-radius: 12px;
+        padding: 12px 16px;
+        box-shadow: var(--shadow);
+        min-width: 0;
+    }
+    .sp-card.is-total { border-left-color: var(--success); }
+    .sp-card.is-efectivo { border-left-color: #0f766e; }
+    .sp-card.is-tarjeta { border-left-color: #7e22ce; }
+    .sp-card.is-otros { border-left-color: var(--text-muted); }
+    .sp-card.is-saldo { border-left-color: var(--danger); }
+    .sp-card .lbl {
+        color: var(--text-muted);
+        font-size: 11px;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: .4px;
+    }
+    .sp-card .num { color: var(--text-main); font-size: 22px; font-weight: 800; line-height: 1.25; }
+    .sp-card.is-total .num { color: var(--success); font-size: 26px; }
+    .sp-card.is-saldo .num { color: var(--danger); }
+    .sp-card .sub { color: var(--text-muted); font-size: 12px; font-weight: 600; line-height: 1.45; }
+
+    .sp-aviso {
+        padding: 12px 16px;
+        border-radius: 10px;
+        background: #eef4ff;
+        color: #334b73;
+        margin-bottom: 14px;
+        line-height: 1.5;
+        font-size: 14px;
+    }
+
+    .sp-tabla-wrap { border-radius: 14px 14px 0 0; }
+    .sp-tabla td { vertical-align: top; }
+    .sp-tabla td.num, .sp-tabla th.num { text-align: right; }
+    .sp-tabla td.sp-cliente { white-space: normal; min-width: 180px; }
+    /* La columna fija «Cliente» sigue opaca al pasar el mouse (el color de
+       resaltado del tema oscuro es transparente y dejaba ver las columnas de atrás). */
+    .table-scroll-viewport[data-table-overflow="true"] .sp-tabla tbody tr:hover td.table-context-cell {
+        background: linear-gradient(var(--hover-bg), var(--hover-bg)), var(--table-context-row-bg, var(--card-bg));
+    }
+    .sp-tabla td a { color: var(--primary-dark); text-decoration: none; }
+    .sp-tabla td a:hover { text-decoration: underline; text-underline-offset: 3px; }
+    /* Un renglón por pago: las columnas de cada pago quedan alineadas. */
+    .sp-lineas > div { height: 20px; line-height: 20px; white-space: nowrap; }
+    .sp-lineas > div + div { margin-top: 4px; }
+    .sp-codigo { color: var(--primary); font-weight: 800; }
+    .sp-muted { display: block; color: var(--text-muted); font-size: 12px; margin-top: 2px; }
+    .sp-tabla .sp-monto { color: var(--success); font-weight: 800; }
+    /* Saldo pendiente: rojo si todavía debe; verde si ya pagó todo. */
+    .sp-tabla .sp-saldo { font-weight: 800; white-space: nowrap; }
+    .sp-tabla .sp-saldo.is-debe { color: var(--danger); }
+    .sp-tabla .sp-saldo.is-pagado { color: var(--success); }
+    .sp-tabla .sp-saldo.is-neutro { color: var(--text-muted); font-weight: 700; }
+    .sp-nota { display: block; margin-top: 3px; font-size: 11px; font-weight: 700; color: var(--text-muted); }
+    .sp-nota.is-bodegaje { color: #b54400; }
+    .sp-rol {
+        display: inline-block;
+        margin-left: 2px;
+        padding: 1px 7px;
+        border-radius: 999px;
+        background: var(--surface-muted);
+        color: var(--text-soft);
+        font-size: 10.5px;
+        font-weight: 700;
+    }
+    .sp-tecnico + .sp-tecnico { margin-top: 4px; }
+    .sp-tabla tfoot td {
+        background: var(--surface-muted);
+        color: var(--text-main);
+        font-weight: 800;
+        border-bottom: 0;
+        vertical-align: middle;
+    }
+    .sp-tabla tfoot td.sp-pie-titulo { white-space: normal; }
+    .sp-tabla tfoot .sp-muted { font-weight: 600; }
+    .sp-tabla tfoot td.num { color: var(--success); font-size: 15px; }
+    .sp-tabla tfoot td.num.sp-saldo-total { color: var(--danger); }
+    .sp-vacio {
+        padding: 28px 16px;
+        border: 1px dashed var(--input-border);
+        border-bottom: 0;
+        border-radius: 14px 14px 0 0;
+        background: var(--card-bg);
+        color: var(--text-muted);
+        font-weight: 700;
+        text-align: center;
+    }
+
+    /* ── Pestañas de hojas (abajo, como en Excel) ── */
+    .sp-hojas {
+        position: sticky;
+        bottom: 0;
+        /* Por encima de la columna fija «Cliente» de la tabla. */
+        z-index: 25;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        padding: 6px 8px;
+        /* Deja libre la esquina del botón flotante de EconoBot. */
+        padding-right: max(8px, calc(190px - (100vw - 100%) / 2));
+        border: 1px solid var(--border-color);
+        border-top: 2px solid var(--input-border);
+        border-radius: 0 0 14px 14px;
+        background: var(--surface-muted);
+    }
+    .sp-hojas-pestanas {
+        display: flex;
+        flex: 1;
+        gap: 2px;
+        min-width: 0;
+        overflow-x: auto;
+        scroll-behavior: smooth;
+        scrollbar-width: thin;
+        scrollbar-color: var(--input-border) transparent;
+    }
+    .sp-hoja {
+        flex: 0 0 auto;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 14px;
+        border-radius: 8px;
+        color: var(--text-soft);
+        font-size: 14px;
+        font-weight: 600;
+        text-decoration: none;
+        white-space: nowrap;
+    }
+    .sp-hoja:hover { background: var(--hover-bg); color: var(--text-main); }
+    .sp-hoja.is-activa {
+        background: var(--card-bg);
+        color: var(--primary-dark);
+        box-shadow: inset 0 -3px 0 var(--primary), 0 1px 3px rgba(0, 0, 0, .12);
+    }
+    .sp-hoja-total {
+        padding: 1px 7px;
+        border-radius: 999px;
+        background: rgba(60, 64, 67, .10);
+        font-size: 12px;
+        text-align: center;
+    }
+    .sp-hoja-actual {
+        padding: 1px 7px;
+        border-radius: 999px;
+        background: var(--success);
+        color: #fff;
+        font-size: 11px;
+        font-weight: 800;
+    }
+    .sp-hoja-actual.is-futura { background: var(--tint-amber-bg); color: var(--tint-amber-fg); }
+    .sp-hojas-flecha,
+    .sp-hojas-menu > summary {
+        flex: 0 0 auto;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 34px;
+        height: 34px;
+        border: 0;
+        border-radius: 8px;
+        background: transparent;
+        color: var(--text-soft);
+        font-size: 20px;
+        cursor: pointer;
+        list-style: none;
+    }
+    .sp-hojas-menu > summary::-webkit-details-marker { display: none; }
+    .sp-hojas-flecha:hover,
+    .sp-hojas-menu > summary:hover { background: var(--hover-bg); }
+    .sp-hojas-menu { position: relative; }
+    .sp-hojas-menu-panel {
+        position: absolute;
+        bottom: calc(100% + 8px);
+        left: 0;
+        z-index: 30;
+        width: 300px;
+        max-width: calc(100vw - 40px);
+        max-height: 60vh;
+        overflow-y: auto;
+        padding: 8px;
+        border: 1px solid var(--border-color);
+        border-radius: 12px;
+        background: var(--card-bg);
+        box-shadow: var(--shadow-lg);
+    }
+    .sp-hojas-menu-panel a {
+        display: flex;
+        justify-content: space-between;
+        gap: 10px;
+        padding: 7px 10px;
+        border-radius: 8px;
+        color: var(--text-main);
+        text-decoration: none;
+        font-size: 14px;
+    }
+    .sp-hojas-menu-panel a:hover { background: var(--hover-bg); }
+    .sp-hojas-menu-panel a.is-activa { color: var(--primary-dark); font-weight: 800; }
+    .sp-hojas-menu-mes {
+        margin: 10px 10px 4px;
+        color: var(--text-muted);
+        font-size: 12px;
+        font-weight: 800;
+        text-transform: uppercase;
+    }
+
+    /* En el celular la barra queda al final de la tabla (sin fijarse abajo). */
+    @media (max-width: 760px) {
+        .sp-hojas { position: static; padding-right: 8px; }
+        .sp-tabs { width: auto; }
+        .sp-tabs a { flex: 1 1 auto; text-align: center; padding: 8px 10px; }
+    }
+
+    [data-theme="dark"] .sp-aviso { background: rgba(59, 130, 246, .12); color: #c9d7f0; }
+    [data-theme="dark"] .sp-nota.is-bodegaje { color: #fbbf73; }
+    [data-theme="dark"] .sp-hoja-total { background: rgba(232, 237, 247, .12); }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="sp-encabezado">
+    <div class="crumb">
+        <a href="{% url 'econotec:bienvenida' %}">Inicio</a> &nbsp;›&nbsp;
+        <a href="{% url 'econotec:pagos_lista' %}">Pagos</a> &nbsp;›&nbsp; Seguimiento de pago
+    </div>
+
+    <h2 class="page-title">💵 Seguimiento de <span class="accent">pago</span></h2>
+    <p class="page-subtitle">
+        Semana {{ titulo_semana }}
+        {% if es_semana_actual %}<span class="sp-estado is-abierta">Esta semana</span>{% elif es_semana_futura %}<span class="sp-estado is-futura" title="Todavía no empieza: solo tiene pagos registrados con fecha adelantada">Próxima</span>{% else %}<span class="sp-estado is-cerrada">Cerrada</span>{% endif %}
+    </p>
+    {% if es_semana_actual %}
+    <p class="sp-reinicio">🗓 Hoja abierta: el {{ proxima_hoja_texto }} a las 00:00 empieza una hoja nueva.</p>
+    {% endif %}
+
+    <nav class="sp-tabs" aria-label="Sede">
+        {% for valor, nombre in sedes %}
+        <a href="?semana={{ lunes|date:'Y-m-d' }}{% if valor %}&amp;sede={{ valor }}{% endif %}"{% if valor == sede %} class="is-activa" aria-current="page"{% endif %}>{% if not valor %}📋 {% endif %}{{ nombre }}</a>
+        {% endfor %}
+    </nav>
+</div>
+
+<div class="sp-resumen">
+    <div class="sp-card is-total">
+        <div class="lbl">Total de la semana</div>
+        <div class="num">{{ total|dinero_signo }}</div>
+        <div class="sub">{{ cantidad }} equipo{{ cantidad|pluralize }} · {{ pagos }} pago{{ pagos|pluralize }}</div>
+    </div>
+    {% for m in metodos %}
+    <div class="sp-card is-{{ m.clave }}">
+        <div class="lbl">{{ m.nombre }}</div>
+        <div class="num">{{ m.monto|dinero_signo }}</div>
+        <div class="sub">{% if m.pagos %}{{ m.pagos }} pago{{ m.pagos|pluralize }}{% for detalle, monto in m.detalle %} · {{ detalle }} {{ monto|dinero_signo }}{% endfor %}{% else %}Sin pagos{% endif %}</div>
+    </div>
+    {% endfor %}
+    <div class="sp-card is-saldo">
+        <div class="lbl">Saldo pendiente</div>
+        <div class="num">{{ saldo_total|dinero_signo }}</div>
+        <div class="sub">Lo que aún deben hoy los equipos de esta hoja</div>
+    </div>
+</div>
+
+<div class="sp-aviso">
+    Pagos de equipos (anticipo, diagnóstico, abonos y pago al finalizar) recibidos de <strong>lunes 00:00 a domingo 23:59</strong>,
+    según la fecha de cada pago. Cada lunes a las 00:00 empieza una hoja nueva y las semanas anteriores quedan en las pestañas de abajo.
+    El <strong>saldo pendiente</strong> es lo que el cliente todavía debe hoy de ese equipo, con todos sus pagos. No incluye ventas de producto.
+</div>
+
+{% if filas %}
+<div class="table-wrap sp-tabla-wrap">
+    <table class="sp-tabla" data-context-column="2" aria-label="Pagos de la semana {{ titulo_semana }}">
+        <thead>
+            <tr>
+                <th>N.º</th>
+                <th>Fecha de pago</th>
+                <th>Cliente</th>
+                <th>Cédula</th>
+                <th>Equipo</th>
+                <th>Concepto</th>
+                <th>Forma de pago</th>
+                <th>Recibo</th>
+                <th class="num">Pagado</th>
+                <th class="num" title="Lo que el cliente todavía debe hoy de este equipo, con todos sus pagos">Saldo pendiente</th>
+                <th>Fecha de ingreso</th>
+                <th>Registrado por</th>
+                <th>Técnico responsable</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for f in filas %}
+            <tr>
+                <td>{{ f.numero }}</td>
+                <td class="sp-lineas">{% for c in f.cobros %}<div>{{ c.dia }}{% if c.hora %} · {{ c.hora|time:"H:i" }}{% endif %}</div>{% endfor %}</td>
+                <td class="sp-cliente"><strong>{{ f.cliente }}</strong></td>
+                <td>{{ f.cedula }}</td>
+                <td>
+                    <a href="{{ f.url_pagos }}" class="sp-codigo" title="Ver los pagos de este equipo">{{ f.codigo }}</a>
+                    <span class="sp-muted">{{ f.tipo_equipo }}{% if f.equipo %} · {{ f.equipo|truncatechars:32 }}{% endif %}</span>
+                </td>
+                <td class="sp-lineas">{% for c in f.cobros %}<div>{{ c.concepto }}</div>{% endfor %}</td>
+                <td class="sp-lineas">{% for c in f.cobros %}<div>{% for p in c.partes %}{% if not forloop.first %} + {% endif %}{{ p.etiqueta }}{% if c.partes|length > 1 or f.cobros|length > 1 %} ({{ p.monto|dinero_signo }}){% endif %}{% endfor %}</div>{% endfor %}</td>
+                <td class="sp-lineas">{% for c in f.cobros %}<div>{{ c.recibo|default:"—" }}</div>{% endfor %}</td>
+                <td class="num sp-monto">{{ f.monto|dinero_signo }}</td>
+                {% if f.saldo_estado == 'debe' %}
+                <td class="num sp-saldo is-debe">{{ f.saldo|dinero_signo }}{% if f.bodegaje > 0 %}<span class="sp-nota is-bodegaje" title="Bodegaje acumulado pendiente: se decide al retirar">📦 +{{ f.bodegaje|dinero_signo }} bodegaje</span>{% endif %}</td>
+                {% elif f.saldo_estado == 'pagado' %}
+                <td class="num sp-saldo is-pagado" title="Equipo pagado por completo">✓ $0,00{% if f.a_favor > 0 %}<span class="sp-nota">A favor {{ f.a_favor|dinero_signo }}</span>{% endif %}{% if f.bodegaje > 0 %}<span class="sp-nota is-bodegaje" title="Bodegaje acumulado pendiente: se decide al retirar">📦 +{{ f.bodegaje|dinero_signo }} bodegaje</span>{% endif %}</td>
+                {% elif f.saldo_estado == 'sin_valor' %}
+                <td class="num sp-saldo is-neutro" title="Todavía no tiene valor acordado">Sin valor acordado</td>
+                {% else %}
+                <td class="num sp-saldo is-neutro" title="Equipo de cortesía: no tiene cobro">Cortesía</td>
+                {% endif %}
+                <td>{{ f.fecha_ingreso|date:"d/m/Y" }}</td>
+                <td>{{ f.registra|default:"—" }}{% if f.registrado_en %}<span class="sp-muted">{{ f.registrado_en|date:"d/m/Y H:i" }}</span>{% endif %}</td>
+                <td>{% for t in f.tecnicos %}<div class="sp-tecnico">{{ t.nombre }} <span class="sp-rol">{{ t.rol }}</span></div>{% empty %}—{% endfor %}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+        <tfoot>
+            <tr>
+                <td></td>
+                <td></td>
+                {# El resumen va dentro de la celda fija para que no se asome cortado al desplazar la tabla. #}
+                <td class="sp-pie-titulo">Total de la semana<span class="sp-muted">{{ cantidad }} equipo{{ cantidad|pluralize }} · {{ pagos }} pago{{ pagos|pluralize }}</span></td>
+                <td colspan="5"></td>
+                <td class="num">{{ total|dinero_signo }}</td>
+                <td class="num sp-saldo-total" title="Suma de lo que todavía deben estos equipos">{{ saldo_total|dinero_signo }}</td>
+                <td colspan="3"></td>
+            </tr>
+        </tfoot>
+    </table>
+</div>
+{% else %}
+<div class="sp-vacio">
+    {% if es_semana_actual %}Todavía no hay pagos registrados esta semana.{% elif es_semana_futura %}Esta semana todavía no empieza.{% else %}No hubo pagos de equipos en esta semana.{% endif %}
+</div>
+{% endif %}
+
+<nav class="sp-hojas" aria-label="Hojas por semana">
+    <details class="sp-hojas-menu">
+        <summary title="Todas las semanas" aria-label="Todas las semanas">≡</summary>
+        <div class="sp-hojas-menu-panel">
+            {% for grupo in meses_pestanas %}
+            <div class="sp-hojas-menu-mes">{{ grupo.nombre }}</div>
+            {% for p in grupo.pestanas %}
+            <a href="?semana={{ p.iso }}{% if sede %}&amp;sede={{ sede }}{% endif %}"{% if p.activa %} class="is-activa" aria-current="page"{% endif %}>
+                <span>{{ p.etiqueta }}{% if p.actual %} · esta semana{% elif p.futura %} · próxima{% endif %}</span><span>{{ p.total|dinero_signo }}</span>
+            </a>
+            {% endfor %}
+            {% endfor %}
+        </div>
+    </details>
+    <button type="button" class="sp-hojas-flecha" data-desplazar="-1" aria-label="Ver semanas más recientes">‹</button>
+    <div class="sp-hojas-pestanas" id="sp-hojas-pestanas">
+        {% for p in pestanas %}
+        <a class="sp-hoja{% if p.activa %} is-activa{% endif %}" href="?semana={{ p.iso }}{% if sede %}&amp;sede={{ sede }}{% endif %}"
+           title="Semana {{ p.titulo }} · {{ p.cantidad }} equipo{{ p.cantidad|pluralize }} · {{ p.total|dinero_signo }}"{% if p.activa %} aria-current="page"{% endif %}>
+            {% if p.actual %}<span class="sp-hoja-actual">Esta semana</span>{% elif p.futura %}<span class="sp-hoja-actual is-futura">Próxima</span>{% endif %}{{ p.etiqueta }}<span class="sp-hoja-total">{{ p.total|dinero_signo }}</span>
+        </a>
+        {% endfor %}
+    </div>
+    <button type="button" class="sp-hojas-flecha" data-desplazar="1" aria-label="Ver semanas más antiguas">›</button>
+</nav>
+
+<script>
+(function () {
+    const pestanas = document.getElementById('sp-hojas-pestanas');
+    const activa = pestanas.querySelector('.is-activa');
+    if (activa) {
+        // Centra la hoja abierta solo dentro de la barra (sin mover la página).
+        const desfase = activa.getBoundingClientRect().left - pestanas.getBoundingClientRect().left;
+        const margen = Math.max(0, (pestanas.clientWidth - activa.offsetWidth) / 2);
+        pestanas.style.scrollBehavior = 'auto';
+        pestanas.scrollLeft += desfase - margen;
+        pestanas.style.scrollBehavior = '';
+    }
+    document.querySelectorAll('.sp-hojas [data-desplazar]').forEach(boton => {
+        boton.addEventListener('click', () => {
+            pestanas.scrollBy({ left: Number(boton.dataset.desplazar) * pestanas.clientWidth * 0.8 });
+        });
+    });
+    const menu = document.querySelector('.sp-hojas-menu');
+    document.addEventListener('click', e => {
+        if (menu.open && !menu.contains(e.target)) menu.open = false;
+    });
+    document.addEventListener('keydown', e => {
+        if (e.key === 'Escape' && menu.open) menu.open = false;
+    });
+})();
+</script>
+{% endblock %}
