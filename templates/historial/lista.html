@@ -112,7 +112,7 @@
                                 <td>{{ i.fecha_ingreso|date:"d/m/Y" }}</td>
                                 <td>{{ i.cliente.nombres }}</td>
                                 <td>{{ i.tipo_equipo_display }} — {{ i.marca|truncatechars:25 }}</td>
-                                <td><span class="badge badge-{{ i.estado }}">{{ i.get_estado_display }}</span></td>
+                                <td><span class="badge badge-{{ i.estado_visual_key }}">{{ i.estado_visual_display }}</span></td>
                                 <td>
                                     {% if i.estado_pago == 'Cortesía' %}
                                         <span class="badge badge-cortesia">Cortesía</span>

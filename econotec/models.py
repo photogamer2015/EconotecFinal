@@ -926,8 +926,21 @@ class IngresoEquipo(RetencionFactura):
             return 'Salió de la oficina'
         if self.pendiente_retiro_visual:
             return 'Pendiente de retiro'
+        # Una salida negativa describe el resultado real del diagnóstico.
+        # No debe mostrarse como "Entregado al cliente": ese estado solo
+        # corresponde a un equipo que ya salió físicamente de la oficina.
+        if salida is not None:
+            if salida.estado_reparacion == 'no_reparable':
+                return 'No se pudo reparar'
+            if salida.estado_reparacion == 'cliente_no_acepta':
+                return 'No quiso repararlo'
         if salida is not None and salida.estado_reparacion == 'revision':
             return 'Revisión'
+        if self.estado == 'entregado':
+            if self.subestado_entregado == 'sin_solucion':
+                return 'No se pudo reparar'
+            if self.subestado_entregado == 'no_quiso_reparar':
+                return 'No quiso repararlo'
         return self.get_estado_display()
 
     @property

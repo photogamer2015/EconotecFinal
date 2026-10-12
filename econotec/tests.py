@@ -5364,7 +5364,7 @@ class VentasTests(TestCase):
         ingreso.refresh_from_db()
 
         self.assertEqual(ingreso.estado_visual_key, 'no_reparable')
-        self.assertEqual(ingreso.estado_visual_display, 'Entregado al cliente')
+        self.assertEqual(ingreso.estado_visual_display, 'No se pudo reparar')
         self.assertEqual(ingreso.subestado_visual_display, 'Sin solución')
 
         response = self.client.get(reverse('econotec:ingreso_detalle', kwargs={'pk': ingreso.pk}))
@@ -5390,7 +5390,7 @@ class VentasTests(TestCase):
         ingreso.refresh_from_db()
 
         self.assertEqual(ingreso.estado_visual_key, 'cliente_no_acepta')
-        self.assertEqual(ingreso.estado_visual_display, 'Entregado al cliente')
+        self.assertEqual(ingreso.estado_visual_display, 'No quiso repararlo')
         self.assertEqual(ingreso.subestado_visual_display, 'No quiso repararlo')
 
         response = self.client.get(reverse('econotec:ingreso_detalle', kwargs={'pk': ingreso.pk}))

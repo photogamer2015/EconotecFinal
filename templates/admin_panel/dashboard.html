@@ -1520,7 +1520,7 @@
                             </td>
                             <td data-label="Técnico al ingreso">{{ item.tecnico_ingreso_nombre|default:"— Sin asignar —" }}</td>
                             <td data-label="Estado actual">
-                                <span class="estado-chip pending">{{ item.ingreso.get_estado_display }}</span>
+                                <span class="estado-chip pending">{{ item.ingreso.estado_visual_display }}</span>
                             </td>
                             <td data-label="Entrega">
                                 {% if item.salida %}
