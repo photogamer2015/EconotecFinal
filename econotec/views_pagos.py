@@ -2,7 +2,7 @@
 Vistas de Pagos / Abonos / Historial.
 """
 from collections import defaultdict
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 from io import BytesIO
 
@@ -12,15 +12,20 @@ from django.db import transaction
 from django.db.models import Sum
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.utils import timezone
 from django.views.decorators.http import require_POST
 
 from .busqueda import filtrar_objetos_normalizado, texto_ingreso_busqueda
 from .bitacora import registrar_bitacora
 from .emails import enviar_correo_abono_seguro
 from .forms import AbonoForm, ValorAcordadoPagoForm
-from .models import Abono, IngresoEquipo
+from .models import SEDES_EQUIPOS, Abono, IngresoEquipo
 from .pagination import paginar_resultados
-from .permisos import tecnico_requerido, asesor_requerido
+from .permisos import admin_requerido, tecnico_requerido, asesor_requerido
+from .seguimiento_pago import (
+    etiqueta_semana, fecha_larga, hoja_semana, inicio_semana, pestanas_semanas,
+    titulo_semana, totales_por_semana,
+)
 
 
 MESES_ES = [
@@ -321,6 +326,48 @@ def pagos_export(request):
     )
     response['Content-Disposition'] = 'attachment; filename="pagos_econotec.xlsx"'
     return response
+
+
+# ═════════════════════════════════════════════════════════════════
+# Seguimiento de pago (hoja semanal, solo admin)
+# ═════════════════════════════════════════════════════════════════
+
+@admin_requerido
+def seguimiento_pago(request):
+    """
+    Pagos de equipos de una semana (?semana=AAAA-MM-DD, cualquier día de ella;
+    la actual si falta). La hoja se reinicia cada lunes a las 00:00.
+    """
+    hoy = timezone.localdate()
+    semana_actual = inicio_semana(hoy)
+    try:
+        dia = date.fromisoformat((request.GET.get('semana') or '').strip())
+    except ValueError:
+        dia = hoy
+    lunes = inicio_semana(dia)
+
+    sede = (request.GET.get('sede') or '').strip()
+    if sede not in SEDES_EQUIPOS:
+        sede = ''
+
+    hoja = hoja_semana(lunes, sede)
+    pestanas, meses = pestanas_semanas(totales_por_semana(sede), semana_actual, lunes)
+    proxima_hoja = semana_actual + timedelta(days=7)
+
+    return render(request, 'pagos/seguimiento.html', {
+        **hoja,
+        'sede': sede,
+        'es_semana_actual': lunes == semana_actual,
+        # Solo tiene datos si se registró un pago con fecha adelantada.
+        'es_semana_futura': lunes > semana_actual,
+        'etiqueta': etiqueta_semana(lunes),
+        'titulo_semana': titulo_semana(lunes),
+        'proxima_hoja': proxima_hoja,
+        'proxima_hoja_texto': fecha_larga(proxima_hoja),
+        'sedes': [('', 'Todas'), ('guayaquil', 'Guayaquil (G)'), ('quito', 'Quito (U)')],
+        'pestanas': pestanas,
+        'meses_pestanas': meses,
+    })
 
 
 # ═════════════════════════════════════════════════════════════════
