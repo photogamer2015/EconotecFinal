@@ -245,7 +245,7 @@
                         <span class="valor-pendiente-badge">⚠ Pendiente valor acordado</span>
                     {% elif i.reparacion_cancelada %}
                         <span style="color:#999; text-decoration: line-through; font-size: 12px;">{{ i.valor_acordado|dinero_signo }}</span>
-                    {% elif i.salida.tiene_valor_acordado_adicional %}
+                    {% elif i.adicional_suma_al_valor_acordado %}
                         {{ i.valor_servicio_a_cobrar|dinero_signo }}
                         <small style="display:block; color:#e65100; font-size:11px; font-weight:700;" title="Incluye {{ i.salida.valor_acordado_adicional|dinero_signo }} adicional">
                             +{{ i.salida.valor_acordado_adicional|dinero_signo }} adic.

@@ -1580,16 +1580,22 @@ def admin_retenciones_lista(request):
             reg = it['registrado_por']
             ws.cell(row=row_num, column=17, value=(reg.get_full_name() or reg.username) if reg else '—')
 
+        # Textos escritos por usuarios que empiezan con «=» no deben quedar como fórmulas.
+        for fila in ws.iter_rows(min_row=2):
+            for celda in fila:
+                if celda.data_type == 'f':
+                    celda.data_type = 's'
+
         fecha_str = timezone.now().strftime("%Y%m%d_%H%M")
         response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
         response['Content-Disposition'] = f'attachment; filename=Retenciones_Facturas_{fecha_str}.xlsx'
         wb.save(response)
         return response
 
-    anos_salidas = list(SalidaEquipo.objects.dates('fecha_salida', 'year').values_list('fecha_salida__year', flat=True))
-    anos_abonos = list(Abono.objects.dates('fecha', 'year').values_list('fecha__year', flat=True))
-    anos_ventas = list(IngresoEquipo.objects.dates('fecha_ingreso', 'year').values_list('fecha_ingreso__year', flat=True))
-    anos_disp = sorted(set(anos_salidas + anos_abonos + anos_ventas + [hoy.year]), reverse=True)
+    anos_disp = {hoy.year}
+    for modelo, campo in ((SalidaEquipo, 'fecha_salida'), (Abono, 'fecha'), (IngresoEquipo, 'fecha_ingreso')):
+        anos_disp.update(d.year for d in modelo.objects.dates(campo, 'year'))
+    anos_disp = sorted(anos_disp, reverse=True)
 
     page_obj, querystring = paginar_resultados(request, items, per_page=20)
 

@@ -10531,3 +10531,55 @@ class VentasTests(TestCase):
             registrado_por=self.admin,
         )
         self.assertContains(self.client.get(url), 'Se aplicó retención', count=1)
+
+    def test_valor_adicional_no_se_desglosa_si_la_reparacion_se_cancelo(self):
+        ingreso = self.crear_ingreso_reparacion(valor_acordado=Decimal('25.00'))
+        SalidaEquipo.objects.create(
+            ingreso=ingreso,
+            fecha_salida=date(2026, 7, 9),
+            estado_reparacion='no_reparable',
+            tecnico_reparo=self.usuario,
+            aplica_valor_acordado_adicional='si',
+            valor_acordado_adicional=Decimal('45.00'),
+            valor_final_cobrado=Decimal('0.00'),
+            metodo_pago_final='sin_pago',
+            registrado_por=self.usuario,
+        )
+        self.assertFalse(ingreso.adicional_suma_al_valor_acordado)
+
+        res_print = self.client.get(reverse('econotec:ingreso_imprimir', kwargs={'pk': ingreso.pk}))
+        self.assertNotContains(res_print, '$25,00 + $45,00')
+
+        token = token_para_ingreso(ingreso.pk)
+        res_hoja = self.client.get(reverse('econotec:tecnico_hoja', kwargs={'token': token}))
+        self.assertNotContains(res_hoja, '$45,00 adic.)')
+
+        res_abonos = self.client.get(reverse('econotec:ingreso_abonos', kwargs={'pk': ingreso.pk}))
+        self.assertNotContains(res_abonos, '+$45,00 adic.')
+
+    def test_admin_retenciones_excel_no_convierte_textos_en_formulas(self):
+        import io
+        import openpyxl
+
+        self.client.force_login(self.admin)
+        ingreso = self.crear_ingreso_reparacion(valor_acordado=Decimal('50.00'))
+        Abono.objects.create(
+            ingreso=ingreso,
+            fecha=date(2026, 8, 15),
+            monto=Decimal('50.00'),
+            metodo='efectivo',
+            factura_realizada='si',
+            factura_nombres='=HYPERLINK("http://x","Abrir")',
+            factura_cedula='1799999999001',
+            factura_correo='beta@example.com',
+            aplica_retencion='si',
+            valor_con_retencion=Decimal('57.50'),
+            registrado_por=self.admin,
+        )
+        response = self.client.get(
+            reverse('econotec:admin_retenciones_lista'),
+            {'ano': 2026, 'mes': 8, 'exportar': 'excel'},
+        )
+        ws = openpyxl.load_workbook(io.BytesIO(response.content)).active
+        self.assertEqual(ws.cell(row=2, column=7).value, '=HYPERLINK("http://x","Abrir")')
+        self.assertEqual(ws.cell(row=2, column=7).data_type, 's')
