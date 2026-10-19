@@ -958,7 +958,7 @@
                 </div>
             {% else %}
                 <!-- CASO NORMAL -->
-                {% if ingreso.salida.tiene_valor_acordado_adicional %}
+                {% if ingreso.adicional_suma_al_valor_acordado %}
                     <div class="big-num" style="padding: 12px 14px 14px;">
                         <div style="font-size: 32px; font-weight: 800; line-height: 1.1; color: var(--primary);">
                             {{ ingreso.valor_servicio_a_cobrar|dinero_signo }}

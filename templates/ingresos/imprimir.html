@@ -409,7 +409,7 @@
         <div class="field-line">
             <span class="label">Valor acordado:</span>
             <span class="value">
-                {% if ingreso.salida.tiene_valor_acordado_adicional %}
+                {% if ingreso.adicional_suma_al_valor_acordado %}
                     {{ ingreso.valor_servicio_a_cobrar|dinero_signo }} <small style="color:#e65100; font-size:10px;">({{ ingreso.valor_acordado|dinero_signo }} + {{ ingreso.salida.valor_acordado_adicional|dinero_signo }})</small>
                 {% else %}
                     {{ ingreso.valor_acordado|dinero_signo }}

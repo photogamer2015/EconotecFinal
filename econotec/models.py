@@ -1259,6 +1259,21 @@ class IngresoEquipo(RetencionFactura):
         return _q2(valor_reparacion)
 
     @property
+    def adicional_suma_al_valor_acordado(self):
+        """
+        True cuando el valor acordado se muestra como «base + adicional».
+        Si la reparación se canceló o salió por revisión, el cobro ya no es
+        esa suma (ver valor_servicio_a_cobrar), así que no se desglosa.
+        """
+        salida = self._salida_relacionada()
+        return (
+            salida is not None
+            and salida.tiene_valor_acordado_adicional
+            and self.estado != 'cortesia'
+            and not self.reparacion_cancelada
+        )
+
+    @property
     def pago_con_retencion(self):
         """True si algún pago del equipo (abono o pago final) se facturó con retención."""
         salida = self._salida_relacionada()

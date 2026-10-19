@@ -234,7 +234,7 @@
         <div style="font-size: 22px; font-weight: 800; color: var(--secondary);">
             {% if ingreso.salida.estado_reparacion == 'revision' %}
                 {{ ingreso.valor_efectivo_a_cobrar|dinero_signo }}
-            {% elif ingreso.salida.tiene_valor_acordado_adicional %}
+            {% elif ingreso.adicional_suma_al_valor_acordado %}
                 {{ ingreso.valor_servicio_a_cobrar|dinero_signo }}
                 <span style="font-size: 13px; font-weight: 600; color: #ea580c; background: rgba(234,88,12,0.1); padding: 2px 6px; border-radius: 8px; vertical-align: middle;">
                     +{{ ingreso.salida.valor_acordado_adicional|dinero_signo }} adic.

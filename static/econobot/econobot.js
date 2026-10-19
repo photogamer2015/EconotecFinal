@@ -130,17 +130,24 @@
         burbuja.className = 'econobot-burbuja';
         burbuja.textContent = mensaje.texto || '';
         fila.appendChild(burbuja);
-        if (mensaje.rol !== 'yo' && mensaje.texto) {
+        if (mensaje.rol !== 'yo' && mensaje.texto && window.speechSynthesis && window.SpeechSynthesisUtterance) {
             var audio = document.createElement('button');
             audio.type = 'button';
             audio.className = 'econobot-audio-btn';
             audio.textContent = '🔊 Escuchar';
             audio.title = 'Escuchar esta respuesta';
             audio.addEventListener('click', function () {
-                if (sintesis && sintesis.speaking) { detenerVoz(); audio.textContent = '🔊 Escuchar'; return; }
-                hablar(mensaje.texto);
+                var estabaSonando = botonAudioActivo === audio;
+                detenerVoz();
+                if (estabaSonando) return;
+                var locucion = hablar(mensaje.texto);
+                if (!locucion) return;
+                botonAudioActivo = audio;
                 audio.textContent = '■ Detener';
-                window.setTimeout(function () { audio.textContent = '🔊 Escuchar'; }, Math.min(12000, Math.max(1200, textoParaVoz(mensaje.texto).length * 55)));
+                locucion.onend = locucion.onerror = function () {
+                    if (botonAudioActivo === audio) botonAudioActivo = null;
+                    audio.textContent = '🔊 Escuchar';
+                };
             });
             fila.appendChild(audio);
         }
@@ -634,6 +641,7 @@
     }
 
     var sintesis = window.speechSynthesis;
+    var botonAudioActivo = null;
 
     var SIN_EMOJIS = null;
     try {
@@ -668,10 +676,16 @@
                 locucion.lang = voz.lang;
             }
             sintesis.speak(locucion);
+            return locucion;
         } catch (e) { /* sin voz */ }
+        return null;
     }
 
     function detenerVoz() {
+        if (botonAudioActivo) {
+            botonAudioActivo.textContent = '🔊 Escuchar';
+            botonAudioActivo = null;
+        }
         if (sintesis) {
             try { sintesis.cancel(); } catch (e) { /* nada que detener */ }
         }
