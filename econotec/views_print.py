@@ -1062,7 +1062,11 @@ def generar_ingreso_pdf_bytes(ingreso):
         c.line(margen + 95, y - 1, margen + 200, y - 1)
         c.setFillColor(black)
         c.setFont('Helvetica', 9)
-        val_acord_str = f'$ {ingreso.valor_acordado:.2f}' if ingreso.valor_acordado is not None else '—'
+        salida = getattr(ingreso, 'salida', None)
+        if salida and salida.tiene_valor_acordado_adicional:
+            val_acord_str = f'$ {ingreso.valor_servicio_a_cobrar:.2f} (+${salida.valor_acordado_adicional:.2f})'
+        else:
+            val_acord_str = f'$ {ingreso.valor_acordado:.2f}' if ingreso.valor_acordado is not None else '—'
         c.drawString(margen + 99, y + 1, val_acord_str)
 
         c.setFillColor(naranja)

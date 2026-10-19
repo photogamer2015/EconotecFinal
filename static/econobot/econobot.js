@@ -130,6 +130,20 @@
         burbuja.className = 'econobot-burbuja';
         burbuja.textContent = mensaje.texto || '';
         fila.appendChild(burbuja);
+        if (mensaje.rol !== 'yo' && mensaje.texto) {
+            var audio = document.createElement('button');
+            audio.type = 'button';
+            audio.className = 'econobot-audio-btn';
+            audio.textContent = '🔊 Escuchar';
+            audio.title = 'Escuchar esta respuesta';
+            audio.addEventListener('click', function () {
+                if (sintesis && sintesis.speaking) { detenerVoz(); audio.textContent = '🔊 Escuchar'; return; }
+                hablar(mensaje.texto);
+                audio.textContent = '■ Detener';
+                window.setTimeout(function () { audio.textContent = '🔊 Escuchar'; }, Math.min(12000, Math.max(1200, textoParaVoz(mensaje.texto).length * 55)));
+            });
+            fila.appendChild(audio);
+        }
         if (mensaje.enlaces && mensaje.enlaces.length) {
             var contenedor = document.createElement('div');
             contenedor.className = 'econobot-enlaces';
@@ -195,7 +209,7 @@
 
     function mostrarEscribiendo(activo) {
         raiz.classList.toggle('is-busy', activo);
-        estadoTexto.textContent = activo ? 'Escribiendo…' : 'Asistente de Econotec';
+        estadoTexto.textContent = activo ? 'Mercybot está pensando…' : 'Tu copiloto de Econotec';
         if (activo && !indicadorEscribiendo) {
             indicadorEscribiendo = document.createElement('div');
             indicadorEscribiendo.className = 'econobot-msg econobot-escribiendo';
@@ -222,7 +236,7 @@
     function bienvenida() {
         agregar({
             rol: 'bot',
-            texto: '¡Hola' + (nombre ? ', ' + nombre : '') + '! 👋 Soy EconoBot, tu asistente de Econotec.\n' +
+            texto: '¡Hola' + (nombre ? ', ' + nombre : '') + '! 👋 Soy Mercybot, tu copiloto de Econotec.\n' +
                 'Puedo registrar equipos, finalizarlos, confirmar salidas y mostrarte clientes, equipos y alertas. ' +
                 'Escribe lo que necesitas o un código como G1031.',
             opciones: [
@@ -407,6 +421,8 @@
     });
 
     botonNuevo.addEventListener('click', function () {
+        if (historial.length && !window.confirm('¿Reiniciar la conversación? Mercybot olvidará este chat y comenzará desde cero.')) return;
+        detenerVoz();
         historial = [];
         borrar(CLAVE_HISTORIAL);
         zonaMensajes.textContent = '';
@@ -607,7 +623,7 @@
                 escuchando = false;
                 botonMic.classList.remove('is-escuchando');
                 botonMic.setAttribute('aria-label', 'Dictar por voz');
-                estadoTexto.textContent = 'Asistente de Econotec';
+                estadoTexto.textContent = 'Tu copiloto de Econotec';
                 if (final.trim()) {
                     dictadoUsado = true;
                     formulario.requestSubmit ? formulario.requestSubmit() : formulario.dispatchEvent(new Event('submit', { cancelable: true }));
