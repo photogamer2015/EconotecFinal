@@ -7,11 +7,11 @@
      data-usuario="{{ user.pk }}"
      data-nombre="{{ user.first_name|default:user.username }}">
     <button type="button" class="econobot-launcher" id="econobot-launcher"
-            aria-controls="econobot-panel" aria-expanded="false" title="Abrir EconoBot">
+            aria-controls="econobot-panel" aria-expanded="false" title="Abrir Mercybot">
         <span class="econobot-avatar" aria-hidden="true">
             <picture><source srcset="{% static 'econobot/econobot-rostro.webp' %}" type="image/webp"><img src="{% static 'econobot/econobot-rostro.png' %}" alt="" width="32" height="32" decoding="async"></picture>
         </span>
-        <span class="econobot-launcher-text">EconoBot</span>
+        <span class="econobot-launcher-text">Mercybot</span>
         <span class="econobot-launcher-dot" id="econobot-launcher-dot" hidden></span>
     </button>
 
@@ -21,8 +21,8 @@
                 <picture><source srcset="{% static 'econobot/econobot-rostro.webp' %}" type="image/webp"><img src="{% static 'econobot/econobot-rostro.png' %}" alt="" width="40" height="40" decoding="async"></picture>
             </span>
             <div class="econobot-head-text">
-                <strong id="econobot-title">EconoBot</strong>
-                <span class="econobot-status" id="econobot-status">Asistente de Econotec</span>
+                <strong id="econobot-title">Mercybot</strong>
+                <span class="econobot-status" id="econobot-status">Tu copiloto de Econotec</span>
             </div>
             <div class="econobot-head-actions">
                 <button type="button" class="econobot-icon-btn" id="econobot-voz" aria-pressed="true" hidden
@@ -30,7 +30,7 @@
                 <button type="button" class="econobot-icon-btn" id="econobot-nuevo" title="Nueva conversación" aria-label="Nueva conversación">
                     <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 12a8 8 0 1 0 2.4-5.7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M4 4.5v4.2h4.2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 </button>
-                <button type="button" class="econobot-icon-btn" id="econobot-cerrar" title="Cerrar" aria-label="Cerrar EconoBot">
+                <button type="button" class="econobot-icon-btn" id="econobot-cerrar" title="Cerrar" aria-label="Cerrar Mercybot">
                     <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
                 </button>
             </div>
@@ -80,7 +80,7 @@
                 <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4.5 12h14M13 6.5l5.5 5.5-5.5 5.5" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
             </button>
         </form>
-        <p class="econobot-pie">Nada se guarda sin tu confirmación.</p>
+        <p class="econobot-pie"><span class="mercybot-spark">✦</span> Mercybot cuida cada paso contigo</p>
     </section>
 </div>
-<script src="{% static 'econobot/econobot.js' %}?v=20260927-4" defer></script>
+<script src="{% static 'econobot/econobot.js' %}?v=20261015-1" defer></script>

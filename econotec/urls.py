@@ -196,6 +196,7 @@ urlpatterns = [
     path('admin-panel/export/egresos/',
          views_admin.export_egresos, name='admin_export_egresos'),
     path('admin-panel/bodegajes/', views_admin.admin_bodegajes, name='admin_bodegajes'),
+    path('admin-panel/retenciones/', views_admin.admin_retenciones_lista, name='admin_retenciones_lista'),
     path('admin-panel/activos-bodegaje/', views_admin.admin_activos_bodegaje, name='admin_activos_bodegaje'),
     path(
         'bodegaje-chatarrerizacion/<int:pk>/enviar-correo/',

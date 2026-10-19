@@ -364,6 +364,15 @@ class RetencionFactura(models.Model):
             - (self.retencion_renta_retenida or Decimal('0.00'))
         )
 
+    @property
+    def retencion_total_retenido(self):
+        if not self.tiene_retencion:
+            return Decimal('0.00')
+        return (
+            (self.retencion_iva_retenido or Decimal('0.00'))
+            + (self.retencion_renta_retenida or Decimal('0.00'))
+        )
+
     def _sincronizar_retencion(self):
         """Deja el desglose coherente con el total, o limpia todo si no aplica."""
         from .retencion import desglose_retencion
@@ -1248,6 +1257,20 @@ class IngresoEquipo(RetencionFactura):
         if salida and salida.tiene_valor_acordado_adicional:
             valor_reparacion += salida.valor_acordado_adicional
         return _q2(valor_reparacion)
+
+    @property
+    def pago_con_retencion(self):
+        """True si algún pago del equipo (abono o pago final) se facturó con retención."""
+        salida = self._salida_relacionada()
+        if salida is not None and salida.tiene_retencion:
+            return True
+        if self.pk is None:
+            return False
+        return self.abonos.filter(
+            factura_realizada='si',
+            aplica_retencion='si',
+            valor_con_retencion__isnull=False,
+        ).exists()
 
     @property
     def bodegaje_cobrado_en_abonos(self):

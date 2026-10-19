@@ -856,7 +856,17 @@
 
                     {% if ingreso.valor_acordado is not None %}
                         <div class="money-summary-mobile">
-                            <div class="money-heading">Valor acordado total: <strong>{{ ingreso.valor_acordado|dinero_signo }}</strong></div>
+                            <div class="money-heading">
+                                Valor acordado total:
+                                {% if salida and salida.tiene_valor_acordado_adicional %}
+                                    <strong>{{ ingreso.valor_servicio_a_cobrar|dinero_signo }}</strong>
+                                    <span style="display:inline-block; font-size:11px; font-weight:700; color:#ea580c; background:rgba(234,88,12,0.1); padding:2px 8px; border-radius:12px; margin-left:4px;">
+                                        ({{ ingreso.valor_acordado|dinero_signo }} + {{ salida.valor_acordado_adicional|dinero_signo }} adic.)
+                                    </span>
+                                {% else %}
+                                    <strong>{{ ingreso.valor_acordado|dinero_signo }}</strong>
+                                {% endif %}
+                            </div>
                             <div class="money-grid-mobile">
                                 <div class="money-card-mobile pos">
                                     <div class="label">Pagado</div>

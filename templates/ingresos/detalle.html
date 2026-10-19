@@ -213,6 +213,58 @@
         border-radius: 8px;
         margin-bottom: 14px;
     }
+    .adicional-badge {
+        margin-top: 6px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        padding: 4px 12px;
+        background: rgba(255, 255, 255, 0.92);
+        border-radius: 999px;
+        font-size: 12px;
+        font-weight: 700;
+        color: var(--text-main, #333);
+        border: 1px solid rgba(249, 115, 22, 0.4);
+        box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    }
+    .adicional-badge .base-val {
+        color: #78716c;
+        font-weight: 600;
+    }
+    .adicional-badge .plus-sign {
+        color: #ea580c;
+        font-weight: 900;
+        font-size: 13px;
+    }
+    .adicional-badge .adic-val {
+        color: #ea580c;
+        font-weight: 800;
+    }
+    [data-theme="dark"] .adicional-badge {
+        background: rgba(0, 0, 0, 0.35);
+        border-color: rgba(249, 115, 22, 0.5);
+    }
+    [data-theme="dark"] .adicional-badge .base-val {
+        color: #a8a29e;
+    }
+    [data-theme="dark"] .adicional-badge .adic-val,
+    [data-theme="dark"] .adicional-badge .plus-sign {
+        color: #fb923c;
+    }
+    .retencion-nota {
+        display: inline-block;
+        padding: 3px 12px;
+        border-radius: 999px;
+        background: rgba(180, 83, 9, 0.1);
+        color: #b45309;
+        font-size: 12px;
+        font-weight: 700;
+    }
+    [data-theme="dark"] .retencion-nota {
+        background: rgba(251, 146, 60, 0.15);
+        color: #fdba74;
+    }
     .money-summary {
         display: grid;
         grid-template-columns: repeat(3, 1fr);
@@ -847,9 +899,22 @@
                     {% if ingreso.salida.estado_reparacion == 'revision' %}
                         Valor acordado por revisión
                     {% elif ingreso.salida.estado_reparacion == 'cliente_no_acepta' %}
-                        Solo se cobra diagnóstico
+                        {% if ingreso.salida.tiene_valor_acordado_adicional %}
+                            Cobro adicional acordado
+                        {% else %}
+                            Solo se cobra diagnóstico
+                        {% endif %}
                     {% else %}
-                        No se cobra revisión (Gratuito)
+                        {% if ingreso.salida.tiene_valor_acordado_adicional %}
+                            Cobro adicional acordado
+                        {% else %}
+                            No se cobra revisión (Gratuito)
+                        {% endif %}
+                    {% endif %}
+                    {% if ingreso.salida.tiene_valor_acordado_adicional and ingreso.salida.motivo_valor_acordado_adicional %}
+                        <div style="font-size: 11.5px; color: #856404; margin-top: 4px; font-weight: 600;" title="{{ ingreso.salida.motivo_valor_acordado_adicional }}">
+                            💬 {{ ingreso.salida.motivo_valor_acordado_adicional }}
+                        </div>
                     {% endif %}
                 </div>
                 <div style="text-align:center; margin-top:8px; padding:8px; background:#fff8f3; border-radius:6px; font-size:12px; color:#666;">
@@ -893,8 +958,29 @@
                 </div>
             {% else %}
                 <!-- CASO NORMAL -->
-                <div class="big-num">{{ ingreso.valor_acordado|dinero_signo }}</div>
-                <div style="text-align:center; font-size:13px; color:#666;">Valor acordado total</div>
+                {% if ingreso.salida.tiene_valor_acordado_adicional %}
+                    <div class="big-num" style="padding: 12px 14px 14px;">
+                        <div style="font-size: 32px; font-weight: 800; line-height: 1.1; color: var(--primary);">
+                            {{ ingreso.valor_servicio_a_cobrar|dinero_signo }}
+                        </div>
+                        <div class="adicional-badge">
+                            <span class="base-val">{{ ingreso.valor_acordado|dinero_signo }}</span>
+                            <span class="plus-sign">+</span>
+                            <span class="adic-val">{{ ingreso.salida.valor_acordado_adicional|dinero_signo }} adicional</span>
+                        </div>
+                    </div>
+                    <div style="text-align:center; font-size:13px; color:#666;">
+                        Valor acordado total
+                        {% if ingreso.salida.motivo_valor_acordado_adicional %}
+                            <div style="font-size: 11.5px; color: #856404; margin-top: 4px; font-weight: 600;" title="{{ ingreso.salida.motivo_valor_acordado_adicional }}">
+                                💬 {{ ingreso.salida.motivo_valor_acordado_adicional }}
+                            </div>
+                        {% endif %}
+                    </div>
+                {% else %}
+                    <div class="big-num">{{ ingreso.valor_acordado|dinero_signo }}</div>
+                    <div style="text-align:center; font-size:13px; color:#666;">Valor acordado total</div>
+                {% endif %}
 
                 <div class="money-summary">
                     <div class="money-card pos">
@@ -917,6 +1003,11 @@
                             {% endif %}
                         </div>
                     </div>
+                </div>
+            {% endif %}
+            {% if ingreso.pago_con_retencion %}
+                <div style="text-align:center; margin-top:10px;">
+                    <span class="retencion-nota">🧾 Se aplicó retención</span>
                 </div>
             {% endif %}
             {% if ingreso.a_domicilio == 'si' %}

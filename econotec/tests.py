@@ -5702,6 +5702,46 @@ class VentasTests(TestCase):
         self.assertEqual(pdf_response.status_code, 200)
         self.assertEqual(pdf_response['Content-Type'], 'application/pdf')
 
+    def test_ingreso_detalle_muestra_valor_adicional_y_suma_acordada(self):
+        ingreso = self.crear_ingreso_reparacion(
+            valor_acordado=Decimal('10.00'),
+            abono_anticipo=Decimal('5.00'),
+        )
+        SalidaEquipo.objects.create(
+            ingreso=ingreso,
+            fecha_salida=date(2026, 7, 9),
+            estado_reparacion='pendiente_retiro',
+            tecnico_reparo=self.usuario,
+            aplica_valor_acordado_adicional='si',
+            valor_acordado_adicional=Decimal('80.00'),
+            motivo_valor_acordado_adicional='Repuesto adicional autorizado por el cliente.',
+            valor_final_cobrado=Decimal('0.00'),
+            metodo_pago_final='sin_pago',
+            registrado_por=self.usuario,
+        )
+        response = self.client.get(reverse('econotec:ingreso_detalle', kwargs={'pk': ingreso.pk}))
+        self.assertContains(response, '$90,00')
+        self.assertContains(response, '$10,00')
+        self.assertContains(response, '$80,00 adicional')
+        self.assertContains(response, 'Repuesto adicional autorizado por el cliente.')
+
+        token = token_para_ingreso(ingreso.pk)
+        res_hoja = self.client.get(reverse('econotec:tecnico_hoja', kwargs={'token': token}))
+        self.assertContains(res_hoja, '$90,00')
+        self.assertContains(res_hoja, '$80,00 adic.')
+
+        res_abonos = self.client.get(reverse('econotec:ingreso_abonos', kwargs={'pk': ingreso.pk}))
+        self.assertContains(res_abonos, '$90,00')
+        self.assertContains(res_abonos, '+$80,00 adic.')
+
+        res_lista = self.client.get(reverse('econotec:ingreso_lista'))
+        self.assertContains(res_lista, '$90,00')
+        self.assertContains(res_lista, '+$80,00 adic.')
+
+        res_print = self.client.get(reverse('econotec:ingreso_imprimir', kwargs={'pk': ingreso.pk}))
+        self.assertContains(res_print, '$90,00')
+        self.assertContains(res_print, '+ $80,00')
+
     def test_salida_imprimir_detalla_pago_mixto(self):
         ingreso = self.crear_ingreso_reparacion(
             estado='entregado',
@@ -10376,3 +10416,118 @@ class VentasTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Ingresa el valor con retención (mayor a $0.00).')
         self.assertFalse(IngresoEquipo.objects.filter(sede='ventas').exists())
+
+    def test_admin_retenciones_lista_requiere_admin(self):
+        url = reverse('econotec:admin_retenciones_lista')
+        self.client.logout()
+        res_anon = self.client.get(url)
+        self.assertEqual(res_anon.status_code, 302)
+
+        self.client.force_login(self.usuario)
+        res_tec = self.client.get(url)
+        self.assertIn(res_tec.status_code, (302, 403))
+
+        self.client.force_login(self.admin)
+        res_adm = self.client.get(url)
+        self.assertEqual(res_adm.status_code, 200)
+
+    def test_admin_retenciones_lista_muestra_solo_retenciones_y_filtra(self):
+        self.client.force_login(self.admin)
+        ingreso1 = self.crear_ingreso_reparacion(
+            valor_acordado=Decimal('100.00'),
+            fecha_ingreso=date(2026, 8, 10),
+        )
+        SalidaEquipo.objects.create(
+            ingreso=ingreso1,
+            fecha_salida=date(2026, 8, 12),
+            estado_reparacion='pendiente_retiro',
+            tecnico_reparo=self.usuario,
+            factura_realizada='si',
+            factura_nombres='Empresa Alfa S.A.',
+            factura_cedula='0999999999001',
+            factura_correo='alfa@example.com',
+            aplica_retencion='si',
+            valor_con_retencion=Decimal('115.00'),
+            valor_final_cobrado=Decimal('0.00'),
+            metodo_pago_final='sin_pago',
+            registrado_por=self.admin,
+        )
+
+        ingreso2 = self.crear_ingreso_reparacion(
+            valor_acordado=Decimal('50.00'),
+            fecha_ingreso=date(2026, 8, 10),
+        )
+        SalidaEquipo.objects.create(
+            ingreso=ingreso2,
+            fecha_salida=date(2026, 8, 12),
+            estado_reparacion='pendiente_retiro',
+            tecnico_reparo=self.usuario,
+            factura_realizada='no',
+            aplica_retencion='no',
+            valor_final_cobrado=Decimal('0.00'),
+            metodo_pago_final='sin_pago',
+            registrado_por=self.admin,
+        )
+
+        Abono.objects.create(
+            ingreso=ingreso2,
+            fecha=date(2026, 8, 15),
+            monto=Decimal('50.00'),
+            metodo='efectivo',
+            factura_realizada='si',
+            factura_nombres='Beta Corp',
+            factura_cedula='1799999999001',
+            factura_correo='beta@example.com',
+            aplica_retencion='si',
+            valor_con_retencion=Decimal('57.50'),
+            registrado_por=self.admin,
+        )
+
+        url = reverse('econotec:admin_retenciones_lista')
+        response = self.client.get(url, {'ano': 2026, 'mes': 8})
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Empresa Alfa S.A.')
+        self.assertContains(response, '0999999999001')
+        self.assertContains(response, '$115,00')
+        self.assertContains(response, 'Beta Corp')
+        self.assertContains(response, '$57,50')
+
+        res_salidas = self.client.get(url, {'ano': 2026, 'mes': 8, 'tipo': 'salidas'})
+        self.assertContains(res_salidas, 'Empresa Alfa S.A.')
+        self.assertNotContains(res_salidas, 'Beta Corp')
+
+        res_q = self.client.get(url, {'ano': 2026, 'mes': 8, 'q': 'Beta'})
+        self.assertNotContains(res_q, 'Empresa Alfa S.A.')
+        self.assertContains(res_q, 'Beta Corp')
+
+        res_rango = self.client.get(url, {'fecha_desde': '2026-08-14', 'fecha_hasta': '2026-08-16'})
+        self.assertNotContains(res_rango, 'Empresa Alfa S.A.')
+        self.assertContains(res_rango, 'Beta Corp')
+
+        res_excel = self.client.get(url, {'ano': 2026, 'mes': 8, 'exportar': 'excel'})
+        self.assertEqual(res_excel.status_code, 200)
+        self.assertEqual(
+            res_excel['Content-Type'],
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        )
+
+    def test_ingreso_detalle_indica_si_se_aplico_retencion(self):
+        self.client.force_login(self.admin)
+        ingreso = self.crear_ingreso_reparacion(valor_acordado=Decimal('55.00'))
+        url = reverse('econotec:ingreso_detalle', kwargs={'pk': ingreso.pk})
+        self.assertNotContains(self.client.get(url), 'Se aplicó retención')
+
+        Abono.objects.create(
+            ingreso=ingreso,
+            fecha=date(2026, 7, 10),
+            monto=Decimal('55.00'),
+            metodo='efectivo',
+            factura_realizada='si',
+            factura_nombres='Beta Corp',
+            factura_cedula='1799999999001',
+            factura_correo='beta@example.com',
+            aplica_retencion='si',
+            valor_con_retencion=Decimal('55.00'),
+            registrado_por=self.admin,
+        )
+        self.assertContains(self.client.get(url), 'Se aplicó retención', count=1)

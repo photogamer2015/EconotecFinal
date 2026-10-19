@@ -1363,6 +1363,268 @@ def salida_facturas_lista(request):
 
 
 @admin_requerido
+def admin_retenciones_lista(request):
+    """
+    Listado administrativo exclusivo para facturas con retención aplicada.
+    Agrupa comprobantes donde se aplicó retención (salidas, abonos y ventas),
+    con filtros por rango de fechas, mes/año, tipo y búsqueda textual.
+    Permite además exportación directa a Excel.
+    """
+    hoy = date.today()
+    year_param = request.GET.get('ano')
+    year = int(year_param) if year_param and year_param.isdigit() else hoy.year
+    mes_param = (request.GET.get('mes') or 'todos').strip().lower()
+    month = int(mes_param) if mes_param.isdigit() and 1 <= int(mes_param) <= 12 else None
+    q = (request.GET.get('q') or '').strip()
+    tipo = (request.GET.get('tipo') or 'todos').strip().lower()
+    fecha_desde, fecha_hasta, fecha_preset = obtener_rango_fecha(request)
+    rango_activo = bool(fecha_desde or fecha_hasta)
+    exportar = (request.GET.get('exportar') or '').strip().lower()
+
+    qs_salidas = (
+        SalidaEquipo.objects
+        .select_related('ingreso', 'ingreso__cliente', 'registrado_por')
+        .filter(factura_realizada='si', aplica_retencion='si', valor_con_retencion__isnull=False)
+    )
+    qs_abonos = (
+        Abono.objects
+        .select_related('ingreso', 'ingreso__cliente', 'registrado_por')
+        .filter(factura_realizada='si', aplica_retencion='si', valor_con_retencion__isnull=False)
+    )
+    qs_ventas = (
+        IngresoEquipo.objects
+        .select_related('cliente', 'registrado_por')
+        .filter(factura_realizada='si', aplica_retencion='si', valor_con_retencion__isnull=False)
+    )
+
+    if rango_activo:
+        qs_salidas = aplicar_rango_fecha(qs_salidas, 'fecha_salida', fecha_desde, fecha_hasta)
+        qs_abonos = aplicar_rango_fecha(qs_abonos, 'fecha', fecha_desde, fecha_hasta)
+        qs_ventas = aplicar_rango_fecha(qs_ventas, 'fecha_ingreso', fecha_desde, fecha_hasta)
+        periodo_label = contexto_rango_fecha(
+            fecha_desde,
+            fecha_hasta,
+            fecha_preset,
+            etiqueta='Fecha retención',
+        )['fecha_resumen'].replace('Fecha retención: ', '')
+    else:
+        qs_salidas = qs_salidas.filter(fecha_salida__year=year)
+        qs_abonos = qs_abonos.filter(fecha__year=year)
+        qs_ventas = qs_ventas.filter(fecha_ingreso__year=year)
+        if month is not None:
+            qs_salidas = qs_salidas.filter(fecha_salida__month=month)
+            qs_abonos = qs_abonos.filter(fecha__month=month)
+            qs_ventas = qs_ventas.filter(fecha_ingreso__month=month)
+        periodo_label = f'{MESES_ES[month] if month else "Todos los meses"} {year}'
+
+    items = []
+
+    if tipo in ('todos', 'salidas'):
+        for s in qs_salidas.order_by('-fecha_salida', '-creado'):
+            cli = s.ingreso.cliente if s.ingreso else None
+            items.append({
+                'origen': 'salida',
+                'id': f'salida_{s.pk}',
+                'obj': s,
+                'fecha': s.fecha_salida,
+                'creado': s.creado,
+                'tipo_display': 'Salida de equipo',
+                'tipo_badge': 'badge-primary',
+                'codigo': s.ingreso.codigo_equipo if s.ingreso else '—',
+                'equipo_desc': f"{s.ingreso.tipo_equipo_display} — {s.ingreso.marca}" if s.ingreso else '—',
+                'cliente': cli,
+                'cliente_nombre': cli.nombres if cli else (s.factura_nombres or '—'),
+                'cliente_cedula': cli.cedula if cli else (s.factura_cedula or '—'),
+                'cliente_telefono': (cli.whatsapp or '') if cli else '',
+                'factura_nombres': s.factura_nombres or (cli.nombres if cli else '—'),
+                'factura_cedula': s.factura_cedula or (cli.cedula if cli else '—'),
+                'factura_correo': s.factura_correo or (cli.correo if cli else '—'),
+                'valor_con_retencion': s.valor_con_retencion or Decimal('0.00'),
+                'retencion_subtotal': s.retencion_subtotal or Decimal('0.00'),
+                'retencion_iva': s.retencion_iva or Decimal('0.00'),
+                'retencion_iva_retenido': s.retencion_iva_retenido or Decimal('0.00'),
+                'retencion_renta_retenida': s.retencion_renta_retenida or Decimal('0.00'),
+                'total_retenido': s.retencion_total_retenido,
+                'valor_recibido': s.retencion_valor_recibido or Decimal('0.00'),
+                'registrado_por': s.registrado_por,
+                'url_ver': reverse('econotec:ingreso_detalle', kwargs={'pk': s.ingreso.pk}) if s.ingreso else '',
+                'url_comprobante': reverse('econotec:salida_factura_imprimir', kwargs={'pk': s.pk}),
+                'url_pdf': reverse('econotec:salida_factura_pdf', kwargs={'pk': s.pk}),
+            })
+
+    if tipo in ('todos', 'abonos'):
+        for a in qs_abonos.order_by('-fecha', '-creado'):
+            cli = a.ingreso.cliente if a.ingreso else None
+            nom_fact = f"{a.factura_nombres or ''} {a.factura_apellidos or ''}".strip()
+            items.append({
+                'origen': 'abono',
+                'id': f'abono_{a.pk}',
+                'obj': a,
+                'fecha': a.fecha,
+                'creado': a.creado,
+                'tipo_display': 'Abono / Pago',
+                'tipo_badge': 'badge-info',
+                'codigo': f"{a.ingreso.codigo_equipo} ({a.numero_recibo})" if (a.ingreso and a.numero_recibo) else (a.numero_recibo or (a.ingreso.codigo_equipo if a.ingreso else 'Abono')),
+                'equipo_desc': f"{a.ingreso.tipo_equipo_display} — {a.ingreso.marca}" if a.ingreso else '—',
+                'cliente': cli,
+                'cliente_nombre': cli.nombres if cli else (nom_fact or '—'),
+                'cliente_cedula': cli.cedula if cli else (a.factura_cedula or '—'),
+                'cliente_telefono': (cli.whatsapp or '') if cli else '',
+                'factura_nombres': nom_fact or (cli.nombres if cli else '—'),
+                'factura_cedula': a.factura_cedula or (cli.cedula if cli else '—'),
+                'factura_correo': a.factura_correo or (cli.correo if cli else '—'),
+                'valor_con_retencion': a.valor_con_retencion or Decimal('0.00'),
+                'retencion_subtotal': a.retencion_subtotal or Decimal('0.00'),
+                'retencion_iva': a.retencion_iva or Decimal('0.00'),
+                'retencion_iva_retenido': a.retencion_iva_retenido or Decimal('0.00'),
+                'retencion_renta_retenida': a.retencion_renta_retenida or Decimal('0.00'),
+                'total_retenido': a.retencion_total_retenido,
+                'valor_recibido': a.retencion_valor_recibido or Decimal('0.00'),
+                'registrado_por': a.registrado_por,
+                'url_ver': reverse('econotec:ingreso_detalle', kwargs={'pk': a.ingreso.pk}) if a.ingreso else '',
+                'url_comprobante': reverse('econotec:abono_recibo', kwargs={'abono_pk': a.pk}),
+                'url_pdf': '',
+            })
+
+    if tipo in ('todos', 'ventas'):
+        for v in qs_ventas.order_by('-fecha_ingreso', '-creado'):
+            cli = v.cliente
+            items.append({
+                'origen': 'venta' if v.sede == 'ventas' else 'ingreso',
+                'id': f'venta_{v.pk}',
+                'obj': v,
+                'fecha': v.fecha_ingreso,
+                'creado': v.creado,
+                'tipo_display': 'Venta de producto' if v.sede == 'ventas' else 'Ingreso de equipo',
+                'tipo_badge': 'badge-success',
+                'codigo': v.codigo_equipo,
+                'equipo_desc': f"Venta: {v.marca or 'Producto'}" if v.sede == 'ventas' else f"{v.tipo_equipo_display} — {v.marca}",
+                'cliente': cli,
+                'cliente_nombre': cli.nombres if cli else (v.factura_nombres or '—'),
+                'cliente_cedula': cli.cedula if cli else (v.factura_cedula or '—'),
+                'cliente_telefono': (cli.whatsapp or '') if cli else '',
+                'factura_nombres': v.factura_nombres or (cli.nombres if cli else '—'),
+                'factura_cedula': v.factura_cedula or (cli.cedula if cli else '—'),
+                'factura_correo': v.factura_correo or (cli.correo if cli else '—'),
+                'valor_con_retencion': v.valor_con_retencion or Decimal('0.00'),
+                'retencion_subtotal': v.retencion_subtotal or Decimal('0.00'),
+                'retencion_iva': v.retencion_iva or Decimal('0.00'),
+                'retencion_iva_retenido': v.retencion_iva_retenido or Decimal('0.00'),
+                'retencion_renta_retenida': v.retencion_renta_retenida or Decimal('0.00'),
+                'total_retenido': v.retencion_total_retenido,
+                'valor_recibido': v.retencion_valor_recibido or Decimal('0.00'),
+                'registrado_por': v.registrado_por,
+                'url_ver': reverse('econotec:ingreso_detalle', kwargs={'pk': v.pk}),
+                'url_comprobante': reverse('econotec:venta_comprobante', kwargs={'pk': v.pk}) if v.sede == 'ventas' else '',
+                'url_pdf': reverse('econotec:ingreso_pdf', kwargs={'pk': v.pk}) if v.sede != 'ventas' else '',
+            })
+
+    items.sort(key=lambda x: (x['fecha'] or date.min, x['creado'] or timezone.now()), reverse=True)
+
+    if q:
+        q_lower = q.lower()
+        items = [
+            it for it in items
+            if q_lower in str(it['codigo']).lower()
+            or q_lower in str(it['factura_nombres']).lower()
+            or q_lower in str(it['factura_cedula']).lower()
+            or q_lower in str(it['factura_correo']).lower()
+            or q_lower in str(it['cliente_nombre']).lower()
+            or q_lower in str(it['cliente_cedula']).lower()
+            or q_lower in str(it['cliente_telefono']).lower()
+            or q_lower in str(it['equipo_desc']).lower()
+        ]
+
+    total_periodo = len(items)
+    total_con_retencion = sum((it['valor_con_retencion'] for it in items), Decimal('0.00'))
+    total_subtotal = sum((it['retencion_subtotal'] for it in items), Decimal('0.00'))
+    total_iva = sum((it['retencion_iva'] for it in items), Decimal('0.00'))
+    total_iva_retenido = sum((it['retencion_iva_retenido'] for it in items), Decimal('0.00'))
+    total_renta_retenida = sum((it['retencion_renta_retenida'] for it in items), Decimal('0.00'))
+    total_retenido = sum((it['total_retenido'] for it in items), Decimal('0.00'))
+    total_valor_recibido = sum((it['valor_recibido'] for it in items), Decimal('0.00'))
+
+    if exportar == 'excel':
+        import openpyxl
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "Retenciones Facturas"
+        headers = [
+            'Fecha', 'Tipo', 'Código / Referencia', 'Cliente', 'Cédula / RUC Cliente',
+            'Teléfono Cliente', 'Factura: Razón Social', 'Factura: RUC / Cédula', 'Factura: Correo',
+            'Total Factura ($)', 'Subtotal ($)', 'IVA ($)', 'Ret. IVA 100% ($)',
+            'Ret. Renta 10% ($)', 'Total Retenido ($)', 'Valor Final Recibido ($)', 'Registrado por'
+        ]
+        for col_num, h in enumerate(headers, 1):
+            cell = ws.cell(row=1, column=col_num, value=h)
+            cell.font = openpyxl.styles.Font(color="FFFFFF", bold=True)
+            cell.fill = openpyxl.styles.PatternFill(start_color="D97706", end_color="D97706", fill_type="solid")
+
+        for row_num, it in enumerate(items, 2):
+            ws.cell(row=row_num, column=1, value=it['fecha'].strftime('%d/%m/%Y') if it['fecha'] else '')
+            ws.cell(row=row_num, column=2, value=it['tipo_display'])
+            ws.cell(row=row_num, column=3, value=it['codigo'])
+            ws.cell(row=row_num, column=4, value=it['cliente_nombre'])
+            ws.cell(row=row_num, column=5, value=it['cliente_cedula'])
+            ws.cell(row=row_num, column=6, value=it['cliente_telefono'])
+            ws.cell(row=row_num, column=7, value=it['factura_nombres'])
+            ws.cell(row=row_num, column=8, value=it['factura_cedula'])
+            ws.cell(row=row_num, column=9, value=it['factura_correo'])
+            ws.cell(row=row_num, column=10, value=float(it['valor_con_retencion']))
+            ws.cell(row=row_num, column=11, value=float(it['retencion_subtotal']))
+            ws.cell(row=row_num, column=12, value=float(it['retencion_iva']))
+            ws.cell(row=row_num, column=13, value=float(it['retencion_iva_retenido']))
+            ws.cell(row=row_num, column=14, value=float(it['retencion_renta_retenida']))
+            ws.cell(row=row_num, column=15, value=float(it['total_retenido']))
+            ws.cell(row=row_num, column=16, value=float(it['valor_recibido']))
+            reg = it['registrado_por']
+            ws.cell(row=row_num, column=17, value=(reg.get_full_name() or reg.username) if reg else '—')
+
+        fecha_str = timezone.now().strftime("%Y%m%d_%H%M")
+        response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+        response['Content-Disposition'] = f'attachment; filename=Retenciones_Facturas_{fecha_str}.xlsx'
+        wb.save(response)
+        return response
+
+    anos_salidas = list(SalidaEquipo.objects.dates('fecha_salida', 'year').values_list('fecha_salida__year', flat=True))
+    anos_abonos = list(Abono.objects.dates('fecha', 'year').values_list('fecha__year', flat=True))
+    anos_ventas = list(IngresoEquipo.objects.dates('fecha_ingreso', 'year').values_list('fecha_ingreso__year', flat=True))
+    anos_disp = sorted(set(anos_salidas + anos_abonos + anos_ventas + [hoy.year]), reverse=True)
+
+    page_obj, querystring = paginar_resultados(request, items, per_page=20)
+
+    context = {
+        'year': year,
+        'month': month,
+        'mes_param': mes_param,
+        'mes_nombre': MESES_ES[month] if month else 'Todos los meses',
+        'periodo_label': periodo_label,
+        'meses_es': MESES_ES,
+        'anos_disp': anos_disp,
+        'q': q,
+        'tipo': tipo,
+        'items': page_obj.object_list,
+        'page_obj': page_obj,
+        'querystring': querystring,
+        'total': total_periodo,
+        'total_con_retencion': total_con_retencion,
+        'total_subtotal': total_subtotal,
+        'total_iva': total_iva,
+        'total_iva_retenido': total_iva_retenido,
+        'total_renta_retenida': total_renta_retenida,
+        'total_retenido': total_retenido,
+        'total_valor_recibido': total_valor_recibido,
+    }
+    context.update(contexto_rango_fecha(
+        fecha_desde,
+        fecha_hasta,
+        fecha_preset,
+        etiqueta='Fecha retención',
+    ))
+    return render(request, 'admin_panel/retenciones_lista.html', context)
+
+
+@admin_requerido
 def admin_bodegajes(request):
     """Lista administrativa de bodegajes (cobrados y no cobrados) por mes."""
     hoy = date.today()

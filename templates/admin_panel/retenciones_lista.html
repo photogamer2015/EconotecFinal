@@ -1,0 +1,305 @@
+{% extends 'base.html' %}
+{% load econotec_extras %}
+
+{% block title %}Facturas con Retención — Econotec{% endblock %}
+
+{% block content %}
+<style>
+    .retencion-summary-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+        gap: 14px;
+        margin: 18px 0;
+    }
+    .retencion-summary-card {
+        background: var(--card-bg);
+        border-radius: 12px;
+        padding: 16px 18px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        border: 1px solid var(--border-color);
+        border-top: 4px solid #b45309;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+    }
+    .retencion-summary-card.count { border-top-color: var(--primary); }
+    .retencion-summary-card.facturado { border-top-color: #0284c7; }
+    .retencion-summary-card.retenido { border-top-color: #ea580c; }
+    .retencion-summary-card.recibido { border-top-color: var(--success); }
+    
+    .retencion-summary-card .lbl {
+        color: var(--text-muted);
+        font-size: 11.5px;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+    }
+    .retencion-summary-card .val {
+        color: var(--text-main);
+        font-size: 26px;
+        font-weight: 900;
+        margin-top: 6px;
+        line-height: 1.15;
+    }
+    .retencion-summary-card.recibido .val {
+        color: var(--success);
+    }
+    .retencion-summary-card.retenido .val {
+        color: #ea580c;
+    }
+    .retencion-summary-card .sub {
+        font-size: 11.5px;
+        color: var(--text-muted);
+        margin-top: 6px;
+    }
+
+    .tipo-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 3px 8px;
+        border-radius: 6px;
+        font-size: 11px;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+    }
+    .tipo-pill.salida {
+        background: rgba(249, 118, 24, 0.12);
+        color: #c2410c;
+        border: 1px solid rgba(249, 118, 24, 0.25);
+    }
+    .tipo-pill.abono {
+        background: rgba(14, 165, 233, 0.12);
+        color: #0284c7;
+        border: 1px solid rgba(14, 165, 233, 0.25);
+    }
+    .tipo-pill.venta {
+        background: rgba(16, 185, 129, 0.12);
+        color: #059669;
+        border: 1px solid rgba(16, 185, 129, 0.25);
+    }
+    .tipo-pill.ingreso {
+        background: rgba(100, 116, 139, 0.12);
+        color: #475569;
+        border: 1px solid rgba(100, 116, 139, 0.25);
+    }
+
+    .ret-data-box {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        font-size: 12px;
+        line-height: 1.35;
+    }
+    .ret-data-box strong {
+        color: var(--text-main);
+    }
+    .ret-data-box span {
+        color: var(--text-muted);
+    }
+    .final-received-box {
+        background: rgba(16, 185, 129, 0.10);
+        border: 1px solid rgba(16, 185, 129, 0.25);
+        border-radius: 8px;
+        padding: 6px 10px;
+        text-align: center;
+    }
+    .final-received-box .amount {
+        font-size: 17px;
+        font-weight: 900;
+        color: var(--success);
+        display: block;
+    }
+    .final-received-box .tag {
+        font-size: 10px;
+        font-weight: 700;
+        text-transform: uppercase;
+        color: #047857;
+    }
+    [data-theme="dark"] .final-received-box {
+        background: rgba(16, 185, 129, 0.16);
+    }
+    [data-theme="dark"] .final-received-box .tag {
+        color: #6ee7b7;
+    }
+    [data-theme="dark"] .tipo-pill.salida {
+        color: #fb923c;
+    }
+    [data-theme="dark"] .tipo-pill.abono {
+        color: #38bdf8;
+    }
+    [data-theme="dark"] .tipo-pill.venta {
+        color: #34d399;
+    }
+</style>
+
+<div class="crumb">
+    <a href="{% url 'econotec:bienvenida' %}">Inicio</a> /
+    <a href="{% url 'econotec:admin_dashboard' %}">Registro Administrativo</a> / Retenciones en Facturas
+</div>
+
+<div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:14px;">
+    <div>
+        <h2 class="page-title">Facturas con <span class="accent">Retención</span></h2>
+        <p class="page-subtitle">Auditoría exclusiva de comprobantes con retención de IVA y Renta aplicada — {{ periodo_label }} — {{ total }} resultado{{ total|pluralize }}</p>
+    </div>
+    <div style="display:flex; gap:8px; flex-wrap:wrap;">
+        <a href="?{{ querystring }}&exportar=excel" class="btn btn-secondary" style="background:#16a34a; color:#fff; border-color:#16a34a;" title="Descargar reporte en formato Excel">
+            📊 Exportar Excel
+        </a>
+        <a href="{% url 'econotec:admin_dashboard' %}" class="btn btn-secondary">← Registro Administrativo</a>
+    </div>
+</div>
+
+<form method="get" class="toolbar" style="margin-top:18px;">
+    <input type="text" name="q" value="{{ q }}" placeholder="Buscar cliente, RUC, equipo, correo…" class="form-input" style="min-width:240px;">
+    
+    {% include 'includes/filtro_fecha_rango.html' %}
+
+    <select name="tipo" class="form-input" style="max-width:180px;">
+        <option value="todos" {% if tipo == 'todos' %}selected{% endif %}>Todos los orígenes</option>
+        <option value="salidas" {% if tipo == 'salidas' %}selected{% endif %}>Salidas de equipos</option>
+        <option value="abonos" {% if tipo == 'abonos' %}selected{% endif %}>Abonos / Pagos</option>
+        <option value="ventas" {% if tipo == 'ventas' %}selected{% endif %}>Ventas de producto</option>
+    </select>
+
+    <select name="ano" class="form-input" style="max-width:110px;">
+        {% for a in anos_disp %}
+            <option value="{{ a }}" {% if a == year %}selected{% endif %}>{{ a }}</option>
+        {% endfor %}
+    </select>
+
+    <select name="mes" class="form-input" style="max-width:150px;">
+        <option value="todos" {% if mes_param == 'todos' %}selected{% endif %}>Todos los meses</option>
+        {% for n in meses_es|slice:"1:13" %}
+            <option value="{{ forloop.counter }}" {% if forloop.counter == month %}selected{% endif %}>{{ n }}</option>
+        {% endfor %}
+    </select>
+
+    <button type="submit" class="btn btn-primary">Filtrar</button>
+    {% if q or tipo != 'todos' or mes_param != 'todos' or fecha_desde or fecha_hasta %}
+        <a href="{% url 'econotec:admin_retenciones_lista' %}" class="btn btn-secondary" title="Limpiar todos los filtros">Limpiar</a>
+    {% endif %}
+</form>
+
+<!-- Tarjetas KPI de Resumen -->
+<div class="retencion-summary-grid">
+    <div class="retencion-summary-card count">
+        <div class="lbl">Comprobantes con retención</div>
+        <div class="val">{{ total }}</div>
+        <div class="sub">Total en el período seleccionado</div>
+    </div>
+    <div class="retencion-summary-card facturado">
+        <div class="lbl">Total facturado</div>
+        <div class="val">{{ total_con_retencion|dinero_signo }}</div>
+        <div class="sub">Subtotal: {{ total_subtotal|dinero_signo }} · IVA: {{ total_iva|dinero_signo }}</div>
+    </div>
+    <div class="retencion-summary-card retenido">
+        <div class="lbl">Total retenido (IVA + Renta)</div>
+        <div class="val">{{ total_retenido|dinero_signo }}</div>
+        <div class="sub">Ret. IVA: {{ total_iva_retenido|dinero_signo }} · Ret. Renta: {{ total_renta_retenida|dinero_signo }}</div>
+    </div>
+    <div class="retencion-summary-card recibido">
+        <div class="lbl">Valor final recibido</div>
+        <div class="val">{{ total_valor_recibido|dinero_signo }}</div>
+        <div class="sub">Total real cobrado tras retención</div>
+    </div>
+</div>
+
+{% if items %}
+<div class="table-wrap">
+    <table>
+        <thead>
+            <tr>
+                <th>Fecha</th>
+                <th>Origen / Referencia</th>
+                <th>Cliente</th>
+                <th>Datos Factura</th>
+                <th style="text-align:right;">Total Factura</th>
+                <th style="text-align:right;">Retención Aplicada</th>
+                <th style="text-align:center;">Valor Final Recibido</th>
+                <th>Acciones</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for it in items %}
+            <tr>
+                <td>
+                    <strong>{{ it.fecha|date:"d/m/Y" }}</strong><br>
+                    <small style="color:var(--text-muted);">{{ it.creado|date:"H:i" }}</small>
+                </td>
+                <td>
+                    <span class="tipo-pill {{ it.origen }}">{{ it.tipo_display }}</span>
+                    <div style="margin-top:4px;">
+                        <strong style="color:var(--primary);">{{ it.codigo }}</strong>
+                    </div>
+                    <small style="color:var(--text-muted); display:block; max-width:200px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="{{ it.equipo_desc }}">
+                        {{ it.equipo_desc }}
+                    </small>
+                </td>
+                <td>
+                    <strong>{{ it.cliente_nombre }}</strong>
+                    <div class="ret-data-box" style="margin-top:2px;">
+                        <span>C.I./RUC: {{ it.cliente_cedula }}</span>
+                        {% if it.cliente_telefono %}
+                            <span>Tel: {{ it.cliente_telefono }}</span>
+                        {% endif %}
+                    </div>
+                </td>
+                <td>
+                    <strong>{{ it.factura_nombres }}</strong>
+                    <div class="ret-data-box" style="margin-top:2px;">
+                        <span>RUC: {{ it.factura_cedula }}</span>
+                        {% if it.factura_correo %}
+                            <span style="font-size:11px;">{{ it.factura_correo }}</span>
+                        {% endif %}
+                    </div>
+                </td>
+                <td style="text-align:right;">
+                    <strong style="font-size:15px; color:var(--text-main);">{{ it.valor_con_retencion|dinero_signo }}</strong>
+                    <div style="font-size:11px; color:var(--text-muted); margin-top:2px;">
+                        Sub: {{ it.retencion_subtotal|dinero_signo }}<br>
+                        IVA: {{ it.retencion_iva|dinero_signo }}
+                    </div>
+                </td>
+                <td style="text-align:right;">
+                    <strong style="font-size:14px; color:#ea580c;">-{{ it.total_retenido|dinero_signo }}</strong>
+                    <div style="font-size:11px; color:var(--text-muted); margin-top:2px;">
+                        Ret. IVA 100%: -{{ it.retencion_iva_retenido|dinero_signo }}<br>
+                        Ret. Renta 10%: -{{ it.retencion_renta_retenida|dinero_signo }}
+                    </div>
+                </td>
+                <td style="text-align:center;">
+                    <div class="final-received-box">
+                        <span class="amount">{{ it.valor_recibido|dinero_signo }}</span>
+                        <span class="tag">Neto Recibido</span>
+                    </div>
+                </td>
+                <td class="row-actions">
+                    {% if it.url_ver %}
+                        <a href="{{ it.url_ver }}" class="btn btn-sm btn-secondary" title="Ver detalle del equipo o venta">Ver</a>
+                    {% endif %}
+                    {% if it.url_comprobante %}
+                        <a href="{{ it.url_comprobante }}" target="_blank" class="btn btn-sm btn-info" title="Imprimir comprobante o factura">Imprimir</a>
+                    {% endif %}
+                    {% if it.url_pdf %}
+                        <a href="{{ it.url_pdf }}" class="btn btn-sm btn-primary" title="Descargar PDF">PDF</a>
+                    {% endif %}
+                </td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="empty-state">
+    <div class="icon">🧾</div>
+    <h3>No hay facturas con retención en este período</h3>
+    <p>Prueba seleccionando otro mes, rango de fechas o término de búsqueda.</p>
+</div>
+{% endif %}
+
+{% include 'includes/paginacion.html' with page_obj=page_obj querystring=querystring page_param='pagina' aria_label='Paginación de facturas con retención' %}
+
+{% endblock %}

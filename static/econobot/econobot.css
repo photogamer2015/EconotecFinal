@@ -7,7 +7,9 @@
     /* Espacio al final de la página: el botón flotante nunca tapa el último contenido. */
     height: 64px;
     --eb-extra-bottom: 0px;
-    --eb-naranja: var(--primary, #f97618);
+    --eb-naranja: #e52436;
+    --eb-azul: #0b3b78;
+    --eb-celeste: #32b7f5;
     font-family: inherit;
 }
 
@@ -22,8 +24,8 @@
     overflow: hidden;
     border-radius: 50%;
     /* Fondo claro propio (también fuera del widget): la cara se ve igual en el menú oscuro y en ambos temas. */
-    background: radial-gradient(circle at 50% 30%, #fffaf3 0%, #ffe8d1 100%);
-    box-shadow: inset 0 0 0 1px rgba(249, 118, 24, 0.28);
+    background: radial-gradient(circle at 50% 30%, #ffffff 0%, #dcecff 100%);
+    box-shadow: inset 0 0 0 2px rgba(50, 183, 245, 0.5), 0 0 0 2px rgba(229, 36, 54, 0.2);
 }
 .econobot-avatar picture,
 .econobot-avatar img {
@@ -52,19 +54,19 @@
     padding: 8px 18px 8px 8px;
     border: 0;
     border-radius: 999px;
-    background: var(--header-bg, #161412);
+    background: linear-gradient(110deg, #092d60 0%, #0b3b78 72%, #e52436 180%);
     color: #ffffff;
     font: inherit;
     font-size: 14px;
     font-weight: 650;
     letter-spacing: 0.01em;
     cursor: pointer;
-    box-shadow: 0 10px 28px -8px rgba(28, 25, 23, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.06);
+    box-shadow: 0 12px 30px -8px rgba(7, 38, 79, 0.5), 0 0 0 1px rgba(50, 183, 245, 0.24);
     transition: transform 0.2s ease, box-shadow 0.2s ease, bottom 0.2s ease;
 }
 .econobot-launcher:hover {
     transform: translateY(-2px);
-    box-shadow: 0 14px 32px -8px rgba(28, 25, 23, 0.5), 0 0 0 1px rgba(249, 118, 24, 0.35);
+    box-shadow: 0 16px 36px -8px rgba(7, 38, 79, 0.58), 0 0 0 1px rgba(50, 183, 245, 0.55);
 }
 .econobot-launcher:focus-visible {
     outline: 3px solid rgba(249, 118, 24, 0.55);
@@ -110,7 +112,8 @@
     background: var(--card-bg, #ffffff);
     color: var(--text-main, #1c1917);
     border: 1px solid var(--border-color, #ebe6e1);
-    border-radius: 20px;
+    border-radius: 22px;
+    border-color: rgba(11, 59, 120, 0.22);
     box-shadow: var(--shadow-lg, 0 24px 60px -16px rgba(28, 25, 23, 0.28));
     transform-origin: bottom right;
     animation: econobot-entrar 0.22s ease-out;
@@ -139,7 +142,19 @@
     gap: 11px;
     padding: 13px 12px 12px 16px;
     border-bottom: 1px solid var(--border-color, #ebe6e1);
-    background: var(--card-bg, #ffffff);
+    background: linear-gradient(120deg, rgba(11, 59, 120, 0.08), rgba(50, 183, 245, 0.03) 62%, rgba(229, 36, 54, 0.08));
+    position: relative;
+}
+.econobot-head::after {
+    content: 'MERCY · SOPORTE INTELIGENTE';
+    position: absolute;
+    left: 68px;
+    bottom: 4px;
+    font-size: 8px;
+    letter-spacing: .16em;
+    font-weight: 800;
+    color: #0b3b78;
+    opacity: .48;
 }
 .econobot-head-text {
     display: flex;
@@ -151,7 +166,7 @@
 .econobot-head-text strong {
     font-size: 15px;
     font-weight: 700;
-    color: var(--text-main, #1c1917);
+    color: #0b3b78;
 }
 .econobot-status {
     display: inline-flex;
@@ -169,7 +184,7 @@
     width: 7px;
     height: 7px;
     border-radius: 50%;
-    background: #22c55e;
+    background: #20c879;
     flex: 0 0 auto;
 }
 .econobot.is-busy .econobot-status::before {
@@ -290,7 +305,7 @@
     box-shadow: 0 1px 2px rgba(28, 25, 23, 0.04);
 }
 .econobot-msg-yo .econobot-burbuja {
-    background: var(--eb-naranja);
+    background: linear-gradient(135deg, #0b3b78, #1264a3);
     border-color: transparent;
     color: #ffffff;
     border-radius: 16px 16px 6px 16px;
@@ -554,7 +569,7 @@
     50% { box-shadow: 0 0 0 7px rgba(220, 38, 38, 0); }
 }
 .econobot-enviar {
-    background: var(--eb-naranja);
+    background: linear-gradient(135deg, #e52436, #bd172a);
     color: #ffffff;
 }
 .econobot-enviar:hover { background: var(--primary-hover, #ea670f); }
@@ -572,6 +587,7 @@
     font-size: 11px;
     text-align: center;
 }
+.mercybot-spark { color: #e52436; margin-right: 3px; }
 
 /* ── Accesos en el menú y en el Inicio ──────────────────────── */
 header.top a.econobot-nav-link {
@@ -681,3 +697,27 @@ header.top a.econobot-nav-link:hover { color: #ffffff; }
 @media print {
     .econobot { display: none !important; }
 }
+
+/* Identidad visual Formación Profesional: limpia, amable y táctil. */
+.econobot { --eb-azul: #1a237e; --eb-indigo: #3949ab; font-family: 'Nunito', 'Inter', system-ui, sans-serif; }
+.econobot-launcher { background: linear-gradient(135deg, #3949ab, #1a237e); padding: 9px 22px 9px 9px; box-shadow: 0 12px 30px rgba(26,35,126,.32); }
+.econobot-launcher .econobot-avatar { width: 48px; height: 48px; background: #fff; padding: 5px; box-shadow: 0 3px 10px rgba(0,0,0,.18); }
+.econobot-launcher-text { display: flex; flex-direction: column; line-height: 1.15; font-size: 18px; font-weight: 800; }
+.econobot-launcher-text::after { content: '¿En qué te ayudo?'; font-size: 12px; font-weight: 600; opacity: .85; margin-top: 3px; }
+.econobot-panel { width: 420px; border-radius: 20px; border-color: #e3e8f7; box-shadow: 0 18px 50px rgba(26,35,126,.2); }
+.econobot-head { padding: 15px 18px; background: #fff; border-bottom-color: #f0f0f0; }
+.econobot-head::after { content: 'COPILOTO ACADÉMICO'; color: #1a237e; }
+.econobot-head-text strong { color: #1a237e; font-size: 18px; }
+.econobot-mensajes { background: #f8f9fd; padding: 18px 20px 14px; gap: 12px; }
+.econobot-hero { height: 184px; background: radial-gradient(circle at 50% 100%, #e8f4ff, #fff 68%); border-bottom: 1px solid #edf1f8; }
+.econobot-hero img { width: 126px; filter: drop-shadow(0 10px 10px rgba(17,46,104,.18)); }
+.econobot-burbuja { padding: 14px 18px; border-radius: 20px 20px 20px 6px; background: linear-gradient(180deg,#fff,#f6f8ff); border-color: #e3e8f7; color: #2b3245; font-size: 15.5px; line-height: 1.6; box-shadow: 0 6px 16px rgba(26,35,126,.07); }
+.econobot-msg-yo .econobot-burbuja { background: linear-gradient(135deg,#3949ab,#1a237e); border-radius: 20px 20px 6px 20px; }
+.econobot-audio-btn { border: 0; background: #eef1fb; color: #3949ab; border-radius: 999px; padding: 6px 11px; font: inherit; font-size: 12px; font-weight: 700; cursor: pointer; }
+.econobot-audio-btn:hover { background: #dfe5fb; }
+.econobot-form { padding: 14px 16px; background: #fff; border-top-color: #f0f0f0; }
+.econobot-form textarea { border-radius: 24px; padding: 13px 48px 13px 18px; border-color: #e0e0e0; font-size: 15px; box-shadow: inset 0 1px 3px rgba(0,0,0,.02); }
+.econobot-mic { width: 48px; height: 48px; border-radius: 50%; background: #1e1e1e; color: #fff; box-shadow: 0 4px 10px rgba(0,0,0,.1); }
+.econobot-mic.is-escuchando { background: #ff4757; animation: econobot-grabando 1.5s infinite; }
+@keyframes econobot-grabando { 70% { box-shadow: 0 0 0 7px rgba(255,71,87,0); } }
+.econobot-enviar { background: #000051; width: 36px; height: 36px; border-radius: 50%; }
