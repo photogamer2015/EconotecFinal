@@ -4115,10 +4115,116 @@ def cliente_export(request):
 # Ranking de Técnicos (totales por técnico)
 # ═════════════════════════════════════════════════════════════════
 
+from .date_filters import _month_bounds, _parse_date
 from .permisos import (
     puede_ver_valores_ranking as _puede_ver_valores_ranking,
     ranking_requerido as _ranking_requerido,
 )
+
+
+def _periodo_anterior_ranking(desde, hasta):
+    """
+    Período con el que se compara el ranking para ver quién está mejorando.
+
+    Un mes calendario completo se compara con el mes anterior; cualquier otro
+    rango, con los mismos días justo antes. Sin un rango completo no hay
+    comparación y se devuelve None.
+    """
+    inicio = _parse_date(desde)
+    fin = _parse_date(hasta)
+    if not inicio or not fin or inicio > fin:
+        return None
+    if inicio.day == 1 and fin == _month_bounds(inicio)[1]:
+        return _month_bounds(inicio - timedelta(days=1))
+    fin_anterior = inicio - timedelta(days=1)
+    return fin_anterior - (fin - inicio), fin_anterior
+
+
+def _ranking_salidas_por_tecnico(desde, hasta, mostrar_valores_monetarios):
+    """
+    Salidas del rango agrupadas por el técnico que reparó, ordenadas de quien
+    más equipos reparó a quien menos (la efectividad desempata).
+
+    Efectividad = positivas / (positivas + cliente no quiso reparar).
+    "No se pudo reparar", revisión, cortesía y chatarrerización no suman ni
+    restan.
+
+    Acordado es lo que se le cobra al cliente por el servicio (incluye el
+    valor adicional y el valor de revisión, sin domicilio ni bodegaje).
+    Recaudado es el acordado de los equipos que ya quedaron en saldo cero;
+    Por cobrar, el de los que todavía deben algo.
+    """
+    salidas = SalidaEquipo.objects.select_related('ingreso', 'tecnico_reparo')
+    if desde:
+        salidas = salidas.filter(fecha_salida__gte=desde)
+    if hasta:
+        salidas = salidas.filter(fecha_salida__lte=hasta)
+    if mostrar_valores_monetarios:
+        salidas = salidas.prefetch_related('ingreso__abonos')
+
+    por_tecnico = {}
+    for salida in salidas.order_by('pk'):
+        tid = salida.tecnico_reparo_id
+        fila = por_tecnico.get(tid)
+        if fila is None:
+            fila = por_tecnico[tid] = {
+                'tecnico_id': tid,
+                'nombre': salida.tecnico_reparo_nombre or '— Sin asignar —',
+                'sin_asignar': tid is None,
+                'num_equipos': 0,
+                'entregados': 0,
+                'pendientes': 0,
+                'salidas_positivas': 0,
+                'no_quiso_reparar': 0,
+                'no_se_pudo_reparar': 0,
+            }
+            if mostrar_valores_monetarios:
+                fila.update({
+                    'total_acordado': D('0.00'),
+                    'total_recaudado': D('0.00'),
+                    'total_por_cobrar': D('0.00'),
+                })
+
+        fila['num_equipos'] += 1
+        # La ubicación física se determina por la fecha real de retiro.
+        # El resultado de reparación puede tener otros valores válidos
+        # (revisión, no reparable, cortesía, etc.) y no debe confundirse
+        # con que el equipo continúe o no dentro de la oficina.
+        if salida.fecha_retiro_real is not None:
+            fila['entregados'] += 1
+        else:
+            fila['pendientes'] += 1
+
+        estado = salida.estado_reparacion
+        if estado in SALIDA_BUENA_ESTADOS:
+            fila['salidas_positivas'] += 1
+        elif estado == 'cliente_no_acepta':
+            fila['no_quiso_reparar'] += 1
+        elif estado == 'no_reparable':
+            fila['no_se_pudo_reparar'] += 1
+
+        if mostrar_valores_monetarios:
+            ingreso = salida.ingreso
+            acordado = ingreso.valor_servicio_a_cobrar
+            fila['total_acordado'] += acordado
+            if ingreso.diferencia <= 0:
+                fila['total_recaudado'] += acordado
+            else:
+                fila['total_por_cobrar'] += acordado
+
+    for fila in por_tecnico.values():
+        base_efectividad = fila['salidas_positivas'] + fila['no_quiso_reparar']
+        fila['efectividad'] = round(
+            fila['salidas_positivas'] / base_efectividad * 100,
+            1,
+        ) if base_efectividad else None
+
+    def orden(fila):
+        efectividad = fila['efectividad'] if fila['efectividad'] is not None else -1
+        return (-fila['salidas_positivas'], -efectividad, fila['nombre'].lower())
+
+    return sorted(por_tecnico.values(), key=orden)
+
 
 @_ranking_requerido
 def salida_totales(request):
@@ -4126,16 +4232,21 @@ def salida_totales(request):
     Ranking de técnicos por salidas: cuenta al técnico que reparó el equipo,
     registrado en `SalidaEquipo.tecnico_reparo`.
 
-    Filtros opcionales por rango de fechas.
+    Filtros opcionales por rango de fechas. Sin filtro se abre el mes en
+    curso, que es el período del abono mensual; "Limpiar" envía los campos
+    vacíos para ver todo el historial.
     """
     from decimal import Decimal as D
 
-    desde = (request.GET.get('desde') or '').strip()
-    hasta = (request.GET.get('hasta') or '').strip()
+    if 'desde' in request.GET or 'hasta' in request.GET:
+        desde = (request.GET.get('desde') or '').strip()
+        hasta = (request.GET.get('hasta') or '').strip()
+    else:
+        inicio_mes, fin_mes = _month_bounds(timezone.localdate())
+        desde, hasta = inicio_mes.isoformat(), fin_mes.isoformat()
     mostrar_valores_monetarios = _puede_ver_valores_ranking(request.user)
 
     estados_positivos = SALIDA_BUENA_ESTADOS
-    estados_negativos = SALIDA_MALA_ESTADOS
 
     # Base de ingresos de equipos. Las ventas de productos no pertenecen al
     # ranking de técnicos responsables de un ingreso de reparación.
@@ -4202,99 +4313,26 @@ def salida_totales(request):
 
     # Base del ranking: salidas en el rango. La productividad se atribuye al
     # técnico que reparó en la salida, no al técnico encargado del ingreso.
-    salidas_ranking_qs = SalidaEquipo.objects.select_related('ingreso', 'tecnico_reparo')
-    if desde:
-        salidas_ranking_qs = salidas_ranking_qs.filter(fecha_salida__gte=desde)
-    if hasta:
-        salidas_ranking_qs = salidas_ranking_qs.filter(fecha_salida__lte=hasta)
+    ranking_list = _ranking_salidas_por_tecnico(desde, hasta, mostrar_valores_monetarios)
 
-    ranking = (
-        salidas_ranking_qs
-        .values('tecnico_reparo_id', 'tecnico_reparo__first_name',
-                'tecnico_reparo__last_name', 'tecnico_reparo__username')
-        .annotate(
-            num_equipos=Count('id'),
-            # La ubicación física se determina por la fecha real de retiro.
-            # El resultado de reparación puede tener otros valores válidos
-            # (revisión, no reparable, cortesía, etc.) y no debe confundirse
-            # con que el equipo continúe o no dentro de la oficina.
-            entregados=Count('id', filter=Q(fecha_retiro_real__isnull=False)),
-            pendientes=Count('id', filter=Q(fecha_retiro_real__isnull=True)),
-        )
-    )
-    if mostrar_valores_monetarios:
-        ranking = ranking.annotate(
-            total_acordado=Sum('ingreso__valor_acordado'),
-            total_anticipo=Sum('ingreso__abono_anticipo'),
-        ).order_by('-num_equipos', '-total_acordado')
-    else:
-        ranking = ranking.order_by('-num_equipos', 'tecnico_reparo__username')
-
-    ranking_list = []
-    for row in ranking:
-        tid = row['tecnico_reparo_id']
-        nombre = (
-            f"{row['tecnico_reparo__first_name'] or ''} {row['tecnico_reparo__last_name'] or ''}".strip()
-            or row['tecnico_reparo__username']
-            or '— Sin asignar —'
-        )
-
-        sal_qs = salidas_ranking_qs.filter(tecnico_reparo_id=tid)
-
-        total_salidas = row['num_equipos']
-        
-        salidas_positivas = 0
-        salidas_negativas = 0
-        cobrado_final = D('0.00')
-
-        if mostrar_valores_monetarios:
-            total_acordado = row['total_acordado'] or D('0.00')
-            total_anticipo = row['total_anticipo'] or D('0.00')
-
-        for salida in sal_qs:
-            estado = salida.estado_reparacion
-            
-            # Conteo de salidas
-            if estado in estados_positivos:
-                salidas_positivas += 1
-            elif estado in estados_negativos:
-                salidas_negativas += 1
-                
-            # Cobrado
-            if mostrar_valores_monetarios:
-                cobrado_final += (salida.valor_final_cobrado or D('0.00'))
-
-                # Ajuste de Venta (Acordado)
-                if estado == 'cliente_no_acepta':
-                    total_acordado -= (salida.ingreso.valor_acordado or D('0.00'))
-                    total_acordado += D('5.00')
-                elif estado == 'no_reparable':
-                    total_acordado -= (salida.ingreso.valor_acordado or D('0.00'))
-                elif estado == 'revision':
-                    total_acordado -= (salida.ingreso.valor_acordado or D('0.00'))
-                    total_acordado += (salida.valor_acordado_revision or D('0.00'))
-
-        item_ranking = {
-            'tecnico_id': tid,
-            'nombre': nombre,
-            'sin_asignar': tid is None,
-            'num_equipos': row['num_equipos'],
-            'entregados': row['entregados'],
-            'pendientes': row['pendientes'],
-            'total_salidas': total_salidas,
-            'salidas_positivas': salidas_positivas,
-            'salidas_negativas': salidas_negativas,
-            'efectividad': round((salidas_positivas / total_salidas * 100) if total_salidas else 0, 1),
+    # Comparación con el período anterior para ver quién está mejorando.
+    periodo_anterior = _periodo_anterior_ranking(desde, hasta)
+    if periodo_anterior:
+        anteriores = {
+            fila['tecnico_id']: fila
+            for fila in _ranking_salidas_por_tecnico(*periodo_anterior, False)
         }
-        if mostrar_valores_monetarios:
-            item_ranking.update({
-                'total_acordado': total_acordado,
-                'total_anticipo': total_anticipo,
-                'cobrado_final': cobrado_final,
-                # Recaudado para el técnico: excluye anticipos.
-                'total_recaudado': cobrado_final,
-            })
-        ranking_list.append(item_ranking)
+        for fila in ranking_list:
+            anterior = anteriores.get(fila['tecnico_id'])
+            positivas_anterior = anterior['salidas_positivas'] if anterior else 0
+            efectividad_anterior = anterior['efectividad'] if anterior else None
+            fila['positivas_anterior'] = positivas_anterior
+            fila['delta_positivas'] = fila['salidas_positivas'] - positivas_anterior
+            fila['efectividad_anterior'] = efectividad_anterior
+            fila['delta_efectividad'] = round(
+                fila['efectividad'] - efectividad_anterior,
+                1,
+            ) if fila['efectividad'] is not None and efectividad_anterior is not None else None
 
     # Totales globales
     total_equipos = qs_ing.count()
@@ -4335,6 +4373,10 @@ def salida_totales(request):
         'total_positivas_global': total_positivas_global,
         'mostrar_valores_monetarios': mostrar_valores_monetarios,
         'filtros': {'desde': desde, 'hasta': hasta},
+        'comparacion': {
+            'desde': periodo_anterior[0],
+            'hasta': periodo_anterior[1],
+        } if periodo_anterior else None,
     }
     if mostrar_valores_monetarios:
         total_acordado_global = qs_ing.aggregate(s=Sum('valor_acordado'))['s'] or D('0.00')

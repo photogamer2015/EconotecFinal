@@ -32,6 +32,7 @@ from .models import (
     VentaInventarioItem,
 )
 from .qr_utils import token_para_ingreso
+from .views import _periodo_anterior_ranking
 from .views_auth import CAPTCHA_SESSION_KEY, LOGIN_2FA_SESSION_KEY, LOGIN_EMAIL_SETUP_SESSION_KEY
 
 
@@ -3498,8 +3499,12 @@ class VentasTests(TestCase):
         self.assertEqual(ranking['nombre'], 'Salida Ranking')
         self.assertEqual(ranking['num_equipos'], 1)
         self.assertEqual(ranking['salidas_positivas'], 1)
-        self.assertEqual(ranking['salidas_negativas'], 0)
-        self.assertEqual(ranking['total_recaudado'], Decimal('90.00'))
+        self.assertEqual(ranking['no_quiso_reparar'], 0)
+        self.assertEqual(ranking['no_se_pudo_reparar'], 0)
+        # Anticipo $10 + pago final $90 dejan el saldo en cero: se recauda
+        # todo el valor acordado.
+        self.assertEqual(ranking['total_recaudado'], Decimal('100.00'))
+        self.assertEqual(ranking['total_por_cobrar'], Decimal('0.00'))
         self.assertContains(response, 'Salida Ranking')
         self.assertContains(response, 'Entrada Ranking')
         self.assertContains(response, 'Ranking de Ingresos por Técnico Asignado')
@@ -3587,7 +3592,11 @@ class VentasTests(TestCase):
         )
         self.client.force_login(superusuario_tecnico)
 
-        response = self.client.get(reverse('econotec:salida_totales'))
+        # Sin fechas la página abre el mes en curso; los datos son de julio.
+        response = self.client.get(reverse('econotec:salida_totales'), {
+            'desde': '2026-07-01',
+            'hasta': '2026-07-31',
+        })
 
         self.assertEqual(response.status_code, 200)
         self.assertFalse(response.context['mostrar_valores_monetarios'])
@@ -3667,6 +3676,271 @@ class VentasTests(TestCase):
             response,
             f'{reverse("econotec:salida_lista")}?tecnico_salida={self.usuario.pk}',
         )
+
+    def crear_tecnico_ranking(self, username):
+        tecnico = get_user_model().objects.create_user(username=username)
+        tecnico.groups.add(Group.objects.get(name='Tecnicos'))
+        return tecnico
+
+    def crear_salida_ranking(self, tecnico, fecha, estado, salida_extra=None, **ingreso_overrides):
+        ingreso_overrides.setdefault('fecha_ingreso', fecha)
+        ingreso = self.crear_ingreso_reparacion(**ingreso_overrides)
+        return SalidaEquipo.objects.create(
+            ingreso=ingreso,
+            fecha_salida=fecha,
+            estado_reparacion=estado,
+            tecnico_reparo=tecnico,
+            valor_final_cobrado=Decimal('0.00'),
+            metodo_pago_final='sin_pago',
+            registrado_por=self.usuario,
+            **(salida_extra or {}),
+        )
+
+    def ranking_por_tecnico(self, response):
+        return {fila['tecnico_id']: fila for fila in response.context['ranking']}
+
+    def test_ranking_salidas_separa_no_quiso_y_no_se_pudo_en_la_efectividad(self):
+        tecnico = self.crear_tecnico_ranking('EfectividadRanking')
+        fecha = date(2026, 8, 10)
+        for estado in ('pendiente_retiro', 'garantia', 'garantia_fallos_adicionales'):
+            self.crear_salida_ranking(tecnico, fecha, estado)
+        self.crear_salida_ranking(
+            tecnico, fecha, 'retirado',
+            salida_extra={'fecha_retiro_real': fecha},
+        )
+        self.crear_salida_ranking(tecnico, fecha, 'cliente_no_acepta')
+        self.crear_salida_ranking(tecnico, fecha, 'no_reparable')
+        self.crear_salida_ranking(tecnico, fecha, 'no_reparable')
+        # Ni suman ni restan: revisión, cortesía y chatarrerización.
+        self.crear_salida_ranking(tecnico, fecha, 'revision')
+        self.crear_salida_ranking(tecnico, fecha, 'cortesia')
+        self.crear_salida_ranking(
+            tecnico, fecha, 'chatarrerizacion',
+            salida_extra={'fecha_retiro_real': fecha},
+        )
+        self.client.force_login(self.admin)
+
+        response = self.client.get(reverse('econotec:salida_totales'), {
+            'desde': '2026-08-01',
+            'hasta': '2026-08-31',
+        })
+
+        self.assertEqual(response.status_code, 200)
+        fila = self.ranking_por_tecnico(response)[tecnico.pk]
+        self.assertEqual(fila['num_equipos'], 10)
+        self.assertEqual(fila['entregados'], 2)
+        self.assertEqual(fila['pendientes'], 8)
+        self.assertEqual(fila['salidas_positivas'], 4)
+        self.assertEqual(fila['no_quiso_reparar'], 1)
+        self.assertEqual(fila['no_se_pudo_reparar'], 2)
+        # 4 positivas ÷ (4 positivas + 1 no quiso reparar).
+        self.assertEqual(fila['efectividad'], 80.0)
+        self.assertNotIn('salidas_negativas', fila)
+        self.assertContains(response, '>No quiso reparar<')
+        self.assertContains(response, '>No se pudo reparar<')
+        self.assertNotContains(response, 'Salidas −')
+        self.assertContains(response, 'width: 80.0%;')
+
+    def test_ranking_salidas_ordena_por_positivas_y_desempata_por_efectividad(self):
+        fecha = date(2026, 8, 10)
+        muchas_negativas = self.crear_tecnico_ranking('MuchasNegativas')
+        self.crear_salida_ranking(muchas_negativas, fecha, 'retirado')
+        for _ in range(4):
+            self.crear_salida_ranking(muchas_negativas, fecha, 'cliente_no_acepta')
+        con_no_quiso = self.crear_tecnico_ranking('ConNoQuiso')
+        self.crear_salida_ranking(con_no_quiso, fecha, 'pendiente_retiro')
+        self.crear_salida_ranking(con_no_quiso, fecha, 'pendiente_retiro')
+        self.crear_salida_ranking(con_no_quiso, fecha, 'cliente_no_acepta')
+        sin_no_quiso = self.crear_tecnico_ranking('SinNoQuiso')
+        self.crear_salida_ranking(sin_no_quiso, fecha, 'pendiente_retiro')
+        self.crear_salida_ranking(sin_no_quiso, fecha, 'pendiente_retiro')
+        self.crear_salida_ranking(sin_no_quiso, fecha, 'no_reparable')
+        solo_no_se_pudo = self.crear_tecnico_ranking('SoloNoSePudo')
+        self.crear_salida_ranking(solo_no_se_pudo, fecha, 'no_reparable')
+        self.client.force_login(self.admin)
+
+        response = self.client.get(reverse('econotec:salida_totales'), {
+            'desde': '2026-08-01',
+            'hasta': '2026-08-31',
+        })
+
+        self.assertEqual(
+            [fila['tecnico_id'] for fila in response.context['ranking']],
+            [sin_no_quiso.pk, con_no_quiso.pk, muchas_negativas.pk, solo_no_se_pudo.pk],
+        )
+        filas = self.ranking_por_tecnico(response)
+        self.assertEqual(filas[sin_no_quiso.pk]['efectividad'], 100.0)
+        self.assertEqual(filas[con_no_quiso.pk]['efectividad'], 66.7)
+        self.assertEqual(filas[muchas_negativas.pk]['efectividad'], 20.0)
+        # Sin positivas ni "no quiso reparar" no hay nada que medir.
+        self.assertIsNone(filas[solo_no_se_pudo.pk]['efectividad'])
+        self.assertContains(response, 'Sin salidas positivas ni de cliente que no quiso reparar')
+
+    def test_ranking_salidas_recaudado_solo_cuenta_equipos_en_saldo_cero(self):
+        tecnico = self.crear_tecnico_ranking('RecaudoRanking')
+        fecha = date(2026, 8, 10)
+        # Valor acordado + adicional, pagado con un abono facturado con
+        # retención: el saldo queda en cero aunque se retenga parte.
+        con_adicional = self.crear_salida_ranking(
+            tecnico, fecha, 'pendiente_retiro',
+            salida_extra={
+                'aplica_valor_acordado_adicional': 'si',
+                'valor_acordado_adicional': Decimal('10.00'),
+            },
+            valor_acordado=Decimal('50.00'),
+        )
+        Abono.objects.create(
+            ingreso=con_adicional.ingreso,
+            fecha=fecha,
+            monto=Decimal('60.00'),
+            factura_realizada='si',
+            aplica_retencion='si',
+            valor_con_retencion=Decimal('60.00'),
+            registrado_por=self.usuario,
+        )
+        # Pago parcial: todavía tiene saldo.
+        self.crear_salida_ranking(
+            tecnico, fecha, 'pendiente_retiro',
+            valor_acordado=Decimal('40.00'),
+            abono_anticipo=Decimal('15.00'),
+        )
+        # Revisión: se cobra el valor de revisión, no el acordado original.
+        revision = self.crear_salida_ranking(
+            tecnico, fecha, 'revision',
+            salida_extra={'valor_acordado_revision': Decimal('20.00')},
+            valor_acordado=Decimal('100.00'),
+        )
+        Abono.objects.create(
+            ingreso=revision.ingreso,
+            fecha=fecha,
+            monto=Decimal('20.00'),
+            registrado_por=self.usuario,
+        )
+        # Cliente no quiso reparar y no se cobró nada: no suma acordado.
+        self.crear_salida_ranking(
+            tecnico, fecha, 'cliente_no_acepta',
+            valor_acordado=Decimal('80.00'),
+        )
+        self.client.force_login(self.admin)
+
+        response = self.client.get(reverse('econotec:salida_totales'), {
+            'desde': '2026-08-01',
+            'hasta': '2026-08-31',
+        })
+
+        fila = self.ranking_por_tecnico(response)[tecnico.pk]
+        self.assertEqual(fila['total_acordado'], Decimal('120.00'))
+        self.assertEqual(fila['total_recaudado'], Decimal('80.00'))
+        self.assertEqual(fila['total_por_cobrar'], Decimal('40.00'))
+        self.assertEqual(
+            fila['total_acordado'],
+            fila['total_recaudado'] + fila['total_por_cobrar'],
+        )
+        self.assertContains(response, '>Por cobrar<')
+        self.assertContains(response, '$120,00')
+        self.assertContains(response, '$80,00')
+
+    def test_ranking_sin_permiso_de_valores_no_ve_por_cobrar(self):
+        self.crear_salida_ranking(
+            self.usuario, date(2026, 8, 10), 'pendiente_retiro',
+            valor_acordado=Decimal('432.10'),
+        )
+
+        response = self.client.get(reverse('econotec:salida_totales'), {
+            'desde': '2026-08-01',
+            'hasta': '2026-08-31',
+        })
+
+        self.assertEqual(response.status_code, 200)
+        fila = self.ranking_por_tecnico(response)[self.usuario.pk]
+        self.assertNotIn('total_por_cobrar', fila)
+        self.assertNotContains(response, '>Por cobrar<')
+        self.assertNotContains(response, 'saldo cero')
+        self.assertNotContains(response, '$432,10')
+
+    def test_ranking_abre_el_mes_en_curso_y_limpiar_muestra_todo(self):
+        hoy = timezone.localdate()
+        inicio_mes = hoy.replace(day=1)
+        anterior = inicio_mes - timedelta(days=40)
+        self.crear_salida_ranking(self.usuario, hoy, 'pendiente_retiro')
+        self.crear_salida_ranking(self.usuario, anterior, 'pendiente_retiro')
+        self.client.force_login(self.admin)
+
+        response = self.client.get(reverse('econotec:salida_totales'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context['filtros']['desde'], inicio_mes.isoformat())
+        siguiente_mes = (inicio_mes + timedelta(days=32)).replace(day=1)
+        self.assertEqual(
+            response.context['filtros']['hasta'],
+            (siguiente_mes - timedelta(days=1)).isoformat(),
+        )
+        self.assertEqual(self.ranking_por_tecnico(response)[self.usuario.pk]['num_equipos'], 1)
+        self.assertContains(
+            response,
+            f'href="{reverse("econotec:salida_totales")}?desde=&amp;hasta="',
+        )
+
+        todo = self.client.get(reverse('econotec:salida_totales'), {'desde': '', 'hasta': ''})
+
+        self.assertEqual(todo.context['filtros'], {'desde': '', 'hasta': ''})
+        self.assertIsNone(todo.context['comparacion'])
+        self.assertEqual(self.ranking_por_tecnico(todo)[self.usuario.pk]['num_equipos'], 2)
+
+    def test_ranking_compara_con_el_mes_anterior(self):
+        mejora = self.crear_tecnico_ranking('MejoraRanking')
+        nuevo = self.crear_tecnico_ranking('NuevoRanking')
+        septiembre = date(2026, 9, 15)
+        octubre = date(2026, 10, 15)
+        self.crear_salida_ranking(mejora, septiembre, 'pendiente_retiro')
+        self.crear_salida_ranking(mejora, septiembre, 'cliente_no_acepta')
+        for _ in range(3):
+            self.crear_salida_ranking(mejora, octubre, 'pendiente_retiro')
+        self.crear_salida_ranking(mejora, octubre, 'cliente_no_acepta')
+        self.crear_salida_ranking(nuevo, octubre, 'pendiente_retiro')
+        self.client.force_login(self.admin)
+
+        response = self.client.get(reverse('econotec:salida_totales'), {
+            'desde': '2026-10-01',
+            'hasta': '2026-10-31',
+        })
+
+        self.assertEqual(response.context['comparacion'], {
+            'desde': date(2026, 9, 1),
+            'hasta': date(2026, 9, 30),
+        })
+        filas = self.ranking_por_tecnico(response)
+        self.assertEqual(filas[mejora.pk]['positivas_anterior'], 1)
+        self.assertEqual(filas[mejora.pk]['delta_positivas'], 2)
+        self.assertEqual(filas[mejora.pk]['efectividad_anterior'], 50.0)
+        self.assertEqual(filas[mejora.pk]['delta_efectividad'], 25.0)
+        self.assertEqual(filas[nuevo.pk]['positivas_anterior'], 0)
+        self.assertEqual(filas[nuevo.pk]['delta_positivas'], 1)
+        self.assertIsNone(filas[nuevo.pk]['efectividad_anterior'])
+        self.assertIsNone(filas[nuevo.pk]['delta_efectividad'])
+        self.assertContains(response, '01/09/2026 – 30/09/2026')
+        self.assertContains(response, 'title="Período anterior: 1">▲ +2</span>')
+        self.assertContains(response, '▲ +25,0 pts')
+
+    def test_periodo_anterior_del_ranking(self):
+        self.assertEqual(
+            _periodo_anterior_ranking('2026-03-01', '2026-03-31'),
+            (date(2026, 2, 1), date(2026, 2, 28)),
+        )
+        self.assertEqual(
+            _periodo_anterior_ranking('2026-01-01', '2026-01-31'),
+            (date(2025, 12, 1), date(2025, 12, 31)),
+        )
+        # Un rango que no es un mes completo se compara con los mismos días
+        # justo antes.
+        self.assertEqual(
+            _periodo_anterior_ranking('2026-10-10', '2026-10-19'),
+            (date(2026, 9, 30), date(2026, 10, 9)),
+        )
+        self.assertIsNone(_periodo_anterior_ranking('', ''))
+        self.assertIsNone(_periodo_anterior_ranking('2026-10-01', ''))
+        self.assertIsNone(_periodo_anterior_ranking('2026-10-31', '2026-10-01'))
+        self.assertIsNone(_periodo_anterior_ranking('no-es-fecha', '2026-10-01'))
 
     def test_top_clientes_cuenta_equipos_reales_por_sede_sin_multiplicar(self):
         biomedics = Cliente.objects.create(
