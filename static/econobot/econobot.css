@@ -146,7 +146,7 @@
     position: relative;
 }
 .econobot-head::after {
-    content: 'MERCY · SOPORTE INTELIGENTE';
+    content: 'ECONOBOT · SOPORTE INTELIGENTE';
     position: absolute;
     left: 68px;
     bottom: 4px;
@@ -587,7 +587,7 @@
     font-size: 11px;
     text-align: center;
 }
-.mercybot-spark { color: #e52436; margin-right: 3px; }
+.econobot-spark { color: #e52436; margin-right: 3px; }
 
 /* ── Accesos en el menú y en el Inicio ──────────────────────── */
 header.top a.econobot-nav-link {

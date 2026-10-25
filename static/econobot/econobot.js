@@ -216,7 +216,7 @@
 
     function mostrarEscribiendo(activo) {
         raiz.classList.toggle('is-busy', activo);
-        estadoTexto.textContent = activo ? 'Mercybot está pensando…' : 'Tu copiloto de Econotec';
+        estadoTexto.textContent = activo ? 'EconoBot está pensando…' : 'Tu copiloto de Econotec';
         if (activo && !indicadorEscribiendo) {
             indicadorEscribiendo = document.createElement('div');
             indicadorEscribiendo.className = 'econobot-msg econobot-escribiendo';
@@ -243,7 +243,7 @@
     function bienvenida() {
         agregar({
             rol: 'bot',
-            texto: '¡Hola' + (nombre ? ', ' + nombre : '') + '! 👋 Soy Mercybot, tu copiloto de Econotec.\n' +
+            texto: '¡Hola' + (nombre ? ', ' + nombre : '') + '! 👋 Soy EconoBot, tu copiloto de Econotec.\n' +
                 'Puedo registrar equipos, finalizarlos, confirmar salidas y mostrarte clientes, equipos y alertas. ' +
                 'Escribe lo que necesitas o un código como G1031.',
             opciones: [
@@ -428,7 +428,7 @@
     });
 
     botonNuevo.addEventListener('click', function () {
-        if (historial.length && !window.confirm('¿Reiniciar la conversación? Mercybot olvidará este chat y comenzará desde cero.')) return;
+        if (historial.length && !window.confirm('¿Reiniciar la conversación? EconoBot olvidará este chat y comenzará desde cero.')) return;
         detenerVoz();
         historial = [];
         borrar(CLAVE_HISTORIAL);
