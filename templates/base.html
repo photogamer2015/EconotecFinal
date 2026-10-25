@@ -1679,7 +1679,7 @@
     {% block extra_head %}{% endblock %}
     <link rel="stylesheet" href="{% static 'responsive.css' %}?v=20260927-1">
     {% if puede_gestionar_equipos or puede_gestionar_pagos %}
-    <link rel="stylesheet" href="{% static 'econobot/econobot.css' %}?v=20261025-1">
+    <link rel="stylesheet" href="{% static 'econobot/econobot.css' %}?v=20261025-2">
     {% endif %}
     <script src="{% static 'table_navigation.js' %}?v=20260927-1" defer></script>
     <!-- SweetAlert2 -->
@@ -1745,7 +1745,7 @@
                 <a href="{% url 'econotec:bienvenida' %}">Inicio</a>
                 <a href="{% url 'econotec:mi_perfil' %}" class="social-nav-profile">{% if mi_perfil_social.avatar %}<img src="{% static 'perfiles/' %}{{ mi_perfil_social.avatar }}" alt="Mi avatar" width="28" height="28">{% else %}<span class="social-nav-initial">{{ user.username|first|upper }}</span>{% endif %}<span>Mi perfil</span></a>
                 {% if puede_gestionar_equipos or puede_gestionar_pagos %}
-                <a href="#econobot" class="econobot-nav-link" data-econobot-open role="button" aria-controls="econobot-panel" title="Abrir EconoBot, tu copiloto de Econotec"><span class="econobot-avatar" aria-hidden="true"><picture><source srcset="{% static 'econobot/econobot-rostro.webp' %}" type="image/webp"><img src="{% static 'econobot/econobot-rostro.png' %}" alt="" width="22" height="22" decoding="async"></picture></span><span class="econobot-nav-texto">EconoBot</span></a>
+                <a href="#econobot" class="econobot-nav-link" data-econobot-open role="button" aria-controls="econobot-panel" title="Abrir EconoBot, el asistente del sistema"><span class="econobot-avatar" aria-hidden="true"><picture><source srcset="{% static 'econobot/econobot-rostro.webp' %}" type="image/webp"><img src="{% static 'econobot/econobot-rostro.png' %}" alt="" width="22" height="22" decoding="async"></picture></span><span class="econobot-nav-texto">EconoBot</span></a>
                 {% endif %}
                 {% if es_asesor and notificaciones_asesora_count > 0 %}
                     <div class="noti-bell-wrap">

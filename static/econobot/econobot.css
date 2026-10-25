@@ -143,18 +143,6 @@
     padding: 13px 12px 12px 16px;
     border-bottom: 1px solid var(--border-color, #ebe6e1);
     background: linear-gradient(120deg, rgba(11, 59, 120, 0.08), rgba(50, 183, 245, 0.03) 62%, rgba(229, 36, 54, 0.08));
-    position: relative;
-}
-.econobot-head::after {
-    content: 'ECONOBOT · SOPORTE INTELIGENTE';
-    position: absolute;
-    left: 68px;
-    bottom: 4px;
-    font-size: 8px;
-    letter-spacing: .16em;
-    font-weight: 800;
-    color: #0b3b78;
-    opacity: .48;
 }
 .econobot-head-text {
     display: flex;
@@ -587,7 +575,6 @@
     font-size: 11px;
     text-align: center;
 }
-.econobot-spark { color: #e52436; margin-right: 3px; }
 
 /* ── Accesos en el menú y en el Inicio ──────────────────────── */
 header.top a.econobot-nav-link {
@@ -706,7 +693,6 @@ header.top a.econobot-nav-link:hover { color: #ffffff; }
 .econobot-launcher-text::after { content: '¿En qué te ayudo?'; font-size: 12px; font-weight: 600; opacity: .85; margin-top: 3px; }
 .econobot-panel { width: 420px; border-radius: 20px; border-color: #e3e8f7; box-shadow: 0 18px 50px rgba(26,35,126,.2); }
 .econobot-head { padding: 15px 18px; background: #fff; border-bottom-color: #f0f0f0; }
-.econobot-head::after { content: 'COPILOTO ACADÉMICO'; color: #1a237e; }
 .econobot-head-text strong { color: #1a237e; font-size: 18px; }
 .econobot-mensajes { background: #f8f9fd; padding: 18px 20px 14px; gap: 12px; }
 .econobot-hero { height: 184px; background: radial-gradient(circle at 50% 100%, #e8f4ff, #fff 68%); border-bottom: 1px solid #edf1f8; }
