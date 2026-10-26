@@ -3683,6 +3683,54 @@ class VentasTests(TestCase):
             f'{reverse("econotec:salida_lista")}?tecnico_salida={self.usuario.pk}',
         )
 
+    def test_ver_detalle_del_ranking_filtra_por_fecha_de_finalizacion(self):
+        # Terminado en octubre y retirado en noviembre: el ranking de octubre
+        # lo cuenta fuera de oficina, así que "Ver detalle" también lo muestra.
+        terminado_octubre = self.crear_salida_ranking(
+            self.usuario, date(2026, 10, 30), 'retirado',
+            salida_extra={'fecha_retiro_real': date(2026, 11, 3)},
+        )
+        # Terminado en septiembre y retirado en octubre: es de septiembre.
+        terminado_septiembre = self.crear_salida_ranking(
+            self.usuario, date(2026, 9, 29), 'retirado',
+            salida_extra={'fecha_retiro_real': date(2026, 10, 2)},
+        )
+        self.client.force_login(self.admin)
+        octubre = {'fecha_desde': '2026-10-01', 'fecha_hasta': '2026-10-31'}
+
+        ranking = self.client.get(reverse('econotec:salida_totales'), {
+            'periodo': 'mes', 'mes': 10, 'mes_anio': 2026,
+        })
+        fila = self.ranking_por_tecnico(ranking)[self.usuario.pk]
+        self.assertEqual(fila['entregados'], 1)
+        enlace = (
+            f'{reverse("econotec:salida_retiros_lista")}?tecnico_salida={self.usuario.pk}'
+            '&fecha_por=finalizacion&fecha_desde=2026-10-01&fecha_hasta=2026-10-31'
+        )
+        self.assertContains(ranking, enlace)
+
+        detalle = self.client.get(reverse('econotec:salida_retiros_lista'), {
+            'tecnico_salida': self.usuario.pk,
+            'fecha_por': 'finalizacion',
+            **octubre,
+        })
+        self.assertEqual(
+            [salida.pk for salida in detalle.context['salidas']],
+            [terminado_octubre.pk],
+        )
+        self.assertEqual(detalle.context['total'], fila['entregados'])
+        self.assertContains(detalle, 'Fecha de finalización: 01/10/2026 - 31/10/2026')
+        self.assertContains(detalle, '<input type="hidden" name="fecha_por" value="finalizacion">')
+
+        # Desde el menú la lista sigue filtrando por la fecha de salida física.
+        por_retiro = self.client.get(reverse('econotec:salida_retiros_lista'), octubre)
+        self.assertEqual(
+            [salida.pk for salida in por_retiro.context['salidas']],
+            [terminado_septiembre.pk],
+        )
+        self.assertContains(por_retiro, 'Fecha de salida física: 01/10/2026 - 31/10/2026')
+        self.assertNotContains(por_retiro, 'name="fecha_por"')
+
     def crear_tecnico_ranking(self, username):
         tecnico = get_user_model().objects.create_user(username=username)
         tecnico.groups.add(Group.objects.get(name='Tecnicos'))
@@ -3803,6 +3851,78 @@ class VentasTests(TestCase):
         # Sin equipos que sumen o resten no hay nada que medir.
         self.assertIsNone(filas[solo_no_se_pudo.pk]['efectividad'])
         self.assertContains(response, 'Sin equipos que sumen o resten')
+
+    def test_tabla_de_posiciones_de_mayor_a_menor_con_empates(self):
+        fecha = date(2026, 8, 10)
+        primero = self.crear_tecnico_ranking('PrimeroTabla')
+        for _ in range(3):
+            self.crear_salida_ranking(primero, fecha, 'pendiente_retiro')
+        # Mismos reparados y misma efectividad: comparten el segundo puesto.
+        empate_a = self.crear_tecnico_ranking('EmpateA')
+        empate_b = self.crear_tecnico_ranking('EmpateB')
+        for tecnico in (empate_a, empate_b):
+            self.crear_salida_ranking(tecnico, fecha, 'pendiente_retiro')
+            self.crear_salida_ranking(tecnico, fecha, 'cliente_no_acepta')
+        # Mismos reparados que los empatados, pero peor efectividad.
+        ultimo = self.crear_tecnico_ranking('UltimoTabla')
+        self.crear_salida_ranking(ultimo, fecha, 'pendiente_retiro')
+        self.crear_salida_ranking(ultimo, fecha, 'garantia')
+        self.crear_salida_ranking(ultimo, fecha, 'garantia')
+        # Una salida sin técnico que reparó, con más reparados que nadie,
+        # no compite: queda al final y sin puesto.
+        for _ in range(5):
+            self.crear_salida_ranking(None, fecha, 'pendiente_retiro')
+        self.client.force_login(self.admin)
+
+        response = self.client.get(reverse('econotec:salida_totales'), {
+            'desde': '2026-08-01',
+            'hasta': '2026-08-31',
+        })
+
+        ranking = response.context['ranking']
+        self.assertEqual(
+            [(fila['nombre'], fila['puesto'], fila['empate']) for fila in ranking],
+            [
+                ('PrimeroTabla', 1, False),
+                ('EmpateA', 2, True),
+                ('EmpateB', 2, True),
+                # Tras el empate en el 2.º el siguiente salta al 4.º.
+                ('UltimoTabla', 4, False),
+                ('— Sin asignar —', None, False),
+            ],
+        )
+        self.assertEqual(
+            [fila['nombre'] for fila in response.context['competidores']],
+            ['PrimeroTabla', 'EmpateA', 'EmpateB', 'UltimoTabla'],
+        )
+        filas = {fila['nombre']: fila for fila in ranking}
+        self.assertEqual(filas['PrimeroTabla']['detras_del_primero'], 0)
+        self.assertEqual(filas['PrimeroTabla']['barra_primero'], 100.0)
+        self.assertEqual(filas['EmpateA']['detras_del_primero'], 2)
+        self.assertEqual(filas['EmpateA']['barra_primero'], 33.3)
+        self.assertContains(response, '🏁 Tabla de posiciones')
+        self.assertContains(response, 'Va primero')
+        self.assertContains(response, 'A 2 reparados del primero')
+        self.assertContains(response, '<span class="chip-empate">Empate</span>', count=2)
+        self.assertContains(
+            response,
+            '5 equipos sin técnico que reparó no entran en la competencia; aparecen al final.',
+        )
+        self.assertContains(response, 'Tabla de posiciones</h4>', count=2)
+
+    def test_tabla_de_posiciones_solo_aparece_con_dos_tecnicos_o_mas(self):
+        self.crear_salida_ranking(self.usuario, date(2026, 8, 10), 'pendiente_retiro')
+        self.crear_salida_ranking(None, date(2026, 8, 10), 'pendiente_retiro')
+        self.client.force_login(self.admin)
+
+        response = self.client.get(reverse('econotec:salida_totales'), {
+            'desde': '2026-08-01',
+            'hasta': '2026-08-31',
+        })
+
+        self.assertEqual(len(response.context['competidores']), 1)
+        self.assertNotContains(response, '🏁 Tabla de posiciones')
+        self.assertEqual(response.context['ranking'][0]['puesto'], 1)
 
     def test_ranking_salidas_recaudado_solo_cuenta_equipos_en_saldo_cero(self):
         tecnico = self.crear_tecnico_ranking('RecaudoRanking')

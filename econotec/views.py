@@ -3661,6 +3661,12 @@ def salida_lista(request, solo_fuera_oficina=False):
     tecnico_registro_filtro = (request.GET.get('tecnico_registro') or '').strip()
     tecnico_salida_filtro = (request.GET.get('tecnico_salida') or '').strip()
     fecha_desde, fecha_hasta, fecha_preset = obtener_rango_fecha(request)
+    # "Ver detalle" del ranking filtra los equipos fuera de oficina por la
+    # fecha de finalización, la misma con la que el ranking los cuenta.
+    por_finalizacion = (
+        solo_fuera_oficina
+        and request.GET.get('fecha_por') == 'finalizacion'
+    )
 
     # Cada lista ofrece únicamente estados coherentes con su etapa física.
     # Dentro de la oficina se conservan los resultados de finalización;
@@ -3686,8 +3692,12 @@ def salida_lista(request, solo_fuera_oficina=False):
         qs = qs.filter(fecha_retiro_real__isnull=False).order_by(
             '-fecha_retiro_real', '-fecha_salida', '-creado',
         )
-        campo_fecha_filtro = 'fecha_retiro_real'
-        etiqueta_fecha_filtro = 'Fecha de salida física'
+        if por_finalizacion:
+            campo_fecha_filtro = 'fecha_salida'
+            etiqueta_fecha_filtro = 'Fecha de finalización'
+        else:
+            campo_fecha_filtro = 'fecha_retiro_real'
+            etiqueta_fecha_filtro = 'Fecha de salida física'
     else:
         qs = qs.filter(fecha_retiro_real__isnull=True).order_by(
             '-fecha_salida', '-creado',
@@ -3731,6 +3741,7 @@ def salida_lista(request, solo_fuera_oficina=False):
         'estados': estados_filtro,
         'total': total,
         'lista_salidas_confirmadas': solo_fuera_oficina,
+        'fecha_por_finalizacion': por_finalizacion,
     }
     context.update(contexto_rango_fecha(
         fecha_desde,
@@ -4399,10 +4410,42 @@ def _resumir_salidas(registros, mostrar_valores_monetarios):
     return resumen
 
 
+def _asignar_puestos(filas):
+    """
+    Puesto de cada técnico en la competencia; `filas` ya viene de mayor a menor.
+
+    Quien empata en reparados y en efectividad comparte el puesto y el
+    siguiente salta (1, 1, 3). Las salidas sin técnico que reparó no
+    compiten: no tienen puesto. La barra compara los reparados de cada
+    técnico con los del primero.
+    """
+    competidores = [fila for fila in filas if not fila['sin_asignar']]
+    reparados_primero = competidores[0]['salidas_positivas'] if competidores else 0
+    for indice, fila in enumerate(competidores):
+        anterior = competidores[indice - 1] if indice else None
+        empata = anterior is not None and (
+            (fila['salidas_positivas'], fila['efectividad'])
+            == (anterior['salidas_positivas'], anterior['efectividad'])
+        )
+        fila['puesto'] = anterior['puesto'] if empata else indice + 1
+        fila['empate'] = empata
+        if empata:
+            anterior['empate'] = True
+        fila['detras_del_primero'] = reparados_primero - fila['salidas_positivas']
+        fila['barra_primero'] = round(
+            fila['salidas_positivas'] / reparados_primero * 100,
+            1,
+        ) if reparados_primero else 0
+    for fila in filas:
+        if fila['sin_asignar']:
+            fila.update({'puesto': None, 'empate': False})
+
+
 def _ranking_salidas_por_tecnico(registros, mostrar_valores_monetarios):
     """
     Salidas agrupadas por el técnico que reparó, ordenadas de quien más
-    equipos reparó a quien menos (la efectividad desempata).
+    equipos reparó a quien menos (la efectividad desempata). Las salidas sin
+    técnico que reparó van al final porque no compiten.
     """
     por_tecnico = {}
     for registro in registros:
@@ -4420,9 +4463,16 @@ def _ranking_salidas_por_tecnico(registros, mostrar_valores_monetarios):
 
     def orden(fila):
         efectividad = fila['efectividad'] if fila['efectividad'] is not None else -1
-        return (-fila['salidas_positivas'], -efectividad, fila['nombre'].lower())
+        return (
+            fila['sin_asignar'],
+            -fila['salidas_positivas'],
+            -efectividad,
+            fila['nombre'].lower(),
+        )
 
-    return sorted(filas, key=orden)
+    filas = sorted(filas, key=orden)
+    _asignar_puestos(filas)
+    return filas
 
 
 def _comprobaciones_totales(resumen, filas, meses_resumen, mostrar_valores_monetarios):
@@ -4697,6 +4747,8 @@ def salida_totales(request):
     contexto = {
         'ranking_ingresos': ranking_ingresos,
         'ranking': ranking_list,
+        # La tabla de posiciones aparece cuando compiten dos técnicos o más.
+        'competidores': [fila for fila in ranking_list if not fila['sin_asignar']],
         'por_tipo': por_tipo_list,
         'total_equipos': total_equipos,
         # Iguales a la suma de todos los técnicos del ranking.

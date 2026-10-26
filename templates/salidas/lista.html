@@ -394,6 +394,10 @@
     <form method="get" class="salidas-filter-form" style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
         <input type="text" name="q" value="{{ q }}" placeholder="Buscar por N°, cliente, marca…" class="form-input">
         {% include 'includes/filtro_fecha_rango.html' %}
+        {% if fecha_por_finalizacion %}
+            {# Viene de "Ver detalle" del ranking: las fechas siguen siendo de finalización al volver a filtrar. #}
+            <input type="hidden" name="fecha_por" value="finalizacion">
+        {% endif %}
         <select name="estado" class="form-input" style="max-width:220px;">
             <option value="">{% if lista_salidas_confirmadas %}— Estado de salida física —{% else %}— Estado de reparación —{% endif %}</option>
             {% for value, label in estados %}
