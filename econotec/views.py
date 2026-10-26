@@ -4268,7 +4268,8 @@ def _periodo_ranking(parametros, hoy=None):
 # efecto, estados de SalidaEquipo). Las garantías restan porque el equipo
 # volvió; se cuentan al técnico registrado en la salida de la garantía, ya
 # que la mayoría se registran con un código manual y no con el equipo original.
-# Que el cliente no quiera reparar no depende del técnico: no afecta.
+# "No se pudo reparar" también resta: el técnico no logró repararlo. Que el
+# cliente no quiera reparar no depende del técnico: no afecta.
 _RESULTADOS_RANKING = (
     ('reparado', 'Finalizado y reparado', 'suma', ('pendiente_retiro', 'retirado')),
     ('garantia', 'Garantía finalizada', 'resta', ('garantia',)),
@@ -4278,7 +4279,7 @@ _RESULTADOS_RANKING = (
         'resta',
         ('garantia_fallos_adicionales',),
     ),
-    ('no_reparable', 'No se pudo reparar', 'neutro', ('no_reparable',)),
+    ('no_reparable', 'No se pudo reparar', 'resta', ('no_reparable',)),
     ('cliente_no_acepta', 'Cliente no quiso reparar', 'neutro', ('cliente_no_acepta',)),
     ('revision', 'Revisión', 'neutro', ('revision',)),
     ('cortesia', 'Cortesía', 'neutro', ('cortesia',)),
