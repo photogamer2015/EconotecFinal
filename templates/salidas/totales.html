@@ -408,6 +408,53 @@
     .dinero dd.por-cobrar::before { background: var(--warning); }
     .dinero-nota { font-size: 11px; font-weight: 700; color: var(--text-muted); }
 
+    /* Tabla de posiciones: los técnicos de mayor a menor (dos o más). */
+    .competencia {
+        margin-bottom: 18px;
+        padding: 16px 18px;
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius-lg);
+        background: var(--surface-muted);
+    }
+    .competencia-titulo { margin: 0; font-size: 15px; font-weight: 800; color: var(--text-main); }
+    .competencia-regla { margin: 4px 0 12px; font-size: 12px; font-weight: 700; color: var(--text-muted); }
+    .competencia-lista { list-style: none; display: grid; gap: 8px; }
+    .competidor {
+        display: grid;
+        grid-template-columns: 34px minmax(140px, 1.3fr) minmax(120px, 2fr) 92px 104px;
+        grid-template-areas: "medalla nombre barra reparados efectividad";
+        align-items: center;
+        gap: 6px 16px;
+        padding: 10px 14px;
+        border-left: 4px solid var(--border-color);
+        border-radius: var(--radius);
+        background: var(--card-bg);
+    }
+    .competidor.puesto-1 { border-left-color: #ffc107; }
+    .competidor.puesto-2 { border-left-color: #9e9e9e; }
+    .competidor.puesto-3 { border-left-color: #cd7f32; }
+    .competidor .medal { grid-area: medalla; width: 34px; height: 34px; line-height: 34px; font-size: 15px; }
+    .competidor-nombre { grid-area: nombre; min-width: 0; }
+    .competidor-nombre strong { display: block; font-size: 15px; color: var(--text-main); overflow-wrap: anywhere; }
+    .competidor-nota { font-size: 11px; font-weight: 700; color: var(--text-muted); }
+    .chip-empate {
+        display: inline-block;
+        margin-left: 4px;
+        padding: 1px 8px;
+        border-radius: 999px;
+        background: var(--tint-amber-bg);
+        color: var(--tint-amber-fg);
+        font-size: 11px;
+        font-weight: 800;
+    }
+    .competidor .meter { grid-area: barra; margin-top: 0; }
+    .competidor-dato { text-align: right; }
+    .competidor-dato.reparados { grid-area: reparados; }
+    .competidor-dato.efectividad { grid-area: efectividad; }
+    .competidor-dato strong { display: block; font-size: 20px; font-weight: 800; line-height: 1.15; color: var(--text-main); }
+    .competidor-dato strong.vacio { color: var(--text-muted); }
+    .competencia-pie { margin-top: 10px; font-size: 12px; font-weight: 700; color: var(--text-muted); }
+
     @media (max-width: 1050px) {
         .tech-card__body,
         .tech-card__body.sin-dinero { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -422,6 +469,16 @@
         .kpi { min-width: 0; flex: 1 1 110px; }
         .kpi-value { font-size: 26px; }
         .rank-legend { margin-left: 0; }
+        .competencia { padding: 14px; }
+        .competidor {
+            grid-template-columns: 34px minmax(0, 1fr) minmax(0, 1fr);
+            grid-template-areas:
+                "medalla nombre nombre"
+                "barra barra barra"
+                "reparados reparados efectividad";
+            gap: 8px 12px;
+        }
+        .competidor-dato { text-align: left; }
     }
 
     /* ── Filtro del período: Mes, Varios meses, Año o Rango de fechas ── */
@@ -825,6 +882,16 @@
             <p>Ejemplo: 14 reparados, 1 garantía y 2 que el cliente no quiso reparar dan 14 ÷ 17 = <b>82,4 %</b>. Los que no afectan no cambian el porcentaje.</p>
         </section>
         <section>
+            <h4>Tabla de posiciones</h4>
+            <p>Cuando en el período hay dos técnicos o más, arriba de las tarjetas aparece la <b>Tabla de posiciones</b>, de mayor a menor:</p>
+            <ul>
+                <li><span><b>1.</b> Gana quien más equipos reparó (los que suman).</span></li>
+                <li><span><b>2.</b> Si empatan en reparados, gana la mejor efectividad.</span></li>
+                <li><span><b>3.</b> Si también empatan en efectividad, comparten el puesto y el siguiente salta (1, 1, 3).</span></li>
+            </ul>
+            <p>La barra compara los reparados de cada técnico con los del primero. Los equipos sin técnico que reparó no compiten y van al final.</p>
+        </section>
+        <section>
             <h4>Cómo elegir el período</h4>
             <ul>
                 <li><span><b>Mes:</b> solo ese mes. No se compara con ningún otro.</span></li>
@@ -844,27 +911,58 @@
         <section>
             <h4>Dónde están los equipos</h4>
             <p><b>Ver detalle</b> muestra los equipos que ya están fuera de la oficina; <b>Equipos finalizados</b> muestra los que todavía permanecen dentro.</p>
+            <p>Las dos listas buscan por la <b>fecha de finalización</b>, igual que el ranking: un equipo terminado en el período aparece aunque el cliente lo haya retirado después.</p>
         </section>
     </div>
+
+    {% if competidores|length > 1 %}
+    <div class="competencia" role="group" aria-labelledby="titulo-competencia">
+        <h4 class="competencia-titulo" id="titulo-competencia">🏁 Tabla de posiciones</h4>
+        <p class="competencia-regla">Gana quien más equipos reparó. Si empatan, gana la mejor efectividad; si también empatan, comparten el puesto.</p>
+        <ol class="competencia-lista">
+            {% for c in competidores %}
+            <li class="competidor{% if c.puesto <= 3 %} puesto-{{ c.puesto }}{% endif %}">
+                <span class="medal {% if c.puesto == 1 %}gold{% elif c.puesto == 2 %}silver{% elif c.puesto == 3 %}bronze{% else %}normal{% endif %}" aria-hidden="true">{{ c.puesto }}</span>
+                <div class="competidor-nombre">
+                    <strong><span class="visually-hidden">Puesto {{ c.puesto }}: </span>{{ c.nombre }}</strong>
+                    <span class="competidor-nota">
+                        {% if c.puesto == 1 %}{% if c.empate %}Comparten el primer puesto{% else %}Va primero{% endif %}{% elif c.detras_del_primero %}A {{ c.detras_del_primero }} reparado{{ c.detras_del_primero|pluralize }} del primero{% else %}Mismos reparados que el primero; lo desempata la efectividad{% endif %}
+                    </span>{% if c.empate %}<span class="chip-empate">Empate</span>{% endif %}
+                </div>
+                <div class="meter ancho" role="img" aria-label="{{ c.salidas_positivas }} reparados; el primero tiene {{ c.salidas_positivas|add:c.detras_del_primero }}" title="Reparados comparados con los del primero">
+                    <span style="width: {{ c.barra_primero|stringformat:'.1f' }}%;"></span>
+                </div>
+                <div class="competidor-dato reparados">
+                    <span class="kpi-label">Reparados</span>
+                    <strong>{{ c.salidas_positivas }}</strong>
+                </div>
+                <div class="competidor-dato efectividad">
+                    <span class="kpi-label">Efectividad</span>
+                    {% if c.efectividad is None %}
+                        <strong class="vacio">—</strong>
+                    {% else %}
+                        <strong>{{ c.efectividad|floatformat:1 }}%</strong>
+                    {% endif %}
+                </div>
+            </li>
+            {% endfor %}
+        </ol>
+        {% for r in ranking %}{% if r.sin_asignar %}
+            <p class="competencia-pie">{{ r.num_equipos }} equipo{{ r.num_equipos|pluralize }} sin técnico que reparó no entra{{ r.num_equipos|pluralize:"n" }} en la competencia; aparece{{ r.num_equipos|pluralize:"n" }} al final.</p>
+        {% endif %}{% endfor %}
+    </div>
+    {% endif %}
 
     {% if ranking %}
     <ol class="tech-list">
     {% for r in ranking %}
-        <li class="tech-card{% if forloop.counter <= 3 %} puesto-{{ forloop.counter }}{% endif %}" aria-labelledby="tecnico-ranking-{{ forloop.counter }}">
+        <li class="tech-card{% if r.puesto and r.puesto <= 3 %} puesto-{{ r.puesto }}{% endif %}" aria-labelledby="tecnico-ranking-{{ forloop.counter }}">
             <div class="tech-card__head">
                 <div class="tech-id">
-                    {% if forloop.counter == 1 %}
-                        <span class="medal gold" aria-hidden="true">1</span>
-                    {% elif forloop.counter == 2 %}
-                        <span class="medal silver" aria-hidden="true">2</span>
-                    {% elif forloop.counter == 3 %}
-                        <span class="medal bronze" aria-hidden="true">3</span>
-                    {% else %}
-                        <span class="medal normal" aria-hidden="true">{{ forloop.counter }}</span>
-                    {% endif %}
+                    <span class="medal {% if r.puesto == 1 %}gold{% elif r.puesto == 2 %}silver{% elif r.puesto == 3 %}bronze{% else %}normal{% endif %}" aria-hidden="true">{% if r.puesto %}{{ r.puesto }}{% else %}–{% endif %}</span>
                     <div>
                         <h4 class="tech-name{% if r.sin_asignar %} sin-asignar{% endif %}" id="tecnico-ranking-{{ forloop.counter }}">
-                            <span class="visually-hidden">Puesto {{ forloop.counter }}: </span>{{ r.nombre }}
+                            <span class="visually-hidden">{% if r.puesto %}Puesto {{ r.puesto }}: {% else %}Sin puesto: {% endif %}</span>{{ r.nombre }}
                         </h4>
                         <div class="tech-sub">
                             {{ r.num_equipos }} equipo{{ r.num_equipos|pluralize }} finalizado{{ r.num_equipos|pluralize }}{% if r.sin_asignar %} sin técnico que reparó{% endif %}
@@ -942,7 +1040,7 @@
                         <span class="ubi-label">Fuera de oficina</span>
                         <span class="ubi-valor">{{ r.entregados }}</span>
                         {% if not r.sin_asignar %}
-                            <a href="{% url 'econotec:salida_retiros_lista' %}?tecnico_salida={{ r.tecnico_id }}{% if filtros.desde %}&fecha_desde={{ filtros.desde }}{% endif %}{% if filtros.hasta %}&fecha_hasta={{ filtros.hasta }}{% endif %}"
+                            <a href="{% url 'econotec:salida_retiros_lista' %}?tecnico_salida={{ r.tecnico_id }}&fecha_por=finalizacion{% if filtros.desde %}&fecha_desde={{ filtros.desde }}{% endif %}{% if filtros.hasta %}&fecha_hasta={{ filtros.hasta }}{% endif %}"
                                class="btn btn-outside"
                                title="Ver equipos de este técnico que ya salieron de la oficina">Ver detalle</a>
                         {% endif %}
