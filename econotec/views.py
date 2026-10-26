@@ -395,7 +395,7 @@ def bienvenida(request):
         reparacion_admin_qs = equipos_reparacion_demorada_qs(
             usuario=None,
             umbral_dias=UMBRAL_DIAS_REPARACION_ADMIN,
-        )
+        ).select_related('reporte_por')  # autor del reporte que se muestra en la alerta
 
     def _items_reparacion(qs):
         return [{

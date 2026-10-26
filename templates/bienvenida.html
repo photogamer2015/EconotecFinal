@@ -2003,6 +2003,35 @@
     color: var(--text-soft);
     font-weight: 600;
   }
+  /* Reporte del técnico en la alerta de +10 días: explica por qué sigue en reparación. */
+  .alerta-item .info .obs {
+    margin-top: 6px;
+    padding: 6px 10px;
+    border-left: 3px solid var(--tint-red-fg);
+    border-radius: 6px;
+    background: var(--surface-muted);
+    color: var(--text-main);
+    font-size: 12.5px;
+    line-height: 1.45;
+  }
+  .alerta-item .info .obs-texto {
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    overflow-wrap: anywhere;
+  }
+  .alerta-item .info .obs-autor {
+    display: block;
+    margin-top: 2px;
+    color: var(--text-muted);
+    font-size: 11.5px;
+  }
+  .alerta-item .info .obs-vacia {
+    border-left-color: var(--border-color);
+    color: var(--text-muted);
+    font-style: italic;
+  }
   .alerta-item .pill {
     padding: 4px 10px;
     border-radius: 999px;
@@ -2948,6 +2977,16 @@
         {{ item.ingreso.tipo_equipo_display }} {{ item.ingreso.marca }} — {{ item.estado }} desde {{ item.desde|date:"d/m/Y" }}
         {% if item.ingreso.tecnico_encargado %} · Téc.: <strong>{{ item.ingreso.tecnico_encargado_nombre }}</strong>{% endif %}
       </div>
+      {% if item.ingreso.reporte_tecnico %}
+      <div class="obs" title="{{ item.ingreso.reporte_tecnico }}">
+        <span class="obs-texto">📝 {{ item.ingreso.reporte_tecnico|linebreaksbr }}</span>
+        {% if item.ingreso.reporte_por_nombre %}
+        <span class="obs-autor">— {{ item.ingreso.reporte_por_nombre }}{% if item.ingreso.reporte_actualizado %} · {{ item.ingreso.reporte_actualizado|date:"d/m/Y H:i" }}{% endif %}</span>
+        {% endif %}
+      </div>
+      {% else %}
+      <div class="obs obs-vacia">Sin observación en la hoja todavía.</div>
+      {% endif %}
     </div>
     <span class="pill">{{ item.dias }} día{{ item.dias|pluralize }}</span>
     <div class="acciones">
