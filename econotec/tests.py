@@ -3762,10 +3762,11 @@ class VentasTests(TestCase):
             tecnico, fecha, 'retirado',
             salida_extra={'fecha_retiro_real': fecha},
         )
+        # Ni suman ni restan: cliente no quiso reparar, no se pudo reparar,
+        # revisión, cortesía y chatarrerización.
         self.crear_salida_ranking(tecnico, fecha, 'cliente_no_acepta')
         self.crear_salida_ranking(tecnico, fecha, 'no_reparable')
         self.crear_salida_ranking(tecnico, fecha, 'no_reparable')
-        # Ni suman ni restan: revisión, cortesía y chatarrerización.
         self.crear_salida_ranking(tecnico, fecha, 'revision')
         self.crear_salida_ranking(tecnico, fecha, 'cortesia')
         self.crear_salida_ranking(
@@ -3795,15 +3796,23 @@ class VentasTests(TestCase):
             'chatarrerizacion': 1,
         })
         self.assertEqual(fila['salidas_positivas'], 2)
-        # Las dos garantías y el cliente que no quiso reparar restan.
-        self.assertEqual(fila['salidas_negativas'], 3)
-        self.assertEqual(fila['salidas_neutras'], 5)
+        # Solo las dos garantías restan.
+        self.assertEqual(fila['salidas_negativas'], 2)
+        self.assertEqual(fila['salidas_neutras'], 6)
         self.assertEqual(
             [(grupo['titulo'], grupo['total']) for grupo in fila['grupos']],
-            [('Suman', 2), ('Restan', 3), ('No afectan', 5)],
+            [('Suman', 2), ('Restan', 2), ('No afectan', 6)],
         )
-        # 2 reparados ÷ (2 reparados + 3 que restan).
-        self.assertEqual(fila['efectividad'], 40.0)
+        self.assertEqual(
+            [[parte['clave'] for parte in grupo['partes']] for grupo in fila['grupos']],
+            [
+                ['reparado'],
+                ['garantia', 'garantia_fallos_adicionales'],
+                ['no_reparable', 'cliente_no_acepta', 'revision', 'cortesia', 'chatarrerizacion'],
+            ],
+        )
+        # 2 reparados ÷ (2 reparados + 2 garantías).
+        self.assertEqual(fila['efectividad'], 50.0)
         for etiqueta in (
             'Finalizado y reparado',
             'Garantía finalizada',
@@ -3815,24 +3824,27 @@ class VentasTests(TestCase):
             self.assertContains(response, f'<span>{etiqueta}</span><strong>')
         self.assertNotContains(response, 'Salidas +')
         self.assertNotContains(response, 'Salidas −')
-        self.assertContains(response, 'width: 40.0%;')
+        self.assertContains(response, 'width: 50.0%;')
 
     def test_ranking_salidas_ordena_por_positivas_y_desempata_por_efectividad(self):
         fecha = date(2026, 8, 10)
         muchas_negativas = self.crear_tecnico_ranking('MuchasNegativas')
         self.crear_salida_ranking(muchas_negativas, fecha, 'retirado')
         for _ in range(4):
-            self.crear_salida_ranking(muchas_negativas, fecha, 'cliente_no_acepta')
-        con_no_quiso = self.crear_tecnico_ranking('ConNoQuiso')
-        self.crear_salida_ranking(con_no_quiso, fecha, 'pendiente_retiro')
-        self.crear_salida_ranking(con_no_quiso, fecha, 'pendiente_retiro')
-        self.crear_salida_ranking(con_no_quiso, fecha, 'cliente_no_acepta')
-        sin_no_quiso = self.crear_tecnico_ranking('SinNoQuiso')
-        self.crear_salida_ranking(sin_no_quiso, fecha, 'pendiente_retiro')
-        self.crear_salida_ranking(sin_no_quiso, fecha, 'pendiente_retiro')
-        self.crear_salida_ranking(sin_no_quiso, fecha, 'no_reparable')
+            self.crear_salida_ranking(muchas_negativas, fecha, 'garantia')
+        con_garantia = self.crear_tecnico_ranking('ConGarantia')
+        self.crear_salida_ranking(con_garantia, fecha, 'pendiente_retiro')
+        self.crear_salida_ranking(con_garantia, fecha, 'pendiente_retiro')
+        self.crear_salida_ranking(con_garantia, fecha, 'garantia')
+        # No se pudo reparar y Cliente no quiso reparar no le bajan la efectividad.
+        sin_garantia = self.crear_tecnico_ranking('SinGarantia')
+        self.crear_salida_ranking(sin_garantia, fecha, 'pendiente_retiro')
+        self.crear_salida_ranking(sin_garantia, fecha, 'pendiente_retiro')
+        self.crear_salida_ranking(sin_garantia, fecha, 'no_reparable')
+        self.crear_salida_ranking(sin_garantia, fecha, 'cliente_no_acepta')
         solo_no_se_pudo = self.crear_tecnico_ranking('SoloNoSePudo')
         self.crear_salida_ranking(solo_no_se_pudo, fecha, 'no_reparable')
+        self.crear_salida_ranking(solo_no_se_pudo, fecha, 'cliente_no_acepta')
         self.client.force_login(self.admin)
 
         response = self.client.get(reverse('econotec:salida_totales'), {
@@ -3842,11 +3854,11 @@ class VentasTests(TestCase):
 
         self.assertEqual(
             [fila['tecnico_id'] for fila in response.context['ranking']],
-            [sin_no_quiso.pk, con_no_quiso.pk, muchas_negativas.pk, solo_no_se_pudo.pk],
+            [sin_garantia.pk, con_garantia.pk, muchas_negativas.pk, solo_no_se_pudo.pk],
         )
         filas = self.ranking_por_tecnico(response)
-        self.assertEqual(filas[sin_no_quiso.pk]['efectividad'], 100.0)
-        self.assertEqual(filas[con_no_quiso.pk]['efectividad'], 66.7)
+        self.assertEqual(filas[sin_garantia.pk]['efectividad'], 100.0)
+        self.assertEqual(filas[con_garantia.pk]['efectividad'], 66.7)
         self.assertEqual(filas[muchas_negativas.pk]['efectividad'], 20.0)
         # Sin equipos que sumen o resten no hay nada que medir.
         self.assertIsNone(filas[solo_no_se_pudo.pk]['efectividad'])
@@ -4047,7 +4059,7 @@ class VentasTests(TestCase):
         self.crear_salida_ranking(mejora, septiembre, 'garantia')
         for _ in range(3):
             self.crear_salida_ranking(mejora, octubre, 'pendiente_retiro')
-        self.crear_salida_ranking(mejora, octubre, 'cliente_no_acepta')
+        self.crear_salida_ranking(mejora, octubre, 'garantia')
         self.crear_salida_ranking(nuevo, octubre, 'pendiente_retiro')
         self.client.force_login(self.admin)
 
@@ -4131,8 +4143,9 @@ class VentasTests(TestCase):
             'Quién cuenta en el ranking',
             'Cuenta exclusivamente al <b>técnico que reparó registrado en la salida</b>',
             'Las garantías se cuentan al técnico registrado en la salida de la garantía.',
-            '<b>Restan:</b> Garantía finalizada, Garantía + fallos adicionales y Cliente no quiso reparar.',
-            '<b>No afectan:</b> No se pudo reparar, Revisión, Cortesía y Chatarrerización.',
+            '<b>Restan:</b> Garantía finalizada y Garantía + fallos adicionales, porque el equipo volvió.',
+            '<b>No afectan:</b> No se pudo reparar, Cliente no quiso reparar, Revisión, Cortesía y Chatarrerización.',
+            '14 reparados y 2 garantías dan 14 ÷ 16 = <b>87,5 %</b>',
             '<b>Suman ÷ (Suman + Restan)</b>',
             'Acordado, recaudado y por cobrar',
             '<b>Ver detalle</b> muestra los equipos que ya están fuera de la oficina',
@@ -4201,7 +4214,7 @@ class VentasTests(TestCase):
         tecnico = self.crear_tecnico_ranking('SoloOctubre')
         self.crear_salida_ranking(tecnico, date(2026, 9, 15), 'pendiente_retiro')
         self.crear_salida_ranking(tecnico, date(2026, 10, 3), 'pendiente_retiro')
-        self.crear_salida_ranking(tecnico, date(2026, 10, 20), 'cliente_no_acepta')
+        self.crear_salida_ranking(tecnico, date(2026, 10, 20), 'garantia')
         self.client.force_login(self.admin)
 
         response = self.client.get(reverse('econotec:salida_totales'), {
@@ -4370,8 +4383,9 @@ class VentasTests(TestCase):
         # La garantía resta también en la tarjeta: 3 reparados de 6.
         self.assertEqual(contexto['total_positivas_global'], 3)
         self.assertEqual(contexto['total_positivas_global'], sum(f['salidas_positivas'] for f in ranking))
-        # 3 reparados ÷ (3 reparados + 1 garantía + 1 no quiso reparar).
-        self.assertEqual(contexto['efectividad_global'], 60.0)
+        # 3 reparados ÷ (3 reparados + 1 garantía); el que el cliente no quiso
+        # reparar no afecta.
+        self.assertEqual(contexto['efectividad_global'], 75.0)
         self.assertEqual(contexto['total_acordado_global'], sum(f['total_acordado'] for f in ranking))
         self.assertEqual(contexto['total_recaudado_global'], sum(f['total_recaudado'] for f in ranking))
         self.assertEqual(contexto['total_por_cobrar_global'], sum(f['total_por_cobrar'] for f in ranking))
@@ -4392,7 +4406,7 @@ class VentasTests(TestCase):
         self.assertContains(response, '✓ Todo cuadra')
         self.assertContains(response, 'TarjetasUno: $85,00 + TarjetasDos: $55,00 = $140,00')
         self.assertContains(response, 'Recaudado: $60,00 + Por cobrar: $80,00 = $140,00')
-        self.assertContains(response, '3 ÷ (3 + 2) = 60,0 %')
+        self.assertContains(response, '3 ÷ (3 + 1) = 75,0 %')
 
     def test_comprobacion_de_totales_avisa_si_algo_no_cuadra(self):
         filas = [
