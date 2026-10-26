@@ -5496,6 +5496,24 @@ class VentasTests(TestCase):
         self.assertContains(response, ingreso.codigo_equipo)
         self.assertContains(response, 'Pide al técnico responsable una explicación')
 
+    def test_alerta_reparacion_admin_muestra_reporte_del_tecnico(self):
+        con_reporte = self.crear_ingreso_reparacion(
+            reporte_tecnico='Esperando cabezal, llega el viernes.',
+            reporte_por=self.usuario,
+        )
+        sin_reporte = self.crear_ingreso_reparacion()
+        IngresoEquipo.objects.filter(pk__in=[con_reporte.pk, sin_reporte.pk]).update(
+            fecha_alerta_reparacion=date.today() - timedelta(days=12),
+        )
+        self.client.force_login(self.admin)
+
+        response = self.client.get(reverse('econotec:bienvenida'))
+
+        self.assertEqual(response.context['reparacion_admin_total'], 2)
+        self.assertContains(response, 'Esperando cabezal, llega el viernes.')
+        self.assertContains(response, f'— {con_reporte.reporte_por_nombre}')
+        self.assertContains(response, 'Sin observación en la hoja todavía.', count=1)
+
     def test_fecha_alerta_reparacion_se_limpia_al_volver_a_diagnostico(self):
         ingreso = self.crear_ingreso_reparacion(subestado_reparacion='espera_cliente')
         self.assertIsNotNone(ingreso.fecha_alerta_reparacion)
