@@ -4115,6 +4115,8 @@ def cliente_export(request):
 # Ranking de Técnicos (totales por técnico)
 # ═════════════════════════════════════════════════════════════════
 
+from django.utils.formats import date_format
+
 from .date_filters import _month_bounds, _parse_date
 from .permisos import (
     puede_ver_valores_ranking as _puede_ver_valores_ranking,
@@ -4140,19 +4142,159 @@ def _periodo_anterior_ranking(desde, hasta):
     return fin_anterior - (fin - inicio), fin_anterior
 
 
-def _ranking_salidas_por_tecnico(desde, hasta, mostrar_valores_monetarios):
-    """
-    Salidas del rango agrupadas por el técnico que reparó, ordenadas de quien
-    más equipos reparó a quien menos (la efectividad desempata).
+def _etiquetas_periodo_anterior(inicio, fin):
+    """Nombre del período anterior: el mes ("septiembre 2026") o sus fechas."""
+    if inicio.day == 1 and fin == _month_bounds(inicio)[1]:
+        etiqueta = date_format(inicio, 'F Y')
+        etiqueta_corta = date_format(inicio, 'F')
+    else:
+        etiqueta = f'{inicio:%d/%m/%Y} – {fin:%d/%m/%Y}'
+        etiqueta_corta = 'período anterior'
+    return {
+        'desde': inicio,
+        'hasta': fin,
+        'etiqueta': etiqueta,
+        'etiqueta_corta': etiqueta_corta,
+    }
 
-    Efectividad = positivas / (positivas + cliente no quiso reparar).
-    "No se pudo reparar", revisión, cortesía y chatarrerización no suman ni
-    restan.
+
+# Formas de elegir el período del ranking: (valor del filtro, texto).
+_MODOS_PERIODO_RANKING = (
+    ('mes', 'Mes'),
+    ('meses', 'Varios meses'),
+    ('anio', 'Año'),
+    ('rango', 'Rango de fechas'),
+)
+_CANTIDADES_MESES_RANKING = (2, 3, 4)
+
+
+def _sumar_meses(dia, meses):
+    """Primer día del mes que queda `meses` meses después del mes de `dia`."""
+    indice = dia.year * 12 + (dia.month - 1) + meses
+    return date(indice // 12, indice % 12 + 1, 1)
+
+
+def _entero_en_rango(valor, minimo, maximo, por_defecto):
+    try:
+        numero = int(valor)
+    except (TypeError, ValueError):
+        return por_defecto
+    return min(max(numero, minimo), maximo)
+
+
+def _periodo_ranking(parametros, hoy=None):
+    """
+    Período que se eligió en el filtro del ranking.
+
+    - mes: un solo mes, sin compararlo con otro.
+    - meses: de 2 a 4 meses seguidos; se muestra el total y cada mes.
+    - anio: el total del año, del 1 de enero al 31 de diciembre.
+    - rango: Desde/Hasta libres (también los enlaces con desde/hasta sin
+      `periodo`); es el único que se compara con el período anterior.
+
+    Sin parámetros se abre el mes en curso. Devuelve las fechas `desde` y
+    `hasta` en formato ISO ('' = sin límite), los meses del período cuando
+    son varios y los valores con los que se vuelve a dibujar el filtro.
+    """
+    hoy = hoy or timezone.localdate()
+    modo = parametros.get('periodo')
+    if modo not in dict(_MODOS_PERIODO_RANKING):
+        modo = 'rango' if ('desde' in parametros or 'hasta' in parametros) else 'mes'
+
+    hace_dos_meses = _sumar_meses(hoy, -2)
+    periodo = {
+        'modo': modo,
+        'mes': _entero_en_rango(parametros.get('mes'), 1, 12, hoy.month),
+        'mes_anio': _entero_en_rango(parametros.get('mes_anio'), 2000, 2100, hoy.year),
+        # Por defecto, los últimos tres meses contando el actual.
+        'inicio_mes': _entero_en_rango(parametros.get('inicio_mes'), 1, 12, hace_dos_meses.month),
+        'inicio_anio': _entero_en_rango(parametros.get('inicio_anio'), 2000, 2100, hace_dos_meses.year),
+        'cantidad_meses': _entero_en_rango(
+            parametros.get('cantidad_meses'),
+            _CANTIDADES_MESES_RANKING[0],
+            _CANTIDADES_MESES_RANKING[-1],
+            3,
+        ),
+        'anio': _entero_en_rango(parametros.get('anio'), 2000, 2100, hoy.year),
+        'meses': [],
+    }
+
+    if modo == 'rango':
+        inicio = _parse_date(parametros.get('desde'))
+        fin = _parse_date(parametros.get('hasta'))
+        if inicio and fin:
+            etiqueta = f'{inicio:%d/%m/%Y} – {fin:%d/%m/%Y}'
+        elif inicio:
+            etiqueta = f'desde el {inicio:%d/%m/%Y}'
+        elif fin:
+            etiqueta = f'hasta el {fin:%d/%m/%Y}'
+        else:
+            etiqueta = 'todo el historial'
+    elif modo == 'mes':
+        inicio, fin = _month_bounds(date(periodo['mes_anio'], periodo['mes'], 1))
+        etiqueta = date_format(inicio, 'F Y')
+    elif modo == 'meses':
+        primero = date(periodo['inicio_anio'], periodo['inicio_mes'], 1)
+        periodo['meses'] = [
+            _month_bounds(_sumar_meses(primero, numero))
+            for numero in range(periodo['cantidad_meses'])
+        ]
+        inicio, fin = periodo['meses'][0][0], periodo['meses'][-1][1]
+        etiqueta = f"{date_format(inicio, 'F Y')} – {date_format(fin, 'F Y')}"
+    else:
+        inicio, fin = date(periodo['anio'], 1, 1), date(periodo['anio'], 12, 31)
+        etiqueta = f"año {periodo['anio']}"
+
+    periodo.update({
+        'desde': inicio.isoformat() if inicio else '',
+        'hasta': fin.isoformat() if fin else '',
+        'etiqueta': etiqueta,
+    })
+    return periodo
+
+
+# Cómo cuenta cada resultado de salida en el ranking: (clave, etiqueta,
+# efecto, estados de SalidaEquipo). Las garantías restan porque el equipo
+# volvió; se cuentan al técnico registrado en la salida de la garantía, ya
+# que la mayoría se registran con un código manual y no con el equipo original.
+_RESULTADOS_RANKING = (
+    ('reparado', 'Finalizado y reparado', 'suma', ('pendiente_retiro', 'retirado')),
+    ('garantia', 'Garantía finalizada', 'resta', ('garantia',)),
+    (
+        'garantia_fallos_adicionales',
+        'Garantía + fallos adicionales',
+        'resta',
+        ('garantia_fallos_adicionales',),
+    ),
+    ('cliente_no_acepta', 'Cliente no quiso reparar', 'resta', ('cliente_no_acepta',)),
+    ('no_reparable', 'No se pudo reparar', 'neutro', ('no_reparable',)),
+    ('revision', 'Revisión', 'neutro', ('revision',)),
+    ('cortesia', 'Cortesía', 'neutro', ('cortesia',)),
+    ('chatarrerizacion', 'Chatarrerización', 'neutro', ('chatarrerizacion',)),
+)
+_GRUPOS_RANKING = (
+    ('suma', 'Suman'),
+    ('resta', 'Restan'),
+    ('neutro', 'No afectan'),
+)
+_RESULTADO_POR_ESTADO = {
+    estado: clave
+    for clave, _etiqueta, _efecto, estados in _RESULTADOS_RANKING
+    for estado in estados
+}
+
+
+def _registros_salidas_ranking(desde, hasta, mostrar_valores_monetarios):
+    """
+    Una entrada por cada salida del rango con lo que el ranking cuenta.
+
+    Se lee cada salida una sola vez; el ranking por técnico, los meses y las
+    tarjetas de arriba se suman a partir de esta misma lista, así que sus
+    totales siempre coinciden.
 
     Acordado es lo que se le cobra al cliente por el servicio (incluye el
     valor adicional y el valor de revisión, sin domicilio ni bodegaje).
-    Recaudado es el acordado de los equipos que ya quedaron en saldo cero;
-    Por cobrar, el de los que todavía deben algo.
+    El equipo está en saldo cero cuando ya no debe nada.
     """
     salidas = SalidaEquipo.objects.select_related('ingreso', 'tecnico_reparo')
     if desde:
@@ -4162,68 +4304,216 @@ def _ranking_salidas_por_tecnico(desde, hasta, mostrar_valores_monetarios):
     if mostrar_valores_monetarios:
         salidas = salidas.prefetch_related('ingreso__abonos')
 
-    por_tecnico = {}
+    registros = []
     for salida in salidas.order_by('pk'):
-        tid = salida.tecnico_reparo_id
-        fila = por_tecnico.get(tid)
-        if fila is None:
-            fila = por_tecnico[tid] = {
-                'tecnico_id': tid,
-                'nombre': salida.tecnico_reparo_nombre or '— Sin asignar —',
-                'sin_asignar': tid is None,
-                'num_equipos': 0,
-                'entregados': 0,
-                'pendientes': 0,
-                'salidas_positivas': 0,
-                'no_quiso_reparar': 0,
-                'no_se_pudo_reparar': 0,
-            }
-            if mostrar_valores_monetarios:
-                fila.update({
-                    'total_acordado': D('0.00'),
-                    'total_recaudado': D('0.00'),
-                    'total_por_cobrar': D('0.00'),
-                })
-
-        fila['num_equipos'] += 1
-        # La ubicación física se determina por la fecha real de retiro.
-        # El resultado de reparación puede tener otros valores válidos
-        # (revisión, no reparable, cortesía, etc.) y no debe confundirse
-        # con que el equipo continúe o no dentro de la oficina.
-        if salida.fecha_retiro_real is not None:
-            fila['entregados'] += 1
-        else:
-            fila['pendientes'] += 1
-
-        estado = salida.estado_reparacion
-        if estado in SALIDA_BUENA_ESTADOS:
-            fila['salidas_positivas'] += 1
-        elif estado == 'cliente_no_acepta':
-            fila['no_quiso_reparar'] += 1
-        elif estado == 'no_reparable':
-            fila['no_se_pudo_reparar'] += 1
-
+        registro = {
+            'tecnico_id': salida.tecnico_reparo_id,
+            'nombre': salida.tecnico_reparo_nombre or '— Sin asignar —',
+            'fecha_salida': salida.fecha_salida,
+            # La ubicación física se determina por la fecha real de retiro.
+            # El resultado de reparación puede tener otros valores válidos
+            # (revisión, no reparable, cortesía, etc.) y no debe confundirse
+            # con que el equipo continúe o no dentro de la oficina.
+            'fuera_de_oficina': salida.fecha_retiro_real is not None,
+            'resultado': _RESULTADO_POR_ESTADO.get(salida.estado_reparacion),
+        }
         if mostrar_valores_monetarios:
             ingreso = salida.ingreso
-            acordado = ingreso.valor_servicio_a_cobrar
-            fila['total_acordado'] += acordado
-            if ingreso.diferencia <= 0:
-                fila['total_recaudado'] += acordado
-            else:
-                fila['total_por_cobrar'] += acordado
+            registro['acordado'] = ingreso.valor_servicio_a_cobrar
+            registro['saldo_cero'] = ingreso.diferencia <= 0
+        registros.append(registro)
+    return registros
 
-    for fila in por_tecnico.values():
-        base_efectividad = fila['salidas_positivas'] + fila['no_quiso_reparar']
-        fila['efectividad'] = round(
-            fila['salidas_positivas'] / base_efectividad * 100,
-            1,
-        ) if base_efectividad else None
+
+def _resumir_salidas(registros, mostrar_valores_monetarios):
+    """
+    Totales de un grupo de salidas: ubicación, cada resultado por separado,
+    lo que suma, resta o no afecta, la efectividad y el dinero.
+
+    Efectividad = suman / (suman + restan). Recaudado es el acordado de los
+    equipos en saldo cero; Por cobrar, el de los que todavía deben algo.
+    """
+    resumen = {
+        'num_equipos': len(registros),
+        'entregados': sum(1 for registro in registros if registro['fuera_de_oficina']),
+        'resultados': {clave: 0 for clave, *_ in _RESULTADOS_RANKING},
+    }
+    resumen['pendientes'] = resumen['num_equipos'] - resumen['entregados']
+    for registro in registros:
+        if registro['resultado']:
+            resumen['resultados'][registro['resultado']] += 1
+
+    totales = {efecto: 0 for efecto, _titulo in _GRUPOS_RANKING}
+    partes = {efecto: [] for efecto, _titulo in _GRUPOS_RANKING}
+    for clave, etiqueta, efecto, _estados in _RESULTADOS_RANKING:
+        cantidad = resumen['resultados'][clave]
+        totales[efecto] += cantidad
+        partes[efecto].append({'clave': clave, 'etiqueta': etiqueta, 'cantidad': cantidad})
+    resumen['salidas_positivas'] = totales['suma']
+    resumen['salidas_negativas'] = totales['resta']
+    resumen['salidas_neutras'] = totales['neutro']
+    resumen['grupos'] = [
+        {
+            'efecto': efecto,
+            'titulo': titulo,
+            'total': totales[efecto],
+            'porcentaje': round(
+                totales[efecto] / resumen['num_equipos'] * 100,
+                1,
+            ) if resumen['num_equipos'] else 0,
+            'partes': partes[efecto],
+        }
+        for efecto, titulo in _GRUPOS_RANKING
+    ]
+
+    base_efectividad = totales['suma'] + totales['resta']
+    resumen['efectividad'] = round(
+        totales['suma'] / base_efectividad * 100,
+        1,
+    ) if base_efectividad else None
+
+    if mostrar_valores_monetarios:
+        acordado = sum((registro['acordado'] for registro in registros), D('0.00'))
+        recaudado = sum(
+            (registro['acordado'] for registro in registros if registro['saldo_cero']),
+            D('0.00'),
+        )
+        resumen.update({
+            'total_acordado': acordado,
+            'total_recaudado': recaudado,
+            'total_por_cobrar': acordado - recaudado,
+            'porcentaje_recaudado': round(
+                float(recaudado / acordado * 100),
+                1,
+            ) if acordado else None,
+            # Lo que se cobra por equipos que no se repararon (no se pudo o
+            # el cliente no quiso): diagnóstico, revisión o valor adicional.
+            'acordado_no_reparados': sum(
+                (
+                    registro['acordado'] for registro in registros
+                    if registro['resultado'] in ('no_reparable', 'cliente_no_acepta')
+                ),
+                D('0.00'),
+            ),
+        })
+    return resumen
+
+
+def _ranking_salidas_por_tecnico(registros, mostrar_valores_monetarios):
+    """
+    Salidas agrupadas por el técnico que reparó, ordenadas de quien más
+    equipos reparó a quien menos (la efectividad desempata).
+    """
+    por_tecnico = {}
+    for registro in registros:
+        por_tecnico.setdefault(registro['tecnico_id'], []).append(registro)
+
+    filas = []
+    for tid, registros_tecnico in por_tecnico.items():
+        fila = _resumir_salidas(registros_tecnico, mostrar_valores_monetarios)
+        fila.update({
+            'tecnico_id': tid,
+            'nombre': registros_tecnico[0]['nombre'],
+            'sin_asignar': tid is None,
+        })
+        filas.append(fila)
 
     def orden(fila):
         efectividad = fila['efectividad'] if fila['efectividad'] is not None else -1
         return (-fila['salidas_positivas'], -efectividad, fila['nombre'].lower())
 
-    return sorted(por_tecnico.values(), key=orden)
+    return sorted(filas, key=orden)
+
+
+def _comprobaciones_totales(resumen, filas, meses_resumen, mostrar_valores_monetarios):
+    """
+    Cuentas que muestran en la Guía de los totales que todo cuadra: cada
+    tarjeta de arriba es la suma de los técnicos, sus partes suman el total de
+    equipos finalizados y, con varios meses, los meses suman el período.
+    """
+    from django.utils.formats import number_format
+
+    from .templatetags.econotec_extras import dinero_signo
+
+    comprobaciones = []
+
+    def comprobar(titulo, partes, total, formato=str):
+        cuenta = ' + '.join(f'{etiqueta}: {formato(valor)}' for etiqueta, valor in partes)
+        comprobaciones.append({
+            'titulo': titulo,
+            'cuenta': f'{cuenta or formato(0)} = {formato(total)}',
+            'cuadra': sum(valor for _etiqueta, valor in partes) == total,
+        })
+
+    def por_tecnico(clave):
+        return [(fila['nombre'], fila[clave]) for fila in filas]
+
+    def por_mes(clave):
+        return [(mes['etiqueta'], mes['resumen'][clave]) for mes in meses_resumen]
+
+    total = resumen['num_equipos']
+    comprobar('Equipos finalizados = suma de los técnicos', por_tecnico('num_equipos'), total)
+    comprobar(
+        'Equipos finalizados positivos = suma de los técnicos',
+        por_tecnico('salidas_positivas'),
+        resumen['salidas_positivas'],
+    )
+    comprobar(
+        'Suman + Restan + No afectan = equipos finalizados',
+        [
+            ('Suman', resumen['salidas_positivas']),
+            ('Restan', resumen['salidas_negativas']),
+            ('No afectan', resumen['salidas_neutras']),
+        ],
+        total,
+    )
+    comprobar(
+        'Fuera de oficina + En oficina = equipos finalizados',
+        [('Fuera de oficina', resumen['entregados']), ('En oficina', resumen['pendientes'])],
+        total,
+    )
+
+    suman, restan = resumen['salidas_positivas'], resumen['salidas_negativas']
+    efectividad = round(suman / (suman + restan) * 100, 1) if suman + restan else None
+    comprobaciones.append({
+        'titulo': 'Efectividad total = Suman ÷ (Suman + Restan)',
+        'cuenta': (
+            f'{suman} ÷ ({suman} + {restan}) = {number_format(efectividad, 1)} %'
+            if efectividad is not None else 'Sin equipos que sumen o resten'
+        ),
+        'cuadra': efectividad == resumen['efectividad'],
+    })
+
+    if mostrar_valores_monetarios:
+        for titulo, clave in (
+            ('Total acordado', 'total_acordado'),
+            ('Total recaudado', 'total_recaudado'),
+            ('Por cobrar', 'total_por_cobrar'),
+            ('Diagnóstico (No reparados)', 'acordado_no_reparados'),
+        ):
+            comprobar(f'{titulo} = suma de los técnicos', por_tecnico(clave), resumen[clave], dinero_signo)
+        comprobar(
+            'Total recaudado + Por cobrar = Total acordado',
+            [('Recaudado', resumen['total_recaudado']), ('Por cobrar', resumen['total_por_cobrar'])],
+            resumen['total_acordado'],
+            dinero_signo,
+        )
+
+    if meses_resumen:
+        comprobar('Equipos finalizados = suma de los meses', por_mes('num_equipos'), total)
+        comprobar(
+            'Equipos finalizados positivos = suma de los meses',
+            por_mes('salidas_positivas'),
+            resumen['salidas_positivas'],
+        )
+        if mostrar_valores_monetarios:
+            for titulo, clave in (
+                ('Total acordado', 'total_acordado'),
+                ('Total recaudado', 'total_recaudado'),
+                ('Por cobrar', 'total_por_cobrar'),
+            ):
+                comprobar(f'{titulo} = suma de los meses', por_mes(clave), resumen[clave], dinero_signo)
+    return comprobaciones
 
 
 @_ranking_requerido
@@ -4232,21 +4522,18 @@ def salida_totales(request):
     Ranking de técnicos por salidas: cuenta al técnico que reparó el equipo,
     registrado en `SalidaEquipo.tecnico_reparo`.
 
-    Filtros opcionales por rango de fechas. Sin filtro se abre el mes en
-    curso, que es el período del abono mensual; "Limpiar" envía los campos
-    vacíos para ver todo el historial.
+    El período se elige por mes, varios meses, año o rango de fechas (ver
+    `_periodo_ranking`). Sin filtro se abre el mes en curso, que es el
+    período del abono mensual; "Limpiar" envía los campos vacíos para ver
+    todo el historial. Toda la página usa el mismo período.
     """
     from decimal import Decimal as D
+    from django.db.models import Min
+    from django.utils.dates import MONTHS
 
-    if 'desde' in request.GET or 'hasta' in request.GET:
-        desde = (request.GET.get('desde') or '').strip()
-        hasta = (request.GET.get('hasta') or '').strip()
-    else:
-        inicio_mes, fin_mes = _month_bounds(timezone.localdate())
-        desde, hasta = inicio_mes.isoformat(), fin_mes.isoformat()
+    periodo_filtro = _periodo_ranking(request.GET)
+    desde, hasta = periodo_filtro['desde'], periodo_filtro['hasta']
     mostrar_valores_monetarios = _puede_ver_valores_ranking(request.user)
-
-    estados_positivos = SALIDA_BUENA_ESTADOS
 
     # Base de ingresos de equipos. Las ventas de productos no pertenecen al
     # ranking de técnicos responsables de un ingreso de reparación.
@@ -4313,14 +4600,50 @@ def salida_totales(request):
 
     # Base del ranking: salidas en el rango. La productividad se atribuye al
     # técnico que reparó en la salida, no al técnico encargado del ingreso.
-    ranking_list = _ranking_salidas_por_tecnico(desde, hasta, mostrar_valores_monetarios)
+    # Las tarjetas de arriba y los meses se suman de los mismos registros.
+    registros = _registros_salidas_ranking(desde, hasta, mostrar_valores_monetarios)
+    ranking_list = _ranking_salidas_por_tecnico(registros, mostrar_valores_monetarios)
+    resumen_salidas = _resumir_salidas(registros, mostrar_valores_monetarios)
 
-    # Comparación con el período anterior para ver quién está mejorando.
-    periodo_anterior = _periodo_anterior_ranking(desde, hasta)
+    # Varios meses: además del total, cada mes por separado (para el equipo
+    # completo y para cada técnico).
+    meses_resumen = []
+    for inicio_mes, fin_mes in periodo_filtro['meses']:
+        registros_mes = [
+            registro for registro in registros
+            if inicio_mes <= registro['fecha_salida'] <= fin_mes
+        ]
+        meses_resumen.append({
+            'etiqueta': date_format(inicio_mes, 'F Y'),
+            'resumen': _resumir_salidas(registros_mes, mostrar_valores_monetarios),
+            'por_tecnico': {
+                fila['tecnico_id']: fila
+                for fila in _ranking_salidas_por_tecnico(registros_mes, False)
+            },
+        })
+    for fila in ranking_list:
+        fila['por_mes'] = [
+            {
+                'etiqueta': mes['etiqueta'],
+                'resumen': mes['por_tecnico'].get(fila['tecnico_id'])
+                or _resumir_salidas([], False),
+            }
+            for mes in meses_resumen
+        ]
+
+    # Solo el rango de fechas se compara con el período anterior: el mes,
+    # los varios meses y el año muestran únicamente su propio período.
+    periodo_anterior = (
+        _periodo_anterior_ranking(desde, hasta)
+        if periodo_filtro['modo'] == 'rango' else None
+    )
     if periodo_anterior:
         anteriores = {
             fila['tecnico_id']: fila
-            for fila in _ranking_salidas_por_tecnico(*periodo_anterior, False)
+            for fila in _ranking_salidas_por_tecnico(
+                _registros_salidas_ranking(*periodo_anterior, False),
+                False,
+            )
         }
         for fila in ranking_list:
             anterior = anteriores.get(fila['tecnico_id'])
@@ -4337,16 +4660,6 @@ def salida_totales(request):
     # Totales globales
     total_equipos = qs_ing.count()
 
-    # Salidas globales
-    sal_global = SalidaEquipo.objects.all()
-    if desde:
-        sal_global = sal_global.filter(fecha_salida__gte=desde)
-    if hasta:
-        sal_global = sal_global.filter(fecha_salida__lte=hasta)
-    total_salidas_global = sal_global.count()
-    total_positivas_global = sal_global.filter(
-        estado_reparacion__in=estados_positivos
-    ).count()
     # Top tipos de equipo trabajados
     por_tipo = qs_ing.values('tipo_equipo').annotate(num=Count('id'))
     if mostrar_valores_monetarios:
@@ -4364,33 +4677,51 @@ def salida_totales(request):
             item_tipo['suma'] = tipo['suma'] or D('0.00')
         por_tipo_list.append(item_tipo)
 
+    comprobaciones = _comprobaciones_totales(
+        resumen_salidas,
+        ranking_list,
+        meses_resumen,
+        mostrar_valores_monetarios,
+    )
+
+    # Años para el filtro: desde el primer registro hasta el año actual.
+    primeras_fechas = [
+        SalidaEquipo.objects.aggregate(primera=Min('fecha_salida'))['primera'],
+        IngresoEquipo.objects.aggregate(primera=Min('fecha_ingreso'))['primera'],
+    ]
+    anio_actual = timezone.localdate().year
+    anios_elegidos = (periodo_filtro['mes_anio'], periodo_filtro['inicio_anio'], periodo_filtro['anio'])
+    primer_anio = min([fecha.year for fecha in primeras_fechas if fecha] + [anio_actual, *anios_elegidos])
+    ultimo_anio = max(anio_actual, *anios_elegidos)
+
     contexto = {
         'ranking_ingresos': ranking_ingresos,
         'ranking': ranking_list,
         'por_tipo': por_tipo_list,
         'total_equipos': total_equipos,
-        'total_salidas_global': total_salidas_global,
-        'total_positivas_global': total_positivas_global,
+        # Iguales a la suma de todos los técnicos del ranking.
+        'total_salidas_global': resumen_salidas['num_equipos'],
+        'total_positivas_global': resumen_salidas['salidas_positivas'],
+        'efectividad_global': resumen_salidas['efectividad'],
+        'meses_resumen': meses_resumen,
+        'resumen_salidas': resumen_salidas,
+        'comprobaciones': comprobaciones,
+        'todo_cuadra': all(comprobacion['cuadra'] for comprobacion in comprobaciones),
         'mostrar_valores_monetarios': mostrar_valores_monetarios,
         'filtros': {'desde': desde, 'hasta': hasta},
-        'comparacion': {
-            'desde': periodo_anterior[0],
-            'hasta': periodo_anterior[1],
-        } if periodo_anterior else None,
+        'periodo_filtro': periodo_filtro,
+        'modos_periodo': _MODOS_PERIODO_RANKING,
+        'cantidades_meses': _CANTIDADES_MESES_RANKING,
+        'meses_del_anio': sorted(MONTHS.items()),
+        'anios_filtro': list(range(ultimo_anio, primer_anio - 1, -1)),
+        'comparacion': _etiquetas_periodo_anterior(*periodo_anterior) if periodo_anterior else None,
     }
     if mostrar_valores_monetarios:
-        total_acordado_global = qs_ing.aggregate(s=Sum('valor_acordado'))['s'] or D('0.00')
-        total_anticipos_global = qs_ing.aggregate(s=Sum('abono_anticipo'))['s'] or D('0.00')
-        cobrado_final_global = sal_global.aggregate(s=Sum('valor_final_cobrado'))['s'] or D('0.00')
-        total_diag_no_reparado = sal_global.filter(
-            estado_reparacion__in=['no_reparable', 'cliente_no_acepta']
-        ).aggregate(s=Sum('valor_final_cobrado'))['s'] or D('0.00')
         contexto.update({
-            'total_acordado_global': total_acordado_global,
-            'total_anticipos_global': total_anticipos_global,
-            'cobrado_final_global': cobrado_final_global,
-            'total_recaudado_global': total_anticipos_global + cobrado_final_global,
-            'total_diag_no_reparado': total_diag_no_reparado,
+            'total_acordado_global': resumen_salidas['total_acordado'],
+            'total_recaudado_global': resumen_salidas['total_recaudado'],
+            'total_por_cobrar_global': resumen_salidas['total_por_cobrar'],
+            'total_diag_no_reparado': resumen_salidas['acordado_no_reparados'],
         })
 
     return render(request, 'salidas/totales.html', contexto)

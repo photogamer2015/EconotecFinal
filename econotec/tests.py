@@ -11,6 +11,7 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.core import mail
 from django.db import connection
+from django.http import QueryDict
 from django.test import TestCase, override_settings
 from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
@@ -32,7 +33,12 @@ from .models import (
     VentaInventarioItem,
 )
 from .qr_utils import token_para_ingreso
-from .views import _periodo_anterior_ranking
+from .views import (
+    _comprobaciones_totales,
+    _etiquetas_periodo_anterior,
+    _periodo_anterior_ranking,
+    _periodo_ranking,
+)
 from .views_auth import CAPTCHA_SESSION_KEY, LOGIN_2FA_SESSION_KEY, LOGIN_EMAIL_SETUP_SESSION_KEY
 
 
@@ -3499,8 +3505,8 @@ class VentasTests(TestCase):
         self.assertEqual(ranking['nombre'], 'Salida Ranking')
         self.assertEqual(ranking['num_equipos'], 1)
         self.assertEqual(ranking['salidas_positivas'], 1)
-        self.assertEqual(ranking['no_quiso_reparar'], 0)
-        self.assertEqual(ranking['no_se_pudo_reparar'], 0)
+        self.assertEqual(ranking['salidas_negativas'], 0)
+        self.assertEqual(ranking['resultados']['reparado'], 1)
         # Anticipo $10 + pago final $90 dejan el saldo en cero: se recauda
         # todo el valor acordado.
         self.assertEqual(ranking['total_recaudado'], Decimal('100.00'))
@@ -3699,7 +3705,7 @@ class VentasTests(TestCase):
     def ranking_por_tecnico(self, response):
         return {fila['tecnico_id']: fila for fila in response.context['ranking']}
 
-    def test_ranking_salidas_separa_no_quiso_y_no_se_pudo_en_la_efectividad(self):
+    def test_ranking_desglosa_cada_resultado_y_la_garantia_resta(self):
         tecnico = self.crear_tecnico_ranking('EfectividadRanking')
         fecha = date(2026, 8, 10)
         for estado in ('pendiente_retiro', 'garantia', 'garantia_fallos_adicionales'):
@@ -3730,16 +3736,38 @@ class VentasTests(TestCase):
         self.assertEqual(fila['num_equipos'], 10)
         self.assertEqual(fila['entregados'], 2)
         self.assertEqual(fila['pendientes'], 8)
-        self.assertEqual(fila['salidas_positivas'], 4)
-        self.assertEqual(fila['no_quiso_reparar'], 1)
-        self.assertEqual(fila['no_se_pudo_reparar'], 2)
-        # 4 positivas ÷ (4 positivas + 1 no quiso reparar).
-        self.assertEqual(fila['efectividad'], 80.0)
-        self.assertNotIn('salidas_negativas', fila)
-        self.assertContains(response, '>No quiso reparar<')
-        self.assertContains(response, '>No se pudo reparar<')
+        self.assertEqual(fila['resultados'], {
+            'reparado': 2,
+            'garantia': 1,
+            'garantia_fallos_adicionales': 1,
+            'cliente_no_acepta': 1,
+            'no_reparable': 2,
+            'revision': 1,
+            'cortesia': 1,
+            'chatarrerizacion': 1,
+        })
+        self.assertEqual(fila['salidas_positivas'], 2)
+        # Las dos garantías y el cliente que no quiso reparar restan.
+        self.assertEqual(fila['salidas_negativas'], 3)
+        self.assertEqual(fila['salidas_neutras'], 5)
+        self.assertEqual(
+            [(grupo['titulo'], grupo['total']) for grupo in fila['grupos']],
+            [('Suman', 2), ('Restan', 3), ('No afectan', 5)],
+        )
+        # 2 reparados ÷ (2 reparados + 3 que restan).
+        self.assertEqual(fila['efectividad'], 40.0)
+        for etiqueta in (
+            'Finalizado y reparado',
+            'Garantía finalizada',
+            'Garantía + fallos adicionales',
+            'Cliente no quiso reparar',
+            'No se pudo reparar',
+            'Chatarrerización',
+        ):
+            self.assertContains(response, f'<span>{etiqueta}</span><strong>')
+        self.assertNotContains(response, 'Salidas +')
         self.assertNotContains(response, 'Salidas −')
-        self.assertContains(response, 'width: 80.0%;')
+        self.assertContains(response, 'width: 40.0%;')
 
     def test_ranking_salidas_ordena_por_positivas_y_desempata_por_efectividad(self):
         fecha = date(2026, 8, 10)
@@ -3772,9 +3800,9 @@ class VentasTests(TestCase):
         self.assertEqual(filas[sin_no_quiso.pk]['efectividad'], 100.0)
         self.assertEqual(filas[con_no_quiso.pk]['efectividad'], 66.7)
         self.assertEqual(filas[muchas_negativas.pk]['efectividad'], 20.0)
-        # Sin positivas ni "no quiso reparar" no hay nada que medir.
+        # Sin equipos que sumen o resten no hay nada que medir.
         self.assertIsNone(filas[solo_no_se_pudo.pk]['efectividad'])
-        self.assertContains(response, 'Sin salidas positivas ni de cliente que no quiso reparar')
+        self.assertContains(response, 'Sin equipos que sumen o resten')
 
     def test_ranking_salidas_recaudado_solo_cuenta_equipos_en_saldo_cero(self):
         tecnico = self.crear_tecnico_ranking('RecaudoRanking')
@@ -3855,6 +3883,9 @@ class VentasTests(TestCase):
         fila = self.ranking_por_tecnico(response)[self.usuario.pk]
         self.assertNotIn('total_por_cobrar', fila)
         self.assertNotContains(response, '>Por cobrar<')
+        self.assertEqual(len(response.context['comprobaciones']), 5)
+        self.assertFalse(any('$' in comprobacion['cuenta'] for comprobacion in response.context['comprobaciones']))
+        self.assertNotContains(response, 'Tarjetas de dinero')
         self.assertNotContains(response, 'saldo cero')
         self.assertNotContains(response, '$432,10')
 
@@ -3893,7 +3924,7 @@ class VentasTests(TestCase):
         septiembre = date(2026, 9, 15)
         octubre = date(2026, 10, 15)
         self.crear_salida_ranking(mejora, septiembre, 'pendiente_retiro')
-        self.crear_salida_ranking(mejora, septiembre, 'cliente_no_acepta')
+        self.crear_salida_ranking(mejora, septiembre, 'garantia')
         for _ in range(3):
             self.crear_salida_ranking(mejora, octubre, 'pendiente_retiro')
         self.crear_salida_ranking(mejora, octubre, 'cliente_no_acepta')
@@ -3908,6 +3939,8 @@ class VentasTests(TestCase):
         self.assertEqual(response.context['comparacion'], {
             'desde': date(2026, 9, 1),
             'hasta': date(2026, 9, 30),
+            'etiqueta': 'septiembre 2026',
+            'etiqueta_corta': 'septiembre',
         })
         filas = self.ranking_por_tecnico(response)
         self.assertEqual(filas[mejora.pk]['positivas_anterior'], 1)
@@ -3918,9 +3951,13 @@ class VentasTests(TestCase):
         self.assertEqual(filas[nuevo.pk]['delta_positivas'], 1)
         self.assertIsNone(filas[nuevo.pk]['efectividad_anterior'])
         self.assertIsNone(filas[nuevo.pk]['delta_efectividad'])
-        self.assertContains(response, '01/09/2026 – 30/09/2026')
-        self.assertContains(response, 'title="Período anterior: 1">▲ +2</span>')
-        self.assertContains(response, '▲ +25,0 pts')
+        self.assertContains(response, 'Comparado con <strong>septiembre 2026</strong>')
+        self.assertContains(
+            response,
+            'title="En septiembre 2026: 1">▲ +2 vs. septiembre</span>',
+        )
+        self.assertContains(response, '▲ +25,0 pts vs. septiembre')
+        self.assertContains(response, 'Sin datos en septiembre')
 
     def test_periodo_anterior_del_ranking(self):
         self.assertEqual(
@@ -3941,6 +3978,324 @@ class VentasTests(TestCase):
         self.assertIsNone(_periodo_anterior_ranking('2026-10-01', ''))
         self.assertIsNone(_periodo_anterior_ranking('2026-10-31', '2026-10-01'))
         self.assertIsNone(_periodo_anterior_ranking('no-es-fecha', '2026-10-01'))
+
+    def test_etiquetas_del_periodo_anterior(self):
+        self.assertEqual(
+            _etiquetas_periodo_anterior(date(2026, 9, 1), date(2026, 9, 30)),
+            {
+                'desde': date(2026, 9, 1),
+                'hasta': date(2026, 9, 30),
+                'etiqueta': 'septiembre 2026',
+                'etiqueta_corta': 'septiembre',
+            },
+        )
+        etiquetas = _etiquetas_periodo_anterior(date(2026, 9, 30), date(2026, 10, 9))
+        self.assertEqual(etiquetas['etiqueta'], '30/09/2026 – 09/10/2026')
+        self.assertEqual(etiquetas['etiqueta_corta'], 'período anterior')
+
+    def test_ranking_explica_su_funcionamiento_en_una_guia(self):
+        self.crear_salida_ranking(self.usuario, date(2026, 8, 10), 'pendiente_retiro')
+        self.client.force_login(self.admin)
+
+        response = self.client.get(reverse('econotec:salida_totales'), {
+            'desde': '2026-08-01',
+            'hasta': '2026-08-31',
+        })
+
+        self.assertContains(response, 'id="btn-guia-ranking"')
+        self.assertContains(response, '📖 Guía del ranking')
+        # La explicación no se muestra en la página: vive en la guía oculta.
+        self.assertContains(response, '<div id="guia-ranking" class="guia-contenido" hidden>')
+        self.assertContains(response, 'Cuenta exclusivamente', count=1)
+        for texto in (
+            'Quién cuenta en el ranking',
+            'Cuenta exclusivamente al <b>técnico que reparó registrado en la salida</b>',
+            'Las garantías se cuentan al técnico registrado en la salida de la garantía.',
+            '<b>Restan:</b> Garantía finalizada, Garantía + fallos adicionales y Cliente no quiso reparar.',
+            '<b>No afectan:</b> No se pudo reparar, Revisión, Cortesía y Chatarrerización.',
+            '<b>Suman ÷ (Suman + Restan)</b>',
+            'Acordado, recaudado y por cobrar',
+            '<b>Ver detalle</b> muestra los equipos que ya están fuera de la oficina',
+            'Cómo elegir el período',
+            '<b>Mes:</b> solo ese mes. No se compara con ningún otro.',
+            '<b>Varios meses:</b> de 2 a 4 meses seguidos.',
+            'id="btn-guia-totales"',
+            '<div id="guia-totales" class="guia-contenido" hidden>',
+            'Qué son estos totales',
+            'Son <b>generales</b>: suman a <b>todos los técnicos</b> del ranking en el período elegido.',
+            'Si en el período solo trabajó un técnico, los totales son iguales a los de ese técnico.',
+            '<b>Total acordado = Total recaudado + Por cobrar</b>',
+            'Comprobación: 01/08/2026 – 31/08/2026',
+        ):
+            self.assertContains(response, texto)
+
+    def test_periodo_del_ranking_por_mes_varios_meses_anio_y_rango(self):
+        hoy = date(2026, 10, 25)
+
+        def periodo(consulta):
+            return _periodo_ranking(QueryDict(consulta), hoy=hoy)
+
+        # Sin filtro: el mes en curso.
+        por_defecto = periodo('')
+        self.assertEqual(por_defecto['modo'], 'mes')
+        self.assertEqual((por_defecto['desde'], por_defecto['hasta']), ('2026-10-01', '2026-10-31'))
+        self.assertEqual(por_defecto['etiqueta'], 'octubre 2026')
+
+        febrero = periodo('periodo=mes&mes=2&mes_anio=2026')
+        self.assertEqual((febrero['desde'], febrero['hasta']), ('2026-02-01', '2026-02-28'))
+        self.assertEqual(febrero['meses'], [])
+
+        varios = periodo('periodo=meses&inicio_mes=11&inicio_anio=2025&cantidad_meses=3')
+        self.assertEqual(varios['meses'], [
+            (date(2025, 11, 1), date(2025, 11, 30)),
+            (date(2025, 12, 1), date(2025, 12, 31)),
+            (date(2026, 1, 1), date(2026, 1, 31)),
+        ])
+        self.assertEqual((varios['desde'], varios['hasta']), ('2025-11-01', '2026-01-31'))
+        self.assertEqual(varios['etiqueta'], 'noviembre 2025 – enero 2026')
+        # Por defecto, los últimos tres meses contando el actual.
+        self.assertEqual(
+            (periodo('periodo=meses')['desde'], periodo('periodo=meses')['hasta']),
+            ('2026-08-01', '2026-10-31'),
+        )
+        # Solo se permiten de 2 a 4 meses.
+        self.assertEqual(len(periodo('periodo=meses&cantidad_meses=9')['meses']), 4)
+        self.assertEqual(len(periodo('periodo=meses&cantidad_meses=1')['meses']), 2)
+        self.assertEqual(len(periodo('periodo=meses&cantidad_meses=x')['meses']), 3)
+
+        anio = periodo('periodo=anio&anio=2025')
+        self.assertEqual((anio['desde'], anio['hasta']), ('2025-01-01', '2025-12-31'))
+        self.assertEqual(anio['etiqueta'], 'año 2025')
+
+        # Los enlaces con desde/hasta (sin `periodo`) son un rango de fechas.
+        rango = periodo('desde=2026-07-01&hasta=2026-07-31')
+        self.assertEqual(rango['modo'], 'rango')
+        self.assertEqual((rango['desde'], rango['hasta']), ('2026-07-01', '2026-07-31'))
+        self.assertEqual(rango['etiqueta'], '01/07/2026 – 31/07/2026')
+        todo = periodo('desde=&hasta=')
+        self.assertEqual((todo['modo'], todo['desde'], todo['hasta']), ('rango', '', ''))
+        self.assertEqual(todo['etiqueta'], 'todo el historial')
+        self.assertEqual(periodo('periodo=rango&desde=no-es-fecha')['desde'], '')
+
+    def test_ranking_por_mes_muestra_solo_ese_mes_sin_comparar(self):
+        tecnico = self.crear_tecnico_ranking('SoloOctubre')
+        self.crear_salida_ranking(tecnico, date(2026, 9, 15), 'pendiente_retiro')
+        self.crear_salida_ranking(tecnico, date(2026, 10, 3), 'pendiente_retiro')
+        self.crear_salida_ranking(tecnico, date(2026, 10, 20), 'cliente_no_acepta')
+        self.client.force_login(self.admin)
+
+        response = self.client.get(reverse('econotec:salida_totales'), {
+            'periodo': 'mes',
+            'mes': '10',
+            'mes_anio': '2026',
+        })
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context['filtros'], {'desde': '2026-10-01', 'hasta': '2026-10-31'})
+        fila = self.ranking_por_tecnico(response)[tecnico.pk]
+        self.assertEqual(fila['num_equipos'], 2)
+        self.assertEqual(fila['salidas_positivas'], 1)
+        self.assertEqual(fila['efectividad'], 50.0)
+        self.assertIsNone(response.context['comparacion'])
+        self.assertEqual(response.context['meses_resumen'], [])
+        self.assertNotIn('delta_positivas', fila)
+        self.assertNotContains(response, 'Comparado con')
+        self.assertNotContains(response, 'vs. septiembre')
+        self.assertNotContains(response, 'id="titulo-mes-a-mes"')
+        self.assertContains(response, 'Período: <strong>Octubre 2026</strong>')
+        self.assertContains(response, '<input type="radio" name="periodo" value="mes" checked>')
+        self.assertContains(response, '<option value="10" selected>Octubre</option>')
+
+    def test_ranking_varios_meses_muestra_cada_mes_y_el_total(self):
+        constante = self.crear_tecnico_ranking('Constante')
+        solo_agosto = self.crear_tecnico_ranking('SoloAgosto')
+        agosto, septiembre, octubre = date(2026, 8, 10), date(2026, 9, 10), date(2026, 10, 10)
+        self.crear_salida_ranking(constante, agosto, 'pendiente_retiro', valor_acordado=Decimal('30.00'))
+        self.crear_salida_ranking(constante, agosto, 'garantia', valor_acordado=Decimal('0.00'))
+        self.crear_salida_ranking(constante, septiembre, 'pendiente_retiro', valor_acordado=Decimal('40.00'))
+        pagado = self.crear_salida_ranking(
+            constante, octubre, 'pendiente_retiro',
+            valor_acordado=Decimal('50.00'),
+        )
+        Abono.objects.create(
+            ingreso=pagado.ingreso,
+            fecha=octubre,
+            monto=Decimal('50.00'),
+            registrado_por=self.usuario,
+        )
+        self.crear_salida_ranking(solo_agosto, agosto, 'no_reparable')
+        # Fuera del período: no cuenta en ningún mes ni en el total.
+        self.crear_salida_ranking(constante, date(2026, 11, 2), 'pendiente_retiro')
+        self.client.force_login(self.admin)
+
+        response = self.client.get(reverse('econotec:salida_totales'), {
+            'periodo': 'meses',
+            'inicio_mes': '8',
+            'inicio_anio': '2026',
+            'cantidad_meses': '3',
+        })
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context['filtros'], {'desde': '2026-08-01', 'hasta': '2026-10-31'})
+        self.assertIsNone(response.context['comparacion'])
+        meses = response.context['meses_resumen']
+        self.assertEqual(
+            [mes['etiqueta'] for mes in meses],
+            ['agosto 2026', 'septiembre 2026', 'octubre 2026'],
+        )
+        self.assertEqual(
+            [(mes['resumen']['num_equipos'], mes['resumen']['salidas_positivas'],
+              mes['resumen']['salidas_negativas'], mes['resumen']['efectividad'])
+             for mes in meses],
+            [(3, 1, 1, 50.0), (1, 1, 0, 100.0), (1, 1, 0, 100.0)],
+        )
+        total = response.context['resumen_salidas']
+        for clave in (
+            'num_equipos', 'salidas_positivas', 'salidas_negativas', 'salidas_neutras',
+            'total_acordado', 'total_recaudado', 'total_por_cobrar',
+        ):
+            self.assertEqual(total[clave], sum(mes['resumen'][clave] for mes in meses), clave)
+        self.assertEqual(total['num_equipos'], 5)
+        self.assertEqual(total['efectividad'], 75.0)
+        self.assertEqual(total['total_acordado'], Decimal('120.00'))
+        self.assertEqual(total['total_recaudado'], Decimal('50.00'))
+
+        filas = self.ranking_por_tecnico(response)
+        self.assertEqual(
+            [mes['resumen']['salidas_positivas'] for mes in filas[constante.pk]['por_mes']],
+            [1, 1, 1],
+        )
+        self.assertEqual(
+            [mes['resumen']['efectividad'] for mes in filas[constante.pk]['por_mes']],
+            [50.0, 100.0, 100.0],
+        )
+        # Un mes sin salidas del técnico queda en cero y sin efectividad.
+        septiembre_solo_agosto = filas[solo_agosto.pk]['por_mes'][1]['resumen']
+        self.assertEqual(septiembre_solo_agosto['num_equipos'], 0)
+        self.assertIsNone(septiembre_solo_agosto['efectividad'])
+        self.assertContains(response, 'id="titulo-mes-a-mes">Mes a mes · todos los técnicos</h3>')
+        self.assertContains(response, 'Mes a mes de Constante</h5>')
+        self.assertContains(response, 'Mes a mes de SoloAgosto</h5>')
+        # 5 de equipos + 5 de dinero + 2 de equipos por mes + 3 de dinero por mes.
+        self.assertEqual(len(response.context['comprobaciones']), 15)
+        self.assertTrue(response.context['todo_cuadra'])
+        self.assertContains(response, '✓ Las 15 cuentas cuadran.')
+        self.assertContains(
+            response,
+            'agosto 2026: 3 + septiembre 2026: 1 + octubre 2026: 1 = 5',
+        )
+        self.assertContains(
+            response,
+            'agosto 2026: $30,00 + septiembre 2026: $40,00 + octubre 2026: $50,00 = $120,00',
+        )
+        self.assertContains(response, '<h4 class="mes-titulo">Agosto 2026</h4>')
+        self.assertContains(response, '<h4 class="mes-titulo">Total del período</h4>')
+        self.assertContains(response, 'Período: <strong>Agosto 2026 – octubre 2026</strong>')
+
+    def test_ranking_por_anio_suma_todo_el_anio(self):
+        tecnico = self.crear_tecnico_ranking('TodoElAnio')
+        self.crear_salida_ranking(tecnico, date(2025, 12, 31), 'pendiente_retiro')
+        self.crear_salida_ranking(tecnico, date(2026, 1, 1), 'pendiente_retiro')
+        self.crear_salida_ranking(tecnico, date(2026, 6, 15), 'garantia')
+        self.crear_salida_ranking(tecnico, date(2026, 12, 31), 'pendiente_retiro')
+        self.client.force_login(self.admin)
+
+        response = self.client.get(reverse('econotec:salida_totales'), {
+            'periodo': 'anio',
+            'anio': '2026',
+        })
+
+        self.assertEqual(response.context['filtros'], {'desde': '2026-01-01', 'hasta': '2026-12-31'})
+        fila = self.ranking_por_tecnico(response)[tecnico.pk]
+        self.assertEqual(fila['num_equipos'], 3)
+        self.assertEqual(fila['salidas_positivas'], 2)
+        self.assertEqual(fila['salidas_negativas'], 1)
+        self.assertIsNone(response.context['comparacion'])
+        self.assertEqual(response.context['meses_resumen'], [])
+        self.assertContains(response, 'Período: <strong>Año 2026</strong>')
+        self.assertContains(response, '<option value="2025">2025</option>')
+
+    def test_tarjetas_de_arriba_coinciden_con_el_ranking(self):
+        uno = self.crear_tecnico_ranking('TarjetasUno')
+        dos = self.crear_tecnico_ranking('TarjetasDos')
+        fecha = date(2026, 8, 10)
+        pagado = self.crear_salida_ranking(uno, fecha, 'pendiente_retiro', valor_acordado=Decimal('60.00'))
+        Abono.objects.create(
+            ingreso=pagado.ingreso,
+            fecha=fecha,
+            monto=Decimal('60.00'),
+            registrado_por=self.usuario,
+        )
+        self.crear_salida_ranking(uno, fecha, 'pendiente_retiro', valor_acordado=Decimal('25.00'))
+        self.crear_salida_ranking(uno, fecha, 'garantia', valor_acordado=Decimal('0.00'))
+        self.crear_salida_ranking(dos, fecha, 'cliente_no_acepta', valor_acordado=Decimal('80.00'))
+        self.crear_salida_ranking(
+            dos, fecha, 'no_reparable',
+            salida_extra={
+                'aplica_valor_acordado_adicional': 'si',
+                'valor_acordado_adicional': Decimal('15.00'),
+            },
+        )
+        self.crear_salida_ranking(dos, fecha, 'retirado', valor_acordado=Decimal('40.00'))
+        self.client.force_login(self.admin)
+
+        response = self.client.get(reverse('econotec:salida_totales'), {
+            'desde': '2026-08-01',
+            'hasta': '2026-08-31',
+        })
+
+        contexto = response.context
+        ranking = contexto['ranking']
+        self.assertEqual(contexto['total_salidas_global'], sum(f['num_equipos'] for f in ranking))
+        # La garantía resta también en la tarjeta: 3 reparados de 6.
+        self.assertEqual(contexto['total_positivas_global'], 3)
+        self.assertEqual(contexto['total_positivas_global'], sum(f['salidas_positivas'] for f in ranking))
+        # 3 reparados ÷ (3 reparados + 1 garantía + 1 no quiso reparar).
+        self.assertEqual(contexto['efectividad_global'], 60.0)
+        self.assertEqual(contexto['total_acordado_global'], sum(f['total_acordado'] for f in ranking))
+        self.assertEqual(contexto['total_recaudado_global'], sum(f['total_recaudado'] for f in ranking))
+        self.assertEqual(contexto['total_por_cobrar_global'], sum(f['total_por_cobrar'] for f in ranking))
+        self.assertEqual(contexto['total_acordado_global'], Decimal('140.00'))
+        self.assertEqual(contexto['total_recaudado_global'], Decimal('60.00'))
+        self.assertEqual(contexto['total_por_cobrar_global'], Decimal('80.00'))
+        self.assertEqual(
+            contexto['total_acordado_global'],
+            contexto['total_recaudado_global'] + contexto['total_por_cobrar_global'],
+        )
+        # El adicional del equipo que no se pudo reparar.
+        self.assertEqual(contexto['total_diag_no_reparado'], Decimal('15.00'))
+        self.assertContains(response, 'Efectividad total')
+        self.assertContains(response, '$140,00')
+        self.assertContains(response, 'Totales de todos los técnicos')
+        self.assertTrue(contexto['todo_cuadra'])
+        self.assertTrue(all(comprobacion['cuadra'] for comprobacion in contexto['comprobaciones']))
+        self.assertContains(response, '✓ Todo cuadra')
+        self.assertContains(response, 'TarjetasUno: $85,00 + TarjetasDos: $55,00 = $140,00')
+        self.assertContains(response, 'Recaudado: $60,00 + Por cobrar: $80,00 = $140,00')
+        self.assertContains(response, '3 ÷ (3 + 2) = 60,0 %')
+
+    def test_comprobacion_de_totales_avisa_si_algo_no_cuadra(self):
+        filas = [
+            {'nombre': 'Uno', 'num_equipos': 2, 'salidas_positivas': 1},
+            {'nombre': 'Dos', 'num_equipos': 1, 'salidas_positivas': 1},
+        ]
+        resumen = {
+            'num_equipos': 4,  # No coincide con 2 + 1.
+            'salidas_positivas': 2,
+            'salidas_negativas': 1,
+            'salidas_neutras': 1,
+            'entregados': 1,
+            'pendientes': 3,
+            'efectividad': 66.7,
+        }
+
+        comprobaciones = _comprobaciones_totales(resumen, filas, [], False)
+
+        primera = comprobaciones[0]
+        self.assertEqual(primera['titulo'], 'Equipos finalizados = suma de los técnicos')
+        self.assertEqual(primera['cuenta'], 'Uno: 2 + Dos: 1 = 4')
+        self.assertFalse(primera['cuadra'])
+        self.assertTrue(comprobaciones[1]['cuadra'])
 
     def test_top_clientes_cuenta_equipos_reales_por_sede_sin_multiplicar(self):
         biomedics = Cliente.objects.create(

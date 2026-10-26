@@ -1,0 +1,27 @@
+{% load econotec_extras %}
+{# Resumen de un mes (o del total) en el Ranking de Técnicos. Recibe: titulo, resumen, mostrar_dinero y total. #}
+<article class="mes-tile{% if total %} total{% endif %}">
+    <h4 class="mes-titulo">{{ titulo|capfirst }}</h4>
+    <div class="mes-efectividad">
+        <span class="kpi-label">Efectividad</span>
+        {% if resumen.efectividad is None %}
+            <span class="mes-valor vacio">—</span>
+        {% else %}
+            <span class="mes-valor">{{ resumen.efectividad|floatformat:1 }}%</span>
+            <div class="meter ancho{% if resumen.efectividad < 50 %} low{% elif resumen.efectividad < 75 %} mid{% endif %}" role="img" aria-label="Efectividad {{ resumen.efectividad|floatformat:1 }} %">
+                <span style="width: {{ resumen.efectividad|stringformat:'.1f' }}%;"></span>
+            </div>
+        {% endif %}
+    </div>
+    <dl class="mes-datos">
+        <div><dt>Finalizados</dt><dd>{{ resumen.num_equipos }}</dd></div>
+        <div><dt><span class="efecto-icono suma" aria-hidden="true">✓</span>Reparados</dt><dd>{{ resumen.salidas_positivas }}</dd></div>
+        <div><dt><span class="efecto-icono resta" aria-hidden="true">−</span>Restan</dt><dd>{{ resumen.salidas_negativas }}</dd></div>
+        <div><dt><span class="efecto-icono neutro" aria-hidden="true">○</span>No afectan</dt><dd>{{ resumen.salidas_neutras }}</dd></div>
+        {% if mostrar_dinero %}
+            <div class="separador"><dt>Acordado</dt><dd>{{ resumen.total_acordado|dinero_signo }}</dd></div>
+            <div><dt>Recaudado</dt><dd>{{ resumen.total_recaudado|dinero_signo }}</dd></div>
+            <div><dt>Por cobrar</dt><dd>{{ resumen.total_por_cobrar|dinero_signo }}</dd></div>
+        {% endif %}
+    </dl>
+</article>

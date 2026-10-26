@@ -121,34 +121,22 @@
         font-weight: 800; font-size: 13px;
         min-width: 45px; text-align: right;
     }
-    .rank-actions {
-        display: flex;
-        justify-content: center;
-        gap: 6px;
-        flex-wrap: wrap;
-        min-width: 190px;
-    }
-    .rank-actions .btn {
-        padding: 6px 10px;
-        font-size: 11px;
-        white-space: nowrap;
-    }
-    .rank-actions .btn-outside {
+    .ubicacion-item .btn-outside {
         background: #e8f5e9;
         color: #1b5e20;
         border: 1px solid #a5d6a7;
     }
-    .rank-actions .btn-finalized {
+    .ubicacion-item .btn-finalized {
         background: #fff3e0;
         color: #b45309;
         border: 1px solid #fed7aa;
     }
-    [data-theme="dark"] .rank-actions .btn-outside {
+    [data-theme="dark"] .ubicacion-item .btn-outside {
         background: rgba(34, 197, 94, 0.16);
         color: #86efac;
         border-color: rgba(134, 239, 172, 0.35);
     }
-    [data-theme="dark"] .rank-actions .btn-finalized {
+    [data-theme="dark"] .ubicacion-item .btn-finalized {
         background: rgba(249, 115, 22, 0.16);
         color: #fdba74;
         border-color: rgba(253, 186, 116, 0.35);
@@ -174,16 +162,149 @@
     }
     .rank-card.ingress-rank[open] > summary h3::after { content: '▾ Ocultar'; }
 
-    /* Encabezados en dos líneas para que la tabla de salidas quepa mejor. */
-    .ranking-table.salidas-table thead th {
-        white-space: normal;
-        line-height: 1.3;
+    /* ── Ranking de salidas: una tarjeta por técnico ───────────────── */
+    .rank-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px 16px;
+        flex-wrap: wrap;
+        padding-bottom: 8px;
+        margin-bottom: 12px;
+        border-bottom: 2px solid var(--primary);
     }
+    .rank-head h3 {
+        margin: 0;
+        padding: 0;
+        border: 0;
+    }
+    .btn-guia {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 7px 14px;
+        border-radius: 999px;
+        border: 1px solid var(--tint-orange-bg);
+        background: var(--tint-orange-bg);
+        color: var(--tint-orange-fg);
+        font: inherit;
+        font-size: 12px;
+        font-weight: 800;
+        cursor: pointer;
+        transition: border-color .15s ease, transform .15s ease;
+    }
+    .btn-guia:hover { border-color: var(--tint-orange-fg); transform: translateY(-1px); }
+    .btn-guia:focus-visible { outline: none; box-shadow: var(--ring); }
 
-    /* Comparación con el período anterior */
+    .rank-meta {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px 18px;
+        margin-bottom: 16px;
+        font-size: 12px;
+        font-weight: 700;
+        color: var(--text-muted);
+    }
+    .rank-meta strong { color: var(--text-main); }
+    .rank-legend { display: inline-flex; flex-wrap: wrap; gap: 6px 14px; margin-left: auto; }
+    .rank-legend span { display: inline-flex; align-items: center; gap: 6px; }
+
+    .efecto-icono {
+        display: inline-grid;
+        place-items: center;
+        flex: 0 0 auto;
+        width: 18px;
+        height: 18px;
+        border-radius: 50%;
+        font-size: 11px;
+        font-weight: 900;
+        line-height: 1;
+        color: #fff;
+    }
+    .efecto-icono.suma { background: var(--success); }
+    .efecto-icono.resta { background: var(--danger); }
+    .efecto-icono.neutro { background: var(--text-muted); }
+
+    .tech-list {
+        list-style: none;
+        display: grid;
+        gap: 14px;
+    }
+    .tech-card {
+        border: 1px solid var(--border-color);
+        border-left: 5px solid var(--border-color);
+        border-radius: var(--radius-lg);
+        padding: 18px 20px;
+        background: var(--card-bg);
+        box-shadow: var(--shadow);
+    }
+    .tech-card.puesto-1 { border-left-color: #ffc107; background: linear-gradient(100deg, #fff8e1, var(--card-bg) 45%); }
+    .tech-card.puesto-2 { border-left-color: #9e9e9e; background: linear-gradient(100deg, #f5f5f5, var(--card-bg) 45%); }
+    .tech-card.puesto-3 { border-left-color: #cd7f32; background: linear-gradient(100deg, #fff3e0, var(--card-bg) 45%); }
+    [data-theme="dark"] .tech-card.puesto-1 { background: linear-gradient(100deg, rgba(255, 193, 7, 0.12), var(--card-bg) 45%); }
+    [data-theme="dark"] .tech-card.puesto-2 { background: linear-gradient(100deg, rgba(158, 158, 158, 0.12), var(--card-bg) 45%); }
+    [data-theme="dark"] .tech-card.puesto-3 { background: linear-gradient(100deg, rgba(205, 127, 50, 0.12), var(--card-bg) 45%); }
+
+    .tech-card__head {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 14px 28px;
+    }
+    .tech-id { display: flex; align-items: center; gap: 12px; min-width: 0; }
+    .tech-id .medal { flex: 0 0 auto; width: 34px; height: 34px; line-height: 34px; font-size: 15px; }
+    .tech-name {
+        margin: 0;
+        font-size: 19px;
+        font-weight: 800;
+        color: var(--text-main);
+        overflow-wrap: anywhere;
+    }
+    .tech-name.sin-asignar { color: var(--text-muted); font-style: italic; }
+    .tech-sub { font-size: 12px; font-weight: 700; color: var(--text-muted); }
+
+    .tech-kpis { display: flex; flex-wrap: wrap; gap: 14px 32px; }
+    .kpi { min-width: 132px; }
+    .kpi-label {
+        display: block;
+        font-size: 11px;
+        font-weight: 800;
+        letter-spacing: .4px;
+        text-transform: uppercase;
+        color: var(--text-muted);
+    }
+    .kpi-value {
+        display: block;
+        margin-top: 2px;
+        font-size: 30px;
+        font-weight: 800;
+        line-height: 1.1;
+        color: var(--text-main);
+    }
+    .kpi-value.vacio { color: var(--text-muted); }
+
+    /* Medidor: el relleno indica el nivel y la pista es un tono claro del mismo color. */
+    .meter {
+        width: 160px;
+        max-width: 100%;
+        height: 8px;
+        margin-top: 6px;
+        border-radius: 4px;
+        overflow: hidden;
+        background: var(--tint-green-bg);
+    }
+    .meter > span { display: block; height: 100%; border-radius: 4px; background: var(--success); }
+    .meter.mid { background: var(--tint-amber-bg); }
+    .meter.mid > span { background: var(--warning); }
+    .meter.low { background: var(--tint-red-bg); }
+    .meter.low > span { background: var(--danger); }
+    .meter.ancho { width: 100%; }
+
     .trend {
         display: block;
-        margin-top: 4px;
+        margin-top: 5px;
         font-size: 11px;
         font-weight: 800;
         white-space: nowrap;
@@ -191,6 +312,263 @@
     .trend.up { color: var(--success); }
     .trend.down { color: var(--danger); }
     .trend.same { color: var(--text-muted); }
+
+    .tech-card__body {
+        display: grid;
+        grid-template-columns: minmax(0, 2.1fr) minmax(0, 1fr) minmax(0, 1fr);
+        gap: 14px;
+        margin-top: 16px;
+    }
+    .tech-card__body.sin-dinero { grid-template-columns: minmax(0, 2.1fr) minmax(0, 1fr); }
+    .tech-block {
+        padding: 14px;
+        border-radius: var(--radius);
+        background: var(--surface-muted);
+    }
+    .tech-block-title {
+        margin: 0 0 10px;
+        font-size: 11px;
+        font-weight: 800;
+        letter-spacing: .4px;
+        text-transform: uppercase;
+        color: var(--text-muted);
+    }
+
+    /* Composición de los finalizados: segmentos separados por 2px. */
+    .composicion {
+        display: flex;
+        gap: 2px;
+        height: 12px;
+        margin-bottom: 14px;
+        border-radius: 4px;
+        overflow: hidden;
+    }
+    .composicion > span { display: block; height: 100%; min-width: 4px; }
+    .composicion > .suma { background: var(--success); }
+    .composicion > .resta { background: var(--danger); }
+    .composicion > .neutro { background: var(--text-muted); }
+
+    .grupos {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 14px;
+    }
+    .grupo-head {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        margin-bottom: 6px;
+        font-size: 12px;
+        font-weight: 800;
+        color: var(--text-main);
+    }
+    .grupo-total { margin-left: auto; font-size: 15px; }
+    .grupo ul { list-style: none; }
+    .parte {
+        display: flex;
+        justify-content: space-between;
+        gap: 8px;
+        padding: 5px 0;
+        border-top: 1px dashed var(--border-color);
+        font-size: 12px;
+        color: var(--text-soft);
+    }
+    .parte strong { color: var(--text-main); }
+    .parte.cero { color: var(--text-muted); opacity: .65; }
+    .parte.cero strong { color: var(--text-muted); font-weight: 700; }
+
+    .ubicacion-item {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        align-items: center;
+        gap: 4px 10px;
+        padding: 8px 0;
+        border-top: 1px dashed var(--border-color);
+    }
+    .ubicacion-item:first-of-type { border-top: 0; padding-top: 0; }
+    .ubicacion-item .ubi-label { font-size: 12px; font-weight: 700; color: var(--text-soft); }
+    .ubicacion-item .ubi-valor { font-size: 20px; font-weight: 800; color: var(--text-main); }
+    .ubicacion-item .btn { grid-column: 1 / -1; justify-self: start; padding: 6px 10px; font-size: 11px; white-space: nowrap; }
+
+    .dinero { display: grid; gap: 8px; }
+    .dinero > div { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+    .dinero dt { font-size: 12px; font-weight: 700; color: var(--text-soft); }
+    .dinero dd { font-size: 15px; font-weight: 800; color: var(--text-main); white-space: nowrap; }
+    .dinero dd.recaudado::before,
+    .dinero dd.por-cobrar::before {
+        content: '';
+        display: inline-block;
+        width: 8px;
+        height: 8px;
+        margin-right: 6px;
+        border-radius: 50%;
+        vertical-align: middle;
+    }
+    .dinero dd.recaudado::before { background: var(--success); }
+    .dinero dd.por-cobrar::before { background: var(--warning); }
+    .dinero-nota { font-size: 11px; font-weight: 700; color: var(--text-muted); }
+
+    @media (max-width: 1050px) {
+        .tech-card__body,
+        .tech-card__body.sin-dinero { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .tech-block.resultados { grid-column: 1 / -1; }
+    }
+    @media (max-width: 640px) {
+        .tech-card { padding: 16px; }
+        .tech-card__body,
+        .tech-card__body.sin-dinero,
+        .grupos { grid-template-columns: minmax(0, 1fr); }
+        .tech-kpis { width: 100%; gap: 14px 16px; }
+        .kpi { min-width: 0; flex: 1 1 110px; }
+        .kpi-value { font-size: 26px; }
+        .rank-legend { margin-left: 0; }
+    }
+
+    /* ── Filtro del período: Mes, Varios meses, Año o Rango de fechas ── */
+    .filtro-ranking { flex-direction: column; align-items: stretch; gap: 12px; }
+    .filtro-ranking .modo-periodo { min-width: 0; margin: 0; padding: 0; border: 0; }
+    .modo-opciones {
+        display: inline-flex;
+        flex-wrap: wrap;
+        gap: 4px;
+        padding: 4px;
+        border: 1px solid var(--border-color);
+        border-radius: 999px;
+        background: var(--surface-muted);
+    }
+    .modo-opcion { position: relative; }
+    .modo-opcion input {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        opacity: 0;
+        cursor: pointer;
+    }
+    .modo-opcion span {
+        display: block;
+        padding: 7px 15px;
+        border-radius: 999px;
+        font-size: 13px;
+        font-weight: 800;
+        color: var(--text-soft);
+        transition: background .15s ease, color .15s ease;
+    }
+    .modo-opcion input:checked + span { background: var(--primary); color: #fff; box-shadow: var(--shadow); }
+    .modo-opcion input:focus-visible + span { box-shadow: var(--ring); }
+    .periodo-fila { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px 14px; }
+    .periodo-panel { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px; }
+    .js .periodo-panel:not(.activo) { display: none; }
+    .periodo-panel select.form-input { min-width: 130px; }
+    .filtro-acciones { display: flex; flex-wrap: wrap; gap: 8px; }
+    @media (max-width: 640px) {
+        .modo-opciones {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            width: 100%;
+            border-radius: 14px;
+        }
+        .modo-opcion span { border-radius: 10px; text-align: center; }
+    }
+
+    /* ── Mes a mes (Varios meses) ── */
+    .meses-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 12px;
+    }
+    .mes-tile {
+        padding: 14px;
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius);
+        background: var(--surface-muted);
+    }
+    .mes-tile.total { border: 2px solid var(--primary); background: var(--card-bg); }
+    .mes-titulo { margin: 0 0 8px; font-size: 15px; font-weight: 800; color: var(--text-main); }
+    .mes-valor { display: block; font-size: 24px; font-weight: 800; color: var(--text-main); }
+    .mes-valor.vacio { color: var(--text-muted); }
+    .mes-datos { display: grid; gap: 4px; margin-top: 10px; }
+    .mes-datos > div { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; }
+    .mes-datos dt { display: inline-flex; align-items: center; gap: 6px; color: var(--text-soft); font-weight: 700; }
+    .mes-datos dt .efecto-icono { width: 15px; height: 15px; font-size: 9px; }
+    .mes-datos dd { font-weight: 800; color: var(--text-main); white-space: nowrap; }
+    .mes-datos .separador { margin-top: 4px; padding-top: 6px; border-top: 1px dashed var(--border-color); }
+
+    .tech-meses { margin-top: 14px; }
+    .tech-meses-lista {
+        list-style: none;
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+        gap: 10px;
+    }
+    .tech-mes {
+        display: grid;
+        gap: 4px;
+        padding: 10px 12px;
+        border-radius: var(--radius-sm);
+        background: var(--card-bg);
+        border: 1px solid var(--border-color);
+    }
+    .tech-mes-nombre { font-size: 12px; font-weight: 800; color: var(--text-soft); }
+    .tech-mes-valor { font-size: 20px; font-weight: 800; color: var(--text-main); }
+    .tech-mes-valor.vacio { color: var(--text-muted); }
+    .tech-mes .meter { margin-top: 0; }
+    .tech-mes-detalle { font-size: 11px; font-weight: 700; color: var(--text-muted); }
+
+    /* Guía del ranking (ventana por pasos, igual que la Guía rápida). */
+    .guia-ranking-pagina { text-align: left; line-height: 1.55; }
+    .guia-ranking-pagina .guia-paso { margin-bottom: 8px; font-size: 12px; font-weight: 800; color: var(--primary); }
+    .guia-ranking-pagina h4 { margin: 0 0 10px; font-size: 18px; font-weight: 800; }
+    .guia-ranking-pagina p,
+    .guia-ranking-pagina li { font-size: 14px; color: var(--text-soft); }
+    .guia-ranking-pagina p + p { margin-top: 8px; }
+    .guia-ranking-pagina ul { list-style: none; display: grid; gap: 10px; }
+    .guia-ranking-pagina li { display: flex; gap: 10px; align-items: flex-start; }
+    .guia-ranking-pagina li .efecto-icono { margin-top: 2px; }
+    .guia-ranking-pagina .guia-progreso { display: flex; gap: 6px; margin-top: 18px; }
+    .guia-ranking-pagina .guia-progreso span { flex: 1; height: 7px; border-radius: 8px; background: var(--border-color); }
+    .guia-ranking-pagina .guia-progreso span.hecho { background: var(--primary); }
+    .guia-contenido:not([hidden]) { margin-bottom: 16px; padding: 14px; border-radius: var(--radius); background: var(--surface-muted); }
+    .guia-contenido:not([hidden]) section + section { margin-top: 12px; }
+    .guia-comprobaciones { margin-top: 10px; gap: 8px !important; }
+    .guia-comprobaciones li { font-size: 13px !important; }
+    .guia-cuadre { font-weight: 800; }
+    .guia-cuadre.ok { color: var(--success) !important; }
+    .guia-cuadre.mal { color: var(--danger) !important; }
+
+    /* Encabezado de los totales de todos los técnicos */
+    .totales-head {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px 16px;
+        margin-bottom: 12px;
+    }
+    .totales-titulo {
+        margin: 0;
+        font-size: 16px;
+        font-weight: 800;
+        letter-spacing: .3px;
+        text-transform: uppercase;
+        color: var(--primary);
+    }
+    .totales-sub { font-size: 12px; font-weight: 700; color: var(--text-muted); }
+    .totales-acciones { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+    .chip-cuadre {
+        padding: 6px 12px;
+        border-radius: 999px;
+        border: 1px solid transparent;
+        font: inherit;
+        font-size: 12px;
+        font-weight: 800;
+        cursor: pointer;
+    }
+    .chip-cuadre.ok { background: var(--tint-green-bg); color: var(--tint-green-fg); }
+    .chip-cuadre.mal { background: var(--tint-red-bg); color: var(--tint-red-fg); }
+    .chip-cuadre:hover { border-color: currentColor; }
+    .chip-cuadre:focus-visible { outline: none; box-shadow: var(--ring); }
 </style>
 
 <div class="crumb">
@@ -200,23 +578,162 @@
 <h2 class="page-title">🏆 Ranking de <span class="accent">Técnicos</span></h2>
 <p class="page-subtitle">Ingresos asignados, equipos finalizados y salidas físicas, separados según la responsabilidad registrada en cada etapa.</p>
 
-<form method="get" class="filter-bar">
-    <div>
-        <label class="form-label">Desde</label>
-        <input type="date" name="desde" value="{{ filtros.desde }}" class="form-input">
+<form method="get" class="filter-bar filtro-ranking" id="filtro-ranking">
+    <fieldset class="modo-periodo">
+        <legend class="form-label">Ver resultados por</legend>
+        <div class="modo-opciones">
+            {% for valor, texto in modos_periodo %}
+                <label class="modo-opcion">
+                    <input type="radio" name="periodo" value="{{ valor }}"{% if periodo_filtro.modo == valor %} checked{% endif %}>
+                    <span>{{ texto }}</span>
+                </label>
+            {% endfor %}
+        </div>
+    </fieldset>
+
+    <div class="periodo-fila">
+        {# Solo se ve el panel del modo elegido; sin JavaScript se ven todos y manda el modo marcado. #}
+        <div class="periodo-panel{% if periodo_filtro.modo == 'mes' %} activo{% endif %}" data-modo="mes">
+            <div>
+                <label class="form-label" for="filtro-mes">Mes</label>
+                <select id="filtro-mes" name="mes" class="form-input">
+                    {% for numero, nombre in meses_del_anio %}
+                        <option value="{{ numero }}"{% if numero == periodo_filtro.mes %} selected{% endif %}>{{ nombre|capfirst }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label class="form-label" for="filtro-mes-anio">Año</label>
+                <select id="filtro-mes-anio" name="mes_anio" class="form-input">
+                    {% for anio in anios_filtro %}
+                        <option value="{{ anio|stringformat:'d' }}"{% if anio == periodo_filtro.mes_anio %} selected{% endif %}>{{ anio|stringformat:'d' }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+
+        <div class="periodo-panel{% if periodo_filtro.modo == 'meses' %} activo{% endif %}" data-modo="meses">
+            <div>
+                <label class="form-label" for="filtro-inicio-mes">Desde el mes</label>
+                <select id="filtro-inicio-mes" name="inicio_mes" class="form-input">
+                    {% for numero, nombre in meses_del_anio %}
+                        <option value="{{ numero }}"{% if numero == periodo_filtro.inicio_mes %} selected{% endif %}>{{ nombre|capfirst }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label class="form-label" for="filtro-inicio-anio">Año</label>
+                <select id="filtro-inicio-anio" name="inicio_anio" class="form-input">
+                    {% for anio in anios_filtro %}
+                        <option value="{{ anio|stringformat:'d' }}"{% if anio == periodo_filtro.inicio_anio %} selected{% endif %}>{{ anio|stringformat:'d' }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label class="form-label" for="filtro-cantidad-meses">Cantidad</label>
+                <select id="filtro-cantidad-meses" name="cantidad_meses" class="form-input">
+                    {% for cantidad in cantidades_meses %}
+                        <option value="{{ cantidad }}"{% if cantidad == periodo_filtro.cantidad_meses %} selected{% endif %}>{{ cantidad }} meses</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+
+        <div class="periodo-panel{% if periodo_filtro.modo == 'anio' %} activo{% endif %}" data-modo="anio">
+            <div>
+                <label class="form-label" for="filtro-anio">Año</label>
+                <select id="filtro-anio" name="anio" class="form-input">
+                    {% for anio in anios_filtro %}
+                        <option value="{{ anio|stringformat:'d' }}"{% if anio == periodo_filtro.anio %} selected{% endif %}>{{ anio|stringformat:'d' }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+
+        <div class="periodo-panel{% if periodo_filtro.modo == 'rango' %} activo{% endif %}" data-modo="rango">
+            <div>
+                <label class="form-label" for="filtro-desde">Desde</label>
+                <input type="date" id="filtro-desde" name="desde" value="{{ filtros.desde }}" class="form-input">
+            </div>
+            <div>
+                <label class="form-label" for="filtro-hasta">Hasta</label>
+                <input type="date" id="filtro-hasta" name="hasta" value="{{ filtros.hasta }}" class="form-input">
+            </div>
+        </div>
+
+        <div class="filtro-acciones">
+            <button type="submit" class="btn btn-primary">Filtrar</button>
+            {% if filtros.desde or filtros.hasta %}
+                {# Los campos vacíos muestran todo el historial; sin ellos se abre el mes en curso. #}
+                <a href="{% url 'econotec:salida_totales' %}?desde=&amp;hasta=" class="btn btn-secondary">Limpiar</a>
+            {% endif %}
+        </div>
     </div>
-    <div>
-        <label class="form-label">Hasta</label>
-        <input type="date" name="hasta" value="{{ filtros.hasta }}" class="form-input">
-    </div>
-    <button type="submit" class="btn btn-primary">Filtrar</button>
-    {% if filtros.desde or filtros.hasta %}
-        {# Los campos vacíos muestran todo el historial; sin ellos se abre el mes en curso. #}
-        <a href="{% url 'econotec:salida_totales' %}?desde=&amp;hasta=" class="btn btn-secondary">Limpiar</a>
-    {% endif %}
 </form>
 
-<!-- Stats globales -->
+<!-- Totales generales: suman a todos los técnicos del ranking (los ingresados, por fecha de ingreso). -->
+<div class="totales-head">
+    <div>
+        <h3 class="totales-titulo">Totales de todos los técnicos</h3>
+        <span class="totales-sub">{{ periodo_filtro.etiqueta|capfirst }}</span>
+    </div>
+    <div class="totales-acciones">
+        <button type="button" class="chip-cuadre {% if todo_cuadra %}ok{% else %}mal{% endif %}" data-guia="guia-totales" data-titulo="📖 Guía de los totales" data-paso="ultimo" aria-controls="guia-totales">
+            {% if todo_cuadra %}✓ Todo cuadra{% else %}⚠ Hay cuentas que no cuadran{% endif %}
+        </button>
+        <button type="button" class="btn-guia" id="btn-guia-totales" data-guia="guia-totales" data-titulo="📖 Guía de los totales" aria-controls="guia-totales">📖 Guía de los totales</button>
+    </div>
+</div>
+
+<div id="guia-totales" class="guia-contenido" hidden>
+    <section>
+        <h4>Qué son estos totales</h4>
+        <p>Son <b>generales</b>: suman a <b>todos los técnicos</b> del ranking en el período elegido.</p>
+        <p>Si en el período solo trabajó un técnico, los totales son iguales a los de ese técnico. Los números de cada técnico están en su tarjeta, en el ranking de más abajo.</p>
+    </section>
+    <section>
+        <h4>Tarjetas de equipos</h4>
+        <ul>
+            <li><span><b>Equipos ingresados:</b> los equipos que entraron en el período (por fecha de ingreso), estén finalizados o no. Por eso puede ser distinto de los finalizados.</span></li>
+            <li><span><b>Equipos finalizados positivos:</b> los reparados de todos los técnicos sobre el total de equipos finalizados en el período (por fecha de finalización).</span></li>
+            <li><span><b>Efectividad total:</b> Suman ÷ (Suman + Restan) con todos los técnicos juntos.</span></li>
+        </ul>
+    </section>
+    {% if mostrar_valores_monetarios %}
+    <section>
+        <h4>Tarjetas de dinero</h4>
+        <ul>
+            <li><span><b>Total acordado:</b> lo que se le cobra al cliente por el servicio de los equipos finalizados (con valor adicional y valor de revisión; sin domicilio ni bodegaje).</span></li>
+            <li><span><b>Total recaudado:</b> el acordado de los equipos que ya quedaron en saldo cero.</span></li>
+            <li><span><b>Por cobrar:</b> el acordado de los equipos que todavía tienen saldo pendiente.</span></li>
+            <li><span><b>Diagnóstico (No reparados):</b> la parte del acordado de los equipos que no se pudieron reparar o que el cliente no quiso reparar.</span></li>
+        </ul>
+        <p>Siempre se cumple: <b>Total acordado = Total recaudado + Por cobrar</b>.</p>
+    </section>
+    {% endif %}
+    <section>
+        <h4>Mes a mes</h4>
+        <p>Con <b>Varios meses</b>, la sección <b>Mes a mes · todos los técnicos</b> muestra estos mismos totales para cada mes, y <b>Total del período</b> es la suma de los meses.</p>
+        <p>Dentro de la tarjeta de cada técnico, <b>Mes a mes de …</b> muestra solo los números de ese técnico.</p>
+    </section>
+    <section>
+        <h4>Comprobación: {{ periodo_filtro.etiqueta }}</h4>
+        {% if todo_cuadra %}
+            <p class="guia-cuadre ok">✓ Las {{ comprobaciones|length }} cuentas cuadran.</p>
+        {% else %}
+            <p class="guia-cuadre mal">⚠ Hay cuentas que no cuadran. Revísalas abajo.</p>
+        {% endif %}
+        <ul class="guia-comprobaciones">
+            {% for comprobacion in comprobaciones %}
+            <li>
+                <span class="efecto-icono {% if comprobacion.cuadra %}suma{% else %}resta{% endif %}" aria-hidden="true">{% if comprobacion.cuadra %}✓{% else %}✗{% endif %}</span>
+                <span><b>{{ comprobacion.titulo }}</b><br>{{ comprobacion.cuenta }}</span>
+            </li>
+            {% endfor %}
+        </ul>
+    </section>
+</div>
+
 <div class="stats-row">
     <div class="stat-card alt">
         <div class="label">Equipos ingresados</div>
@@ -226,160 +743,267 @@
         <div class="label">Equipos finalizados positivos</div>
         <div class="value">{{ total_positivas_global }} <small style="font-size:14px; color:#888;">/ {{ total_salidas_global }}</small></div>
     </div>
-    {% if mostrar_valores_monetarios %}
-        <div class="stat-card">
-            <div class="label">Total acordado</div>
-            <div class="value">{{ total_acordado_global|dinero_signo }}</div>
-        </div>
-        <div class="stat-card success">
-            <div class="label">Total recaudado</div>
-            <div class="value">{{ total_recaudado_global|dinero_signo }}</div>
-        </div>
-        <div class="stat-card" style="border-left-color: var(--warning);">
-            <div class="label" style="font-size: 10px;">Diagnóstico (No reparados)</div>
-            <div class="value" style="color: var(--warning);">{{ total_diag_no_reparado|dinero_signo }}</div>
-        </div>
-    {% endif %}
+    <div class="stat-card">
+        <div class="label">Efectividad total</div>
+        <div class="value">{% if efectividad_global is None %}—{% else %}{{ efectividad_global|floatformat:1 }}%{% endif %}</div>
+    </div>
 </div>
+{% if mostrar_valores_monetarios %}
+<div class="stats-row">
+    <div class="stat-card">
+        <div class="label">Total acordado</div>
+        <div class="value">{{ total_acordado_global|dinero_signo }}</div>
+    </div>
+    <div class="stat-card success">
+        <div class="label">Total recaudado</div>
+        <div class="value">{{ total_recaudado_global|dinero_signo }}</div>
+    </div>
+    <div class="stat-card" style="border-left-color: #e65100;">
+        <div class="label">Por cobrar</div>
+        <div class="value" style="color: #e65100;">{{ total_por_cobrar_global|dinero_signo }}</div>
+    </div>
+    <div class="stat-card" style="border-left-color: var(--warning);">
+        <div class="label" style="font-size: 10px;">Diagnóstico (No reparados)</div>
+        <div class="value" style="color: var(--warning);">{{ total_diag_no_reparado|dinero_signo }}</div>
+    </div>
+</div>
+{% endif %}
+
+{% if meses_resumen %}
+<!-- Varios meses: el total del período y cada mes por separado -->
+<section class="rank-card" aria-labelledby="titulo-mes-a-mes">
+    <div class="rank-head">
+        <h3 id="titulo-mes-a-mes">Mes a mes · todos los técnicos</h3>
+    </div>
+    <div class="meses-grid">
+        {% for mes in meses_resumen %}
+            {% include 'includes/ranking_resumen_mes.html' with titulo=mes.etiqueta resumen=mes.resumen mostrar_dinero=mostrar_valores_monetarios total=False %}
+        {% endfor %}
+        {% include 'includes/ranking_resumen_mes.html' with titulo='Total del período' resumen=resumen_salidas mostrar_dinero=mostrar_valores_monetarios total=True %}
+    </div>
+</section>
+{% endif %}
 
 <!-- Ranking principal de salidas -->
-<div class="rank-card">
-    <h3>Ranking de Técnicos por Salidas Reparadas</h3>
-    <p class="rank-section-note">
-        Cuenta exclusivamente al <strong>técnico que reparó registrado en la salida</strong>.
-        El técnico asignado al ingreso no interviene en esta tabla.
-        Se ordena por <strong>Salidas +</strong> (equipos reparados); si empatan, por efectividad.
-        <strong>Efectividad</strong>: de los equipos con Salida + o No quiso reparar, qué porcentaje salió reparado.
-        Las positivas suman, <strong>No quiso reparar</strong> resta y <strong>No se pudo reparar</strong> no afecta
-        (tampoco revisión, cortesía ni chatarrerización).
-        {% if mostrar_valores_monetarios %}
-            <strong>Recaudado</strong> es el valor acordado de los equipos que ya quedaron en saldo cero;
-            <strong>Por cobrar</strong>, el de los que todavía tienen saldo pendiente.
-        {% endif %}
-        <strong>Ver detalle</strong> muestra los equipos que ya están fuera de la oficina;
-        <strong>Equipos finalizados</strong> muestra los que todavía permanecen dentro.
+<section class="rank-card" aria-labelledby="titulo-ranking-salidas">
+    <div class="rank-head">
+        <h3 id="titulo-ranking-salidas">Ranking de Técnicos por Salidas Reparadas</h3>
+        <button type="button" class="btn-guia" id="btn-guia-ranking" data-guia="guia-ranking" data-titulo="📖 Guía del ranking" aria-controls="guia-ranking">📖 Guía del ranking</button>
+    </div>
+
+    <div class="rank-meta">
+        <span>Período: <strong>{{ periodo_filtro.etiqueta|capfirst }}</strong></span>
         {% if comparacion %}
-            Las flechas ▲▼ comparan con el período anterior
-            ({{ comparacion.desde|date:"d/m/Y" }} – {{ comparacion.hasta|date:"d/m/Y" }}).
+            <span>Comparado con <strong>{{ comparacion.etiqueta }}</strong></span>
         {% endif %}
-    </p>
+        <span class="rank-legend">
+            <span><span class="efecto-icono suma" aria-hidden="true">✓</span>Suman</span>
+            <span><span class="efecto-icono resta" aria-hidden="true">−</span>Restan</span>
+            <span><span class="efecto-icono neutro" aria-hidden="true">○</span>No afectan</span>
+        </span>
+    </div>
+
+    {# La explicación vive en la guía por pasos; si no hay JavaScript, el botón la muestra aquí. #}
+    <div id="guia-ranking" class="guia-contenido" hidden>
+        <section>
+            <h4>Quién cuenta en el ranking</h4>
+            <p>Cuenta exclusivamente al <b>técnico que reparó registrado en la salida</b>. El técnico asignado al ingreso no interviene en este ranking.</p>
+            <p>Las garantías se cuentan al técnico registrado en la salida de la garantía.</p>
+            <p>Los totales de todos los técnicos, arriba, tienen su propia guía: <b>📖 Guía de los totales</b>.</p>
+        </section>
+        <section>
+            <h4>Qué suma, qué resta y qué no afecta</h4>
+            <ul>
+                <li><span class="efecto-icono suma" aria-hidden="true">✓</span><span><b>Suman:</b> Finalizado y reparado, esté pendiente de retiro o ya haya salido de la oficina.</span></li>
+                <li><span class="efecto-icono resta" aria-hidden="true">−</span><span><b>Restan:</b> Garantía finalizada, Garantía + fallos adicionales y Cliente no quiso reparar.</span></li>
+                <li><span class="efecto-icono neutro" aria-hidden="true">○</span><span><b>No afectan:</b> No se pudo reparar, Revisión, Cortesía y Chatarrerización.</span></li>
+            </ul>
+        </section>
+        <section>
+            <h4>Cómo se calcula la efectividad</h4>
+            <p>De los equipos que suman o restan, qué porcentaje salió reparado: <b>Suman ÷ (Suman + Restan)</b>.</p>
+            <p>Ejemplo: 14 reparados, 1 garantía y 2 que el cliente no quiso reparar dan 14 ÷ 17 = <b>82,4 %</b>. Los que no afectan no cambian el porcentaje.</p>
+        </section>
+        <section>
+            <h4>Cómo elegir el período</h4>
+            <ul>
+                <li><span><b>Mes:</b> solo ese mes. No se compara con ningún otro.</span></li>
+                <li><span><b>Varios meses:</b> de 2 a 4 meses seguidos. Muestra el total del período y, en <b>Mes a mes</b>, cada mes por separado para ver cómo ha ido: el de arriba suma a todos los técnicos y el de cada tarjeta es solo de ese técnico.</span></li>
+                <li><span><b>Año:</b> el total del año, del 1 de enero al 31 de diciembre.</span></li>
+                <li><span><b>Rango de fechas:</b> Desde y Hasta libres. Solo aquí aparecen las flechas ▲▼ que comparan con el período anterior (un mes completo con el mes anterior; otro rango, con los mismos días justo antes).</span></li>
+            </ul>
+            <p>Al abrir la página se muestra el mes en curso. <b>Limpiar</b> muestra todo el historial. El ranking se ordena por <b>equipos reparados</b>; si empatan, por efectividad.</p>
+        </section>
+        {% if mostrar_valores_monetarios %}
+        <section>
+            <h4>Acordado, recaudado y por cobrar</h4>
+            <p><b>Acordado</b> es lo que se le cobra al cliente por el servicio: incluye el valor adicional y el valor de revisión, sin domicilio ni bodegaje.</p>
+            <p><b>Recaudado</b> es el valor acordado de los equipos que ya quedaron en saldo cero; <b>Por cobrar</b>, el de los que todavía tienen saldo pendiente.</p>
+        </section>
+        {% endif %}
+        <section>
+            <h4>Dónde están los equipos</h4>
+            <p><b>Ver detalle</b> muestra los equipos que ya están fuera de la oficina; <b>Equipos finalizados</b> muestra los que todavía permanecen dentro.</p>
+        </section>
+    </div>
 
     {% if ranking %}
-    <div style="overflow-x:auto;">
-        <table class="ranking-table salidas-table" style="width:100%; min-width: {% if mostrar_valores_monetarios %}1100{% else %}900{% endif %}px; border-collapse: collapse; font-size: 13px;">
-            <thead>
-                <tr style="background: var(--primary); color: white;">
-                    <th style="padding: 12px; text-align: center;">Pos.</th>
-                    <th style="padding: 12px; text-align: left;">Técnico</th>
-                    <th style="padding: 12px; text-align: center;">Finalizados</th>
-                    <th style="padding: 12px; text-align: center;">Fuera de oficina</th>
-                    <th style="padding: 12px; text-align: center;">En oficina</th>
-                    <th style="padding: 12px; text-align: center;">Salidas&nbsp;+</th>
-                    <th style="padding: 12px; text-align: center;">No quiso reparar</th>
-                    <th style="padding: 12px; text-align: center;">No se pudo reparar</th>
-                    <th style="padding: 12px; text-align: left;">Efectividad</th>
-                    {% if mostrar_valores_monetarios %}
-                        <th style="padding: 12px; text-align: right;">Acordado</th>
-                        <th style="padding: 12px; text-align: right;">Recaudado</th>
-                        <th style="padding: 12px; text-align: right;">Por cobrar</th>
+    <ol class="tech-list">
+    {% for r in ranking %}
+        <li class="tech-card{% if forloop.counter <= 3 %} puesto-{{ forloop.counter }}{% endif %}" aria-labelledby="tecnico-ranking-{{ forloop.counter }}">
+            <div class="tech-card__head">
+                <div class="tech-id">
+                    {% if forloop.counter == 1 %}
+                        <span class="medal gold" aria-hidden="true">1</span>
+                    {% elif forloop.counter == 2 %}
+                        <span class="medal silver" aria-hidden="true">2</span>
+                    {% elif forloop.counter == 3 %}
+                        <span class="medal bronze" aria-hidden="true">3</span>
+                    {% else %}
+                        <span class="medal normal" aria-hidden="true">{{ forloop.counter }}</span>
                     {% endif %}
-                    <th style="padding: 12px; text-align: center;">Detalles</th>
-                </tr>
-            </thead>
-            <tbody>
-            {% for r in ranking %}
-                <tr class="pos-{{ forloop.counter }}" style="border-bottom: 1px solid #f0f0f0;">
-                    <td style="padding: 12px; text-align: center;">
-                        {% if forloop.counter == 1 %}
-                            <span class="medal gold">1</span>
-                        {% elif forloop.counter == 2 %}
-                            <span class="medal silver">2</span>
-                        {% elif forloop.counter == 3 %}
-                            <span class="medal bronze">3</span>
-                        {% else %}
-                            <span class="medal normal">{{ forloop.counter }}</span>
-                        {% endif %}
-                    </td>
-                    <td style="padding: 12px;">
-                        {% if r.sin_asignar %}
-                            <strong style="color: #888; font-style: italic;">— Sin asignar —</strong>
-                            <br><small style="color:#bbb; font-size:10px;">Salidas sin técnico que reparó</small>
-                        {% else %}
-                            <strong style="color: var(--secondary);">{{ r.nombre }}</strong>
-                        {% endif %}
-                    </td>
-                    <td style="padding: 12px; text-align: center; font-weight: 800; color: var(--primary); font-size: 16px;">{{ r.num_equipos }}</td>
-                    <td style="padding: 12px; text-align: center; color: var(--success); font-weight: 700;">{{ r.entregados }}</td>
-                    <td style="padding: 12px; text-align: center; color: #e65100; font-weight: 700;">{{ r.pendientes }}</td>
-                    <td style="padding: 12px; text-align: center;">
-                        <span style="background: #e8f5e9; color: var(--success); padding: 3px 9px; border-radius: 10px; font-weight: 700;">{{ r.salidas_positivas }}</span>
+                    <div>
+                        <h4 class="tech-name{% if r.sin_asignar %} sin-asignar{% endif %}" id="tecnico-ranking-{{ forloop.counter }}">
+                            <span class="visually-hidden">Puesto {{ forloop.counter }}: </span>{{ r.nombre }}
+                        </h4>
+                        <div class="tech-sub">
+                            {{ r.num_equipos }} equipo{{ r.num_equipos|pluralize }} finalizado{{ r.num_equipos|pluralize }}{% if r.sin_asignar %} sin técnico que reparó{% endif %}
+                        </div>
+                    </div>
+                </div>
+
+                <div class="tech-kpis">
+                    <div class="kpi">
+                        <span class="kpi-label">Reparados</span>
+                        <span class="kpi-value">{{ r.salidas_positivas }}</span>
                         {% if comparacion %}
                             {% if r.delta_positivas > 0 %}
-                                <span class="trend up" title="Período anterior: {{ r.positivas_anterior }}">▲ {{ r.delta_positivas|stringformat:'+d' }}</span>
+                                <span class="trend up" title="En {{ comparacion.etiqueta }}: {{ r.positivas_anterior }}">▲ {{ r.delta_positivas|stringformat:'+d' }} vs. {{ comparacion.etiqueta_corta }}</span>
                             {% elif r.delta_positivas < 0 %}
-                                <span class="trend down" title="Período anterior: {{ r.positivas_anterior }}">▼ {{ r.delta_positivas|stringformat:'+d' }}</span>
+                                <span class="trend down" title="En {{ comparacion.etiqueta }}: {{ r.positivas_anterior }}">▼ {{ r.delta_positivas|stringformat:'+d' }} vs. {{ comparacion.etiqueta_corta }}</span>
                             {% else %}
-                                <span class="trend same" title="Período anterior: {{ r.positivas_anterior }}">= igual</span>
+                                <span class="trend same" title="En {{ comparacion.etiqueta }}: {{ r.positivas_anterior }}">= sin cambio vs. {{ comparacion.etiqueta_corta }}</span>
                             {% endif %}
                         {% endif %}
-                    </td>
-                    <td style="padding: 12px; text-align: center;">
-                        {% if r.no_quiso_reparar %}
-                            <span style="background: #ffebee; color: var(--danger); padding: 3px 9px; border-radius: 10px; font-weight: 700;">{{ r.no_quiso_reparar }}</span>
-                        {% else %}
-                            <span style="color:#bbb;">—</span>
-                        {% endif %}
-                    </td>
-                    <td style="padding: 12px; text-align: center;">
-                        {% if r.no_se_pudo_reparar %}
-                            <span style="background: #f0f0f0; color: #616161; padding: 3px 9px; border-radius: 10px; font-weight: 700;" title="No afecta la efectividad">{{ r.no_se_pudo_reparar }}</span>
-                        {% else %}
-                            <span style="color:#bbb;">—</span>
-                        {% endif %}
-                    </td>
-                    <td style="padding: 12px;">
+                    </div>
+                    <div class="kpi">
+                        <span class="kpi-label">Efectividad</span>
                         {% if r.efectividad is None %}
-                            <span style="color:#bbb;" title="Sin salidas positivas ni de cliente que no quiso reparar">—</span>
+                            <span class="kpi-value vacio">—</span>
+                            <span class="trend same">Sin equipos que sumen o resten</span>
                         {% else %}
-                            <div class="efectividad-bar">
-                                <div class="bar">
-                                    <div class="fill {% if r.efectividad < 50 %}low{% elif r.efectividad < 75 %}mid{% endif %}" style="width: {{ r.efectividad|stringformat:'.1f' }}%;"></div>
-                                </div>
-                                <span class="num">{{ r.efectividad }}%</span>
+                            <span class="kpi-value">{{ r.efectividad|floatformat:1 }}%</span>
+                            <div class="meter{% if r.efectividad < 50 %} low{% elif r.efectividad < 75 %} mid{% endif %}" role="img" aria-label="Efectividad {{ r.efectividad|floatformat:1 }} %">
+                                <span style="width: {{ r.efectividad|stringformat:'.1f' }}%;"></span>
                             </div>
-                            {% if comparacion and r.delta_efectividad is not None %}
-                                {% if r.delta_efectividad > 0 %}
-                                    <span class="trend up" title="Período anterior: {{ r.efectividad_anterior }}%">▲ +{{ r.delta_efectividad|floatformat:1 }} pts</span>
+                            {% if comparacion %}
+                                {% if r.delta_efectividad is None %}
+                                    <span class="trend same">Sin datos en {{ comparacion.etiqueta_corta }}</span>
+                                {% elif r.delta_efectividad > 0 %}
+                                    <span class="trend up" title="En {{ comparacion.etiqueta }}: {{ r.efectividad_anterior|floatformat:1 }} %">▲ +{{ r.delta_efectividad|floatformat:1 }} pts vs. {{ comparacion.etiqueta_corta }}</span>
                                 {% elif r.delta_efectividad < 0 %}
-                                    <span class="trend down" title="Período anterior: {{ r.efectividad_anterior }}%">▼ {{ r.delta_efectividad|floatformat:1 }} pts</span>
+                                    <span class="trend down" title="En {{ comparacion.etiqueta }}: {{ r.efectividad_anterior|floatformat:1 }} %">▼ {{ r.delta_efectividad|floatformat:1 }} pts vs. {{ comparacion.etiqueta_corta }}</span>
                                 {% else %}
-                                    <span class="trend same" title="Período anterior: {{ r.efectividad_anterior }}%">= igual</span>
+                                    <span class="trend same" title="En {{ comparacion.etiqueta }}: {{ r.efectividad_anterior|floatformat:1 }} %">= sin cambio vs. {{ comparacion.etiqueta_corta }}</span>
                                 {% endif %}
                             {% endif %}
                         {% endif %}
-                    </td>
-                    {% if mostrar_valores_monetarios %}
-                        <td style="padding: 12px; text-align: right; font-weight: 700;">{{ r.total_acordado|dinero_signo }}</td>
-                        <td style="padding: 12px; text-align: right; color: var(--success); font-weight: 800;">{{ r.total_recaudado|dinero_signo }}</td>
-                        <td style="padding: 12px; text-align: right; font-weight: 800; {% if r.total_por_cobrar %}color: #e65100;{% else %}color: #bbb;{% endif %}">{{ r.total_por_cobrar|dinero_signo }}</td>
-                    {% endif %}
-                    <td style="padding: 12px; text-align: center;">
+                    </div>
+                </div>
+            </div>
+
+            <div class="tech-card__body{% if not mostrar_valores_monetarios %} sin-dinero{% endif %}">
+                <div class="tech-block resultados">
+                    <h5 class="tech-block-title">Resultados de los equipos finalizados</h5>
+                    <div class="composicion" role="img" aria-label="{% for g in r.grupos %}{{ g.titulo }}: {{ g.total }}{% if not forloop.last %}, {% endif %}{% endfor %}">
+                        {% for g in r.grupos %}{% if g.total %}<span class="{{ g.efecto }}" style="flex: {{ g.total }} 1 0;" title="{{ g.titulo }}: {{ g.total }} ({{ g.porcentaje|floatformat:1 }} %)"></span>{% endif %}{% endfor %}
+                    </div>
+                    <div class="grupos">
+                        {% for g in r.grupos %}
+                        <div class="grupo">
+                            <div class="grupo-head">
+                                <span class="efecto-icono {{ g.efecto }}" aria-hidden="true">{% if g.efecto == 'suma' %}✓{% elif g.efecto == 'resta' %}−{% else %}○{% endif %}</span>
+                                {{ g.titulo }}
+                                <span class="grupo-total">{{ g.total }}</span>
+                            </div>
+                            <ul>
+                                {% for p in g.partes %}
+                                <li class="parte{% if not p.cantidad %} cero{% endif %}"><span>{{ p.etiqueta }}</span><strong>{{ p.cantidad }}</strong></li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <div class="tech-block">
+                    <h5 class="tech-block-title">Ubicación</h5>
+                    <div class="ubicacion-item">
+                        <span class="ubi-label">Fuera de oficina</span>
+                        <span class="ubi-valor">{{ r.entregados }}</span>
                         {% if not r.sin_asignar %}
-                            <div class="rank-actions">
-                                <a href="{% url 'econotec:salida_retiros_lista' %}?tecnico_salida={{ r.tecnico_id }}{% if filtros.desde %}&fecha_desde={{ filtros.desde }}{% endif %}{% if filtros.hasta %}&fecha_hasta={{ filtros.hasta }}{% endif %}"
-                                   class="btn btn-outside"
-                                   title="Ver equipos de este técnico que ya salieron de la oficina">Ver detalle</a>
-                                <a href="{% url 'econotec:salida_lista' %}?tecnico_salida={{ r.tecnico_id }}{% if filtros.desde %}&fecha_desde={{ filtros.desde }}{% endif %}{% if filtros.hasta %}&fecha_hasta={{ filtros.hasta }}{% endif %}"
-                                   class="btn btn-finalized"
-                                   title="Ver equipos finalizados por este técnico que aún están en la oficina">Equipos finalizados</a>
+                            <a href="{% url 'econotec:salida_retiros_lista' %}?tecnico_salida={{ r.tecnico_id }}{% if filtros.desde %}&fecha_desde={{ filtros.desde }}{% endif %}{% if filtros.hasta %}&fecha_hasta={{ filtros.hasta }}{% endif %}"
+                               class="btn btn-outside"
+                               title="Ver equipos de este técnico que ya salieron de la oficina">Ver detalle</a>
+                        {% endif %}
+                    </div>
+                    <div class="ubicacion-item">
+                        <span class="ubi-label">En oficina</span>
+                        <span class="ubi-valor">{{ r.pendientes }}</span>
+                        {% if not r.sin_asignar %}
+                            <a href="{% url 'econotec:salida_lista' %}?tecnico_salida={{ r.tecnico_id }}{% if filtros.desde %}&fecha_desde={{ filtros.desde }}{% endif %}{% if filtros.hasta %}&fecha_hasta={{ filtros.hasta }}{% endif %}"
+                               class="btn btn-finalized"
+                               title="Ver equipos finalizados por este técnico que aún están en la oficina">Equipos finalizados</a>
+                        {% endif %}
+                    </div>
+                </div>
+
+                {% if mostrar_valores_monetarios %}
+                <div class="tech-block">
+                    <h5 class="tech-block-title">Dinero</h5>
+                    <dl class="dinero">
+                        <div><dt>Acordado</dt><dd>{{ r.total_acordado|dinero_signo }}</dd></div>
+                        <div><dt>Recaudado</dt><dd class="recaudado">{{ r.total_recaudado|dinero_signo }}</dd></div>
+                        <div><dt>Por cobrar</dt><dd class="por-cobrar">{{ r.total_por_cobrar|dinero_signo }}</dd></div>
+                    </dl>
+                    {% if r.porcentaje_recaudado is not None %}
+                        <div class="meter ancho" role="img" aria-label="{{ r.porcentaje_recaudado|floatformat:1 }} % del acordado recaudado">
+                            <span style="width: {{ r.porcentaje_recaudado|stringformat:'.1f' }}%;"></span>
+                        </div>
+                        <div class="dinero-nota">{{ r.porcentaje_recaudado|floatformat:1 }} % del acordado ya está en saldo cero</div>
+                    {% endif %}
+                </div>
+                {% endif %}
+            </div>
+
+            {% if r.por_mes %}
+            <div class="tech-block tech-meses">
+                <h5 class="tech-block-title">Mes a mes de {{ r.nombre }}</h5>
+                <ol class="tech-meses-lista">
+                    {% for mes in r.por_mes %}
+                    <li class="tech-mes">
+                        <span class="tech-mes-nombre">{{ mes.etiqueta|capfirst }}</span>
+                        {% if mes.resumen.efectividad is None %}
+                            <span class="tech-mes-valor vacio">—</span>
+                        {% else %}
+                            <span class="tech-mes-valor">{{ mes.resumen.efectividad|floatformat:1 }}%</span>
+                            <div class="meter ancho{% if mes.resumen.efectividad < 50 %} low{% elif mes.resumen.efectividad < 75 %} mid{% endif %}" role="img" aria-label="Efectividad {{ mes.resumen.efectividad|floatformat:1 }} %">
+                                <span style="width: {{ mes.resumen.efectividad|stringformat:'.1f' }}%;"></span>
                             </div>
                         {% endif %}
-                    </td>
-                </tr>
-            {% endfor %}
-            </tbody>
-        </table>
-    </div>
+                        <span class="tech-mes-detalle">
+                            {{ mes.resumen.num_equipos }} finalizado{{ mes.resumen.num_equipos|pluralize }} ·
+                            {{ mes.resumen.salidas_positivas }} reparado{{ mes.resumen.salidas_positivas|pluralize }} ·
+                            {{ mes.resumen.salidas_negativas }} resta{{ mes.resumen.salidas_negativas|pluralize:"n" }}
+                        </span>
+                    </li>
+                    {% endfor %}
+                </ol>
+            </div>
+            {% endif %}
+        </li>
+    {% endfor %}
+    </ol>
     {% else %}
     <div class="empty-state">
         <div class="icon">👥</div>
@@ -387,12 +1011,13 @@
         <p>Aún no se han registrado equipos en el período seleccionado.</p>
     </div>
     {% endif %}
-</div>
+</section>
 
 <!-- Top tipos de equipo -->
 {% if por_tipo %}
 <div class="rank-card">
     <h3>📊 Tipos de Equipo más Atendidos</h3>
+    <p class="rank-section-note">Según los equipos ingresados en el período.</p>
     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px;">
         {% for t in por_tipo %}
         <div style="background: var(--primary-light); padding: 14px; border-radius: 10px; text-align: center;">
@@ -486,4 +1111,105 @@
     </div>
     {% endif %}
 </details>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Filtro del período: muestra solo los campos del modo elegido y envía solo esos.
+(function () {
+    const formulario = document.getElementById('filtro-ranking');
+    if (!formulario) return;
+    const paneles = formulario.querySelectorAll('.periodo-panel');
+
+    function modoElegido() {
+        const marcado = formulario.querySelector('input[name="periodo"]:checked');
+        return marcado ? marcado.value : 'mes';
+    }
+
+    function mostrarPanel() {
+        const modo = modoElegido();
+        paneles.forEach(function (panel) {
+            panel.classList.toggle('activo', panel.dataset.modo === modo);
+        });
+    }
+
+    function habilitarCampos() {
+        formulario.querySelectorAll('.periodo-panel input, .periodo-panel select').forEach(function (campo) {
+            campo.disabled = false;
+        });
+    }
+
+    formulario.querySelectorAll('input[name="periodo"]').forEach(function (opcion) {
+        opcion.addEventListener('change', mostrarPanel);
+    });
+    formulario.addEventListener('submit', function () {
+        const modo = modoElegido();
+        paneles.forEach(function (panel) {
+            panel.querySelectorAll('input, select').forEach(function (campo) {
+                campo.disabled = panel.dataset.modo !== modo;
+            });
+        });
+    });
+    // Al volver con "Atrás" el navegador restaura la página: los campos no
+    // deben quedar deshabilitados.
+    window.addEventListener('pageshow', function () {
+        habilitarCampos();
+        mostrarPanel();
+    });
+})();
+
+// Guías por pasos (ranking y totales) con el mismo estilo de la Guía rápida.
+(function () {
+    function abrirGuia(guia, titulo, paso) {
+        const paginas = Array.prototype.map.call(
+            guia.querySelectorAll(':scope > section'),
+            function (seccion) { return seccion.innerHTML; }
+        );
+
+        function mostrarPaso(indice) {
+            const esUltima = indice === paginas.length - 1;
+            const progreso = paginas.map(function (_, i) {
+                return '<span' + (i <= indice ? ' class="hecho"' : '') + '></span>';
+            }).join('');
+            Swal.fire({
+                title: titulo,
+                html:
+                    '<div class="guia-ranking-pagina">' +
+                        '<div class="guia-paso">PASO ' + (indice + 1) + ' DE ' + paginas.length + '</div>' +
+                        paginas[indice] +
+                        '<div class="guia-progreso" aria-hidden="true">' + progreso + '</div>' +
+                    '</div>',
+                width: 560,
+                showCloseButton: true,
+                showDenyButton: indice > 0,
+                denyButtonText: '← Anterior',
+                confirmButtonText: esUltima ? 'Entendido' : 'Siguiente →',
+                confirmButtonColor: '#f97618',
+                denyButtonColor: '#6b7280',
+                reverseButtons: true
+            }).then(function (resultado) {
+                if (resultado.isDenied) {
+                    mostrarPaso(indice - 1);
+                } else if (resultado.isConfirmed && !esUltima) {
+                    mostrarPaso(indice + 1);
+                }
+            });
+        }
+
+        mostrarPaso(paso === 'ultimo' ? paginas.length - 1 : 0);
+    }
+
+    document.querySelectorAll('[data-guia]').forEach(function (boton) {
+        const guia = document.getElementById(boton.dataset.guia);
+        if (!guia) return;
+        boton.addEventListener('click', function () {
+            if (window.Swal) {
+                abrirGuia(guia, boton.dataset.titulo, boton.dataset.paso);
+            } else {
+                guia.hidden = !guia.hidden;
+            }
+        });
+    });
+})();
+</script>
 {% endblock %}
