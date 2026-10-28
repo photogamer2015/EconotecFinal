@@ -2638,6 +2638,10 @@ class VentasTests(TestCase):
         self.assertIn('MacBook M4 S', html)
         self.assertNotIn('{{', html)
         self.assertNotIn('{%', html)
+        # La web correcta, en el correo con formato y en el de texto.
+        self.assertIn('https://econotec-ec.com/', html)
+        self.assertIn('https://econotec-ec.com/', correo.body)
+        self.assertNotIn('econotec.ec.com', html + correo.body)
         self.assertEqual(len(correo.attachments), 1)
         adjunto = correo.attachments[0]
         self.assertEqual(
@@ -2781,6 +2785,9 @@ class VentasTests(TestCase):
         self.assertIn('Regla de bodegaje', html)
         self.assertIn('5 días de gracia', html)
         self.assertIn('$1,00', html)
+        self.assertIn('https://econotec-ec.com/', html)
+        self.assertIn('https://econotec-ec.com/', correo.body)
+        self.assertNotIn('econotec.ec.com', html + correo.body)
         self.assertEqual(len(correo.attachments), 1)
         self.assertEqual(
             correo.attachments[0][0],
@@ -3373,6 +3380,8 @@ class VentasTests(TestCase):
         self.assertIn('5 días de gracia', html)
         self.assertIn('Pago anterior en efectivo.', html)
         self.assertIn('Advertencia de chatarrerización', html)
+        self.assertIn('https://econotec-ec.com/', html)
+        self.assertNotIn('econotec.ec.com', html)
         self.assertNotIn('{{', html)
         self.assertEqual(len(correo.attachments), 1)
         self.assertEqual(

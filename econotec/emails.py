@@ -20,6 +20,8 @@ from .views_print import (
 
 logger = logging.getLogger(__name__)
 
+SITIO_ECONOTEC = 'https://econotec-ec.com/'
+
 
 CONTACTO_SEDES = {
     'guayaquil': {
@@ -57,7 +59,7 @@ def _contexto_correo_ingreso(ingreso, *, adjunto_incluido):
         'registrado_por_nombre': _nombre_usuario(ingreso.registrado_por),
         'adjunto_incluido': adjunto_incluido,
         'whatsapps_econotec': '096 328 9727 · 098 075 8747',
-        'sitio_econotec': 'www.econotec.ec.com',
+        'sitio_econotec': SITIO_ECONOTEC,
     }
 
 
@@ -249,7 +251,7 @@ def _contexto_correo_actualizacion(ingreso, *, tipo, abonos_evento, adjunto_incl
         'bodegaje': _contexto_bodegaje(salida),
         'adjunto_incluido': adjunto_incluido,
         'whatsapps_econotec': '096 328 9727 · 098 075 8747',
-        'sitio_econotec': 'www.econotec.ec.com',
+        'sitio_econotec': SITIO_ECONOTEC,
     }
 
 
@@ -410,7 +412,7 @@ def _contexto_correo_bodegaje(salida, *, adjunto_incluido):
         'pagos': _pagos_detallados_salida(salida),
         'adjunto_incluido': adjunto_incluido,
         'whatsapps_econotec': '096 328 9727 · 098 075 8747',
-        'sitio_econotec': 'www.econotec.ec.com',
+        'sitio_econotec': SITIO_ECONOTEC,
     }
 
 
