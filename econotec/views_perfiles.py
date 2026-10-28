@@ -6,6 +6,7 @@ from django.db.models import Q
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST, require_http_methods
 from .models import PerfilSocial
+from .gamificacion import nivel_por_puntos
 from .views import datos_perfil
 from .permisos import es_admin, es_tecnico, es_asesor
 
@@ -54,7 +55,7 @@ def perfil(request, usuario_id=None):
             return redirect('econotec:mi_perfil')
     operativo = datos_perfil(usuario, incluir_privado=propio)
     proximo = operativo['proximo']
-    umbral = max(n for n in (0, 50, 100, 500, 1000, 4000) if n <= operativo['total'])
+    umbral = nivel_por_puntos(operativo['total'])['desde']
     operativo['porcentaje'] = round(100 * (operativo['total'] - umbral) / (proximo - umbral)) if proximo else 100
     amigos = personal.amigos.filter(usuario__is_active=True).select_related('usuario')
     return render(request, 'perfiles/perfil.html', {
