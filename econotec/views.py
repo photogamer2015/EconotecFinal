@@ -11,6 +11,7 @@ import uuid
 
 from django.conf import settings
 from django.contrib import messages
+from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import NON_FIELD_ERRORS, ValidationError
 from django.core.validators import validate_email
@@ -54,10 +55,13 @@ from .pagination import paginar_resultados
 from .sonidos import programar_sonido
 from .permisos import admin_requerido, tecnico_requerido, es_admin, es_asesor, es_tecnico
 from .gamificacion import (
-    SALIDA_BUENA_ESTADOS,
-    SALIDA_GARANTIA_ESTADOS,
-    SALIDA_MALA_ESTADOS,
-    calcular_puntaje_gamificacion,
+    PUNTOS_POR_ESTADO_SALIDA,
+    PUNTOS_VENTA_PRODUCTO,
+    SALIDA_PUNTOS_NEGATIVOS,
+    SALIDA_PUNTOS_POSITIVOS,
+    calcular_puntaje_perfil,
+    nivel_por_puntos,
+    puntos_de_salidas,
 )
 from .alertas import (
     equipos_demorados_qs,
@@ -4386,13 +4390,15 @@ def _periodo_ranking(parametros, hoy=None):
 
 
 # Cómo cuenta cada resultado de salida en el ranking: (clave, etiqueta,
-# efecto, estados de SalidaEquipo). Las garantías restan porque el equipo
-# volvió; se cuentan al técnico registrado en la salida de la garantía, ya
-# que la mayoría se registran con un código manual y no con el equipo original.
-# "No se pudo reparar" también resta: el técnico no logró repararlo. Que el
-# cliente no quiera reparar no depende del técnico: no afecta.
+# efecto, estados de SalidaEquipo). El efecto sigue el signo de los puntos
+# de gamificacion.PUNTOS_POR_ESTADO_SALIDA: reparado (+3) y cliente no quiso
+# reparar (+1) suman; no se pudo reparar (−1) y las garantías (−4) restan
+# (se cuentan al técnico registrado en la salida de la garantía, ya que la
+# mayoría se registran con un código manual y no con el equipo original);
+# lo que vale 0 no afecta.
 _RESULTADOS_RANKING = (
     ('reparado', 'Finalizado y reparado', 'suma', ('pendiente_retiro', 'retirado')),
+    ('cliente_no_acepta', 'Cliente no quiso reparar', 'suma', ('cliente_no_acepta',)),
     ('garantia', 'Garantía finalizada', 'resta', ('garantia',)),
     (
         'garantia_fallos_adicionales',
@@ -4401,7 +4407,6 @@ _RESULTADOS_RANKING = (
         ('garantia_fallos_adicionales',),
     ),
     ('no_reparable', 'No se pudo reparar', 'resta', ('no_reparable',)),
-    ('cliente_no_acepta', 'Cliente no quiso reparar', 'neutro', ('cliente_no_acepta',)),
     ('revision', 'Revisión', 'neutro', ('revision',)),
     ('cortesia', 'Cortesía', 'neutro', ('cortesia',)),
     ('chatarrerizacion', 'Chatarrerización', 'neutro', ('chatarrerizacion',)),
@@ -4415,6 +4420,10 @@ _RESULTADO_POR_ESTADO = {
     estado: clave
     for clave, _etiqueta, _efecto, estados in _RESULTADOS_RANKING
     for estado in estados
+}
+_PUNTOS_POR_RESULTADO = {
+    clave: PUNTOS_POR_ESTADO_SALIDA.get(estados[0], 0)
+    for clave, _etiqueta, _efecto, estados in _RESULTADOS_RANKING
 }
 
 
@@ -4464,8 +4473,10 @@ def _resumir_salidas(registros, mostrar_valores_monetarios):
     Totales de un grupo de salidas: ubicación, cada resultado por separado,
     lo que suma, resta o no afecta, la efectividad y el dinero.
 
-    Efectividad = suman / (suman + restan). Recaudado es el acordado de los
-    equipos en saldo cero; Por cobrar, el de los que todavía deben algo.
+    Efectividad = suman / (suman + restan). Puntos = cada resultado por sus
+    puntos (las ventas de producto se agregan por técnico en el ranking).
+    Recaudado es el acordado de los equipos en saldo cero; Por cobrar, el
+    de los que todavía deben algo.
     """
     resumen = {
         'num_equipos': len(registros),
@@ -4482,7 +4493,28 @@ def _resumir_salidas(registros, mostrar_valores_monetarios):
     for clave, etiqueta, efecto, _estados in _RESULTADOS_RANKING:
         cantidad = resumen['resultados'][clave]
         totales[efecto] += cantidad
-        partes[efecto].append({'clave': clave, 'etiqueta': etiqueta, 'cantidad': cantidad})
+        partes[efecto].append({
+            'clave': clave,
+            'etiqueta': etiqueta,
+            'cantidad': cantidad,
+            'puntos': _PUNTOS_POR_RESULTADO[clave],
+        })
+    resumen['reparados'] = resumen['resultados']['reparado']
+    resumen['ventas_producto'] = 0
+    resumen['puntos'] = sum(
+        cantidad * _PUNTOS_POR_RESULTADO[clave]
+        for clave, cantidad in resumen['resultados'].items()
+    )
+    resumen['puntos_detalle'] = [
+        {
+            'etiqueta': etiqueta,
+            'cantidad': resumen['resultados'][clave],
+            'unitario': _PUNTOS_POR_RESULTADO[clave],
+            'subtotal': resumen['resultados'][clave] * _PUNTOS_POR_RESULTADO[clave],
+        }
+        for clave, etiqueta, _efecto, _estados in _RESULTADOS_RANKING
+        if _PUNTOS_POR_RESULTADO[clave] and resumen['resultados'][clave]
+    ]
     resumen['salidas_positivas'] = totales['suma']
     resumen['salidas_negativas'] = totales['resta']
     resumen['salidas_neutras'] = totales['neutro']
@@ -4537,49 +4569,79 @@ def _asignar_puestos(filas):
     """
     Puesto de cada técnico en la competencia; `filas` ya viene de mayor a menor.
 
-    Quien empata en reparados y en efectividad comparte el puesto y el
+    Quien empata en puntos y en efectividad comparte el puesto y el
     siguiente salta (1, 1, 3). Las salidas sin técnico que reparó no
-    compiten: no tienen puesto. La barra compara los reparados de cada
+    compiten: no tienen puesto. La barra compara los puntos de cada
     técnico con los del primero.
     """
     competidores = [fila for fila in filas if not fila['sin_asignar']]
-    reparados_primero = competidores[0]['salidas_positivas'] if competidores else 0
+    puntos_primero = competidores[0]['puntos'] if competidores else 0
     for indice, fila in enumerate(competidores):
         anterior = competidores[indice - 1] if indice else None
         empata = anterior is not None and (
-            (fila['salidas_positivas'], fila['efectividad'])
-            == (anterior['salidas_positivas'], anterior['efectividad'])
+            (fila['puntos'], fila['efectividad'])
+            == (anterior['puntos'], anterior['efectividad'])
         )
         fila['puesto'] = anterior['puesto'] if empata else indice + 1
         fila['empate'] = empata
         if empata:
             anterior['empate'] = True
-        fila['detras_del_primero'] = reparados_primero - fila['salidas_positivas']
+        fila['detras_del_primero'] = puntos_primero - fila['puntos']
         fila['barra_primero'] = round(
-            fila['salidas_positivas'] / reparados_primero * 100,
+            max(fila['puntos'], 0) / puntos_primero * 100,
             1,
-        ) if reparados_primero else 0
+        ) if puntos_primero > 0 else 0
     for fila in filas:
         if fila['sin_asignar']:
             fila.update({'puesto': None, 'empate': False})
 
 
-def _ranking_salidas_por_tecnico(registros, mostrar_valores_monetarios):
+def _ventas_producto_ranking(desde, hasta):
+    """Ventas de producto del rango por técnico: {tecnico_id: (cantidad, nombre)}.
+    Cada venta vale gamificacion.PUNTOS_VENTA_PRODUCTO, igual que en el perfil."""
+    ventas = IngresoEquipo.objects.filter(sede='ventas', tecnico_encargado__isnull=False)
+    ventas = aplicar_rango_fecha(ventas, 'fecha_ingreso', desde, hasta)
+    resultado = {}
+    for venta in ventas.select_related('tecnico_encargado').only(
+        'tecnico_encargado__first_name',
+        'tecnico_encargado__last_name',
+        'tecnico_encargado__username',
+    ):
+        cantidad, _nombre = resultado.get(venta.tecnico_encargado_id, (0, ''))
+        resultado[venta.tecnico_encargado_id] = (cantidad + 1, venta.tecnico_encargado_nombre)
+    return resultado
+
+
+def _ranking_salidas_por_tecnico(registros, mostrar_valores_monetarios, ventas_producto=None):
     """
     Salidas agrupadas por el técnico que reparó, ordenadas de quien más
-    equipos reparó a quien menos (la efectividad desempata). Las salidas sin
+    puntos tiene a quien menos (la efectividad desempata). Con
+    `ventas_producto` se suman los puntos de sus ventas. Las salidas sin
     técnico que reparó van al final porque no compiten.
     """
+    ventas_producto = ventas_producto or {}
     por_tecnico = {}
     for registro in registros:
         por_tecnico.setdefault(registro['tecnico_id'], []).append(registro)
+    for tid in ventas_producto:
+        por_tecnico.setdefault(tid, [])
 
     filas = []
     for tid, registros_tecnico in por_tecnico.items():
         fila = _resumir_salidas(registros_tecnico, mostrar_valores_monetarios)
+        ventas, nombre_ventas = ventas_producto.get(tid, (0, ''))
+        if ventas:
+            fila['ventas_producto'] = ventas
+            fila['puntos'] += ventas * PUNTOS_VENTA_PRODUCTO
+            fila['puntos_detalle'].append({
+                'etiqueta': 'Venta de producto',
+                'cantidad': ventas,
+                'unitario': PUNTOS_VENTA_PRODUCTO,
+                'subtotal': ventas * PUNTOS_VENTA_PRODUCTO,
+            })
         fila.update({
             'tecnico_id': tid,
-            'nombre': registros_tecnico[0]['nombre'],
+            'nombre': registros_tecnico[0]['nombre'] if registros_tecnico else nombre_ventas,
             'sin_asignar': tid is None,
         })
         filas.append(fila)
@@ -4588,7 +4650,7 @@ def _ranking_salidas_por_tecnico(registros, mostrar_valores_monetarios):
         efectividad = fila['efectividad'] if fila['efectividad'] is not None else -1
         return (
             fila['sin_asignar'],
-            -fila['salidas_positivas'],
+            -fila['puntos'],
             -efectividad,
             fila['nombre'].lower(),
         )
@@ -4775,8 +4837,31 @@ def salida_totales(request):
     # técnico que reparó en la salida, no al técnico encargado del ingreso.
     # Las tarjetas de arriba y los meses se suman de los mismos registros.
     registros = _registros_salidas_ranking(desde, hasta, mostrar_valores_monetarios)
-    ranking_list = _ranking_salidas_por_tecnico(registros, mostrar_valores_monetarios)
+    ranking_list = _ranking_salidas_por_tecnico(
+        registros,
+        mostrar_valores_monetarios,
+        _ventas_producto_ranking(desde, hasta),
+    )
     resumen_salidas = _resumir_salidas(registros, mostrar_valores_monetarios)
+
+    # Nivel de cada técnico: el mismo de Mi perfil (puntos acumulados).
+    usuarios_ranking = {
+        usuario.pk: usuario
+        for usuario in get_user_model().objects.filter(
+            pk__in=[fila['tecnico_id'] for fila in ranking_list if fila['tecnico_id']],
+        )
+    }
+    for fila in ranking_list:
+        usuario = usuarios_ranking.get(fila['tecnico_id'])
+        fila['perfil'] = None
+        if usuario is not None:
+            perfil = puntaje_tecnico(usuario)
+            perfil['porcentaje'] = round(
+                100 * (perfil['total'] - perfil['desde']) / (perfil['proximo'] - perfil['desde'])
+            ) if perfil['proximo'] else 100
+            perfil['faltan'] = perfil['proximo'] - perfil['total'] if perfil['proximo'] else 0
+            perfil['siguiente'] = nivel_por_puntos(perfil['proximo'])['nivel'] if perfil['proximo'] else ''
+            fila['perfil'] = perfil
 
     # Varios meses: además del total, cada mes por separado (para el equipo
     # completo y para cada técnico).
@@ -4820,10 +4905,10 @@ def salida_totales(request):
         }
         for fila in ranking_list:
             anterior = anteriores.get(fila['tecnico_id'])
-            positivas_anterior = anterior['salidas_positivas'] if anterior else 0
+            positivas_anterior = anterior['reparados'] if anterior else 0
             efectividad_anterior = anterior['efectividad'] if anterior else None
             fila['positivas_anterior'] = positivas_anterior
-            fila['delta_positivas'] = fila['salidas_positivas'] - positivas_anterior
+            fila['delta_positivas'] = fila['reparados'] - positivas_anterior
             fila['efectividad_anterior'] = efectividad_anterior
             fila['delta_efectividad'] = round(
                 fila['efectividad'] - efectividad_anterior,
@@ -6048,6 +6133,48 @@ def _construir_bitacora_usuario(user, dia=None):
     }
 
 
+def puntaje_tecnico(user):
+    """
+    Puntos acumulados del técnico y su nivel (Mi perfil, Comunidad, panel de
+    admin y la tarjeta del ranking).
+
+    IMPORTANTE (regla del negocio): los puntos salen SOLO de las SALIDAS que
+    el técnico reparó (campo `tecnico_reparo`) y de sus ventas de producto,
+    NO de los ingresos. Valores en gamificacion.PUNTOS_POR_ESTADO_SALIDA:
+    reparado +3, cliente no quiso reparar +1, no se pudo reparar −1,
+    garantía −4, venta de producto +1; el resto 0. Si el perfil se
+    reinició, solo cuenta lo registrado desde esa fecha.
+    """
+    fecha_reinicio = None
+    if hasattr(user, 'actividad') and user.actividad.fecha_reinicio_perfil:
+        fecha_reinicio = user.actividad.fecha_reinicio_perfil
+
+    salidas_qs = SalidaEquipo.objects.filter(tecnico_reparo=user)
+    ventas_producto_qs = IngresoEquipo.objects.filter(
+        sede='ventas',
+        tecnico_encargado=user,
+    )
+    if fecha_reinicio:
+        salidas_qs = salidas_qs.filter(creado__gte=fecha_reinicio)
+        ventas_producto_qs = ventas_producto_qs.filter(creado__gte=fecha_reinicio)
+
+    conteo = {
+        fila['estado_reparacion']: fila['cantidad']
+        for fila in salidas_qs.values('estado_reparacion').annotate(cantidad=Count('id'))
+    }
+    ventas_producto = ventas_producto_qs.count()
+    total = calcular_puntaje_perfil(conteo, ventas_producto)
+    return {
+        'fecha_reinicio': fecha_reinicio,
+        'conteo': conteo,
+        'ventas_producto': ventas_producto,
+        'salidas_buenas': sum(conteo.get(estado, 0) for estado in SALIDA_PUNTOS_POSITIVOS),
+        'salidas_malas': sum(conteo.get(estado, 0) for estado in SALIDA_PUNTOS_NEGATIVOS),
+        'total': total,
+        **nivel_por_puntos(total),
+    }
+
+
 def datos_perfil(user, incluir_privado=False):
     """Estadísticas compartidas; correo y bitácora solo para el propietario."""
 
@@ -6075,88 +6202,20 @@ def datos_perfil(user, incluir_privado=False):
             'bitacora_total': construir_bitacora_usuario(user)['total'] if incluir_privado else 0,
         }
     
-    # Verificar si el usuario tiene una fecha de reinicio
-    fecha_reinicio = None
-    if hasattr(user, 'actividad') and user.actividad.fecha_reinicio_perfil:
-        fecha_reinicio = user.actividad.fecha_reinicio_perfil
-
-    # Base querysets
-    #
-    # IMPORTANTE (regla del negocio): el NIVEL del técnico se calcula SOLO por
-    # las SALIDAS que él reparó (campo `tecnico_reparo`), NO por los ingresos.
-    # El técnico seleccionado en la salida asume la responsabilidad del resultado:
-    #   • salida buena  → suma
-    #   • salida mala    → resta
-    #   • garantía       → cuenta como salida positiva
-    # Los ingresos se siguen mostrando como dato informativo, pero ya NO cuentan
-    # para subir de nivel.
+    puntaje = puntaje_tecnico(user)
     ingresos_qs = IngresoEquipo.objects.filter(registrado_por=user)
-    salidas_qs = SalidaEquipo.objects.filter(tecnico_reparo=user)
-    ventas_producto_qs = IngresoEquipo.objects.filter(
-        sede='ventas',
-        tecnico_encargado=user,
-    )
-
-    if fecha_reinicio:
-        ingresos_qs = ingresos_qs.filter(creado__gte=fecha_reinicio)
-        salidas_qs = salidas_qs.filter(creado__gte=fecha_reinicio)
-        ventas_producto_qs = ventas_producto_qs.filter(creado__gte=fecha_reinicio)
-
+    if puntaje['fecha_reinicio']:
+        ingresos_qs = ingresos_qs.filter(creado__gte=puntaje['fecha_reinicio'])
     # Ingresos registrados por el usuario (solo informativo, no suma nivel)
     ingresos_count = ingresos_qs.count()
-    salidas_producto = ventas_producto_qs.count()
-    
-    # Salidas buenas positivas (reparadas por el técnico)
-    salidas_buenas = salidas_qs.filter(
-        estado_reparacion__in=SALIDA_BUENA_ESTADOS
-    ).count()
-    
-    # Salidas negativas (restan 1 punto)
-    salidas_malas = salidas_qs.filter(
-        estado_reparacion__in=SALIDA_MALA_ESTADOS
-    ).count()
-    
-    # Compatibilidad histórica: las garantías ya están incluidas como buenas.
-    salidas_garantia = salidas_qs.filter(
-        estado_reparacion__in=SALIDA_GARANTIA_ESTADOS
-    ).count()
-    
-    # Calcular total (no puede ser menor a 0).
-    # Las ventas de producto cuentan como salida positiva de producto: +1 cada una.
-    # Las salidas buenas positivas valen más para equilibrar el perfil.
-    total_operaciones = calcular_puntaje_gamificacion(
-        salidas_buenas,
-        salidas_producto,
-        salidas_malas,
-        salidas_garantia,
-    )
-    
-    # Gamificación
-    if total_operaciones <= 49:
-        nivel = 'Novato'
-        color = '#8e8e8e' # Gris
-        proximo = 50
-    elif total_operaciones <= 99:
-        nivel = 'Intermedio'
-        color = '#cd7f32' # Bronce
-        proximo = 100
-    elif total_operaciones <= 499:
-        nivel = 'Avanzado'
-        color = '#c0c0c0' # Plata
-        proximo = 500
-    elif total_operaciones <= 999:
-        nivel = 'Experto'
-        color = '#ffd700' # Oro
-        proximo = 1000
-    elif total_operaciones <= 3999:
-        nivel = 'Maestro'
-        color = '#b9f2ff' # Diamante brillante
-        proximo = 4000
-    else:
-        nivel = 'God Tec Econotec'
-        color = 'linear-gradient(45deg, #FFD700, #ff8c00)' # Oro
-        proximo = None
-        
+    salidas_buenas = puntaje['salidas_buenas']
+    salidas_producto = puntaje['ventas_producto']
+    salidas_malas = puntaje['salidas_malas']
+    total_operaciones = puntaje['total']
+    nivel = puntaje['nivel']
+    color = puntaje['color']
+    proximo = puntaje['proximo']
+
     return {
         'username': user.username,
         'nombre': user.first_name or user.username,

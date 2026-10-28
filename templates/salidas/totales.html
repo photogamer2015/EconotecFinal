@@ -284,6 +284,84 @@
         color: var(--text-main);
     }
     .kpi-value.vacio { color: var(--text-muted); }
+    .kpi.puntos .kpi-value { color: var(--primary-dark); }
+    .kpi.puntos .kpi-value.negativo { color: var(--danger); }
+
+    /* Nivel del técnico (Mi perfil) y puntos ganados en el período. */
+    .tech-nivel {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1.35fr);
+        gap: 14px;
+        margin-top: 16px;
+    }
+    .nivel-cabeza { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; }
+    .nivel-dot {
+        flex: 0 0 auto;
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
+        background: var(--nivel-color);
+        box-shadow: 0 0 0 3px var(--card-bg);
+    }
+    .nivel-nombre { font-size: 20px; font-weight: 800; color: var(--text-main); }
+    .nivel-total {
+        margin-left: auto;
+        padding: 3px 10px;
+        border-radius: 999px;
+        background: var(--card-bg);
+        font-size: 12px;
+        font-weight: 800;
+        color: var(--text-soft);
+    }
+    .nivel-meter {
+        height: 10px;
+        margin-top: 10px;
+        border: 1px solid var(--border-color);
+        border-radius: 999px;
+        background: var(--card-bg);
+        overflow: hidden;
+    }
+    .nivel-meter > span { display: block; height: 100%; border-radius: 999px; background: var(--nivel-color); }
+    .nivel-nota { margin-top: 7px; font-size: 12px; font-weight: 700; color: var(--text-muted); line-height: 1.4; }
+    .nivel-nota strong { color: var(--text-main); }
+    .puntos-desglose { list-style: none; }
+    .puntos-desglose li {
+        display: flex;
+        justify-content: space-between;
+        gap: 10px;
+        padding: 5px 0;
+        border-top: 1px dashed var(--border-color);
+        font-size: 12.5px;
+        color: var(--text-soft);
+    }
+    .puntos-desglose li:first-child { border-top: 0; }
+    .puntos-desglose strong { color: var(--text-main); white-space: nowrap; }
+    .puntos-desglose .pos { color: var(--success); }
+    .puntos-desglose .neg { color: var(--danger); }
+    .puntos-desglose li.vacio { color: var(--text-muted); font-style: italic; }
+    .puntos-desglose li.total {
+        margin-top: 2px;
+        border-top: 2px solid var(--border-color);
+        font-size: 13.5px;
+        font-weight: 800;
+        color: var(--text-main);
+    }
+    .parte-valor { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+    .parte-puntos {
+        display: inline-block;
+        padding: 0 6px;
+        border-radius: 999px;
+        font-size: 10.5px;
+        font-weight: 800;
+        line-height: 1.6;
+        vertical-align: 1px;
+    }
+    .parte-puntos.pos { background: var(--tint-green-bg); color: var(--tint-green-fg); }
+    .parte-puntos.neg { background: var(--tint-red-bg); color: var(--tint-red-fg); }
+    .parte-puntos.cero { background: var(--card-bg); color: var(--text-muted); }
+    .tabla-puntos { width: 100%; border-collapse: collapse; margin-top: 6px; font-size: 13px; }
+    .tabla-puntos td { padding: 5px 4px; border-top: 1px dashed var(--border-color); }
+    .tabla-puntos td:last-child { text-align: right; font-weight: 800; white-space: nowrap; }
 
     /* Medidor: el relleno indica el nivel y la pista es un tono claro del mismo color. */
     .meter {
@@ -461,6 +539,7 @@
         .tech-block.resultados { grid-column: 1 / -1; }
     }
     @media (max-width: 640px) {
+        .tech-nivel { grid-template-columns: minmax(0, 1fr); }
         .tech-card { padding: 16px; }
         .tech-card__body,
         .tech-card__body.sin-dinero,
@@ -871,25 +950,39 @@
         <section>
             <h4>Qué suma, qué resta y qué no afecta</h4>
             <ul>
-                <li><span class="efecto-icono suma" aria-hidden="true">✓</span><span><b>Suman:</b> Finalizado y reparado, esté pendiente de retiro o ya haya salido de la oficina.</span></li>
+                <li><span class="efecto-icono suma" aria-hidden="true">✓</span><span><b>Suman:</b> Finalizado y reparado (esté pendiente de retiro o ya haya salido de la oficina) y Cliente no quiso reparar.</span></li>
                 <li><span class="efecto-icono resta" aria-hidden="true">−</span><span><b>Restan:</b> Garantía finalizada, Garantía + fallos adicionales y No se pudo reparar.</span></li>
-                <li><span class="efecto-icono neutro" aria-hidden="true">○</span><span><b>No afectan:</b> Cliente no quiso reparar, Revisión, Cortesía y Chatarrerización.</span></li>
+                <li><span class="efecto-icono neutro" aria-hidden="true">○</span><span><b>No afectan:</b> Revisión, Cortesía y Chatarrerización.</span></li>
             </ul>
         </section>
         <section>
+            <h4>Puntos y niveles</h4>
+            <table class="tabla-puntos">
+                <tbody>
+                    <tr><td>Finalizado y reparado (en espera de retiro o retirado)</td><td>+3</td></tr>
+                    <tr><td>Cliente no quiso reparar</td><td>+1</td></tr>
+                    <tr><td>Venta de producto</td><td>+1</td></tr>
+                    <tr><td>No se pudo reparar</td><td>−1</td></tr>
+                    <tr><td>Garantía finalizada / Garantía + fallos adicionales</td><td>−4</td></tr>
+                    <tr><td>Revisión, Cortesía y Chatarrerización</td><td>0</td></tr>
+                </tbody>
+            </table>
+            <p>Cada tarjeta muestra los <b>puntos del período</b> elegido y el <b>nivel del técnico</b>, que es el mismo de Mi perfil y cuenta todo su historial: Novato (0), Intermedio (50), Avanzado (100), Experto (500), Maestro (1.000) y God Tec Econotec (4.000).</p>
+        </section>
+        <section>
             <h4>Cómo se calcula la efectividad</h4>
-            <p>De los equipos que suman o restan, qué porcentaje salió reparado: <b>Suman ÷ (Suman + Restan)</b>.</p>
-            <p>Ejemplo: 14 reparados, 1 garantía y 1 que no se pudo reparar dan 14 ÷ 16 = <b>87,5 %</b>. Si además hubo equipos que el cliente no quiso reparar, el porcentaje sigue igual: no afectan.</p>
+            <p>De los equipos que suman o restan, qué porcentaje salió bien: <b>Suman ÷ (Suman + Restan)</b>.</p>
+            <p>Ejemplo: 14 reparados, 2 que el cliente no quiso reparar, 1 garantía y 1 que no se pudo reparar dan (14 + 2) ÷ 18 = <b>88,9 %</b>. Revisión, cortesía y chatarrerización no cambian el porcentaje.</p>
         </section>
         <section>
             <h4>Tabla de posiciones</h4>
             <p>Cuando en el período hay dos técnicos o más, arriba de las tarjetas aparece la <b>Tabla de posiciones</b>, de mayor a menor:</p>
             <ul>
-                <li><span><b>1.</b> Gana quien más equipos reparó (los que suman).</span></li>
-                <li><span><b>2.</b> Si empatan en reparados, gana la mejor efectividad.</span></li>
+                <li><span><b>1.</b> Gana quien más puntos tiene en el período.</span></li>
+                <li><span><b>2.</b> Si empatan en puntos, gana la mejor efectividad.</span></li>
                 <li><span><b>3.</b> Si también empatan en efectividad, comparten el puesto y el siguiente salta (1, 1, 3).</span></li>
             </ul>
-            <p>La barra compara los reparados de cada técnico con los del primero. Los equipos sin técnico que reparó no compiten y van al final.</p>
+            <p>La barra compara los puntos de cada técnico con los del primero. Los equipos sin técnico que reparó no compiten y van al final.</p>
         </section>
         <section>
             <h4>Cómo elegir el período</h4>
@@ -899,7 +992,7 @@
                 <li><span><b>Año:</b> el total del año, del 1 de enero al 31 de diciembre.</span></li>
                 <li><span><b>Rango de fechas:</b> Desde y Hasta libres. Solo aquí aparecen las flechas ▲▼ que comparan con el período anterior (un mes completo con el mes anterior; otro rango, con los mismos días justo antes).</span></li>
             </ul>
-            <p>Al abrir la página se muestra el mes en curso. <b>Limpiar</b> muestra todo el historial. El ranking se ordena por <b>equipos reparados</b>; si empatan, por efectividad.</p>
+            <p>Al abrir la página se muestra el mes en curso. <b>Limpiar</b> muestra todo el historial. El ranking se ordena por <b>puntos</b>; si empatan, por efectividad.</p>
         </section>
         {% if mostrar_valores_monetarios %}
         <section>
@@ -918,7 +1011,7 @@
     {% if competidores|length > 1 %}
     <div class="competencia" role="group" aria-labelledby="titulo-competencia">
         <h4 class="competencia-titulo" id="titulo-competencia">🏁 Tabla de posiciones</h4>
-        <p class="competencia-regla">Gana quien más equipos reparó. Si empatan, gana la mejor efectividad; si también empatan, comparten el puesto.</p>
+        <p class="competencia-regla">Gana quien más puntos tiene. Si empatan, gana la mejor efectividad; si también empatan, comparten el puesto.</p>
         <ol class="competencia-lista">
             {% for c in competidores %}
             <li class="competidor{% if c.puesto <= 3 %} puesto-{{ c.puesto }}{% endif %}">
@@ -926,15 +1019,15 @@
                 <div class="competidor-nombre">
                     <strong><span class="visually-hidden">Puesto {{ c.puesto }}: </span>{{ c.nombre }}</strong>
                     <span class="competidor-nota">
-                        {% if c.puesto == 1 %}{% if c.empate %}Comparten el primer puesto{% else %}Va primero{% endif %}{% elif c.detras_del_primero %}A {{ c.detras_del_primero }} reparado{{ c.detras_del_primero|pluralize }} del primero{% else %}Mismos reparados que el primero; lo desempata la efectividad{% endif %}
+                        {% if c.puesto == 1 %}{% if c.empate %}Comparten el primer puesto{% else %}Va primero{% endif %}{% elif c.detras_del_primero %}A {{ c.detras_del_primero }} punto{{ c.detras_del_primero|pluralize }} del primero{% else %}Mismos puntos que el primero; lo desempata la efectividad{% endif %}
                     </span>{% if c.empate %}<span class="chip-empate">Empate</span>{% endif %}
                 </div>
-                <div class="meter ancho" role="img" aria-label="{{ c.salidas_positivas }} reparados; el primero tiene {{ c.salidas_positivas|add:c.detras_del_primero }}" title="Reparados comparados con los del primero">
+                <div class="meter ancho" role="img" aria-label="{{ c.puntos }} puntos; el primero tiene {{ c.puntos|add:c.detras_del_primero }}" title="Puntos comparados con los del primero">
                     <span style="width: {{ c.barra_primero|stringformat:'.1f' }}%;"></span>
                 </div>
                 <div class="competidor-dato reparados">
-                    <span class="kpi-label">Reparados</span>
-                    <strong>{{ c.salidas_positivas }}</strong>
+                    <span class="kpi-label">Puntos</span>
+                    <strong>{{ c.puntos }}</strong>
                 </div>
                 <div class="competidor-dato efectividad">
                     <span class="kpi-label">Efectividad</span>
@@ -971,9 +1064,14 @@
                 </div>
 
                 <div class="tech-kpis">
+                    <div class="kpi puntos">
+                        <span class="kpi-label">Puntos</span>
+                        <span class="kpi-value{% if r.puntos < 0 %} negativo{% endif %}">{{ r.puntos }}</span>
+                        <span class="trend same">en este período</span>
+                    </div>
                     <div class="kpi">
                         <span class="kpi-label">Reparados</span>
-                        <span class="kpi-value">{{ r.salidas_positivas }}</span>
+                        <span class="kpi-value">{{ r.reparados }}</span>
                         {% if comparacion %}
                             {% if r.delta_positivas > 0 %}
                                 <span class="trend up" title="En {{ comparacion.etiqueta }}: {{ r.positivas_anterior }}">▲ {{ r.delta_positivas|stringformat:'+d' }} vs. {{ comparacion.etiqueta_corta }}</span>
@@ -1010,6 +1108,44 @@
                 </div>
             </div>
 
+            {% if r.perfil %}
+            <div class="tech-nivel">
+                <div class="tech-block nivel-perfil" style="--nivel-color: {{ r.perfil.color }};">
+                    <h5 class="tech-block-title">Nivel del técnico</h5>
+                    <div class="nivel-cabeza">
+                        <span class="nivel-dot" aria-hidden="true"></span>
+                        <span class="nivel-nombre">{{ r.perfil.nivel }}</span>
+                        <span class="nivel-total">{{ r.perfil.total }} pts acumulados</span>
+                    </div>
+                    <div class="nivel-meter" role="img" aria-label="{{ r.perfil.porcentaje }} % del camino al siguiente nivel">
+                        <span style="width: {{ r.perfil.porcentaje }}%;"></span>
+                    </div>
+                    <p class="nivel-nota">
+                        {% if r.perfil.proximo %}
+                            Le faltan <strong>{{ r.perfil.faltan }} punto{{ r.perfil.faltan|pluralize }}</strong> para <strong>{{ r.perfil.siguiente }}</strong> ({{ r.perfil.total }} / {{ r.perfil.proximo }}).
+                        {% else %}
+                            Llegó al <strong>nivel máximo</strong>.
+                        {% endif %}
+                        Es el mismo nivel de Mi perfil: cuenta todo su historial{% if r.perfil.fecha_reinicio %} desde el {{ r.perfil.fecha_reinicio|date:"d/m/Y" }}{% endif %}.
+                    </p>
+                </div>
+                <div class="tech-block puntos-periodo">
+                    <h5 class="tech-block-title">Puntos de este período</h5>
+                    <ul class="puntos-desglose">
+                        {% for d in r.puntos_detalle %}
+                        <li>
+                            <span>{{ d.cantidad }} × {{ d.etiqueta }} ({% if d.unitario > 0 %}+{% endif %}{{ d.unitario }})</span>
+                            <strong class="{% if d.subtotal > 0 %}pos{% else %}neg{% endif %}">{% if d.subtotal > 0 %}+{% endif %}{{ d.subtotal }}</strong>
+                        </li>
+                        {% empty %}
+                        <li class="vacio">Sin resultados que den o quiten puntos en este período.</li>
+                        {% endfor %}
+                        <li class="total"><span>Total del período</span><strong>{{ r.puntos }} pts</strong></li>
+                    </ul>
+                </div>
+            </div>
+            {% endif %}
+
             <div class="tech-card__body{% if not mostrar_valores_monetarios %} sin-dinero{% endif %}">
                 <div class="tech-block resultados">
                     <h5 class="tech-block-title">Resultados de los equipos finalizados</h5>
@@ -1026,7 +1162,7 @@
                             </div>
                             <ul>
                                 {% for p in g.partes %}
-                                <li class="parte{% if not p.cantidad %} cero{% endif %}"><span>{{ p.etiqueta }}</span><strong>{{ p.cantidad }}</strong></li>
+                                <li class="parte{% if not p.cantidad %} cero{% endif %}"><span>{{ p.etiqueta }}</span><span class="parte-valor"><span class="parte-puntos {% if p.puntos > 0 %}pos{% elif p.puntos < 0 %}neg{% else %}cero{% endif %}" title="Puntos por cada equipo">{% if p.puntos > 0 %}+{% endif %}{{ p.puntos }} pts</span><strong>{{ p.cantidad }}</strong></span></li>
                                 {% endfor %}
                             </ul>
                         </div>
@@ -1091,7 +1227,7 @@
                         {% endif %}
                         <span class="tech-mes-detalle">
                             {{ mes.resumen.num_equipos }} finalizado{{ mes.resumen.num_equipos|pluralize }} ·
-                            {{ mes.resumen.salidas_positivas }} reparado{{ mes.resumen.salidas_positivas|pluralize }} ·
+                            {{ mes.resumen.salidas_positivas }} suma{{ mes.resumen.salidas_positivas|pluralize:"n" }} ·
                             {{ mes.resumen.salidas_negativas }} resta{{ mes.resumen.salidas_negativas|pluralize:"n" }}
                         </span>
                     </li>

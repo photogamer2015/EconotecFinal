@@ -24,9 +24,7 @@ from django.views.decorators.http import require_POST
 from .forms import EgresoForm
 from .gamificacion import (
     SALIDA_BUENA_ESTADOS,
-    SALIDA_GARANTIA_ESTADOS,
     SALIDA_MALA_ESTADOS,
-    calcular_puntaje_gamificacion,
 )
 from .busqueda import filtrar_objetos_normalizado, texto_salida_busqueda, total_resultados
 from .bitacora import construir_bitacora_usuario
@@ -2280,56 +2278,27 @@ from django.utils import timezone
 from .models import UsuarioActividad
 
 def _obtener_estadisticas_gamificacion():
+    from .views import puntaje_tecnico
+
     stats = []
     usuarios = User.objects.filter(is_active=True, groups__name__in=['Tecnicos', 'Asesores']).distinct()
     
     for u in usuarios:
-        fecha_reinicio = None
-        if hasattr(u, 'actividad') and u.actividad.fecha_reinicio_perfil:
-            fecha_reinicio = u.actividad.fecha_reinicio_perfil
-
+        # Mismos puntos y nivel que Mi perfil (gamificacion.PUNTOS_POR_ESTADO_SALIDA).
+        puntaje = puntaje_tecnico(u)
         ingresos_qs = IngresoEquipo.objects.filter(
             sede__in=SEDES_EQUIPOS,
             tecnico_encargado=u,
         )
-        # El nivel se calcula por las salidas que el técnico REPARÓ, no por
-        # las que registró ni por los ingresos (misma regla que api_perfil).
-        salidas_qs = SalidaEquipo.objects.filter(tecnico_reparo=u)
-        ventas_producto_qs = IngresoEquipo.objects.filter(
-            sede='ventas',
-            tecnico_encargado=u,
-        )
-
-        if fecha_reinicio:
-            ingresos_qs = ingresos_qs.filter(creado__gte=fecha_reinicio)
-            salidas_qs = salidas_qs.filter(creado__gte=fecha_reinicio)
-            ventas_producto_qs = ventas_producto_qs.filter(creado__gte=fecha_reinicio)
+        if puntaje['fecha_reinicio']:
+            ingresos_qs = ingresos_qs.filter(creado__gte=puntaje['fecha_reinicio'])
 
         ingresos = ingresos_qs.count()
-        ventas_producto = ventas_producto_qs.count()
-        salidas_buenas = salidas_qs.filter(estado_reparacion__in=SALIDA_BUENA_ESTADOS).count()
-        salidas_malas = salidas_qs.filter(estado_reparacion__in=SALIDA_MALA_ESTADOS).count()
-        salidas_garantia = salidas_qs.filter(estado_reparacion__in=SALIDA_GARANTIA_ESTADOS).count()
-        
-        total = calcular_puntaje_gamificacion(
-            salidas_buenas,
-            ventas_producto,
-            salidas_malas,
-            salidas_garantia,
-        )
-        
-        if total <= 49:
-            nivel = 'Novato'
-        elif total <= 99:
-            nivel = 'Intermedio'
-        elif total <= 499:
-            nivel = 'Avanzado'
-        elif total <= 999:
-            nivel = 'Experto'
-        elif total <= 3999:
-            nivel = 'Maestro'
-        else:
-            nivel = 'God Tec Econotec'
+        ventas_producto = puntaje['ventas_producto']
+        salidas_buenas = puntaje['salidas_buenas']
+        salidas_malas = puntaje['salidas_malas']
+        total = puntaje['total']
+        nivel = puntaje['nivel']
             
         stats.append({
             'usuario': f"{u.first_name} {u.last_name}".strip() or u.username,
