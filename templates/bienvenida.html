@@ -2990,11 +2990,19 @@
     </div>
     <span class="pill">{{ item.dias }} día{{ item.dias|pluralize }}</span>
     <div class="acciones">
+      {% with total_obs=item.ingreso.observaciones.all|length %}
+      <button type="button" class="btn-ver-mini btn-ver-observaciones"
+              data-obs-admin-url="{% url 'econotec:ingreso_observaciones' pk=item.ingreso.pk %}"
+              data-obs-admin-detalle="{% url 'econotec:ingreso_detalle' item.ingreso.pk %}">
+        📝 Observaciones{% if total_obs %}<span class="obs-count">{{ total_obs }}</span>{% endif %}
+      </button>
+      {% endwith %}
       <a class="btn-ver-mini" href="{% url 'econotec:ingreso_detalle' item.ingreso.pk %}">Ver</a>
     </div>
   </div>
   {% endfor %}
 </div>
+{% include 'includes/observaciones_modal.html' %}
 {% endif %}
 
 {# ════════════════════════════════════════════════════════════════ #}

@@ -729,6 +729,33 @@
         border-color: rgba(255, 255, 255, 0.14) !important;
     }
 
+    .observacion-nueva-wrap {
+        margin-top: 14px;
+    }
+
+    .observacion-nueva-wrap[hidden] {
+        display: none;
+    }
+
+    .observacion-ayuda {
+        display: flex;
+        justify-content: space-between;
+        gap: 10px;
+        margin-top: 4px;
+        color: #888;
+        font-size: 11px;
+        font-weight: 700;
+    }
+
+    .observacion-contador {
+        white-space: nowrap;
+    }
+
+    .observacion-historial-nota {
+        margin-top: 10px;
+        color: var(--primary-dark, #c2410c);
+    }
+
     .firma-panel {
         display: grid;
         gap: 12px;
@@ -1881,6 +1908,39 @@
                 </div>
             </div>
         </div>
+    </div>
+
+    <!-- Observación opcional: con "Sí" sale en el detalle del equipo -->
+    <div class="form-section" id="seccion-observacion">
+        <h3>Observación</h3>
+        <div class="form-row cols-2">
+            <div>
+                <label class="form-label">{{ ing_form.agregar_observacion.label }}</label>
+                <div class="valor-acordado-opciones" id="observacion-opciones">
+                    {% for radio in ing_form.agregar_observacion %}
+                        <label class="valor-acordado-opcion" for="{{ radio.id_for_label }}">
+                            {{ radio.tag }}
+                            <span>{{ radio.choice_label }}</span>
+                        </label>
+                    {% endfor %}
+                </div>
+                {{ ing_form.agregar_observacion.errors }}
+            </div>
+        </div>
+        <div id="wrap_observacion_nueva" class="observacion-nueva-wrap" {% if ing_form.agregar_observacion.value != 'si' %}hidden{% endif %}>
+            <label class="form-label" for="id_observacion_nueva">Observación *</label>
+            {{ ing_form.observacion_nueva }}
+            {{ ing_form.observacion_nueva.errors }}
+            <small class="observacion-ayuda">
+                Saldrá en el detalle del equipo con la fecha y quién la escribió.
+                <span class="observacion-contador"><span id="observacion-contador">0</span> / {{ ing_form.OBSERVACION_MAX_CARACTERES }}</span>
+            </small>
+        </div>
+        {% if modo == 'editar' and ingreso.observaciones.exists %}
+        <small class="observacion-ayuda observacion-historial-nota">
+            📝 Este equipo ya tiene observaciones. Si eliges Sí, la nueva se agrega al historial y las anteriores se conservan.
+        </small>
+        {% endif %}
     </div>
 
     <!-- Firma del cliente -->
@@ -3046,6 +3106,52 @@
         actualizarValorAcordado();
         setTimeout(actualizarValorAcordado, 150);
         setTimeout(actualizarValorAcordado, 600);
+    })();
+
+    // Observación opcional: con "Sí" aparece el cuadro para escribirla.
+    // Donado / Equipo a comprar ya usan "Problema reportado" como observación.
+    (function () {
+        var seccion = document.getElementById('seccion-observacion');
+        var wrap = document.getElementById('wrap_observacion_nueva');
+        var texto = document.getElementById('id_observacion_nueva');
+        var contador = document.getElementById('observacion-contador');
+        var estado = document.querySelector('[name="ing-estado"]');
+        var radios = Array.prototype.slice.call(document.querySelectorAll('input[name="ing-agregar_observacion"]'));
+        if (!seccion || !wrap || !texto || !radios.length) return;
+
+        function seleccion() {
+            for (var i = 0; i < radios.length; i += 1) {
+                if (radios[i].checked) return radios[i].value;
+            }
+            return 'no';
+        }
+
+        function esAdministrativo() {
+            return estado && (estado.value === 'donado' || estado.value === 'equipo_a_comprar');
+        }
+
+        function actualizar() {
+            var administrativo = esAdministrativo();
+            var activo = !administrativo && seleccion() === 'si';
+            seccion.style.display = administrativo ? 'none' : '';
+            wrap.hidden = !activo;
+            texto.required = activo;
+            radios.forEach(function (radio) {
+                var label = radio.closest('.valor-acordado-opcion');
+                if (label) label.classList.toggle('is-active', radio.checked);
+            });
+            if (contador) contador.textContent = texto.value.length;
+        }
+
+        radios.forEach(function (radio) {
+            radio.addEventListener('change', function () {
+                actualizar();
+                if (seleccion() === 'si') texto.focus();
+            });
+        });
+        texto.addEventListener('input', actualizar);
+        if (estado) estado.addEventListener('change', actualizar);
+        actualizar();
     })();
 
     // Flujo administrativo para Donado / Equipo a comprar.

@@ -29,8 +29,8 @@ from .alertas import (
 from .horarios import registrar_entrada_laboral
 from .models import (
     Abono, BitacoraTecnico, Cliente, Egreso, HorarioTecnico, IngresoEquipo, InventarioItem,
-    NotificacionAsesora, NotificacionInventarioAdmin, SalidaEquipo, UsuarioActividad,
-    VentaInventarioItem,
+    NotificacionAsesora, NotificacionInventarioAdmin, ObservacionEquipo, SalidaEquipo,
+    UsuarioActividad, VentaInventarioItem,
 )
 from .qr_utils import token_para_ingreso
 from .views import (
@@ -11366,3 +11366,245 @@ class VentasTests(TestCase):
         ws = openpyxl.load_workbook(io.BytesIO(response.content)).active
         self.assertEqual(ws.cell(row=2, column=7).value, '=HYPERLINK("http://x","Abrir")')
         self.assertEqual(ws.cell(row=2, column=7).data_type, 's')
+
+    # ── Observaciones del equipo ───────────────────────────────────
+    def url_detalle(self, ingreso):
+        return reverse('econotec:ingreso_detalle', kwargs={'pk': ingreso.pk})
+
+    def test_formulario_ingreso_pregunta_si_desea_agregar_observacion(self):
+        self.activar_sede_guayaquil()
+
+        response = self.client.get(reverse('econotec:ingreso_registrar'))
+
+        self.assertContains(response, '¿Desea agregar una observación?')
+        self.assertContains(response, 'name="ing-agregar_observacion" value="si"')
+        self.assertContains(response, 'name="ing-agregar_observacion" value="no"')
+        self.assertContains(response, 'id="id_observacion_nueva"')
+
+    def test_registro_con_observacion_si_la_muestra_en_el_detalle(self):
+        self.activar_sede_guayaquil()
+
+        self.client.post(
+            reverse('econotec:ingreso_registrar'),
+            self.ingreso_registro_post_data(**{
+                'ing-agregar_observacion': 'si',
+                'ing-observacion_nueva': '  El cliente pide que lo llamen antes de cambiar piezas.  ',
+            }),
+        )
+
+        ingreso = IngresoEquipo.objects.get()
+        observacion = ingreso.observaciones.get()
+        self.assertEqual(observacion.texto, 'El cliente pide que lo llamen antes de cambiar piezas.')
+        self.assertEqual(observacion.autor, self.usuario)
+        self.assertEqual(observacion.estado_texto, 'En reparación')
+
+        detalle = self.client.get(self.url_detalle(ingreso))
+        self.assertContains(detalle, '📝 Observaciones')
+        self.assertContains(detalle, 'El cliente pide que lo llamen antes de cambiar piezas.')
+        self.assertContains(detalle, timezone.localtime(observacion.creado).strftime('%d/%m/%Y'))
+        self.assertContains(detalle, '✍️ Yandri')
+
+    def test_registro_con_observacion_si_sin_texto_no_se_guarda(self):
+        self.activar_sede_guayaquil()
+
+        response = self.client.post(
+            reverse('econotec:ingreso_registrar'),
+            self.ingreso_registro_post_data(**{
+                'ing-agregar_observacion': 'si',
+                'ing-observacion_nueva': '   ',
+            }),
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('observacion_nueva', response.context['ing_form'].errors)
+        self.assertFalse(IngresoEquipo.objects.exists())
+        self.assertFalse(ObservacionEquipo.objects.exists())
+
+    def test_registro_con_observacion_no_no_guarda_observacion(self):
+        self.activar_sede_guayaquil()
+
+        self.client.post(
+            reverse('econotec:ingreso_registrar'),
+            self.ingreso_registro_post_data(**{
+                'ing-agregar_observacion': 'no',
+                'ing-observacion_nueva': 'Texto que no se debe guardar',
+            }),
+        )
+
+        self.assertTrue(IngresoEquipo.objects.exists())
+        self.assertFalse(ObservacionEquipo.objects.exists())
+
+    def test_editar_ingreso_con_observacion_la_agrega_al_historial(self):
+        ingreso = self.crear_ingreso_reparacion()
+        ObservacionEquipo.objects.create(ingreso=ingreso, texto='Primera', autor=self.usuario)
+
+        response = self.client.post(
+            reverse('econotec:ingreso_editar', kwargs={'pk': ingreso.pk}),
+            self.ingreso_edit_post_data(ingreso, **{
+                'ing-agregar_observacion': 'si',
+                'ing-observacion_nueva': 'Segunda',
+            }),
+        )
+
+        self.assertRedirects(response, self.url_detalle(ingreso), fetch_redirect_response=False)
+        self.assertEqual(
+            list(ingreso.observaciones.values_list('texto', flat=True)),
+            ['Segunda', 'Primera'],
+        )
+
+    def test_detalle_en_reparacion_muestra_boton_y_ventana_una_vez_al_dia(self):
+        for subestado in ('en_reparacion', 'espera_cliente', 'espera_repuesto'):
+            with self.subTest(subestado=subestado):
+                ingreso = self.crear_ingreso_reparacion(subestado_reparacion=subestado)
+
+                primera = self.client.get(self.url_detalle(ingreso))
+                self.assertTrue(primera.context['mostrar_popup_observacion'])
+                self.assertContains(primera, '¿Deseas actualizar la observación de este equipo?')
+                self.assertContains(primera, 'data-auto-abrir="1"')
+                self.assertContains(primera, '📝 Actualizar observación')
+
+                segunda = self.client.get(self.url_detalle(ingreso))
+                self.assertFalse(segunda.context['mostrar_popup_observacion'])
+                self.assertContains(segunda, 'data-auto-abrir="0"')
+                self.assertContains(segunda, '📝 Actualizar observación')
+
+    def test_ventana_de_observacion_vuelve_a_salir_al_dia_siguiente(self):
+        ingreso = self.crear_ingreso_reparacion()
+        self.client.get(self.url_detalle(ingreso))
+        session = self.client.session
+        session['observacion_popup_vistos'] = {'fecha': '2026-01-01', 'ids': [ingreso.pk]}
+        session.save()
+
+        response = self.client.get(self.url_detalle(ingreso))
+
+        self.assertTrue(response.context['mostrar_popup_observacion'])
+
+    def test_ventana_de_observacion_no_sale_si_ya_hay_una_de_hoy(self):
+        ingreso = self.crear_ingreso_reparacion()
+        ObservacionEquipo.objects.create(ingreso=ingreso, texto='Hoy se cambió el fusor.', autor=self.usuario)
+
+        response = self.client.get(self.url_detalle(ingreso))
+
+        self.assertFalse(response.context['mostrar_popup_observacion'])
+        self.assertContains(response, '📝 Actualizar observación')
+
+    def test_detalle_fuera_de_reparacion_no_muestra_boton_ni_ventana(self):
+        ingreso = self.crear_ingreso_reparacion(estado='ingresado', subestado_reparacion='')
+
+        response = self.client.get(self.url_detalle(ingreso))
+
+        self.assertFalse(response.context['mostrar_popup_observacion'])
+        self.assertNotContains(response, 'Actualizar observación')
+        self.assertNotContains(response, 'id="obs-pregunta-modal"')
+
+    def test_agregar_observacion_guarda_fecha_autor_y_estado(self):
+        ingreso = self.crear_ingreso_reparacion(subestado_reparacion='espera_repuesto')
+
+        response = self.client.post(
+            reverse('econotec:ingreso_observacion_agregar', kwargs={'pk': ingreso.pk}),
+            {'texto': '  Se pidió el repuesto, llega el viernes.  '},
+        )
+
+        self.assertRedirects(response, self.url_detalle(ingreso), fetch_redirect_response=False)
+        observacion = ingreso.observaciones.get()
+        self.assertEqual(observacion.texto, 'Se pidió el repuesto, llega el viernes.')
+        self.assertEqual(observacion.autor, self.usuario)
+        self.assertEqual(observacion.estado_texto, 'En reparación - Repuestos')
+        self.assertEqual(timezone.localdate(observacion.creado), timezone.localdate())
+
+        detalle = self.client.get(self.url_detalle(ingreso))
+        self.assertContains(detalle, 'Se pidió el repuesto, llega el viernes.')
+        self.assertContains(detalle, 'Última')
+        self.assertFalse(detalle.context['mostrar_popup_observacion'])
+
+    def test_agregar_observacion_vacia_no_se_guarda(self):
+        ingreso = self.crear_ingreso_reparacion()
+
+        self.client.post(
+            reverse('econotec:ingreso_observacion_agregar', kwargs={'pk': ingreso.pk}),
+            {'texto': '   '},
+        )
+
+        self.assertFalse(ObservacionEquipo.objects.exists())
+
+    def test_agregar_observacion_fuera_de_reparacion_se_rechaza(self):
+        ingreso = self.crear_ingreso_reparacion(estado='ingresado', subestado_reparacion='')
+
+        self.client.post(
+            reverse('econotec:ingreso_observacion_agregar', kwargs={'pk': ingreso.pk}),
+            {'texto': 'No debería guardarse'},
+        )
+
+        self.assertFalse(ObservacionEquipo.objects.exists())
+
+    def test_admin_ve_boton_observaciones_en_lista_de_equipos_en_reparacion(self):
+        en_reparacion = self.crear_ingreso_reparacion()
+        ObservacionEquipo.objects.create(ingreso=en_reparacion, texto='Uno', autor=self.usuario)
+        ObservacionEquipo.objects.create(ingreso=en_reparacion, texto='Dos', autor=self.usuario)
+        en_diagnostico = self.crear_ingreso_reparacion(estado='ingresado', subestado_reparacion='')
+        self.client.force_login(self.admin)
+
+        response = self.client.get(reverse('econotec:ingreso_lista'))
+
+        self.assertContains(
+            response,
+            reverse('econotec:ingreso_observaciones', kwargs={'pk': en_reparacion.pk}),
+        )
+        self.assertNotContains(
+            response,
+            reverse('econotec:ingreso_observaciones', kwargs={'pk': en_diagnostico.pk}),
+        )
+        self.assertContains(response, '<span class="obs-count">2</span>', html=True)
+        self.assertContains(response, 'id="obs-admin-modal"')
+
+    def test_tecnico_no_ve_boton_ver_observaciones_en_lista(self):
+        self.crear_ingreso_reparacion()
+
+        response = self.client.get(reverse('econotec:ingreso_lista'))
+
+        self.assertNotContains(response, 'Ver observaciones')
+        self.assertNotContains(response, 'id="obs-admin-modal"')
+
+    def test_admin_consulta_historial_de_observaciones(self):
+        ingreso = self.crear_ingreso_reparacion()
+        ObservacionEquipo.objects.create(
+            ingreso=ingreso,
+            texto='Esperando cabezal, llega el viernes.',
+            autor=self.usuario,
+            estado_texto='En reparación',
+        )
+        self.client.force_login(self.admin)
+
+        response = self.client.get(
+            reverse('econotec:ingreso_observaciones', kwargs={'pk': ingreso.pk}),
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Esperando cabezal, llega el viernes.')
+        self.assertContains(response, '✍️ Yandri')
+        self.assertContains(response, 'Última')
+
+    def test_tecnico_no_puede_consultar_historial_de_admin(self):
+        ingreso = self.crear_ingreso_reparacion()
+
+        response = self.client.get(
+            reverse('econotec:ingreso_observaciones', kwargs={'pk': ingreso.pk}),
+        )
+
+        self.assertRedirects(response, reverse('econotec:bienvenida'), fetch_redirect_response=False)
+
+    def test_alerta_mas_de_10_dias_muestra_observaciones_al_admin(self):
+        ingreso = self.crear_ingreso_reparacion()
+        IngresoEquipo.objects.filter(pk=ingreso.pk).update(
+            fecha_alerta_reparacion=date.today() - timedelta(days=12),
+        )
+        ObservacionEquipo.objects.create(ingreso=ingreso, texto='Sin repuesto', autor=self.usuario)
+        self.client.force_login(self.admin)
+
+        response = self.client.get(reverse('econotec:bienvenida'))
+
+        self.assertContains(
+            response,
+            reverse('econotec:ingreso_observaciones', kwargs={'pk': ingreso.pk}),
+        )
+        self.assertContains(response, 'id="obs-admin-modal"')

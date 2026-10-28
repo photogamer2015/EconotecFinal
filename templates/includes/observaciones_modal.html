@@ -1,0 +1,245 @@
+{# Admin: ventana "Ver observaciones". Cualquier botón con data-obs-admin-url la abre y carga el historial. #}
+<style>
+    .obs-admin-modal {
+        position: fixed;
+        inset: 0;
+        z-index: 10000;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        padding: 18px;
+        background: rgba(15, 12, 10, 0.55);
+        backdrop-filter: blur(3px);
+    }
+    .obs-admin-modal.show {
+        display: flex;
+        animation: obs-admin-fade 0.18s ease;
+    }
+    .obs-admin-card {
+        display: flex;
+        flex-direction: column;
+        width: min(560px, 100%);
+        max-height: calc(100dvh - 36px);
+        border: 1px solid var(--border-color);
+        border-radius: 18px;
+        background: var(--card-bg);
+        color: var(--text-main);
+        box-shadow: var(--shadow-lg);
+        animation: obs-admin-pop 0.22s ease;
+        overflow: hidden;
+    }
+    .obs-admin-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 18px 22px 14px;
+        border-bottom: 1px solid var(--border-color);
+    }
+    .obs-admin-head h3 {
+        margin: 0;
+        color: var(--text-main);
+        font-size: 17px;
+        font-weight: 800;
+    }
+    .obs-admin-x {
+        width: 34px;
+        height: 34px;
+        border: none;
+        border-radius: 50%;
+        background: var(--surface-muted);
+        color: var(--text-muted);
+        font-size: 20px;
+        line-height: 1;
+        cursor: pointer;
+    }
+    .obs-admin-x:hover { color: var(--text-main); }
+    .obs-admin-body {
+        padding: 16px 22px;
+        overflow-y: auto;
+    }
+    .obs-admin-cabecera {
+        display: grid;
+        gap: 3px;
+        margin-bottom: 14px;
+        font-size: 14px;
+    }
+    .obs-admin-cabecera span {
+        color: var(--text-muted);
+        font-size: 12.5px;
+        font-weight: 600;
+    }
+    .obs-admin-lista {
+        display: grid;
+        gap: 10px;
+        list-style: none;
+        margin: 0;
+        padding: 0;
+    }
+    .obs-admin-item {
+        padding: 11px 13px;
+        border: 1px solid var(--border-color);
+        border-left: 3px solid var(--border-color);
+        border-radius: 10px;
+        background: var(--surface-muted);
+    }
+    .obs-admin-item.is-ultima {
+        border-color: rgba(249, 118, 24, 0.35);
+        border-left-color: var(--primary);
+        background: var(--primary-light);
+    }
+    .obs-admin-meta {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 6px 12px;
+        margin-bottom: 6px;
+        color: var(--text-muted);
+        font-size: 12px;
+        font-weight: 700;
+    }
+    .obs-admin-tag {
+        padding: 2px 8px;
+        border-radius: 999px;
+        background: var(--primary);
+        color: #fff;
+        font-size: 10.5px;
+        font-weight: 800;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+    }
+    .obs-admin-estado {
+        padding: 2px 8px;
+        border-radius: 999px;
+        background: var(--tint-orange-bg);
+        color: var(--tint-orange-fg);
+        font-size: 11px;
+    }
+    .obs-admin-item p {
+        margin: 0;
+        color: var(--text-main);
+        font-size: 13.5px;
+        line-height: 1.5;
+        overflow-wrap: anywhere;
+    }
+    .obs-admin-vacia,
+    .obs-admin-cargando {
+        margin: 0;
+        padding: 14px;
+        border-radius: 10px;
+        background: var(--surface-muted);
+        color: var(--text-muted);
+        font-size: 13px;
+        font-style: italic;
+        text-align: center;
+    }
+    .obs-admin-pie {
+        display: flex;
+        justify-content: flex-end;
+        gap: 10px;
+        padding: 14px 22px 18px;
+        border-top: 1px solid var(--border-color);
+    }
+    .btn-ver-observaciones { cursor: pointer; }
+    .btn-ver-observaciones .obs-count {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 18px;
+        height: 18px;
+        margin-left: 4px;
+        padding: 0 5px;
+        border-radius: 999px;
+        background: var(--primary);
+        color: #fff;
+        font-size: 10.5px;
+        font-weight: 800;
+    }
+    @keyframes obs-admin-fade { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes obs-admin-pop {
+        from { opacity: 0; transform: translateY(10px) scale(0.98); }
+        to { opacity: 1; transform: none; }
+    }
+    @media (max-width: 520px) {
+        .obs-admin-head, .obs-admin-body, .obs-admin-pie { padding-left: 16px; padding-right: 16px; }
+        .obs-admin-pie { flex-direction: column-reverse; }
+        .obs-admin-pie .btn { width: 100%; justify-content: center; }
+    }
+    [data-theme="dark"] .obs-admin-estado {
+        background: rgba(249, 118, 24, 0.18);
+        color: #fdba74;
+    }
+</style>
+
+<div class="obs-admin-modal" id="obs-admin-modal" aria-hidden="true">
+    <div class="obs-admin-card" role="dialog" aria-modal="true" aria-labelledby="obs-admin-titulo">
+        <div class="obs-admin-head">
+            <h3 id="obs-admin-titulo">📝 Observaciones de los técnicos</h3>
+            <button type="button" class="obs-admin-x" data-obs-admin-cerrar aria-label="Cerrar">×</button>
+        </div>
+        <div class="obs-admin-body" id="obs-admin-body" aria-live="polite"></div>
+        <div class="obs-admin-pie">
+            <a href="#" class="btn btn-secondary" id="obs-admin-detalle">Ver detalle del equipo</a>
+            <button type="button" class="btn btn-primary" data-obs-admin-cerrar>Cerrar</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    (function () {
+        var modal = document.getElementById('obs-admin-modal');
+        var cuerpo = document.getElementById('obs-admin-body');
+        var enlaceDetalle = document.getElementById('obs-admin-detalle');
+        if (!modal || !cuerpo) return;
+        var pedido = 0;
+        var ultimoFoco = null;
+
+        function cerrar() {
+            if (!modal.classList.contains('show')) return;
+            modal.classList.remove('show');
+            modal.setAttribute('aria-hidden', 'true');
+            document.body.style.overflow = '';
+            if (ultimoFoco && ultimoFoco.focus) ultimoFoco.focus();
+        }
+
+        function abrir(boton) {
+            var numero = ++pedido;
+            ultimoFoco = boton;
+            cuerpo.innerHTML = '<p class="obs-admin-cargando">Cargando observaciones…</p>';
+            if (enlaceDetalle) enlaceDetalle.href = boton.dataset.obsAdminDetalle || '#';
+            modal.classList.add('show');
+            modal.setAttribute('aria-hidden', 'false');
+            document.body.style.overflow = 'hidden';
+            fetch(boton.dataset.obsAdminUrl, {
+                credentials: 'same-origin',
+                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            })
+            .then(function (respuesta) {
+                if (!respuesta.ok || respuesta.redirected) throw new Error('sin acceso');
+                return respuesta.text();
+            })
+            .then(function (html) {
+                if (numero === pedido) cuerpo.innerHTML = html;
+            })
+            .catch(function () {
+                if (numero === pedido) {
+                    cuerpo.innerHTML = '<p class="obs-admin-vacia">No se pudieron cargar las observaciones. Intenta de nuevo.</p>';
+                }
+            });
+        }
+
+        document.addEventListener('click', function (e) {
+            var boton = e.target.closest('[data-obs-admin-url]');
+            if (boton) {
+                e.preventDefault();
+                abrir(boton);
+                return;
+            }
+            if (e.target === modal || e.target.closest('[data-obs-admin-cerrar]')) cerrar();
+        });
+
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape') cerrar();
+        });
+    })();
+</script>

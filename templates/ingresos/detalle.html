@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% load static econotec_extras %}
+{% load static tz econotec_extras %}
 
 {% block title %}Equipo {{ ingreso.codigo_equipo }} — Econotec{% endblock %}
 
@@ -550,6 +550,227 @@
         border-color: rgba(255, 255, 255, 0.14) !important;
         color: var(--text-muted) !important;
     }
+
+    /* Observaciones del equipo: historial con fecha y autor. */
+    .obs-lista {
+        display: grid;
+        gap: 10px;
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        max-height: 420px;
+        overflow-y: auto;
+    }
+    .obs-item {
+        padding: 11px 13px;
+        border: 1px solid var(--border-color);
+        border-left: 3px solid var(--border-color);
+        border-radius: 10px;
+        background: var(--surface-muted);
+    }
+    .obs-item.is-ultima {
+        border-color: rgba(249, 118, 24, 0.35);
+        border-left-color: var(--primary);
+        background: var(--primary-light);
+    }
+    .obs-meta {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 6px 12px;
+        margin-bottom: 6px;
+        color: var(--text-muted);
+        font-size: 12px;
+        font-weight: 700;
+    }
+    .obs-tag {
+        padding: 2px 8px;
+        border-radius: 999px;
+        background: var(--primary);
+        color: #fff;
+        font-size: 10.5px;
+        font-weight: 800;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+    }
+    .obs-estado {
+        padding: 2px 8px;
+        border-radius: 999px;
+        background: var(--tint-orange-bg);
+        color: var(--tint-orange-fg);
+        font-size: 11px;
+    }
+    .obs-texto {
+        margin: 0;
+        color: var(--text-main);
+        font-size: 13.5px;
+        line-height: 1.5;
+        overflow-wrap: anywhere;
+    }
+    .obs-vacia {
+        margin: 0;
+        color: var(--text-muted);
+        font-style: italic;
+    }
+    .obs-abrir-btn {
+        width: 100%;
+        justify-content: center;
+        margin-bottom: 8px;
+        border-color: rgba(249, 118, 24, 0.45) !important;
+        color: var(--primary-dark) !important;
+        font-weight: 800;
+    }
+    .obs-modal {
+        position: fixed;
+        inset: 0;
+        z-index: 10000;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        padding: 18px;
+        background: rgba(15, 12, 10, 0.55);
+        backdrop-filter: blur(3px);
+    }
+    .obs-modal.show {
+        display: flex;
+        animation: obs-fade 0.18s ease;
+    }
+    .obs-modal-card {
+        width: min(500px, 100%);
+        max-height: calc(100dvh - 36px);
+        overflow-y: auto;
+        padding: 24px;
+        border: 1px solid var(--border-color);
+        border-radius: 18px;
+        background: var(--card-bg);
+        color: var(--text-main);
+        box-shadow: var(--shadow-lg);
+        animation: obs-pop 0.22s ease;
+    }
+    .obs-modal-icono {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 54px;
+        height: 54px;
+        margin: 0 auto 12px;
+        border-radius: 50%;
+        background: var(--primary-light);
+        font-size: 26px;
+    }
+    .obs-modal-card h3 {
+        margin: 0 0 6px;
+        color: var(--text-main);
+        font-size: 19px;
+        font-weight: 800;
+        line-height: 1.25;
+    }
+    .obs-modal-centro { text-align: center; }
+    .obs-modal-sub {
+        margin: 0 0 16px;
+        color: var(--text-soft);
+        font-size: 13.5px;
+        line-height: 1.45;
+    }
+    .obs-modal-ultima {
+        margin-bottom: 18px;
+        padding: 12px 14px;
+        border-left: 3px solid var(--primary);
+        border-radius: 10px;
+        background: var(--surface-muted);
+        text-align: left;
+    }
+    .obs-modal-ultima.is-vacia {
+        border-left-color: var(--border-color);
+        color: var(--text-muted);
+        font-size: 13px;
+        font-style: italic;
+    }
+    .obs-modal-ultima-label {
+        display: block;
+        margin-bottom: 4px;
+        color: var(--text-muted);
+        font-size: 11.5px;
+        font-weight: 800;
+    }
+    .obs-modal-ultima p {
+        margin: 0;
+        font-size: 13px;
+        line-height: 1.45;
+        overflow-wrap: anywhere;
+    }
+    .obs-modal-datos {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 8px;
+        margin: 14px 0 16px;
+    }
+    .obs-modal-datos div {
+        padding: 9px 10px;
+        border-radius: 10px;
+        background: var(--surface-muted);
+    }
+    .obs-modal-datos span {
+        display: block;
+        color: var(--text-muted);
+        font-size: 10.5px;
+        font-weight: 800;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+    }
+    .obs-modal-datos strong {
+        display: block;
+        margin-top: 2px;
+        color: var(--text-main);
+        font-size: 14px;
+        overflow-wrap: anywhere;
+    }
+    .obs-modal-card textarea {
+        width: 100%;
+        min-height: 120px;
+        resize: vertical;
+    }
+    .obs-modal-ayuda {
+        display: flex;
+        justify-content: space-between;
+        gap: 10px;
+        margin-top: 5px;
+        color: var(--text-muted);
+        font-size: 11.5px;
+        font-weight: 700;
+    }
+    .obs-modal-ayuda > span:last-child {
+        flex-shrink: 0;
+        white-space: nowrap;
+    }
+    .obs-modal-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 10px;
+        margin-top: 18px;
+    }
+    .obs-modal-centro .obs-modal-actions { justify-content: center; }
+    @keyframes obs-fade { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes obs-pop {
+        from { opacity: 0; transform: translateY(10px) scale(0.98); }
+        to { opacity: 1; transform: none; }
+    }
+    @media (max-width: 520px) {
+        .obs-modal-card { padding: 20px 16px; }
+        .obs-modal-datos { grid-template-columns: 1fr 1fr; }
+        .obs-modal-actions { flex-direction: column-reverse; }
+        .obs-modal-actions .btn { width: 100%; justify-content: center; }
+    }
+    [data-theme="dark"] .obs-item.is-ultima {
+        border-color: rgba(249, 118, 24, 0.4);
+    }
+    [data-theme="dark"] .obs-estado {
+        background: rgba(249, 118, 24, 0.18);
+        color: #fdba74;
+    }
+    [data-theme="dark"] .obs-abrir-btn {
+        color: #fdba74 !important;
+    }
 </style>
 
 <div class="crumb">
@@ -647,6 +868,68 @@
     </div>
 </div>
 
+{% if puede_actualizar_observacion %}
+<!-- MODAL: ¿Deseas actualizar la observación? (sale 1 vez al día si sigue en reparación) -->
+<div class="obs-modal" id="obs-pregunta-modal" aria-hidden="true"
+     data-auto-abrir="{% if mostrar_popup_observacion %}1{% else %}0{% endif %}">
+    <div class="obs-modal-card obs-modal-centro" role="dialog" aria-modal="true"
+         aria-labelledby="obs-pregunta-titulo" aria-describedby="obs-pregunta-sub">
+        <div class="obs-modal-icono" aria-hidden="true">📝</div>
+        <h3 id="obs-pregunta-titulo">¿Deseas actualizar la observación de este equipo?</h3>
+        <p class="obs-modal-sub" id="obs-pregunta-sub">
+            El equipo <strong>{{ ingreso.codigo_equipo }}</strong> sigue en
+            <strong>{{ estado_observacion_texto }}</strong>.
+        </p>
+        {% if ultima_observacion %}
+        <div class="obs-modal-ultima">
+            <span class="obs-modal-ultima-label">
+                Última observación · {{ ultima_observacion.creado|date:"d/m/Y H:i" }}{% if ultima_observacion.autor_nombre %} · {{ ultima_observacion.autor_nombre }}{% endif %}
+            </span>
+            <p>{{ ultima_observacion.texto|truncatechars:240 }}</p>
+        </div>
+        {% else %}
+        <div class="obs-modal-ultima is-vacia">Este equipo aún no tiene ninguna observación.</div>
+        {% endif %}
+        <div class="obs-modal-actions">
+            <button type="button" class="btn btn-secondary" data-obs-cerrar>Ahora no</button>
+            <button type="button" class="btn btn-primary" id="obs-pregunta-si">Sí, actualizar</button>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL: formulario para agregar la observación con fecha y hora -->
+{% get_current_timezone as zona_horaria %}
+<div class="obs-modal" id="obs-form-modal" aria-hidden="true">
+    <form class="obs-modal-card" method="post" id="obs-form"
+          action="{% url 'econotec:ingreso_observacion_agregar' pk=ingreso.pk %}"
+          role="dialog" aria-modal="true" aria-labelledby="obs-form-titulo"
+          data-zona-horaria="{{ zona_horaria }}">
+        {% csrf_token %}
+        <h3 id="obs-form-titulo">📝 Actualizar observación</h3>
+        <p class="obs-modal-sub" style="margin-bottom:0;">
+            Equipo <strong>{{ ingreso.codigo_equipo }}</strong> · {{ estado_observacion_texto }}
+        </p>
+        <div class="obs-modal-datos">
+            <div><span>Fecha</span><strong id="obs-form-fecha">{% now "d/m/Y" %}</strong></div>
+            <div><span>Hora</span><strong id="obs-form-hora">{% now "H:i" %}</strong></div>
+            <div><span>Escrita por</span><strong>{{ user.get_full_name|default:user.username }}</strong></div>
+        </div>
+        <label class="form-label" for="obs-form-texto">Nueva observación *</label>
+        <textarea id="obs-form-texto" name="texto" class="form-input" rows="5"
+                  maxlength="{{ observacion_max_caracteres }}" required
+                  placeholder="Ej.: Se pidió el repuesto, llega el viernes. Cliente avisado."></textarea>
+        <small class="obs-modal-ayuda">
+            <span>Se guarda con la fecha y hora de este momento. Las anteriores se conservan.</span>
+            <span><span id="obs-form-contador">0</span> / {{ observacion_max_caracteres }}</span>
+        </small>
+        <div class="obs-modal-actions">
+            <button type="button" class="btn btn-secondary" data-obs-cerrar>Cancelar</button>
+            <button type="submit" class="btn btn-primary" id="obs-form-guardar">Guardar observación</button>
+        </div>
+    </form>
+</div>
+{% endif %}
+
 <div class="detail-grid">
     <!-- Columna izquierda: datos del equipo -->
     <div>
@@ -706,6 +989,29 @@
             <div class="field-row"><span class="label">Accesorios entregados</span><span class="value">{{ ingreso.accesorios_entregados|default:"—" }}</span></div>
         </div>
 
+        {% if observaciones or puede_actualizar_observacion %}
+        <div class="info-card" style="margin-top:18px;" id="observaciones-equipo">
+            <h3>📝 Observaciones</h3>
+            {% if observaciones %}
+            <ol class="obs-lista">
+                {% for obs in observaciones %}
+                <li class="obs-item {% if forloop.first %}is-ultima{% endif %}">
+                    <div class="obs-meta">
+                        {% if forloop.first %}<span class="obs-tag">Última</span>{% endif %}
+                        <span>📅 {{ obs.creado|date:"d/m/Y" }} · {{ obs.creado|date:"H:i" }}</span>
+                        {% if obs.autor_nombre %}<span>✍️ {{ obs.autor_nombre }}</span>{% endif %}
+                        {% if obs.estado_texto %}<span class="obs-estado">{{ obs.estado_texto }}</span>{% endif %}
+                    </div>
+                    <p class="obs-texto">{{ obs.texto|linebreaksbr }}</p>
+                </li>
+                {% endfor %}
+            </ol>
+            {% else %}
+            <p class="detail-note obs-vacia">Este equipo aún no tiene observaciones. Usa «Actualizar observación» para agregar la primera.</p>
+            {% endif %}
+        </div>
+        {% endif %}
+
         <div class="info-card" style="margin-top:18px;">
             {% if ingreso.estado == 'donado' or ingreso.estado == 'equipo_a_comprar' %}
             <h3>📝 Observación</h3>
@@ -759,6 +1065,11 @@
             </div>
             {% endif %}
             <div class="estado-equipo-actions">
+                {% if puede_actualizar_observacion %}
+                <button type="button" class="btn btn-secondary obs-abrir-btn" data-obs-abrir>
+                    📝 Actualizar observación
+                </button>
+                {% endif %}
                 {% if ingreso.retirado_por_cliente %}
                 <button type="button" class="btn btn-secondary ingreso-edit-bloqueado" disabled title="Ya este equipo fue retirado por el cliente">
                     🔒 Hoja de ingreso cerrada
@@ -1273,6 +1584,108 @@
 
         window.addEventListener('focus', resetearSiCambioDia);
         setInterval(resetearSiCambioDia, 60000);
+    })();
+
+    // Observaciones: ventana "¿Deseas actualizar la observación?" (1 vez al día
+    // mientras sigue en reparación) y formulario con la fecha y hora del momento.
+    (function () {
+        var pregunta = document.getElementById('obs-pregunta-modal');
+        var formModal = document.getElementById('obs-form-modal');
+        var form = document.getElementById('obs-form');
+        if (!formModal || !form) return;
+
+        var texto = document.getElementById('obs-form-texto');
+        var contador = document.getElementById('obs-form-contador');
+        var fecha = document.getElementById('obs-form-fecha');
+        var hora = document.getElementById('obs-form-hora');
+        var guardar = document.getElementById('obs-form-guardar');
+        var botonSi = document.getElementById('obs-pregunta-si');
+        var ultimoFoco = null;
+
+        function abrir(modal) {
+            if (!modal) return;
+            ultimoFoco = document.activeElement;
+            modal.classList.add('show');
+            modal.setAttribute('aria-hidden', 'false');
+            document.body.style.overflow = 'hidden';
+        }
+
+        function cerrar(modal) {
+            if (!modal || !modal.classList.contains('show')) return;
+            modal.classList.remove('show');
+            modal.setAttribute('aria-hidden', 'true');
+            if (!document.querySelector('.obs-modal.show')) document.body.style.overflow = '';
+            if (ultimoFoco && ultimoFoco.focus) ultimoFoco.focus();
+        }
+
+        function actualizarFechaHora() {
+            var zona = form.dataset.zonaHoraria || undefined;
+            var ahora = new Date();
+            try {
+                fecha.textContent = ahora.toLocaleDateString('es-EC', {
+                    timeZone: zona, day: '2-digit', month: '2-digit', year: 'numeric'
+                });
+                hora.textContent = ahora.toLocaleTimeString('es-EC', {
+                    timeZone: zona, hour: '2-digit', minute: '2-digit', hour12: false
+                });
+            } catch (e) {}
+        }
+
+        function abrirFormulario() {
+            cerrar(pregunta);
+            actualizarFechaHora();
+            abrir(formModal);
+            setTimeout(function () { texto.focus(); }, 60);
+        }
+
+        document.querySelectorAll('[data-obs-abrir]').forEach(function (boton) {
+            boton.addEventListener('click', abrirFormulario);
+        });
+        if (botonSi) botonSi.addEventListener('click', abrirFormulario);
+
+        [pregunta, formModal].forEach(function (modal) {
+            if (!modal) return;
+            // Solo cierra al tocar el fondo si el toque empezó en el fondo:
+            // así no se pierde lo escrito al seleccionar texto con el mouse.
+            var inicioEnFondo = false;
+            modal.addEventListener('mousedown', function (e) {
+                inicioEnFondo = e.target === modal;
+            });
+            modal.addEventListener('click', function (e) {
+                if ((e.target === modal && inicioEnFondo) || e.target.closest('[data-obs-cerrar]')) {
+                    cerrar(modal);
+                }
+            });
+        });
+
+        document.addEventListener('keydown', function (e) {
+            if (e.key !== 'Escape') return;
+            var abierto = document.querySelector('.obs-modal.show');
+            if (abierto) cerrar(abierto);
+        });
+
+        texto.addEventListener('input', function () {
+            contador.textContent = texto.value.length;
+        });
+
+        form.addEventListener('submit', function (e) {
+            if (!texto.value.trim()) {
+                e.preventDefault();
+                texto.value = '';
+                texto.reportValidity();
+                texto.focus();
+                return;
+            }
+            guardar.disabled = true;
+            guardar.textContent = 'Guardando…';
+        });
+
+        if (pregunta && pregunta.dataset.autoAbrir === '1') {
+            setTimeout(function () {
+                abrir(pregunta);
+                if (botonSi) botonSi.focus();
+            }, 350);
+        }
     })();
 </script>
 {% if simulacion %}
