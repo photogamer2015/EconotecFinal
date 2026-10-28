@@ -196,6 +196,55 @@
     .btn-guia:hover { border-color: var(--tint-orange-fg); transform: translateY(-1px); }
     .btn-guia:focus-visible { outline: none; box-shadow: var(--ring); }
 
+    /* Foco 💡: abre la explicación de la efectividad. */
+    .btn-foco {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 24px;
+        height: 24px;
+        margin-left: 4px;
+        padding: 0;
+        border: 1px solid #fcd34d;
+        border-radius: 50%;
+        background: #fef3c7;
+        font-size: 13px;
+        line-height: 1;
+        vertical-align: middle;
+        cursor: pointer;
+        box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.45);
+        transition: transform .15s ease, box-shadow .15s ease;
+    }
+    .btn-foco:hover { transform: scale(1.12); box-shadow: 0 0 0 4px rgba(245, 158, 11, 0.18); }
+    .btn-foco:focus-visible { outline: none; box-shadow: var(--ring); }
+    [data-theme="dark"] .btn-foco { border-color: rgba(245, 158, 11, 0.5); background: rgba(245, 158, 11, 0.18); }
+    .efec-formula {
+        padding: 10px 12px;
+        border-radius: var(--radius-sm);
+        background: var(--tint-amber-bg);
+        color: var(--tint-amber-fg) !important;
+        text-align: center;
+    }
+    .efec-tabla { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .efec-tabla tr, .efec-tabla tr:hover, .efec-tabla td { background: transparent !important; }
+    .efec-tabla td { padding: 7px 4px; border-top: 1px dashed var(--border-color); color: var(--text-soft); vertical-align: top; }
+    .efec-tabla tr:first-child td { border-top: 0; }
+    .efec-tabla td:first-child { white-space: nowrap; font-weight: 800; color: var(--text-main); }
+    .efec-tabla td:last-child { text-align: right; font-size: 16px; color: var(--text-main); }
+    .efec-resultado {
+        margin-top: 12px !important;
+        padding: 10px 12px;
+        border-radius: var(--radius-sm);
+        background: var(--tint-green-bg);
+        color: var(--tint-green-fg) !important;
+        font-weight: 700;
+        text-align: center;
+    }
+    .efec-color { flex: 0 0 auto; width: 14px; height: 14px; margin-top: 4px; border-radius: 50%; }
+    .efec-color.verde { background: var(--success); }
+    .efec-color.amarillo { background: var(--warning); }
+    .efec-color.rojo { background: var(--danger); }
+
     .rank-meta {
         display: flex;
         flex-wrap: wrap;
@@ -659,6 +708,8 @@
     .guia-ranking-pagina p,
     .guia-ranking-pagina li { font-size: 14px; color: var(--text-soft); }
     .guia-ranking-pagina p + p { margin-top: 8px; }
+    .guia-ranking-pagina ul + p,
+    .guia-ranking-pagina table + p { margin-top: 12px; }
     .guia-ranking-pagina ul { list-style: none; display: grid; gap: 10px; }
     .guia-ranking-pagina li { display: flex; gap: 10px; align-items: flex-start; }
     .guia-ranking-pagina li .efecto-icono { margin-top: 2px; }
@@ -880,8 +931,12 @@
         <div class="value">{{ total_positivas_global }} <small style="font-size:14px; color:#888;">/ {{ total_salidas_global }}</small></div>
     </div>
     <div class="stat-card">
-        <div class="label">Efectividad total</div>
+        <div class="label">
+            Efectividad total
+            <button type="button" class="btn-foco" data-guia="guia-efectividad-total" data-titulo="💡 Cómo funciona la efectividad" aria-controls="guia-efectividad-total" aria-label="Cómo funciona la efectividad total" title="¿Cómo funciona la efectividad?">💡</button>
+        </div>
         <div class="value">{% if efectividad_global is None %}—{% else %}{{ efectividad_global|floatformat:1 }}%{% endif %}</div>
+        {% include 'includes/guia_efectividad.html' with guia_id='guia-efectividad-total' nombre='todos los técnicos' resumen=resumen_salidas %}
     </div>
 </div>
 {% if mostrar_valores_monetarios %}
@@ -1083,7 +1138,11 @@
                         {% endif %}
                     </div>
                     <div class="kpi">
-                        <span class="kpi-label">Efectividad</span>
+                        <span class="kpi-label">
+                            Efectividad
+                            <button type="button" class="btn-foco" data-guia="guia-efectividad-{{ forloop.counter }}" data-titulo="💡 Cómo funciona la efectividad" aria-controls="guia-efectividad-{{ forloop.counter }}" aria-label="Cómo funciona la efectividad de {{ r.nombre }}" title="¿Cómo funciona la efectividad?">💡</button>
+                        </span>
+                        {% include 'includes/guia_efectividad.html' with guia_id='guia-efectividad-' guia_sufijo=forloop.counter nombre=r.nombre resumen=r %}
                         {% if r.efectividad is None %}
                             <span class="kpi-value vacio">—</span>
                             <span class="trend same">Sin equipos que sumen o resten</span>

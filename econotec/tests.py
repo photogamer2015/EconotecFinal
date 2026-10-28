@@ -11792,3 +11792,30 @@ class VentasTests(TestCase):
         perfil = self.client.get(reverse('econotec:perfil_social', args=[tecnico.pk]))
         self.assertEqual(perfil.context['operativo']['total'], 66)
         self.assertEqual(perfil.context['operativo']['nivel'], 'Intermedio')
+
+    def test_ranking_foco_explica_la_efectividad_con_los_numeros_del_tecnico(self):
+        tecnico = self.crear_tecnico_ranking('FocoRanking')
+        fecha = date(2026, 8, 10)
+        for estado in ('retirado', 'retirado', 'pendiente_retiro', 'cliente_no_acepta',
+                       'no_reparable', 'garantia', 'cortesia'):
+            self.crear_salida_ranking(tecnico, fecha, estado)
+        self.client.force_login(self.admin)
+
+        response = self.client.get(reverse('econotec:salida_totales'), {
+            'desde': '2026-08-01',
+            'hasta': '2026-08-31',
+        })
+
+        # Un foco en la efectividad total y otro en la tarjeta del técnico.
+        self.assertContains(response, 'class="btn-foco"', count=2)
+        self.assertContains(response, 'data-guia="guia-efectividad-total"')
+        self.assertContains(response, 'data-guia="guia-efectividad-1"')
+        self.assertContains(response, '<div id="guia-efectividad-1" class="guia-contenido" hidden>')
+        self.assertContains(response, '¿Qué es la efectividad?', count=2)
+        self.assertContains(response, 'Con los números de FocoRanking')
+        self.assertContains(response, 'Con los números de todos los técnicos')
+        # Suman 4 (3 reparados + 1 cliente no quiso), restan 2: 4 ÷ 6 = 66,7 %.
+        self.assertContains(response, '3 reparados + 1 cliente no quiso')
+        self.assertContains(response, '1 no se pudo + 1 garantía + 0 garantía con fallos')
+        self.assertContains(response, '4 ÷ (4 + 2)\n                = 4 ÷ 6\n                = <b>66,7 %</b>')
+        self.assertContains(response, 'unos <b>67</b> salieron bien')

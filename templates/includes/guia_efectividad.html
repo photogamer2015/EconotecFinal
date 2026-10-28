@@ -1,0 +1,63 @@
+{# Guía "💡 Cómo funciona la efectividad" por pasos. Recibe: guia_id (+ guia_sufijo opcional), nombre y resumen (de _resumir_salidas). #}
+<div id="{{ guia_id }}{{ guia_sufijo|default:'' }}" class="guia-contenido" hidden>
+    <section>
+        <h4>¿Qué es la efectividad?</h4>
+        <p>Dice qué tan seguido le salen <b>bien</b> los equipos al técnico.</p>
+        <p>Es un porcentaje: <b>de cada 100 equipos que cuentan, cuántos salieron bien</b>. Mientras más alto, mejor.</p>
+    </section>
+    <section>
+        <h4>Qué cuenta a favor y qué en contra</h4>
+        <ul>
+            <li><span class="efecto-icono suma" aria-hidden="true">✓</span><span><b>Suman (salió bien):</b> Finalizado y reparado (en espera de retiro o retirado) y Cliente no quiso reparar.</span></li>
+            <li><span class="efecto-icono resta" aria-hidden="true">−</span><span><b>Restan (salió mal):</b> No se pudo reparar, Garantía finalizada y Garantía + fallos adicionales.</span></li>
+            <li><span class="efecto-icono neutro" aria-hidden="true">○</span><span><b>No afectan:</b> Revisión, Cortesía y Chatarrerización. No entran en la cuenta: ni ayudan ni perjudican.</span></li>
+        </ul>
+    </section>
+    <section>
+        <h4>La fórmula</h4>
+        <p class="efec-formula">Efectividad = <b>Suman ÷ (Suman + Restan)</b> × 100</p>
+        <p>Ejemplo: si 8 equipos suman y 2 restan, cuentan 10 equipos. 8 ÷ 10 = 0,80 → <b>80 %</b>.</p>
+        <p>Cada equipo que resta baja el porcentaje; cada uno que suma lo sube.</p>
+    </section>
+    <section>
+        <h4>Con los números de {{ nombre }}</h4>
+        <table class="efec-tabla">
+            <tbody>
+                <tr class="suma">
+                    <td><span class="efecto-icono suma" aria-hidden="true">✓</span> Suman</td>
+                    <td>{{ resumen.resultados.reparado }} reparado{{ resumen.resultados.reparado|pluralize }} + {{ resumen.resultados.cliente_no_acepta }} cliente no quiso</td>
+                    <td><b>{{ resumen.salidas_positivas }}</b></td>
+                </tr>
+                <tr class="resta">
+                    <td><span class="efecto-icono resta" aria-hidden="true">−</span> Restan</td>
+                    <td>{{ resumen.resultados.no_reparable }} no se pudo + {{ resumen.resultados.garantia }} garantía + {{ resumen.resultados.garantia_fallos_adicionales }} garantía con fallos</td>
+                    <td><b>{{ resumen.salidas_negativas }}</b></td>
+                </tr>
+                <tr class="neutro">
+                    <td><span class="efecto-icono neutro" aria-hidden="true">○</span> No afectan</td>
+                    <td>No entran en la cuenta</td>
+                    <td><b>{{ resumen.salidas_neutras }}</b></td>
+                </tr>
+            </tbody>
+        </table>
+        {% if resumen.efectividad is None %}
+            <p class="efec-resultado">Todavía no tiene equipos que sumen o resten en este período, por eso la efectividad se ve como <b>—</b>.</p>
+        {% else %}
+            <p class="efec-resultado">
+                {{ resumen.salidas_positivas }} ÷ ({{ resumen.salidas_positivas }} + {{ resumen.salidas_negativas }})
+                = {{ resumen.salidas_positivas }} ÷ {{ resumen.salidas_positivas|add:resumen.salidas_negativas }}
+                = <b>{{ resumen.efectividad|floatformat:1 }} %</b>
+            </p>
+            <p>De cada 100 equipos que cuentan, unos <b>{{ resumen.efectividad|floatformat:0 }}</b> salieron bien.</p>
+        {% endif %}
+    </section>
+    <section>
+        <h4>Colores y diferencia con los puntos</h4>
+        <ul>
+            <li><span class="efec-color verde" aria-hidden="true"></span><span><b>Verde:</b> 75 % o más. Muy bien.</span></li>
+            <li><span class="efec-color amarillo" aria-hidden="true"></span><span><b>Amarillo:</b> de 50 % a 74,9 %. Hay que mejorar.</span></li>
+            <li><span class="efec-color rojo" aria-hidden="true"></span><span><b>Rojo:</b> menos de 50 %. Salen mal más equipos de los que salen bien.</span></li>
+        </ul>
+        <p>La efectividad <b>no es lo mismo que los puntos</b>. Aquí cada equipo cuenta como 1, sea bueno o malo. En los puntos pesa distinto: un reparado da +3 y una garantía quita −4. Por eso el puesto del ranking se decide por puntos, y la efectividad solo desempata.</p>
+    </section>
+</div>
