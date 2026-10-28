@@ -41,7 +41,7 @@ from .busqueda import (
 from .models import (
     Abono, BitacoraTecnico, CategoriaEgreso, Cliente, Egreso, IngresoEquipo,
     InventarioItem, NotificacionAsesora, NotificacionInventarioAdmin,
-    NotificacionRevisionAdmin, ObservacionEquipo, SalidaEquipo, SEDE_PREFIJOS, SEDES_EQUIPOS, TIPOS_EQUIPO,
+    NotificacionRevisionAdmin, ObservacionEquipo, VentanaObservacionVista, SalidaEquipo, SEDE_PREFIJOS, SEDES_EQUIPOS, TIPOS_EQUIPO,
     UsuarioActividad, VentaInventarioItem,
 )
 from .bitacora import registrar_bitacora, nombre_corto_usuario, construir_bitacora_usuario
@@ -2533,7 +2533,7 @@ def ingreso_detalle(request, pk):
     popup_observacion_aplica = _popup_observacion_aplica(ingreso)
     mostrar_popup_observacion = (
         popup_observacion_aplica
-        and _popup_observacion_pendiente_hoy(request, ingreso, observaciones)
+        and _popup_observacion_pendiente(request, ingreso)
     )
     return render(request, 'ingresos/detalle.html', {
         'ingreso': ingreso,
@@ -2551,6 +2551,7 @@ def ingreso_detalle(request, pk):
         'ultima_observacion': observaciones[0] if observaciones else None,
         'puede_actualizar_observacion': puede_actualizar_observacion,
         'popup_observacion_aplica': popup_observacion_aplica,
+        'dias_en_reparacion': _dias_en_reparacion(ingreso),
         'mostrar_popup_observacion': mostrar_popup_observacion,
         'observacion_max_caracteres': IngresoEquipoForm.OBSERVACION_MAX_CARACTERES,
         'estado_observacion_texto': _estado_texto_observacion(ingreso),
@@ -2609,9 +2610,9 @@ def ingreso_reparacion_check(request, pk):
 
 # ── Observaciones del equipo ─────────────────────────────────────
 
-# Sesión: equipos en reparación a los que ya se les mostró hoy la ventana
-# "¿Deseas actualizar la observación?" → {'fecha': 'AAAA-MM-DD', 'ids': [pk, ...]}
-_SESION_POPUP_OBSERVACION = 'observacion_popup_vistos'
+# La ventana "¿Deseas actualizar la observación?" sale cuando el equipo lleva
+# estos días o más En reparación.
+DIAS_VENTANA_OBSERVACION = 5
 
 
 def _estado_texto_observacion(ingreso):
@@ -2628,12 +2629,13 @@ def _puede_actualizar_observacion(ingreso):
 
 
 def _popup_observacion_aplica(ingreso):
-    """La ventana "¿Deseas actualizar la observación?" solo sale mientras el
-    equipo sigue En reparación (Reparación, Cliente o Repuestos) o en
-    Revisión dentro de la oficina."""
-    return _puede_actualizar_observacion(ingreso) and (
-        ingreso.estado == 'en_reparacion'
-        or avisos_revision.salida_en_revision(ingreso) is not None
+    """La ventana "¿Deseas actualizar la observación?" solo sale En reparación
+    (Reparación, Cliente o Repuestos) cuando el equipo ya lleva
+    DIAS_VENTANA_OBSERVACION días o más desde que entró."""
+    return (
+        _puede_actualizar_observacion(ingreso)
+        and ingreso.estado == 'en_reparacion'
+        and _dias_en_reparacion(ingreso) >= DIAS_VENTANA_OBSERVACION
     )
 
 
@@ -2680,20 +2682,23 @@ def _guardar_observacion_formulario(ing_form, ingreso, user):
     return observacion
 
 
-def _popup_observacion_pendiente_hoy(request, ingreso, observaciones):
-    """La ventana sale una sola vez al día por equipo y usuario. Si alguien
-    ya escribió una observación hoy, no se vuelve a preguntar."""
-    hoy = timezone.localdate()
-    if any(timezone.localdate(obs.creado) == hoy for obs in observaciones):
-        return False
-    vistos = request.session.get(_SESION_POPUP_OBSERVACION) or {}
-    if vistos.get('fecha') != hoy.isoformat():
-        vistos = {'fecha': hoy.isoformat(), 'ids': []}
-    if ingreso.pk in vistos['ids']:
-        return False
-    vistos['ids'].append(ingreso.pk)
-    request.session[_SESION_POPUP_OBSERVACION] = vistos
-    return True
+def _dias_en_reparacion(ingreso):
+    """Días desde que el equipo entró a En reparación (no se reinicia al pasar
+    entre Reparación, Cliente y Repuestos)."""
+    if ingreso.estado != 'en_reparacion' or not ingreso.fecha_inicio_reparacion:
+        return 0
+    return (date.today() - ingreso.fecha_inicio_reparacion).days
+
+
+def _popup_observacion_pendiente(request, ingreso):
+    """Una sola vez por persona en cada periodo En reparación: la primera vez
+    que la abre después de cumplir los días, queda anotada como vista."""
+    _vista, creada = VentanaObservacionVista.objects.get_or_create(
+        usuario=request.user,
+        ingreso=ingreso,
+        desde=ingreso.fecha_inicio_reparacion,
+    )
+    return creada
 
 
 @tecnico_requerido
