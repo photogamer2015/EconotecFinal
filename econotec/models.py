@@ -846,6 +846,13 @@ class IngresoEquipo(RetencionFactura):
         help_text='Se actualiza automáticamente cuando el equipo entra a '
                   'En reparación, Espera de cliente o Espera de repuesto.',
     )
+    fecha_inicio_reparacion = models.DateField(
+        null=True,
+        blank=True,
+        verbose_name='En reparación desde',
+        help_text='Día en que el equipo entró a En reparación. No se reinicia al '
+                  'pasar entre Reparación, Cliente y Repuestos.',
+    )
     creado = models.DateTimeField(auto_now_add=True)
     actualizado = models.DateTimeField(auto_now=True)
 
@@ -1463,6 +1470,20 @@ class IngresoEquipo(RetencionFactura):
             update_fields = kwargs.get('update_fields')
             if update_fields is not None:
                 kwargs['update_fields'] = set(update_fields) | {'fecha_alerta_reparacion'}
+
+        # Desde cuándo está En reparación, sin reiniciar al cambiar de subestado.
+        actualizar_inicio_reparacion = False
+        if self.estado == 'en_reparacion':
+            if not self.fecha_inicio_reparacion or (self.pk and estado_anterior != 'en_reparacion'):
+                self.fecha_inicio_reparacion = date.today()
+                actualizar_inicio_reparacion = True
+        elif self.fecha_inicio_reparacion:
+            self.fecha_inicio_reparacion = None
+            actualizar_inicio_reparacion = True
+        if actualizar_inicio_reparacion:
+            update_fields = kwargs.get('update_fields')
+            if update_fields is not None:
+                kwargs['update_fields'] = set(update_fields) | {'fecha_inicio_reparacion'}
         super().save(*args, **kwargs)
 
     def __str__(self):
@@ -1472,6 +1493,35 @@ class IngresoEquipo(RetencionFactura):
 # ─────────────────────────────────────────────────────────
 # Observaciones del equipo (historial con fecha y autor)
 # ─────────────────────────────────────────────────────────
+
+class VentanaObservacionVista(models.Model):
+    """
+    La ventana «¿Deseas actualizar la observación?» sale una sola vez por
+    persona cuando el equipo cumple 5 días En reparación. `desde` es la
+    fecha_inicio_reparacion de ese periodo: si el equipo sale y vuelve a
+    entrar a reparación, cuenta de nuevo.
+    """
+    usuario = models.ForeignKey(
+        'auth.User', on_delete=models.CASCADE,
+        related_name='ventanas_observacion_vistas',
+    )
+    ingreso = models.ForeignKey(
+        'IngresoEquipo', on_delete=models.CASCADE,
+        related_name='ventanas_observacion_vistas',
+    )
+    desde = models.DateField(verbose_name='En reparación desde')
+    creado = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'Ventana de observación vista'
+        verbose_name_plural = 'Ventanas de observación vistas'
+        constraints = [
+            models.UniqueConstraint(
+                fields=['usuario', 'ingreso', 'desde'],
+                name='uniq_ventana_observacion_vista',
+            ),
+        ]
+
 
 class ObservacionEquipo(models.Model):
     """

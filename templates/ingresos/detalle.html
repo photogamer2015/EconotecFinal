@@ -870,7 +870,7 @@
 
 {% if puede_actualizar_observacion %}
 {% if popup_observacion_aplica %}
-<!-- MODAL: ¿Deseas actualizar la observación? (sale 1 vez al día si sigue en reparación) -->
+<!-- MODAL: ¿Deseas actualizar la observación? (una vez por persona cuando lleva 5 días o más en reparación) -->
 <div class="obs-modal" id="obs-pregunta-modal" aria-hidden="true"
      data-auto-abrir="{% if mostrar_popup_observacion %}1{% else %}0{% endif %}">
     <div class="obs-modal-card obs-modal-centro" role="dialog" aria-modal="true"
@@ -878,8 +878,9 @@
         <div class="obs-modal-icono" aria-hidden="true">📝</div>
         <h3 id="obs-pregunta-titulo">¿Deseas actualizar la observación de este equipo?</h3>
         <p class="obs-modal-sub" id="obs-pregunta-sub">
-            El equipo <strong>{{ ingreso.codigo_equipo }}</strong> sigue en
-            <strong>{{ estado_observacion_texto }}</strong>.
+            El equipo <strong>{{ ingreso.codigo_equipo }}</strong> lleva
+            <strong>{{ dias_en_reparacion }} día{{ dias_en_reparacion|pluralize }}</strong> en reparación
+            (<strong>{{ estado_observacion_texto }}</strong>).
         </p>
         {% if ultima_observacion %}
         <div class="obs-modal-ultima">

@@ -33,6 +33,11 @@ NEGATIVOS = [
     ('no_reparable', '❌ No se pudo reparar'),
     ('cliente_no_acepta', '🚫 Cliente no quiso reparar'),
 ]
+def es_revision(resultado):
+    """Revisión se elige con su subcategoría: «revision:equipo_prueba», …"""
+    return (resultado or '').split(':')[0] == 'revision'
+
+
 ESTADO_INGRESO_NEGATIVO = {
     'no_reparable': IngresoEquipoForm.ESTADO_NO_SE_PUDO_REPARAR,
     'cliente_no_acepta': IngresoEquipoForm.ESTADO_NO_QUISO_REPARAR,
@@ -183,7 +188,7 @@ class FlujoFinalizar(Flujo):
                                       '¿Cuánto paga el cliente ahora? Escribe 0 si paga después.', tipo='dinero'))
                     if _decimal(d.get('pago_ahora')) > 0:
                         p += preguntas_pago('final', d, 'pago', d.get('pago_ahora'))
-        if resultado == 'revision':
+        if es_revision(resultado):
             p.append(Pregunta('valor_revision', 'Valor de revisión',
                               '¿Cuál es el valor acordado por la revisión? (mínimo $1,00)', tipo='dinero'))
         if resultado == 'garantia_fallos_adicionales':
@@ -222,7 +227,7 @@ class FlujoFinalizar(Flujo):
             'tecnico_reparo': d.get('tecnico_reparo', ''),
             'reporte_tecnico': self.reporte(),
             'observaciones': d.get('observaciones', ''),
-            'valor_acordado_revision': d.get('valor_revision', '') if resultado == 'revision' else '',
+            'valor_acordado_revision': d.get('valor_revision', '') if es_revision(resultado) else '',
             'aplica_valor_acordado_adicional': 'si' if aplica else 'no',
             'valor_acordado_adicional': d.get('valor_adicional', '') if aplica else '',
             'motivo_valor_acordado_adicional': d.get('motivo_adicional', '') if aplica else '',
@@ -349,7 +354,7 @@ class FlujoFinalizar(Flujo):
                 pago = _decimal(d.get('pago_ahora'))
                 lineas.append('• Pago ahora: ' + (
                     f'{tx.dinero_legible(pago)} ({resumen_pago("final", d)})' if pago > 0 else 'No paga ahora'))
-        if d.get('resultado') == 'revision':
+        if es_revision(d.get('resultado')):
             lineas.append(f'• Valor de revisión: {tx.dinero_legible(d.get("valor_revision"))}')
         if d.get('resultado') == 'garantia_fallos_adicionales':
             lineas.append(f'• Valor por fallos adicionales: {tx.dinero_legible(d.get("valor_fallos"))}')

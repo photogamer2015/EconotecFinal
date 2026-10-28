@@ -30,7 +30,7 @@ from .horarios import registrar_entrada_laboral
 from .models import (
     Abono, BitacoraTecnico, Cliente, Egreso, HorarioTecnico, IngresoEquipo, InventarioItem,
     NotificacionAsesora, NotificacionInventarioAdmin, NotificacionRevisionAdmin,
-    ObservacionEquipo, SalidaEquipo,
+    ObservacionEquipo, SalidaEquipo, VentanaObservacionVista,
     UsuarioActividad, VentaInventarioItem,
 )
 from .qr_utils import token_para_ingreso
@@ -8531,7 +8531,10 @@ class VentasTests(TestCase):
         self.assertNotIn('cliente_no_acepta', opciones)
         self.assertNotIn('no_reparable', opciones)
         self.assertIn('pendiente_retiro', opciones)
-        self.assertIn('revision', opciones)
+        # Revisión se ofrece con cada subcategoría.
+        self.assertNotIn('revision', opciones)
+        for subestado in ('equipo_prueba', 'no_reparable', 'cliente_no_acepta'):
+            self.assertIn(f'revision:{subestado}', opciones)
 
     def test_finalizacion_nueva_rechaza_resultado_negativo_enviado_manualmente(self):
         ingreso = self.crear_ingreso_reparacion(valor_acordado=Decimal('40.00'))
@@ -9021,8 +9024,7 @@ class VentasTests(TestCase):
         response = self.client.post(
             reverse('econotec:salida_registrar', kwargs={'ingreso_pk': ingreso.pk}),
             self.salida_post_data(
-                estado_reparacion='revision',
-                subestado_revision='equipo_prueba',
+                estado_reparacion='revision:equipo_prueba',
                 valor_acordado_revision='12.00',
                 valor_final_cobrado='99.00',
                 metodo_pago_final='efectivo',
@@ -9053,7 +9055,7 @@ class VentasTests(TestCase):
         response = self.client.post(
             reverse('econotec:salida_registrar', kwargs={'ingreso_pk': ingreso.pk}),
             self.salida_post_data(
-                estado_reparacion='revision',
+                estado_reparacion='revision:equipo_prueba',
                 valor_acordado_revision='',
                 metodo_pago_final='sin_pago',
                 asesora_notificacion=str(self.vendedor.pk),
@@ -9209,8 +9211,7 @@ class VentasTests(TestCase):
         response = self.client.post(
             reverse('econotec:salida_registrar', kwargs={'ingreso_pk': ingreso.pk}),
             self.salida_post_data(
-                estado_reparacion='revision',
-                subestado_revision='equipo_prueba',
+                estado_reparacion='revision:equipo_prueba',
                 valor_acordado_revision='10.00',
                 aplica_valor_acordado_adicional='si',
                 valor_acordado_adicional='10.00',
@@ -11495,41 +11496,69 @@ class VentasTests(TestCase):
             ['Segunda', 'Primera'],
         )
 
-    def test_detalle_en_reparacion_muestra_boton_y_ventana_una_vez_al_dia(self):
+    def poner_dias_en_reparacion(self, ingreso, dias):
+        IngresoEquipo.objects.filter(pk=ingreso.pk).update(
+            fecha_inicio_reparacion=date.today() - timedelta(days=dias),
+        )
+
+    def test_ventana_de_observacion_sale_a_los_5_dias_una_vez_por_persona(self):
         for subestado in ('en_reparacion', 'espera_cliente', 'espera_repuesto'):
             with self.subTest(subestado=subestado):
                 ingreso = self.crear_ingreso_reparacion(subestado_reparacion=subestado)
+                self.poner_dias_en_reparacion(ingreso, 5)
 
                 primera = self.client.get(self.url_detalle(ingreso))
                 self.assertTrue(primera.context['mostrar_popup_observacion'])
                 self.assertContains(primera, '¿Deseas actualizar la observación de este equipo?')
                 self.assertContains(primera, 'data-auto-abrir="1"')
-                self.assertContains(primera, '📝 Actualizar observación')
+                self.assertContains(primera, 'lleva\n            <strong>5 días</strong> en reparación')
 
+                # La misma persona ya no la vuelve a ver.
                 segunda = self.client.get(self.url_detalle(ingreso))
                 self.assertFalse(segunda.context['mostrar_popup_observacion'])
                 self.assertContains(segunda, 'data-auto-abrir="0"')
-                self.assertContains(segunda, '📝 Actualizar observación')
 
-    def test_ventana_de_observacion_vuelve_a_salir_al_dia_siguiente(self):
+                # Otra persona la ve una vez.
+                self.client.force_login(self.admin)
+                self.assertTrue(self.client.get(self.url_detalle(ingreso)).context['mostrar_popup_observacion'])
+                self.assertFalse(self.client.get(self.url_detalle(ingreso)).context['mostrar_popup_observacion'])
+                self.client.force_login(self.usuario)
+
+    def test_ventana_de_observacion_no_sale_antes_de_5_dias(self):
         ingreso = self.crear_ingreso_reparacion()
-        self.client.get(self.url_detalle(ingreso))
-        session = self.client.session
-        session['observacion_popup_vistos'] = {'fecha': '2026-01-01', 'ids': [ingreso.pk]}
-        session.save()
-
-        response = self.client.get(self.url_detalle(ingreso))
-
-        self.assertTrue(response.context['mostrar_popup_observacion'])
-
-    def test_ventana_de_observacion_no_sale_si_ya_hay_una_de_hoy(self):
-        ingreso = self.crear_ingreso_reparacion()
-        ObservacionEquipo.objects.create(ingreso=ingreso, texto='Hoy se cambió el fusor.', autor=self.usuario)
+        self.poner_dias_en_reparacion(ingreso, 4)
 
         response = self.client.get(self.url_detalle(ingreso))
 
         self.assertFalse(response.context['mostrar_popup_observacion'])
+        self.assertNotContains(response, 'id="obs-pregunta-modal"')
         self.assertContains(response, '📝 Actualizar observación')
+        self.assertFalse(VentanaObservacionVista.objects.exists())
+
+    def test_dias_en_reparacion_no_se_reinician_al_cambiar_de_subestado(self):
+        ingreso = self.crear_ingreso_reparacion(subestado_reparacion='en_reparacion')
+        self.assertEqual(ingreso.fecha_inicio_reparacion, date.today())
+        self.poner_dias_en_reparacion(ingreso, 6)
+        ingreso.refresh_from_db()
+
+        ingreso.subestado_reparacion = 'espera_repuesto'
+        ingreso.save()
+
+        ingreso.refresh_from_db()
+        self.assertEqual(ingreso.fecha_inicio_reparacion, date.today() - timedelta(days=6))
+        self.assertTrue(self.client.get(self.url_detalle(ingreso)).context['mostrar_popup_observacion'])
+
+        # Sale de reparación y vuelve: cuenta de nuevo desde hoy.
+        ingreso.estado = 'ingresado'
+        ingreso.subestado_reparacion = ''
+        ingreso.save()
+        ingreso.refresh_from_db()
+        self.assertIsNone(ingreso.fecha_inicio_reparacion)
+        ingreso.estado = 'en_reparacion'
+        ingreso.subestado_reparacion = 'en_reparacion'
+        ingreso.save()
+        ingreso.refresh_from_db()
+        self.assertEqual(ingreso.fecha_inicio_reparacion, date.today())
 
     def crear_ingreso_retirado(self):
         ingreso = self.crear_ingreso_reparacion(estado='entregado', subestado_reparacion='')
@@ -11848,11 +11877,22 @@ class VentasTests(TestCase):
             ),
         )
 
+        # «Revisión» sola ya no es una opción: va con su subcategoría.
         self.assertEqual(response.status_code, 200)
-        self.assertIn('subestado_revision', response.context['form'].errors)
+        self.assertIn('estado_reparacion', response.context['form'].errors)
         self.assertFalse(SalidaEquipo.objects.filter(ingreso=ingreso).exists())
-        self.assertContains(response, 'Subcategoría de la revisión *')
-        self.assertContains(response, '🧪 Equipo de prueba')
+        opciones = [valor for valor, _etiqueta in response.context['form'].fields['estado_reparacion'].choices]
+        self.assertEqual(opciones, [
+            '',
+            'pendiente_retiro',
+            'revision:equipo_prueba',
+            'revision:no_reparable',
+            'revision:cliente_no_acepta',
+        ])
+        self.assertContains(response, '🔎 Revisión — 🧪 Equipo de prueba')
+        self.assertContains(response, '🔎 Revisión — ❌ No se pudo reparar')
+        self.assertContains(response, '🔎 Revisión — 🚫 Cliente no quiso reparar')
+        self.assertNotContains(response, 'name="subestado_revision"')
 
     def test_finalizacion_en_revision_guarda_subcategoria_y_avisa_al_admin(self):
         ingreso = self.crear_ingreso_reparacion(valor_acordado=Decimal('40.00'))
@@ -11860,8 +11900,7 @@ class VentasTests(TestCase):
         self.client.post(
             reverse('econotec:salida_registrar', kwargs={'ingreso_pk': ingreso.pk}),
             self.salida_post_data(
-                estado_reparacion='revision',
-                subestado_revision='no_reparable',
+                estado_reparacion='revision:no_reparable',
                 valor_acordado_revision='12.00',
                 metodo_pago_final='sin_pago',
                 asesora_notificacion=str(self.vendedor.pk),
@@ -11883,8 +11922,7 @@ class VentasTests(TestCase):
         salida = self.crear_salida_revision('equipo_prueba')
         url = reverse('econotec:salida_editar', kwargs={'pk': salida.pk})
         datos = self.salida_post_data(
-            estado_reparacion='revision',
-            subestado_revision='equipo_prueba',
+            estado_reparacion='revision:equipo_prueba',
             valor_acordado_revision='15.00',
             metodo_pago_final='sin_pago',
             asesora_notificacion=str(self.vendedor.pk),
@@ -11893,7 +11931,7 @@ class VentasTests(TestCase):
         self.client.post(url, datos)
         self.assertFalse(NotificacionRevisionAdmin.objects.exists())
 
-        datos['subestado_revision'] = 'cliente_no_acepta'
+        datos['estado_reparacion'] = 'revision:cliente_no_acepta'
         self.client.post(url, datos)
         salida.refresh_from_db()
         self.assertEqual(salida.subestado_revision, 'cliente_no_acepta')
@@ -11974,24 +12012,19 @@ class VentasTests(TestCase):
             'Revisión — Equipo de prueba',
         )
 
-    def test_ventana_diaria_de_observacion_en_revision(self):
+    def test_revision_no_muestra_ventana_y_muestra_subcategoria(self):
         salida = self.crear_salida_revision('equipo_prueba')
-        url = reverse('econotec:ingreso_detalle', kwargs={'pk': salida.ingreso.pk})
+        SalidaEquipo.objects.filter(pk=salida.pk).update(
+            fecha_subestado_revision=timezone.now() - timedelta(days=9),
+        )
 
-        response = self.client.get(url)
+        response = self.client.get(reverse('econotec:ingreso_detalle', kwargs={'pk': salida.ingreso.pk}))
 
-        self.assertTrue(response.context['mostrar_popup_observacion'])
-        self.assertContains(response, 'sigue en\n            <strong>Revisión — Equipo de prueba</strong>')
+        self.assertFalse(response.context['mostrar_popup_observacion'])
+        self.assertNotContains(response, 'id="obs-pregunta-modal"')
+        self.assertContains(response, '📝 Actualizar observación')
         self.assertContains(response, 'Subcategoría de revisión')
         self.assertContains(response, '<strong>🧪 Equipo de prueba</strong>', html=True)
-        self.assertFalse(self.client.get(url).context['mostrar_popup_observacion'])
-
-        SalidaEquipo.objects.filter(pk=salida.pk).update(fecha_retiro_real=date(2026, 8, 12))
-        otra = self.crear_salida_revision('equipo_prueba')
-        SalidaEquipo.objects.filter(pk=otra.pk).update(fecha_retiro_real=date(2026, 8, 12))
-        response = self.client.get(reverse('econotec:ingreso_detalle', kwargs={'pk': otra.ingreso.pk}))
-        # Ya salió de la oficina: no sigue en revisión.
-        self.assertFalse(response.context['mostrar_popup_observacion'])
 
     def test_equipo_de_prueba_con_cinco_dias_avisa_al_admin(self):
         from .avisos_revision import generar_avisos_prueba_demorada

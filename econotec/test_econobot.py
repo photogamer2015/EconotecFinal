@@ -284,6 +284,20 @@ class EconoBotTests(TestCase):
         self.assertEqual(ingreso.reporte_tecnico, 'Cambio de pantalla')
         self.assertTrue(SalidaEquipo.objects.filter(ingreso=ingreso, estado_reparacion='pendiente_retiro').exists())
 
+    def test_finalizar_en_revision_con_subcategoria(self):
+        ingreso = self.crear_ingreso()
+        self.chat(f'finalizar {ingreso.codigo_equipo}')
+        datos = self.conversar('revision no se pudo reparar', 'mantener', '20')
+        self.assertIn('asesora', datos['reply'])
+        datos = self.chat('Kimberly')
+        self.assertIn('Revisión — ❌ No se pudo reparar', datos['reply'])
+        self.assertIn('Valor de revisión: $20,00', datos['reply'])
+        datos = self.chat('sí')
+        self.assertIn('quedó finalizado', datos['reply'])
+        salida = SalidaEquipo.objects.get(ingreso=ingreso)
+        self.assertEqual((salida.estado_reparacion, salida.subestado_revision), ('revision', 'no_reparable'))
+        self.assertEqual(salida.valor_acordado_revision, Decimal('20.00'))
+
     def test_finalizar_no_reparable_usa_la_edicion_del_equipo(self):
         ingreso = self.crear_ingreso(valor_acordado=None)
         self.chat(f'finalizar {ingreso.codigo_equipo}')

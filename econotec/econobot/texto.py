@@ -159,6 +159,10 @@ def solo_espacios_numericos(texto):
     return re.sub(r'(?<=\d)[\s-](?=\d)', '', str(texto or ''))
 
 
+def _solo_palabras(texto):
+    return ' '.join(re.findall(r'[a-z0-9ñ]+', texto or ''))
+
+
 def elegir(texto, opciones):
     """Busca una opción por número, valor o etiqueta.
 
@@ -176,6 +180,13 @@ def elegir(texto, opciones):
                if t in (norm(valor), limpiar(etiqueta))]
     if len(exactas) == 1:
         return exactas[0]
+    # Igual a la etiqueta sin íconos ni signos: «no se pudo reparar» elige
+    # «❌ No se pudo reparar» y no «🔎 Revisión — ❌ No se pudo reparar».
+    palabras_texto = _solo_palabras(t)
+    sin_simbolos = [valor for valor, etiqueta in opciones
+                    if palabras_texto and palabras_texto == _solo_palabras(limpiar(etiqueta))]
+    if len(sin_simbolos) == 1:
+        return sin_simbolos[0]
     parciales = [valor for valor, etiqueta in opciones
                  if t in limpiar(etiqueta) or limpiar(etiqueta) in t]
     if len(parciales) == 1:

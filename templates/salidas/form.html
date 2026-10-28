@@ -426,11 +426,7 @@
 
         <div class="form-row cols-1" id="wrap-valor-revision" style="margin-top: 14px; display:none;">
             <div style="background:#fff8e1; border:1px solid #ffe08a; border-radius:8px; padding:14px;">
-                <label class="form-label" for="{{ form.subestado_revision.id_for_label }}">
-                    Subcategoría de la revisión *
-                </label>
-                {{ form.subestado_revision }}
-                {{ form.subestado_revision.errors }}
+                <div class="form-label">Qué significa cada Revisión</div>
                 <ul class="revision-subcategorias-ayuda">
                     <li><b>🧪 Equipo de prueba:</b> neutro, no suma ni resta. Si sigue así 5 días o más, se avisa al admin.</li>
                     <li><b>❌ No se pudo reparar:</b> cuenta como No se pudo reparar (resta −1 punto al técnico).</li>
@@ -618,7 +614,6 @@
         var labelValorCobrado = document.getElementById('label-valor-cobrado');
         var wrapValorRevision = document.getElementById('wrap-valor-revision');
         var inputValorRevision = document.querySelector('[name="valor_acordado_revision"]');
-        var selectSubestadoRevision = document.querySelector('[name="subestado_revision"]');
         var mensajeNotificacion = document.querySelector('[name="mensaje_notificacion"]');
         var tituloNotificarAsesora = document.getElementById('notificar-asesora-titulo');
         var ayudaNotificarAsesora = document.getElementById('notificar-asesora-ayuda');
@@ -706,7 +701,8 @@
 
         function actualizar() {
             if (!selEstado) return;
-            var v = selEstado.value;
+            // «revision:equipo_prueba» y demás subcategorías se tratan como Revisión.
+            var v = selEstado.value.split(':')[0];
             var esCierreSinReparacion = v === 'cliente_no_acepta' || v === 'no_reparable';
             var mostrarValorAdicional = v === 'pendiente_retiro' || esCierreSinReparacion;
             var aplicaAdicional = (
@@ -774,7 +770,6 @@
                     inputCobrado.removeAttribute('max');
                 }
                 if (wrapValorRevision) wrapValorRevision.style.display = 'none';
-                if (selectSubestadoRevision) selectSubestadoRevision.removeAttribute('required');
                 if (inputValorRevision) {
                     inputValorRevision.removeAttribute('required');
                     inputValorRevision.setAttribute('min', '0');
@@ -806,9 +801,6 @@
                     }
                 } else if (v === 'revision') {
                     if (wrapValorRevision) wrapValorRevision.style.display = '';
-                    if (selectSubestadoRevision && !selectSubestadoRevision.disabled) {
-                        selectSubestadoRevision.setAttribute('required', 'required');
-                    }
                     if (inputValorRevision) {
                         inputValorRevision.setAttribute('required', 'required');
                         inputValorRevision.setAttribute('min', '1');
