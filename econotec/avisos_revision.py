@@ -102,7 +102,7 @@ def generar_avisos_prueba_demorada(hoy=None):
             dedupe_key=clave,
             mensaje=(
                 f'El equipo {salida.ingreso.codigo_equipo} ({salida.ingreso.cliente.nombres}) '
-                f'lleva {dias_en_subestado(salida, hoy)} días como Equipo de prueba.'
+                f'lleva {dias_en_subestado(salida, hoy)} días como Equipo en prueba (test).'
             ),
         )
         for clave, salida in claves.items()

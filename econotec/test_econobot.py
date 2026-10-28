@@ -301,8 +301,8 @@ class EconoBotTests(TestCase):
         self.assertIsNone(salida.valor_acordado_revision)
         self.assertEqual(salida.valor_acordado_adicional, Decimal('20.00'))
         ingreso.refresh_from_db()
-        # Valor acordado $25 + adicional $20.
-        self.assertEqual(ingreso.valor_servicio_a_cobrar, Decimal('45.00'))
+        # No se pudo reparar: el valor acordado ($25) queda en $0; solo el adicional.
+        self.assertEqual(ingreso.valor_servicio_a_cobrar, Decimal('20.00'))
 
     def test_finalizar_no_reparable_usa_la_edicion_del_equipo(self):
         ingreso = self.crear_ingreso(valor_acordado=None)

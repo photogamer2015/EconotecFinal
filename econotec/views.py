@@ -4479,7 +4479,7 @@ _RESULTADOS_RANKING = (
         'suma',
         ('revision:cliente_no_acepta',),
     ),
-    ('revision', 'Revisión — Equipo de prueba', 'neutro', ('revision',)),
+    ('revision', 'Revisión — Equipo en prueba (test)', 'neutro', ('revision',)),
     ('cortesia', 'Cortesía', 'neutro', ('cortesia',)),
     ('chatarrerizacion', 'Chatarrerización', 'neutro', ('chatarrerizacion',)),
 )

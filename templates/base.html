@@ -1831,7 +1831,7 @@
                                     {% for aviso in notificaciones_revision_admin_preview %}
                                         <a href="{% url 'econotec:notificacion_revision_admin_ver' pk=aviso.pk %}" class="noti-item">
                                             <div class="noti-item-title">
-                                                <span>{% if aviso.tipo == 'subcategoria' %}🔎 Subcategoría aplicada{% elif aviso.tipo == 'observacion' %}📝 Observación nueva{% else %}🧪 Equipo de prueba +5 días{% endif %}</span>
+                                                <span>{% if aviso.tipo == 'subcategoria' %}🔎 Subcategoría aplicada{% elif aviso.tipo == 'observacion' %}📝 Observación nueva{% else %}🧪 Equipo en prueba (test) +5 días{% endif %}</span>
                                                 <span class="noti-item-value">{{ aviso.salida.ingreso.codigo_equipo }}</span>
                                             </div>
                                             <div class="noti-item-meta">
