@@ -486,7 +486,7 @@ def _draw_header_econotec(c, width, height, doc_title):
         'Guayaquil: Sauces 8 Mz 462 Solar / 6 Piso 2 Oficina 2',
         'Quito: Av. Amazonas y 18 de septiembre / Piso 2 Oficina 102',
         'Celular / WhatsApp: 0963289727 — 0980758747',
-        'Web: https://econotec-ec.com/   Correo: ventas@econotec.ec.com',
+        'Web: https://econotec-ec.com/   Correo: econotec002@gmail.com',
     ]
     y = height - 112
     for line in info_lines:
