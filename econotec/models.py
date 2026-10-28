@@ -998,7 +998,9 @@ class IngresoEquipo(RetencionFactura):
         if self.pendiente_retiro_visual:
             return 'Reparado - pendiente de retiro'
         if salida is not None and salida.estado_reparacion == 'revision':
-            return 'Revisión pendiente de pago'
+            # Las revisiones con subcategoría muestran cuál es; las anteriores
+            # siempre tenían un valor de revisión pendiente.
+            return salida.subestado_revision_texto or 'Revisión pendiente de pago'
         if self.estado == 'en_reparacion' and self.subestado_reparacion:
             return self.get_subestado_reparacion_display()
         if self.estado == 'entregado' and self.subestado_entregado:
@@ -1205,11 +1207,16 @@ class IngresoEquipo(RetencionFactura):
     @property
     def reparacion_cancelada(self):
         """
-        ¿La reparación fue cancelada o cerrada por revisión?
+        ¿La reparación fue cancelada o cerrada con un valor de revisión propio?
         En estos estados el valor acordado original ya no aplica como deuda.
+        Las revisiones nuevas (sin valor de revisión propio) cobran el valor
+        acordado más el adicional, igual que un equipo pendiente de retiro.
         """
         if hasattr(self, 'salida') and self.salida:
-            return self.salida.estado_reparacion in ('cliente_no_acepta', 'no_reparable', 'revision')
+            return (
+                self.salida.estado_reparacion in ('cliente_no_acepta', 'no_reparable')
+                or self.salida.revision_con_valor_propio
+            )
         return False
 
     @property
@@ -1225,7 +1232,9 @@ class IngresoEquipo(RetencionFactura):
     def valor_servicio_a_cobrar(self):
         """
         Valor que realmente se le cobra al cliente por la REPARACIÓN / SALIDA:
-        - Si salió por Revisión: el valor acordado propio de esa salida.
+        - Si salió por Revisión con valor de revisión propio (revisiones
+          anteriores): ese valor, más el adicional si lo hay.
+        - Si salió por Revisión sin valor propio: valor acordado + adicional.
         - Si la reparación fue cancelada: solo el valor del diagnóstico (si no lo pagó al inicio).
         - Si no: el valor acordado completo.
         """
@@ -1233,8 +1242,11 @@ class IngresoEquipo(RetencionFactura):
             return Decimal('0.00')
 
         salida = self.salida if hasattr(self, 'salida') else None
-        if salida and salida.estado_reparacion == 'revision':
-            return _q2(salida.valor_acordado_revision or Decimal('0.00'))
+        if salida and salida.revision_con_valor_propio:
+            valor_revision = salida.valor_acordado_revision
+            if salida.tiene_valor_acordado_adicional:
+                valor_revision += salida.valor_acordado_adicional
+            return _q2(valor_revision)
 
         if self.reparacion_cancelada:
             if salida and salida.tiene_valor_acordado_adicional:
@@ -2396,6 +2408,13 @@ class SalidaEquipo(RetencionFactura):
                     self.ingreso.subestado_entregado = 'revision'
             self.ingreso.save()
         super().save(*args, **kwargs)
+
+    @property
+    def revision_con_valor_propio(self):
+        """Revisión registrada con «valor acordado por revisión» (forma anterior):
+        ese valor reemplaza al valor acordado del equipo. Las revisiones nuevas
+        no lo tienen y cobran valor acordado + valor adicional."""
+        return self.estado_reparacion == 'revision' and self.valor_acordado_revision is not None
 
     @property
     def en_revision(self):

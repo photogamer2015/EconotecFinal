@@ -389,7 +389,7 @@
         <div id="wrap-valor-adicional" style="display:none; margin-top:14px; background:#fff8e1; border:1px solid #f5c451; border-radius:10px; padding:14px;">
             <div class="form-row cols-2" style="align-items:end;">
                 <div>
-                    <label class="form-label" for="{{ form.aplica_valor_acordado_adicional.id_for_label }}" style="color:#856404;">
+                    <label class="form-label" id="titulo-cobro-adicional" for="{{ form.aplica_valor_acordado_adicional.id_for_label }}" style="color:#856404;">
                         ¿Registrar un cobro adicional opcional?
                     </label>
                     {{ form.aplica_valor_acordado_adicional }}
@@ -426,23 +426,20 @@
 
         <div class="form-row cols-1" id="wrap-valor-revision" style="margin-top: 14px; display:none;">
             <div style="background:#fff8e1; border:1px solid #ffe08a; border-radius:8px; padding:14px;">
-                <div class="form-label">Qué significa cada Revisión</div>
+                <div class="form-label">Cómo funciona cada Revisión</div>
                 <ul class="revision-subcategorias-ayuda">
-                    <li><b>🧪 Equipo de prueba:</b> neutro, no suma ni resta. Si sigue así 5 días o más, se avisa al admin.</li>
-                    <li><b>❌ No se pudo reparar:</b> cuenta como No se pudo reparar (resta −1 punto al técnico).</li>
-                    <li><b>🚫 Cliente no quiso reparar:</b> cuenta como Cliente no quiso reparar (suma +1 punto al técnico).</li>
+                    <li><b>🧪 Equipo de prueba:</b> el equipo queda en prueba. Si sigue así 5 días o más, se avisa al admin.</li>
+                    <li><b>❌ No se pudo reparar:</b> se revisó el equipo y no se pudo reparar.</li>
+                    <li><b>🚫 Cliente no quiso reparar:</b> se revisó el equipo y el cliente decidió no repararlo.</li>
                 </ul>
-                <small style="display:block; margin:0 0 12px; color:#856404; font-weight:700; line-height:1.35;">
-                    El cobro sigue siendo el de Revisión. Al guardar se avisa al admin.
+                <small style="display:block; color:#856404; font-weight:700; line-height:1.35;">
+                    Se cobra el valor acordado del equipo. Si agregas un valor adicional, se suma al valor acordado. Al guardar se avisa al admin.
                 </small>
-                <label class="form-label" for="{{ form.valor_acordado_revision.id_for_label }}">
-                    Valor acordado por revisión *
-                </label>
-                {{ form.valor_acordado_revision }}
-                {{ form.valor_acordado_revision.errors }}
-                <small style="display:block; margin-top:6px; color:#856404; font-weight:700; line-height:1.35;">
-                    Este valor solo aplica al estado Revisión y será la base del saldo pendiente de pago.
+                {% if salida and salida.revision_con_valor_propio %}
+                <small style="display:block; margin-top:8px; color:#856404; line-height:1.35;">
+                    Esta revisión se registró con un valor acordado por revisión de <b>{{ salida.valor_acordado_revision|dinero_signo }}</b>, que reemplaza al valor acordado del equipo y se mantiene.
                 </small>
+                {% endif %}
             </div>
         </div>
     </div>
@@ -613,7 +610,7 @@
         var asesoraNotificacion = document.querySelector('[name="asesora_notificacion"]');
         var labelValorCobrado = document.getElementById('label-valor-cobrado');
         var wrapValorRevision = document.getElementById('wrap-valor-revision');
-        var inputValorRevision = document.querySelector('[name="valor_acordado_revision"]');
+        var tituloCobroAdicional = document.getElementById('titulo-cobro-adicional');
         var mensajeNotificacion = document.querySelector('[name="mensaje_notificacion"]');
         var tituloNotificarAsesora = document.getElementById('notificar-asesora-titulo');
         var ayudaNotificarAsesora = document.getElementById('notificar-asesora-ayuda');
@@ -634,6 +631,9 @@
         totalAbonado -= parseFloat("{{ ingreso.bodegaje_cobrado_en_abonos|default:0|stringformat:'f' }}") || 0;
         var valorDomicilio = parseFloat("{{ ingreso.valor_domicilio_aplicable }}".replace(',', '.')) || 0;
         var diferenciaNormal = (parseFloat("{{ ingreso.valor_acordado|default:0 }}") || 0) + valorDomicilio - totalAbonado;
+        // Revisión registrada antes con «valor acordado por revisión»: ese valor
+        // reemplaza al valor acordado y se mantiene.
+        var valorRevisionAnterior = {% if salida and salida.revision_con_valor_propio %}parseFloat("{{ salida.valor_acordado_revision|stringformat:'f' }}") || 0{% else %}null{% endif %};
 
         // Estados considerados "positivos" → permiten enviar la hoja
         var ESTADOS_POSITIVOS = ['pendiente_retiro', 'garantia', 'garantia_fallos_adicionales', 'reparado_parcial', 'retirado'];
@@ -704,7 +704,8 @@
             // «revision:equipo_prueba» y demás subcategorías se tratan como Revisión.
             var v = selEstado.value.split(':')[0];
             var esCierreSinReparacion = v === 'cliente_no_acepta' || v === 'no_reparable';
-            var mostrarValorAdicional = v === 'pendiente_retiro' || esCierreSinReparacion;
+            var esRevision = v === 'revision';
+            var mostrarValorAdicional = v === 'pendiente_retiro' || esCierreSinReparacion || esRevision;
             var aplicaAdicional = (
                 mostrarValorAdicional
                 && aplicaValorAdicional
@@ -713,10 +714,17 @@
             if (wrapValorAdicional) {
                 wrapValorAdicional.style.display = mostrarValorAdicional ? 'block' : 'none';
             }
+            if (tituloCobroAdicional) {
+                tituloCobroAdicional.textContent = esRevision
+                    ? '¿Agregar un valor adicional por la revisión?'
+                    : '¿Registrar un cobro adicional opcional?';
+            }
             if (ayudaCobroAdicional) {
                 ayudaCobroAdicional.textContent = esCierreSinReparacion
                     ? 'Este resultado no tiene cobro por defecto. Actívalo solo si se acordó un valor adicional con el cliente.'
-                    : 'Es opcional. Si lo activas, el valor se suma al saldo pendiente del equipo.';
+                    : esRevision
+                        ? 'Es opcional. Si lo activas, el valor se suma al valor acordado del equipo.'
+                        : 'Es opcional. Si lo activas, el valor se suma al saldo pendiente del equipo.';
             }
             if (detalleValorAdicional) {
                 detalleValorAdicional.style.display = aplicaAdicional ? 'grid' : 'none';
@@ -770,11 +778,6 @@
                     inputCobrado.removeAttribute('max');
                 }
                 if (wrapValorRevision) wrapValorRevision.style.display = 'none';
-                if (inputValorRevision) {
-                    inputValorRevision.removeAttribute('required');
-                    inputValorRevision.setAttribute('min', '0');
-                    inputValorRevision.setCustomValidity('');
-                }
                 setNotificacionAsesora(false);
                 bloquearMetodoPagoPendiente(metodoPago, false);
 
@@ -801,11 +804,6 @@
                     }
                 } else if (v === 'revision') {
                     if (wrapValorRevision) wrapValorRevision.style.display = '';
-                    if (inputValorRevision) {
-                        inputValorRevision.setAttribute('required', 'required');
-                        inputValorRevision.setAttribute('min', '1');
-                        if (inputValorRevision.value === '0') inputValorRevision.value = '';
-                    }
                     if (wrapPagoFinal) wrapPagoFinal.style.display = 'none';
                     if (wrapNumeroRecibo) wrapNumeroRecibo.style.display = 'none';
                     if (inputCobrado) {
@@ -813,18 +811,28 @@
                         inputCobrado.setAttribute('readonly', 'readonly');
                     }
                     bloquearMetodoPagoPendiente(metodoPago, true);
-                    setNotificacionAsesora(true, 'revision');
 
-                    var valorRevision = valorInputCobrado(inputValorRevision);
-                    var saldoRevision = Math.max(valorRevision + valorDomicilio - totalAbonado, 0);
+                    // Valor acordado (o el de revisión anterior) + valor adicional.
+                    var adicionalRevision = aplicaAdicional ? valorInputCobrado(inputValorAdicional) : 0;
+                    var baseRevision = valorRevisionAnterior === null
+                        ? diferenciaNormal
+                        : valorRevisionAnterior + valorDomicilio - totalAbonado;
+                    var saldoRevision = Math.max(baseRevision + adicionalRevision, 0);
                     saldoDisplay.textContent = '$' + saldoRevision.toFixed(2);
                     saldoDisplay.style.color = saldoRevision > 0 ? 'var(--danger)' : 'var(--success)';
+                    setNotificacionAsesora(saldoRevision > 0, 'revision');
                     if (saldoNota) {
                         saldoNota.style.display = '';
-                        saldoNota.textContent = 'Saldo calculado desde el valor acordado de revisión.';
+                        if (saldoRevision <= 0) {
+                            saldoNota.textContent = 'Sin saldo pendiente: no hay nada que cobrar.';
+                        } else if (adicionalRevision > 0) {
+                            saldoNota.textContent = 'Valor acordado + valor adicional de $' + adicionalRevision.toFixed(2) + '.';
+                        } else {
+                            saldoNota.textContent = 'Saldo del valor acordado del equipo.';
+                        }
                     }
                     if (ayudaValor) {
-                        ayudaValor.innerHTML = 'En Revisión no se registra pago recibido ahora; el pendiente sale del valor acordado de revisión.';
+                        ayudaValor.innerHTML = 'En Revisión no se registra pago recibido ahora; el saldo se cobra con abonos antes del retiro.';
                         ayudaValor.style.color = '#856404';
                     }
                 } else if (v === 'garantia') {
@@ -993,10 +1001,6 @@
         if (inputCobrado) {
             inputCobrado.addEventListener('input', actualizar);
             inputCobrado.addEventListener('change', actualizar);
-        }
-        if (inputValorRevision) {
-            inputValorRevision.addEventListener('input', actualizar);
-            inputValorRevision.addEventListener('change', actualizar);
         }
         if (aplicaValorAdicional) {
             aplicaValorAdicional.addEventListener('change', actualizar);

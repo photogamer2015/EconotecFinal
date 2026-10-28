@@ -1528,8 +1528,9 @@ class CobroBodegajeForm(forms.Form):
 
 class SalidaEquipoForm(RetencionFacturaFormMixin, forms.ModelForm):
     ESTADOS_REVISION_PENDIENTE = ('cliente_no_acepta', 'no_reparable')
-    ESTADOS_COBRO_ADICIONAL = ('pendiente_retiro', *ESTADOS_REVISION_PENDIENTE)
     ESTADO_REVISION = 'revision'
+    # En Revisión el valor adicional es opcional y se suma al valor acordado.
+    ESTADOS_COBRO_ADICIONAL = ('pendiente_retiro', *ESTADOS_REVISION_PENDIENTE, ESTADO_REVISION)
 
     reporte_tecnico = forms.CharField(
         widget=forms.Textarea(attrs={
@@ -1926,6 +1927,20 @@ class SalidaEquipoForm(RetencionFacturaFormMixin, forms.ModelForm):
         self.notificacion_asesora_valor = valor
         self.notificacion_asesora_mensaje_default = mensaje_default
 
+    def _saldo_revision(self, valor_revision_anterior, valor_adicional):
+        """Saldo que queda al finalizar en Revisión (no se registra pago ahora)."""
+        if valor_revision_anterior is None:
+            return self._saldo_pendiente_despues_de_pago(Decimal('0.00'), valor_adicional)
+        if not (self.instance and self.instance.ingreso):
+            return Decimal('0.00')
+        pendiente = (
+            valor_revision_anterior
+            + (valor_adicional or Decimal('0.00'))
+            + self.instance.ingreso.valor_domicilio_aplicable
+            - self._total_abonado_previo()
+        )
+        return pendiente if pendiente > 0 else Decimal('0.00')
+
     def _saldo_pendiente_despues_de_pago(
         self,
         valor_pagado_ahora,
@@ -2013,7 +2028,18 @@ class SalidaEquipoForm(RetencionFacturaFormMixin, forms.ModelForm):
             return cleaned
 
         valor_adicional = Decimal('0.00')
-        if estado_reparacion in self.ESTADOS_COBRO_ADICIONAL:
+        if (
+            estado_reparacion == self.ESTADO_REVISION
+            and self.fields['estado_reparacion'].disabled
+            and self.instance.pk
+        ):
+            # Revisión con la salida ya confirmada: el valor adicional no cambia.
+            cleaned['aplica_valor_acordado_adicional'] = self.instance.aplica_valor_acordado_adicional
+            cleaned['valor_acordado_adicional'] = self.instance.valor_acordado_adicional
+            cleaned['motivo_valor_acordado_adicional'] = self.instance.motivo_valor_acordado_adicional
+            if self.instance.tiene_valor_acordado_adicional:
+                valor_adicional = self.instance.valor_acordado_adicional
+        elif estado_reparacion in self.ESTADOS_COBRO_ADICIONAL:
             aplica_adicional = cleaned.get('aplica_valor_acordado_adicional') or 'no'
             if aplica_adicional == 'si':
                 valor_adicional = cleaned.get('valor_acordado_adicional') or Decimal('0.00')
@@ -2038,7 +2064,6 @@ class SalidaEquipoForm(RetencionFacturaFormMixin, forms.ModelForm):
                 
         metodo = cleaned.get('metodo_pago_final')
         valor = cleaned.get('valor_final_cobrado') or Decimal('0.00')
-        valor_revision = cleaned.get('valor_acordado_revision') or Decimal('0.00')
         banco = cleaned.get('banco')
         banco_otro = cleaned.get('banco_otro')
         tarjeta_app = cleaned.get('tarjeta_app')
@@ -2055,24 +2080,33 @@ class SalidaEquipoForm(RetencionFacturaFormMixin, forms.ModelForm):
                         'Elige la Revisión con su subcategoría: Equipo de prueba, '
                         'No se pudo reparar o Cliente no quiso reparar.',
                     )
-            if valor_revision < Decimal('1.00'):
-                self.add_error(
-                    'valor_acordado_revision',
-                    'Ingresa el valor acordado por revisión. Debe ser de $1.00 o más.'
-                )
-            if not cleaned.get('asesora_notificacion'):
-                self.add_error(
-                    'asesora_notificacion',
-                    'Selecciona la asesora que recibirá esta notificación.'
-                )
-            self._registrar_notificacion_pendiente(
-                NotificacionAsesora.TIPO_REVISION_PENDIENTE,
-                valor_revision,
-                (
-                    'El equipo {codigo} salió en estado Revisión. '
-                    'Valor acordado pendiente: ${valor:.2f}. No entregar hasta registrar el pago.'
-                ),
+            # Se cobra el valor acordado del equipo + el valor adicional
+            # opcional. Una revisión anterior con «valor acordado por
+            # revisión» lo conserva (ese valor reemplaza al valor acordado).
+            valor_revision_anterior = (
+                self.instance.valor_acordado_revision
+                if self.instance and self.instance.pk and self.instance.revision_con_valor_propio
+                else None
             )
+            cleaned['valor_acordado_revision'] = valor_revision_anterior
+            saldo_pendiente = self._saldo_revision(valor_revision_anterior, valor_adicional)
+            if saldo_pendiente > 0:
+                if not cleaned.get('asesora_notificacion'):
+                    self.add_error(
+                        'asesora_notificacion',
+                        'Selecciona la asesora que recibirá esta notificación.'
+                    )
+                self._registrar_notificacion_pendiente(
+                    NotificacionAsesora.TIPO_REVISION_PENDIENTE,
+                    saldo_pendiente,
+                    (
+                        'El equipo {codigo} salió en estado Revisión. '
+                        'Saldo pendiente: ${valor:.2f}. No entregar hasta registrar el pago.'
+                    ),
+                )
+            else:
+                cleaned['asesora_notificacion'] = None
+                cleaned['mensaje_notificacion'] = ''
             cleaned['valor_final_cobrado'] = Decimal('0.00')
             self._limpiar_pago_pendiente(cleaned)
             return cleaned
@@ -2243,7 +2277,8 @@ class SalidaEquipoForm(RetencionFacturaFormMixin, forms.ModelForm):
             salida.metodo_2 = ''
             salida.banco_2 = ''
         elif salida.estado_reparacion == self.ESTADO_REVISION:
-            salida.valor_acordado_revision = self.cleaned_data.get('valor_acordado_revision') or Decimal('0.00')
+            # None en las revisiones nuevas: cobran valor acordado + adicional.
+            salida.valor_acordado_revision = self.cleaned_data.get('valor_acordado_revision')
             salida.valor_final_cobrado = Decimal('0.00')
             salida.metodo_pago_final = 'sin_pago'
             salida.numero_recibo = ''

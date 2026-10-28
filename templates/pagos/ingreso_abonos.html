@@ -223,7 +223,7 @@
     <div class="card-box valor-acordado-card" style="border-left: 4px solid var(--primary); padding: 16px;">
         <div class="valor-acordado-head">
             <div class="valor-acordado-label">
-                {% if ingreso.salida.estado_reparacion == 'revision' %}Valor revisión{% else %}Valor acordado de este equipo{% endif %}
+                {% if ingreso.salida.revision_con_valor_propio %}Valor revisión{% else %}Valor acordado de este equipo{% endif %}
             </div>
             {% if puede_editar_valor_acordado %}
                 <button type="button" id="btn-editar-valor-acordado" class="btn-editar-valor-acordado" data-open-valor-acordado>
@@ -232,7 +232,7 @@
             {% endif %}
         </div>
         <div style="font-size: 22px; font-weight: 800; color: var(--secondary);">
-            {% if ingreso.salida.estado_reparacion == 'revision' %}
+            {% if ingreso.salida.revision_con_valor_propio %}
                 {{ ingreso.valor_efectivo_a_cobrar|dinero_signo }}
             {% elif ingreso.adicional_suma_al_valor_acordado %}
                 {{ ingreso.valor_servicio_a_cobrar|dinero_signo }}

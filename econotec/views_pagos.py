@@ -53,7 +53,8 @@ def _puede_editar_valor_acordado_en_pagos(ingreso, salida=None):
         return False
 
     salida = salida if salida is not None else getattr(ingreso, 'salida', None)
-    if salida and salida.estado_reparacion == 'revision':
+    # Revisión anterior con valor propio: su valor reemplaza al acordado.
+    if salida and salida.revision_con_valor_propio:
         return False
     return True
 
