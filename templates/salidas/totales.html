@@ -1005,9 +1005,9 @@
         <section>
             <h4>Qué suma, qué resta y qué no afecta</h4>
             <ul>
-                <li><span class="efecto-icono suma" aria-hidden="true">✓</span><span><b>Suman:</b> Finalizado y reparado (esté pendiente de retiro o ya haya salido de la oficina) y Cliente no quiso reparar.</span></li>
-                <li><span class="efecto-icono resta" aria-hidden="true">−</span><span><b>Restan:</b> Garantía finalizada, Garantía + fallos adicionales y No se pudo reparar.</span></li>
-                <li><span class="efecto-icono neutro" aria-hidden="true">○</span><span><b>No afectan:</b> Revisión, Cortesía y Chatarrerización.</span></li>
+                <li><span class="efecto-icono suma" aria-hidden="true">✓</span><span><b>Suman:</b> Finalizado y reparado (esté pendiente de retiro o ya haya salido de la oficina) y Cliente no quiso reparar, también cuando es la subcategoría de una Revisión.</span></li>
+                <li><span class="efecto-icono resta" aria-hidden="true">−</span><span><b>Restan:</b> Garantía finalizada, Garantía + fallos adicionales y No se pudo reparar, también cuando es la subcategoría de una Revisión.</span></li>
+                <li><span class="efecto-icono neutro" aria-hidden="true">○</span><span><b>No afectan:</b> Revisión — Equipo de prueba, Cortesía y Chatarrerización.</span></li>
             </ul>
         </section>
         <section>
@@ -1019,7 +1019,9 @@
                     <tr><td>Venta de producto</td><td>+1</td></tr>
                     <tr><td>No se pudo reparar</td><td>−1</td></tr>
                     <tr><td>Garantía finalizada / Garantía + fallos adicionales</td><td>−4</td></tr>
-                    <tr><td>Revisión, Cortesía y Chatarrerización</td><td>0</td></tr>
+                    <tr><td>Revisión — Cliente no quiso reparar</td><td>+1</td></tr>
+                    <tr><td>Revisión — No se pudo reparar</td><td>−1</td></tr>
+                    <tr><td>Revisión — Equipo de prueba, Cortesía y Chatarrerización</td><td>0</td></tr>
                 </tbody>
             </table>
             <p>Cada tarjeta muestra los <b>puntos del período</b> elegido y el <b>nivel del técnico</b>, que es el mismo de Mi perfil y cuenta todo su historial: Novato (0), Intermedio (50), Avanzado (100), Experto (500), Maestro (1.000) y God Tec Econotec (4.000).</p>

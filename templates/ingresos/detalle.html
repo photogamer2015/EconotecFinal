@@ -1427,6 +1427,19 @@
             <h3>✅ Equipo finalizado</h3>
             <div class="field-row"><span class="label">Fecha de finalización</span><span class="value">{{ salida.fecha_salida|date:"d/m/Y" }}</span></div>
             <div class="field-row"><span class="label">Estado</span><span class="value"><span class="badge badge-{{ salida.estado_operativo_key }}">{{ salida.estado_operativo_display }}</span></span></div>
+            {% if salida.estado_reparacion == 'revision' %}
+            <div class="field-row">
+                <span class="label">Subcategoría de revisión</span>
+                <span class="value">
+                    {% if salida.subestado_revision %}
+                        <strong>{{ salida.get_subestado_revision_display }}</strong>
+                        {% if salida.fecha_subestado_revision %}<br><small style="color:var(--text-muted);">desde {{ salida.fecha_subestado_revision|date:"d/m/Y H:i" }}</small>{% endif %}
+                    {% else %}
+                        <span style="color:var(--text-muted);">Sin subcategoría (elígela en Editar finalización)</span>
+                    {% endif %}
+                </span>
+            </div>
+            {% endif %}
             <div class="field-row">
                 <span class="label">Técnico quien reparó</span>
                 <span class="value">

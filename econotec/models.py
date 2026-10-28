@@ -1778,6 +1778,16 @@ class SalidaEquipo(RetencionFactura):
         ('chatarrerizacion', '♻️ Chatarrerización'),
     ]
 
+    # Subcategoría obligatoria cuando el resultado es Revisión. El cobro sigue
+    # siendo el de Revisión; para puntos y ranking, «No se pudo reparar» y
+    # «Cliente no quiso reparar» cuentan como esos estados y «Equipo de
+    # prueba» es neutro (ver gamificacion.estado_para_puntos).
+    SUBESTADO_REVISION = [
+        ('equipo_prueba', '🧪 Equipo de prueba'),
+        ('no_reparable', '❌ No se pudo reparar'),
+        ('cliente_no_acepta', '🚫 Cliente no quiso reparar'),
+    ]
+
     SI_NO = [
         ('si', 'Sí'),
         ('no', 'No'),
@@ -1808,6 +1818,16 @@ class SalidaEquipo(RetencionFactura):
         max_length=30, choices=ESTADO_REPARACION,
         verbose_name='Resultado final del equipo',
         help_text='¿Cómo termina este equipo? La opción más común es "Reparado — pendiente de retiro".'
+    )
+    subestado_revision = models.CharField(
+        max_length=20, choices=SUBESTADO_REVISION, blank=True, default='',
+        verbose_name='Subcategoría de revisión',
+        help_text='Solo aplica cuando el resultado es Revisión.',
+    )
+    fecha_subestado_revision = models.DateTimeField(
+        null=True, blank=True,
+        verbose_name='Subcategoría de revisión desde',
+        help_text='Se actualiza sola cada vez que cambia la subcategoría de revisión.',
     )
 
     # ── Técnico que REPARÓ el equipo (se declara en la salida) ───────────
@@ -2279,6 +2299,29 @@ class SalidaEquipo(RetencionFactura):
                     'factura_correo',
                 }
 
+        # Subcategoría de revisión: se limpia fuera de Revisión y su fecha
+        # marca desde cuándo está en ella (alerta de Equipo de prueba).
+        if self.estado_reparacion != 'revision':
+            self.subestado_revision = ''
+        subestado_anterior = None
+        if self.pk:
+            subestado_anterior = (
+                type(self).objects
+                .filter(pk=self.pk)
+                .values_list('subestado_revision', flat=True)
+                .first()
+            )
+        if not self.subestado_revision:
+            self.fecha_subestado_revision = None
+        elif self.subestado_revision != subestado_anterior or not self.fecha_subestado_revision:
+            self.fecha_subestado_revision = timezone.now()
+        update_fields = kwargs.get('update_fields')
+        if update_fields is not None:
+            kwargs['update_fields'] = set(update_fields) | {
+                'subestado_revision',
+                'fecha_subestado_revision',
+            }
+
         if self.valor_final_cobrado and self.valor_final_cobrado > 0 and not self.numero_recibo:
             self.numero_recibo = SalidaEquipo.generar_numero_recibo()
         # Sincronizar estado del ingreso al guardar la salida
@@ -2304,8 +2347,78 @@ class SalidaEquipo(RetencionFactura):
             self.ingreso.save()
         super().save(*args, **kwargs)
 
+    @property
+    def en_revision(self):
+        """Sigue en Revisión dentro de la oficina."""
+        return self.estado_reparacion == 'revision' and self.fecha_retiro_real is None
+
+    @property
+    def subestado_revision_texto(self):
+        """Subcategoría sin el ícono, p. ej. «Equipo de prueba»."""
+        if not self.subestado_revision:
+            return ''
+        return self.get_subestado_revision_display().split(' ', 1)[-1]
+
     def __str__(self):
         return f'Salida Equipo {self.ingreso.codigo_equipo} — {self.get_estado_reparacion_display()}'
+
+
+# ─────────────────────────────────────────────────────────
+# Avisos para administración sobre equipos en Revisión
+# ─────────────────────────────────────────────────────────
+
+class NotificacionRevisionAdmin(models.Model):
+    """
+    Aviso para el admin (campanita 🔎): se aplicó una subcategoría de
+    Revisión, se escribió una observación en un equipo en Revisión o un
+    Equipo de prueba lleva 5 días o más.
+    """
+    TIPO_SUBCATEGORIA = 'subcategoria'
+    TIPO_OBSERVACION = 'observacion'
+    TIPO_PRUEBA_DEMORADA = 'prueba_demorada'
+    TIPOS = [
+        (TIPO_SUBCATEGORIA, 'Subcategoría de revisión aplicada'),
+        (TIPO_OBSERVACION, 'Observación nueva'),
+        (TIPO_PRUEBA_DEMORADA, 'Equipo de prueba con 5 días o más'),
+    ]
+
+    salida = models.ForeignKey(
+        SalidaEquipo,
+        on_delete=models.CASCADE,
+        related_name='notificaciones_revision',
+        verbose_name='Equipo finalizado',
+    )
+    tipo = models.CharField(max_length=20, choices=TIPOS, verbose_name='Tipo')
+    mensaje = models.TextField(blank=True, verbose_name='Mensaje')
+    creado_por = models.ForeignKey(
+        'auth.User',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='notificaciones_revision_creadas',
+        verbose_name='Hecho por',
+    )
+    dedupe_key = models.CharField(
+        max_length=120, blank=True, default='',
+        verbose_name='Clave para no repetir el aviso',
+    )
+    leida = models.BooleanField(default=False, verbose_name='Vista por administración')
+    leida_en = models.DateTimeField(null=True, blank=True, verbose_name='Vista el')
+    creado = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'Aviso de revisión para admin'
+        verbose_name_plural = 'Avisos de revisión para admin'
+        ordering = ['-creado', '-pk']
+
+    def marcar_vista(self):
+        if not self.leida:
+            self.leida = True
+            self.leida_en = timezone.now()
+            self.save(update_fields=['leida', 'leida_en'])
+
+    def __str__(self):
+        return f'{self.get_tipo_display()} — {self.salida.ingreso.codigo_equipo}'
 
 
 # ─────────────────────────────────────────────────────────

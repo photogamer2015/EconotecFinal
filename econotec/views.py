@@ -41,10 +41,11 @@ from .busqueda import (
 from .models import (
     Abono, BitacoraTecnico, CategoriaEgreso, Cliente, Egreso, IngresoEquipo,
     InventarioItem, NotificacionAsesora, NotificacionInventarioAdmin,
-    ObservacionEquipo, SalidaEquipo, SEDE_PREFIJOS, SEDES_EQUIPOS, TIPOS_EQUIPO,
+    NotificacionRevisionAdmin, ObservacionEquipo, SalidaEquipo, SEDE_PREFIJOS, SEDES_EQUIPOS, TIPOS_EQUIPO,
     UsuarioActividad, VentaInventarioItem,
 )
 from .bitacora import registrar_bitacora, nombre_corto_usuario, construir_bitacora_usuario
+from . import avisos_revision
 from .date_filters import aplicar_rango_fecha, contexto_rango_fecha, obtener_rango_fecha
 from .emails import (
     enviar_correo_finalizacion_seguro,
@@ -60,6 +61,7 @@ from .gamificacion import (
     SALIDA_PUNTOS_NEGATIVOS,
     SALIDA_PUNTOS_POSITIVOS,
     calcular_puntaje_perfil,
+    estado_para_puntos,
     nivel_por_puntos,
     puntos_de_salidas,
 )
@@ -413,6 +415,14 @@ def bienvenida(request):
     reparacion_tecnico = _items_reparacion(reparacion_tecnico_qs)
     reparacion_admin = _items_reparacion(reparacion_admin_qs)
 
+    # 3b. Equipos de prueba (Revisión) con 5 días o más: solo admin.
+    equipos_prueba_admin = []
+    if es_admin_user:
+        equipos_prueba_admin = [
+            {'salida': salida, 'ingreso': salida.ingreso, 'dias': avisos_revision.dias_en_subestado(salida)}
+            for salida in avisos_revision.equipos_prueba_demorados_qs().prefetch_related('ingreso__observaciones')
+        ]
+
     # 1b. Diagnósticos silenciados
     from datetime import timedelta as _td
     fecha_limite_diag = date.today() - _td(days=UMBRAL_DIAS_DIAGNOSTICO)
@@ -481,6 +491,8 @@ def bienvenida(request):
         'reparacion_tecnico_total': reparacion_tecnico_qs.count(),
         'reparacion_admin': reparacion_admin,
         'reparacion_admin_total': reparacion_admin_qs.count(),
+        'equipos_prueba_admin': equipos_prueba_admin,
+        'dias_alerta_equipo_prueba': avisos_revision.DIAS_ALERTA_EQUIPO_PRUEBA,
         'umbral_diagnostico': UMBRAL_DIAS_DIAGNOSTICO,
         'umbral_bodegaje': UMBRAL_DIAS_BODEGAJE,
         'umbral_reparacion_tecnico': UMBRAL_DIAS_REPARACION_TECNICO,
@@ -2603,6 +2615,9 @@ _SESION_POPUP_OBSERVACION = 'observacion_popup_vistos'
 
 
 def _estado_texto_observacion(ingreso):
+    salida = avisos_revision.salida_en_revision(ingreso)
+    if salida is not None and salida.subestado_revision:
+        return f'Revisión — {salida.subestado_revision_texto}'
     return ingreso.subestado_visual_display or ingreso.estado_visual_display
 
 
@@ -2614,8 +2629,38 @@ def _puede_actualizar_observacion(ingreso):
 
 def _popup_observacion_aplica(ingreso):
     """La ventana "¿Deseas actualizar la observación?" solo sale mientras el
-    equipo sigue En reparación (Reparación, Cliente o Repuestos)."""
-    return _puede_actualizar_observacion(ingreso) and ingreso.estado == 'en_reparacion'
+    equipo sigue En reparación (Reparación, Cliente o Repuestos) o en
+    Revisión dentro de la oficina."""
+    return _puede_actualizar_observacion(ingreso) and (
+        ingreso.estado == 'en_reparacion'
+        or avisos_revision.salida_en_revision(ingreso) is not None
+    )
+
+
+@admin_requerido
+def notificacion_revision_admin_ver(request, pk):
+    """Admin: abre el equipo del aviso de Revisión y lo marca como visto."""
+    notificacion = get_object_or_404(
+        NotificacionRevisionAdmin.objects.select_related('salida'),
+        pk=pk,
+    )
+    notificacion.marcar_vista()
+    return redirect('econotec:ingreso_detalle', pk=notificacion.salida.ingreso_id)
+
+
+@admin_requerido
+@require_POST
+def notificaciones_revision_admin_vistas(request):
+    """Admin: marca como vistos todos los avisos de Revisión."""
+    NotificacionRevisionAdmin.objects.filter(leida=False).update(
+        leida=True,
+        leida_en=timezone.now(),
+    )
+    messages.success(request, 'Avisos de revisión marcados como vistos.')
+    destino = request.POST.get('next') or ''
+    if not url_has_allowed_host_and_scheme(destino, allowed_hosts={request.get_host()}):
+        destino = reverse('econotec:bienvenida')
+    return redirect(destino)
 
 
 def _guardar_observacion_formulario(ing_form, ingreso, user):
@@ -2625,12 +2670,14 @@ def _guardar_observacion_formulario(ing_form, ingreso, user):
     texto = ing_form.cleaned_data.get('observacion_nueva') or ''
     if not texto:
         return None
-    return ObservacionEquipo.objects.create(
+    observacion = ObservacionEquipo.objects.create(
         ingreso=ingreso,
         texto=texto,
         autor=user,
         estado_texto=_estado_texto_observacion(ingreso),
     )
+    avisos_revision.avisar_observacion(observacion)
+    return observacion
 
 
 def _popup_observacion_pendiente_hoy(request, ingreso, observaciones):
@@ -2673,6 +2720,7 @@ def ingreso_observacion_agregar(request, pk):
         autor=request.user,
         estado_texto=_estado_texto_observacion(ingreso),
     )
+    avisos_revision.avisar_observacion(observacion)
     momento = timezone.localtime(observacion.creado)
     messages.success(
         request,
@@ -3914,6 +3962,7 @@ def salida_registrar(request, ingreso_pk):
             salida.registrado_por = request.user
             salida.save()
             _sincronizar_notificacion_asesora(form, salida, request.user)
+            avisos_revision.avisar_subcategoria(salida, request.user)
             registrar_bitacora(
                 request.user,
                 'salida',
@@ -3962,12 +4011,18 @@ def salida_editar(request, pk):
     )
     if request.method == 'POST':
         estado_anterior = salida.estado_reparacion
+        subestado_revision_anterior = salida.subestado_revision
         tecnico_anterior = salida.tecnico_reparo_id
         valor_anterior = salida.valor_final_cobrado
         form = SalidaEquipoForm(request.POST, instance=salida)
         if form.is_valid():
             salida = form.save()
             _sincronizar_notificacion_asesora(form, salida, request.user)
+            if (
+                salida.estado_reparacion != estado_anterior
+                or salida.subestado_revision != subestado_revision_anterior
+            ):
+                avisos_revision.avisar_subcategoria(salida, request.user)
             if (
                 salida.estado_reparacion != estado_anterior
                 or salida.tecnico_reparo_id != tecnico_anterior
@@ -4407,7 +4462,19 @@ _RESULTADOS_RANKING = (
         ('garantia_fallos_adicionales',),
     ),
     ('no_reparable', 'No se pudo reparar', 'resta', ('no_reparable',)),
-    ('revision', 'Revisión', 'neutro', ('revision',)),
+    (
+        'revision_no_reparable',
+        'Revisión — No se pudo reparar',
+        'resta',
+        ('revision:no_reparable',),
+    ),
+    (
+        'revision_cliente_no_acepta',
+        'Revisión — Cliente no quiso reparar',
+        'suma',
+        ('revision:cliente_no_acepta',),
+    ),
+    ('revision', 'Revisión — Equipo de prueba', 'neutro', ('revision',)),
     ('cortesia', 'Cortesía', 'neutro', ('cortesia',)),
     ('chatarrerizacion', 'Chatarrerización', 'neutro', ('chatarrerizacion',)),
 )
@@ -4421,10 +4488,20 @@ _RESULTADO_POR_ESTADO = {
     for clave, _etiqueta, _efecto, estados in _RESULTADOS_RANKING
     for estado in estados
 }
+# «revision:<subcategoría>» vale lo mismo que esa subcategoría.
 _PUNTOS_POR_RESULTADO = {
-    clave: PUNTOS_POR_ESTADO_SALIDA.get(estados[0], 0)
+    clave: PUNTOS_POR_ESTADO_SALIDA.get(estados[0].split(':')[-1], 0)
     for clave, _etiqueta, _efecto, estados in _RESULTADOS_RANKING
 }
+
+
+def _estado_ranking(salida):
+    """Clave de _RESULTADO_POR_ESTADO: en Revisión con «No se pudo reparar» o
+    «Cliente no quiso reparar» se cuenta aparte (revision:<subcategoría>);
+    Equipo de prueba y las revisiones sin subcategoría quedan en 'revision'."""
+    if estado_para_puntos(salida.estado_reparacion, salida.subestado_revision) != salida.estado_reparacion:
+        return f'revision:{salida.subestado_revision}'
+    return salida.estado_reparacion
 
 
 def _registros_salidas_ranking(desde, hasta, mostrar_valores_monetarios):
@@ -4458,7 +4535,7 @@ def _registros_salidas_ranking(desde, hasta, mostrar_valores_monetarios):
             # (revisión, no reparable, cortesía, etc.) y no debe confundirse
             # con que el equipo continúe o no dentro de la oficina.
             'fuera_de_oficina': salida.fecha_retiro_real is not None,
-            'resultado': _RESULTADO_POR_ESTADO.get(salida.estado_reparacion),
+            'resultado': _RESULTADO_POR_ESTADO.get(_estado_ranking(salida)),
         }
         if mostrar_valores_monetarios:
             ingreso = salida.ingreso
@@ -6142,7 +6219,8 @@ def puntaje_tecnico(user):
     el técnico reparó (campo `tecnico_reparo`) y de sus ventas de producto,
     NO de los ingresos. Valores en gamificacion.PUNTOS_POR_ESTADO_SALIDA:
     reparado +3, cliente no quiso reparar +1, no se pudo reparar −1,
-    garantía −4, venta de producto +1; el resto 0. Si el perfil se
+    garantía −4, venta de producto +1; el resto 0 (en Revisión decide la
+    subcategoría: gamificacion.estado_para_puntos). Si el perfil se
     reinició, solo cuenta lo registrado desde esa fecha.
     """
     fecha_reinicio = None
@@ -6158,10 +6236,10 @@ def puntaje_tecnico(user):
         salidas_qs = salidas_qs.filter(creado__gte=fecha_reinicio)
         ventas_producto_qs = ventas_producto_qs.filter(creado__gte=fecha_reinicio)
 
-    conteo = {
-        fila['estado_reparacion']: fila['cantidad']
-        for fila in salidas_qs.values('estado_reparacion').annotate(cantidad=Count('id'))
-    }
+    conteo = {}
+    for fila in salidas_qs.values('estado_reparacion', 'subestado_revision').annotate(cantidad=Count('id')):
+        estado = estado_para_puntos(fila['estado_reparacion'], fila['subestado_revision'])
+        conteo[estado] = conteo.get(estado, 0) + fila['cantidad']
     ventas_producto = ventas_producto_qs.count()
     total = calcular_puntaje_perfil(conteo, ventas_producto)
     return {

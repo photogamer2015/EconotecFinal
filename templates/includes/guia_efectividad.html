@@ -8,9 +8,9 @@
     <section>
         <h4>Qué cuenta a favor y qué en contra</h4>
         <ul>
-            <li><span class="efecto-icono suma" aria-hidden="true">✓</span><span><b>Suman (salió bien):</b> Finalizado y reparado (en espera de retiro o retirado) y Cliente no quiso reparar.</span></li>
-            <li><span class="efecto-icono resta" aria-hidden="true">−</span><span><b>Restan (salió mal):</b> No se pudo reparar, Garantía finalizada y Garantía + fallos adicionales.</span></li>
-            <li><span class="efecto-icono neutro" aria-hidden="true">○</span><span><b>No afectan:</b> Revisión, Cortesía y Chatarrerización. No entran en la cuenta: ni ayudan ni perjudican.</span></li>
+            <li><span class="efecto-icono suma" aria-hidden="true">✓</span><span><b>Suman (salió bien):</b> Finalizado y reparado (en espera de retiro o retirado) y Cliente no quiso reparar (también en Revisión).</span></li>
+            <li><span class="efecto-icono resta" aria-hidden="true">−</span><span><b>Restan (salió mal):</b> No se pudo reparar (también en Revisión), Garantía finalizada y Garantía + fallos adicionales.</span></li>
+            <li><span class="efecto-icono neutro" aria-hidden="true">○</span><span><b>No afectan:</b> Revisión — Equipo de prueba, Cortesía y Chatarrerización. No entran en la cuenta: ni ayudan ni perjudican.</span></li>
         </ul>
     </section>
     <section>
@@ -25,12 +25,12 @@
             <tbody>
                 <tr class="suma">
                     <td><span class="efecto-icono suma" aria-hidden="true">✓</span> Suman</td>
-                    <td>{{ resumen.resultados.reparado }} reparado{{ resumen.resultados.reparado|pluralize }} + {{ resumen.resultados.cliente_no_acepta }} cliente no quiso</td>
+                    <td>{{ resumen.resultados.reparado }} reparado{{ resumen.resultados.reparado|pluralize }} + {{ resumen.resultados.cliente_no_acepta }} cliente no quiso{% if resumen.resultados.revision_cliente_no_acepta %} + {{ resumen.resultados.revision_cliente_no_acepta }} en revisión{% endif %}</td>
                     <td><b>{{ resumen.salidas_positivas }}</b></td>
                 </tr>
                 <tr class="resta">
                     <td><span class="efecto-icono resta" aria-hidden="true">−</span> Restan</td>
-                    <td>{{ resumen.resultados.no_reparable }} no se pudo + {{ resumen.resultados.garantia }} garantía + {{ resumen.resultados.garantia_fallos_adicionales }} garantía con fallos</td>
+                    <td>{{ resumen.resultados.no_reparable }} no se pudo + {{ resumen.resultados.garantia }} garantía + {{ resumen.resultados.garantia_fallos_adicionales }} garantía con fallos{% if resumen.resultados.revision_no_reparable %} + {{ resumen.resultados.revision_no_reparable }} no se pudo en revisión{% endif %}</td>
                     <td><b>{{ resumen.salidas_negativas }}</b></td>
                 </tr>
                 <tr class="neutro">

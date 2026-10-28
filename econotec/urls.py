@@ -66,6 +66,10 @@ urlpatterns = [
          views.notificacion_asesora_marcar_vista, name='notificacion_asesora_marcar_vista'),
     path('notificaciones/asesoras/limpiar/',
          views.notificacion_asesora_limpiar_bandeja, name='notificacion_asesora_limpiar_bandeja'),
+    path('notificaciones/revision/<int:pk>/ver/',
+         views.notificacion_revision_admin_ver, name='notificacion_revision_admin_ver'),
+    path('notificaciones/revision/vistas/',
+         views.notificaciones_revision_admin_vistas, name='notificaciones_revision_admin_vistas'),
     path('notificaciones/inventario/<int:pk>/ver/',
          views.notificacion_inventario_admin_ver, name='notificacion_inventario_admin_ver'),
 
