@@ -37,6 +37,19 @@ PUNTOS_POR_ESTADO_SALIDA = {
 }
 PUNTOS_VENTA_PRODUCTO = 1
 
+# Revisión es neutra (0), pero su subcategoría «No se pudo reparar» o
+# «Cliente no quiso reparar» cuenta como ese estado. «Equipo de prueba» y
+# las revisiones antiguas sin subcategoría siguen en 0.
+SUBESTADOS_REVISION_CON_PUNTOS = ('no_reparable', 'cliente_no_acepta')
+
+
+def estado_para_puntos(estado, subestado_revision=''):
+    """Estado con el que se cuentan los puntos de una salida."""
+    if estado == 'revision' and subestado_revision in SUBESTADOS_REVISION_CON_PUNTOS:
+        return subestado_revision
+    return estado
+
+
 SALIDA_PUNTOS_POSITIVOS = tuple(
     estado for estado, puntos in PUNTOS_POR_ESTADO_SALIDA.items() if puntos > 0
 )

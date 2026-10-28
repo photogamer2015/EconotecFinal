@@ -29,7 +29,8 @@ from .alertas import (
 from .horarios import registrar_entrada_laboral
 from .models import (
     Abono, BitacoraTecnico, Cliente, Egreso, HorarioTecnico, IngresoEquipo, InventarioItem,
-    NotificacionAsesora, NotificacionInventarioAdmin, ObservacionEquipo, SalidaEquipo,
+    NotificacionAsesora, NotificacionInventarioAdmin, NotificacionRevisionAdmin,
+    ObservacionEquipo, SalidaEquipo,
     UsuarioActividad, VentaInventarioItem,
 )
 from .qr_utils import token_para_ingreso
@@ -3800,6 +3801,8 @@ class VentasTests(TestCase):
             'garantia_fallos_adicionales': 1,
             'cliente_no_acepta': 1,
             'no_reparable': 2,
+            'revision_no_reparable': 0,
+            'revision_cliente_no_acepta': 0,
             'revision': 1,
             'cortesia': 1,
             'chatarrerizacion': 1,
@@ -3816,8 +3819,8 @@ class VentasTests(TestCase):
         self.assertEqual(
             [[parte['clave'] for parte in grupo['partes']] for grupo in fila['grupos']],
             [
-                ['reparado', 'cliente_no_acepta'],
-                ['garantia', 'garantia_fallos_adicionales', 'no_reparable'],
+                ['reparado', 'cliente_no_acepta', 'revision_cliente_no_acepta'],
+                ['garantia', 'garantia_fallos_adicionales', 'no_reparable', 'revision_no_reparable'],
                 ['revision', 'cortesia', 'chatarrerizacion'],
             ],
         )
@@ -4175,8 +4178,8 @@ class VentasTests(TestCase):
             'Quién cuenta en el ranking',
             'Cuenta exclusivamente al <b>técnico que reparó registrado en la salida</b>',
             'Las garantías se cuentan al técnico registrado en la salida de la garantía.',
-            '<b>Restan:</b> Garantía finalizada, Garantía + fallos adicionales y No se pudo reparar.',
-            '<b>No afectan:</b> Revisión, Cortesía y Chatarrerización.',
+            '<b>Restan:</b> Garantía finalizada, Garantía + fallos adicionales y No se pudo reparar, también cuando es la subcategoría de una Revisión.',
+            '<b>No afectan:</b> Revisión — Equipo de prueba, Cortesía y Chatarrerización.',
             '14 reparados, 2 que el cliente no quiso reparar, 1 garantía y 1 que no se pudo reparar dan (14 + 2) ÷ 18 = <b>88,9 %</b>',
             'Puntos y niveles',
             '<td>Finalizado y reparado (en espera de retiro o retirado)</td><td>+3</td>',
@@ -9019,6 +9022,7 @@ class VentasTests(TestCase):
             reverse('econotec:salida_registrar', kwargs={'ingreso_pk': ingreso.pk}),
             self.salida_post_data(
                 estado_reparacion='revision',
+                subestado_revision='equipo_prueba',
                 valor_acordado_revision='12.00',
                 valor_final_cobrado='99.00',
                 metodo_pago_final='efectivo',
@@ -9206,6 +9210,7 @@ class VentasTests(TestCase):
             reverse('econotec:salida_registrar', kwargs={'ingreso_pk': ingreso.pk}),
             self.salida_post_data(
                 estado_reparacion='revision',
+                subestado_revision='equipo_prueba',
                 valor_acordado_revision='10.00',
                 aplica_valor_acordado_adicional='si',
                 valor_acordado_adicional='10.00',
@@ -11819,3 +11824,252 @@ class VentasTests(TestCase):
         self.assertContains(response, '1 no se pudo + 1 garantía + 0 garantía con fallos')
         self.assertContains(response, '4 ÷ (4 + 2)\n                = 4 ÷ 6\n                = <b>66,7 %</b>')
         self.assertContains(response, 'unos <b>67</b> salieron bien')
+
+    # ── Revisión: subcategorías, puntos y avisos al admin ──────────
+    def crear_salida_revision(self, subestado='equipo_prueba', tecnico=None, **salida_extra):
+        salida_extra.setdefault('valor_acordado_revision', Decimal('15.00'))
+        return self.crear_salida_ranking(
+            tecnico or self.usuario,
+            date(2026, 8, 10),
+            'revision',
+            salida_extra={'subestado_revision': subestado, **salida_extra},
+        )
+
+    def test_finalizacion_en_revision_exige_subcategoria(self):
+        ingreso = self.crear_ingreso_reparacion(valor_acordado=Decimal('40.00'))
+
+        response = self.client.post(
+            reverse('econotec:salida_registrar', kwargs={'ingreso_pk': ingreso.pk}),
+            self.salida_post_data(
+                estado_reparacion='revision',
+                valor_acordado_revision='12.00',
+                metodo_pago_final='sin_pago',
+                asesora_notificacion=str(self.vendedor.pk),
+            ),
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('subestado_revision', response.context['form'].errors)
+        self.assertFalse(SalidaEquipo.objects.filter(ingreso=ingreso).exists())
+        self.assertContains(response, 'Subcategoría de la revisión *')
+        self.assertContains(response, '🧪 Equipo de prueba')
+
+    def test_finalizacion_en_revision_guarda_subcategoria_y_avisa_al_admin(self):
+        ingreso = self.crear_ingreso_reparacion(valor_acordado=Decimal('40.00'))
+
+        self.client.post(
+            reverse('econotec:salida_registrar', kwargs={'ingreso_pk': ingreso.pk}),
+            self.salida_post_data(
+                estado_reparacion='revision',
+                subestado_revision='no_reparable',
+                valor_acordado_revision='12.00',
+                metodo_pago_final='sin_pago',
+                asesora_notificacion=str(self.vendedor.pk),
+            ),
+        )
+
+        salida = SalidaEquipo.objects.get(ingreso=ingreso)
+        self.assertEqual(salida.subestado_revision, 'no_reparable')
+        self.assertIsNotNone(salida.fecha_subestado_revision)
+        # El cobro sigue siendo el de Revisión.
+        self.assertEqual(salida.valor_acordado_revision, Decimal('12.00'))
+        aviso = NotificacionRevisionAdmin.objects.get(salida=salida)
+        self.assertEqual(aviso.tipo, NotificacionRevisionAdmin.TIPO_SUBCATEGORIA)
+        self.assertEqual(aviso.creado_por, self.usuario)
+        self.assertIn('en Revisión — No se pudo reparar', aviso.mensaje)
+        self.assertIn(ingreso.codigo_equipo, aviso.mensaje)
+
+    def test_editar_finalizacion_avisa_solo_si_cambia_la_subcategoria(self):
+        salida = self.crear_salida_revision('equipo_prueba')
+        url = reverse('econotec:salida_editar', kwargs={'pk': salida.pk})
+        datos = self.salida_post_data(
+            estado_reparacion='revision',
+            subestado_revision='equipo_prueba',
+            valor_acordado_revision='15.00',
+            metodo_pago_final='sin_pago',
+            asesora_notificacion=str(self.vendedor.pk),
+        )
+
+        self.client.post(url, datos)
+        self.assertFalse(NotificacionRevisionAdmin.objects.exists())
+
+        datos['subestado_revision'] = 'cliente_no_acepta'
+        self.client.post(url, datos)
+        salida.refresh_from_db()
+        self.assertEqual(salida.subestado_revision, 'cliente_no_acepta')
+        aviso = NotificacionRevisionAdmin.objects.get()
+        self.assertIn('Revisión — Cliente no quiso reparar', aviso.mensaje)
+
+    def test_salir_de_revision_limpia_la_subcategoria(self):
+        salida = self.crear_salida_revision('equipo_prueba')
+        self.assertIsNotNone(salida.fecha_subestado_revision)
+
+        salida.estado_reparacion = 'pendiente_retiro'
+        salida.save()
+
+        salida.refresh_from_db()
+        self.assertEqual(salida.subestado_revision, '')
+        self.assertIsNone(salida.fecha_subestado_revision)
+
+    def test_puntos_de_revision_segun_subcategoria(self):
+        self.crear_salida_revision('equipo_prueba')
+        self.crear_salida_revision('equipo_prueba')
+        self.crear_salida_revision('cliente_no_acepta')
+        self.crear_salida_revision('cliente_no_acepta')
+        self.crear_salida_revision('cliente_no_acepta')
+        self.crear_salida_revision('no_reparable')
+        # Revisión antigua sin subcategoría: sigue neutra.
+        self.crear_salida_revision('')
+
+        data = self.client.get(reverse('econotec:api_perfil')).json()
+
+        # 3 × (+1) − 1 = 2; Equipo de prueba y sin subcategoría valen 0.
+        self.assertEqual(data['total'], 2)
+        self.assertEqual(data['salidas_buenas'], 3)
+        self.assertEqual(data['salidas_malas'], 1)
+
+    def test_ranking_cuenta_las_subcategorias_de_revision(self):
+        tecnico = self.crear_tecnico_ranking('RevisionRanking')
+        self.crear_salida_ranking(tecnico, date(2026, 8, 10), 'pendiente_retiro')
+        self.crear_salida_revision('cliente_no_acepta', tecnico=tecnico)
+        self.crear_salida_revision('no_reparable', tecnico=tecnico)
+        self.crear_salida_revision('equipo_prueba', tecnico=tecnico)
+        self.client.force_login(self.admin)
+
+        response = self.client.get(reverse('econotec:salida_totales'), {
+            'desde': '2026-08-01',
+            'hasta': '2026-08-31',
+        })
+
+        fila = self.ranking_por_tecnico(response)[tecnico.pk]
+        self.assertEqual(fila['resultados']['revision_cliente_no_acepta'], 1)
+        self.assertEqual(fila['resultados']['revision_no_reparable'], 1)
+        self.assertEqual(fila['resultados']['revision'], 1)
+        self.assertEqual((fila['salidas_positivas'], fila['salidas_negativas'], fila['salidas_neutras']), (2, 1, 1))
+        # Suman 2 ÷ (2 + 1) = 66,7 %; puntos 3 + 1 − 1 = 3.
+        self.assertEqual(fila['efectividad'], 66.7)
+        self.assertEqual(fila['puntos'], 3)
+        self.assertContains(response, '<span>Revisión — No se pudo reparar</span>')
+        self.assertContains(response, '<td>Revisión — No se pudo reparar</td><td>−1</td>')
+
+    def test_observacion_en_equipo_en_revision_avisa_al_admin(self):
+        salida = self.crear_salida_revision('equipo_prueba')
+        otro = self.crear_ingreso_reparacion()
+
+        self.client.post(
+            reverse('econotec:ingreso_observacion_agregar', kwargs={'pk': salida.ingreso.pk}),
+            {'texto': 'El cliente sigue probando la laptop en casa.'},
+        )
+        self.client.post(
+            reverse('econotec:ingreso_observacion_agregar', kwargs={'pk': otro.pk}),
+            {'texto': 'Esta no es de revisión.'},
+        )
+
+        aviso = NotificacionRevisionAdmin.objects.get()
+        self.assertEqual(aviso.tipo, NotificacionRevisionAdmin.TIPO_OBSERVACION)
+        self.assertEqual(aviso.salida, salida)
+        self.assertEqual(aviso.mensaje, 'El cliente sigue probando la laptop en casa.')
+        self.assertEqual(
+            salida.ingreso.observaciones.get().estado_texto,
+            'Revisión — Equipo de prueba',
+        )
+
+    def test_ventana_diaria_de_observacion_en_revision(self):
+        salida = self.crear_salida_revision('equipo_prueba')
+        url = reverse('econotec:ingreso_detalle', kwargs={'pk': salida.ingreso.pk})
+
+        response = self.client.get(url)
+
+        self.assertTrue(response.context['mostrar_popup_observacion'])
+        self.assertContains(response, 'sigue en\n            <strong>Revisión — Equipo de prueba</strong>')
+        self.assertContains(response, 'Subcategoría de revisión')
+        self.assertContains(response, '<strong>🧪 Equipo de prueba</strong>', html=True)
+        self.assertFalse(self.client.get(url).context['mostrar_popup_observacion'])
+
+        SalidaEquipo.objects.filter(pk=salida.pk).update(fecha_retiro_real=date(2026, 8, 12))
+        otra = self.crear_salida_revision('equipo_prueba')
+        SalidaEquipo.objects.filter(pk=otra.pk).update(fecha_retiro_real=date(2026, 8, 12))
+        response = self.client.get(reverse('econotec:ingreso_detalle', kwargs={'pk': otra.ingreso.pk}))
+        # Ya salió de la oficina: no sigue en revisión.
+        self.assertFalse(response.context['mostrar_popup_observacion'])
+
+    def test_equipo_de_prueba_con_cinco_dias_avisa_al_admin(self):
+        from .avisos_revision import generar_avisos_prueba_demorada
+
+        demorado = self.crear_salida_revision('equipo_prueba')
+        reciente = self.crear_salida_revision('equipo_prueba')
+        retirado = self.crear_salida_revision('equipo_prueba')
+        no_prueba = self.crear_salida_revision('no_reparable')
+        ahora = timezone.now()
+        SalidaEquipo.objects.filter(pk__in=[demorado.pk, retirado.pk, no_prueba.pk]).update(
+            fecha_subestado_revision=ahora - timedelta(days=5),
+        )
+        SalidaEquipo.objects.filter(pk=reciente.pk).update(
+            fecha_subestado_revision=ahora - timedelta(days=4),
+        )
+        SalidaEquipo.objects.filter(pk=retirado.pk).update(fecha_retiro_real=date(2026, 8, 12))
+
+        self.assertEqual(generar_avisos_prueba_demorada(), 1)
+        self.assertEqual(generar_avisos_prueba_demorada(), 0)
+        aviso = NotificacionRevisionAdmin.objects.get()
+        self.assertEqual(aviso.tipo, NotificacionRevisionAdmin.TIPO_PRUEBA_DEMORADA)
+        self.assertEqual(aviso.salida, demorado)
+        self.assertIn('lleva 5 días como Equipo de prueba', aviso.mensaje)
+
+        self.client.force_login(self.admin)
+        inicio = self.client.get(reverse('econotec:bienvenida'))
+        self.assertEqual(
+            [item['salida'].pk for item in inicio.context['equipos_prueba_admin']],
+            [demorado.pk],
+        )
+        self.assertContains(inicio, '1 equipo de prueba lleva 5 días o más en Revisión')
+        self.assertContains(inicio, reverse('econotec:ingreso_observaciones', kwargs={'pk': demorado.ingreso.pk}))
+
+    def test_tecnico_no_ve_alerta_ni_campanita_de_revision(self):
+        salida = self.crear_salida_revision('equipo_prueba')
+        SalidaEquipo.objects.filter(pk=salida.pk).update(
+            fecha_subestado_revision=timezone.now() - timedelta(days=8),
+        )
+
+        inicio = self.client.get(reverse('econotec:bienvenida'))
+
+        self.assertEqual(inicio.context['equipos_prueba_admin'], [])
+        self.assertNotContains(inicio, 'id="revision-admin-bell-btn"')
+
+    def test_campanita_de_revision_del_admin(self):
+        salida = self.crear_salida_revision('equipo_prueba')
+        aviso = NotificacionRevisionAdmin.objects.create(
+            salida=salida,
+            tipo=NotificacionRevisionAdmin.TIPO_SUBCATEGORIA,
+            creado_por=self.usuario,
+            mensaje='Yandri puso el equipo en Revisión — Equipo de prueba.',
+        )
+        NotificacionRevisionAdmin.objects.create(
+            salida=salida,
+            tipo=NotificacionRevisionAdmin.TIPO_OBSERVACION,
+            mensaje='Otra observación.',
+        )
+        self.client.force_login(self.admin)
+
+        inicio = self.client.get(reverse('econotec:bienvenida'))
+
+        self.assertEqual(inicio.context['notificaciones_revision_admin_count'], 2)
+        self.assertContains(inicio, 'id="revision-admin-bell-btn"')
+        self.assertContains(inicio, '🔎 Subcategoría aplicada')
+        self.assertContains(inicio, '📝 Observación nueva')
+
+        ver = self.client.get(reverse('econotec:notificacion_revision_admin_ver', kwargs={'pk': aviso.pk}))
+        self.assertRedirects(
+            ver,
+            reverse('econotec:ingreso_detalle', kwargs={'pk': salida.ingreso.pk}),
+            fetch_redirect_response=False,
+        )
+        aviso.refresh_from_db()
+        self.assertTrue(aviso.leida)
+
+        self.client.post(
+            reverse('econotec:notificaciones_revision_admin_vistas'),
+            {'next': reverse('econotec:ingreso_lista')},
+        )
+        self.assertFalse(NotificacionRevisionAdmin.objects.filter(leida=False).exists())
+        self.assertNotContains(self.client.get(reverse('econotec:bienvenida')), 'id="revision-admin-bell-btn"')

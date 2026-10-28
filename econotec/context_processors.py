@@ -110,6 +110,8 @@ def roles(request):
     notificaciones_asesora_admin_total = 0
     notificaciones_inventario_admin_count = 0
     notificaciones_inventario_admin_preview = []
+    notificaciones_revision_admin_count = 0
+    notificaciones_revision_admin_preview = []
     mi_perfil_social = None
     try:
         from .models import PerfilSocial
@@ -141,6 +143,23 @@ def roles(request):
     except Exception:
         pass
 
+    if es_a:
+        # Avisos de Revisión (campanita 🔎); antes se crean los de Equipo de
+        # prueba que ya cumplieron 5 días.
+        try:
+            from .avisos_revision import generar_avisos_prueba_demorada
+            from .models import NotificacionRevisionAdmin
+            generar_avisos_prueba_demorada()
+            qs_notificaciones_revision = (
+                NotificacionRevisionAdmin.objects
+                .select_related('salida__ingreso', 'creado_por')
+                .filter(leida=False)
+            )
+            notificaciones_revision_admin_count = qs_notificaciones_revision.count()
+            notificaciones_revision_admin_preview = list(qs_notificaciones_revision[:6])
+        except Exception:
+            pass
+
     return {
         'es_admin': es_a,
         'es_tecnico': es_t,
@@ -165,5 +184,7 @@ def roles(request):
         'notificaciones_asesora_admin_total': notificaciones_asesora_admin_total,
         'notificaciones_inventario_admin_count': notificaciones_inventario_admin_count,
         'notificaciones_inventario_admin_preview': notificaciones_inventario_admin_preview,
+        'notificaciones_revision_admin_count': notificaciones_revision_admin_count,
+        'notificaciones_revision_admin_preview': notificaciones_revision_admin_preview,
         'mi_perfil_social': mi_perfil_social,
     }

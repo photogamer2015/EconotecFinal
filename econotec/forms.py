@@ -1560,7 +1560,7 @@ class SalidaEquipoForm(RetencionFacturaFormMixin, forms.ModelForm):
     class Meta:
         model = SalidaEquipo
         fields = [
-            'fecha_salida', 'estado_reparacion', 'tecnico_reparo',
+            'fecha_salida', 'estado_reparacion', 'subestado_revision', 'tecnico_reparo',
             'observaciones',
             'valor_acordado_revision',
             'aplica_valor_acordado_adicional',
@@ -1577,6 +1577,7 @@ class SalidaEquipoForm(RetencionFacturaFormMixin, forms.ModelForm):
         widgets = {
             'fecha_salida': forms.DateInput(attrs={'class': 'form-input', 'type': 'date'}, format='%Y-%m-%d'),
             'estado_reparacion': forms.Select(attrs={'class': 'form-input'}),
+            'subestado_revision': forms.Select(attrs={'class': 'form-input'}),
             'tecnico_reparo': forms.Select(attrs={'class': 'form-input'}),
             'numero_recibo': forms.TextInput(attrs={
                 'class': 'form-input',
@@ -1650,6 +1651,12 @@ class SalidaEquipoForm(RetencionFacturaFormMixin, forms.ModelForm):
         self.notificacion_asesora_mensaje_default = ''
         self.fields['aplica_valor_acordado_adicional'].required = False
         self.fields['valor_acordado_adicional'].required = False
+        # Se exige en clean() solo cuando el resultado es Revisión.
+        self.fields['subestado_revision'].required = False
+        self.fields['subestado_revision'].choices = [
+            ('', '— Elige la subcategoría —'),
+            *SalidaEquipo.SUBESTADO_REVISION,
+        ]
         self._preparar_campos_retencion()
         self.fields['aplica_valor_acordado_adicional'].choices = [
             ('no', 'No'),
@@ -1847,6 +1854,7 @@ class SalidaEquipoForm(RetencionFacturaFormMixin, forms.ModelForm):
                 'al editar pagos u otros datos.'
             )
             self.initial['estado_reparacion'] = estado_cerrado
+            self.fields['subestado_revision'].disabled = True
 
     def _limpiar_pago_pendiente(self, cleaned):
         cleaned['metodo_pago_final'] = 'sin_pago'
@@ -2004,6 +2012,15 @@ class SalidaEquipoForm(RetencionFacturaFormMixin, forms.ModelForm):
         tarjeta_app = cleaned.get('tarjeta_app')
 
         if estado_reparacion == self.ESTADO_REVISION:
+            if self.fields['estado_reparacion'].disabled:
+                # Salida ya confirmada: el resultado y su subcategoría no cambian aquí.
+                cleaned['subestado_revision'] = self.instance.subestado_revision
+            elif not cleaned.get('subestado_revision'):
+                self.add_error(
+                    'subestado_revision',
+                    'Elige la subcategoría de la revisión: Equipo de prueba, '
+                    'No se pudo reparar o Cliente no quiso reparar.',
+                )
             if valor_revision < Decimal('1.00'):
                 self.add_error(
                     'valor_acordado_revision',
@@ -2027,6 +2044,7 @@ class SalidaEquipoForm(RetencionFacturaFormMixin, forms.ModelForm):
             return cleaned
 
         cleaned['valor_acordado_revision'] = None
+        cleaned['subestado_revision'] = ''
 
         if estado_reparacion == 'garantia_fallos_adicionales':
             if valor <= 0:

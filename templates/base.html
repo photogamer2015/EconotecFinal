@@ -410,6 +410,8 @@
             font-weight: 500;
             line-height: 1.35;
         }
+        header.top .noti-menu-form { margin: 0; }
+        header.top .noti-menu-form .noti-menu-foot { width: 100%; font: inherit; font-weight: 700; cursor: pointer; }
         header.top .noti-menu-foot {
             display: block;
             padding: 11px 14px;
@@ -1814,6 +1816,39 @@
                             </div>
                         </div>
                     {% endif %}
+                    {% if notificaciones_revision_admin_count > 0 %}
+                        <div class="noti-bell-wrap">
+                            <button type="button" class="noti-bell-btn" id="revision-admin-bell-btn" aria-expanded="false" aria-controls="revision-admin-bell-menu" title="Avisos de equipos en Revisión">
+                                🔎
+                                <span class="noti-bell-count">{{ notificaciones_revision_admin_count }}</span>
+                            </button>
+                            <div class="noti-menu" id="revision-admin-bell-menu">
+                                <div class="noti-menu-head">
+                                    <strong>Equipos en Revisión</strong>
+                                    <span>{{ notificaciones_revision_admin_count }} aviso{{ notificaciones_revision_admin_count|pluralize }}</span>
+                                </div>
+                                <div class="noti-menu-list">
+                                    {% for aviso in notificaciones_revision_admin_preview %}
+                                        <a href="{% url 'econotec:notificacion_revision_admin_ver' pk=aviso.pk %}" class="noti-item">
+                                            <div class="noti-item-title">
+                                                <span>{% if aviso.tipo == 'subcategoria' %}🔎 Subcategoría aplicada{% elif aviso.tipo == 'observacion' %}📝 Observación nueva{% else %}🧪 Equipo de prueba +5 días{% endif %}</span>
+                                                <span class="noti-item-value">{{ aviso.salida.ingreso.codigo_equipo }}</span>
+                                            </div>
+                                            <div class="noti-item-meta">
+                                                {{ aviso.mensaje|truncatechars:110 }}
+                                                <br>{% if aviso.creado_por %}{{ aviso.creado_por.get_full_name|default:aviso.creado_por.username }} · {% endif %}{{ aviso.creado|date:"d/m/Y H:i" }}
+                                            </div>
+                                        </a>
+                                    {% endfor %}
+                                </div>
+                                <form method="post" action="{% url 'econotec:notificaciones_revision_admin_vistas' %}" class="noti-menu-form">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                                    <button type="submit" class="noti-menu-foot">Marcar todos como vistos</button>
+                                </form>
+                            </div>
+                        </div>
+                    {% endif %}
                     <a href="{% url 'econotec:notificaciones_asesora' %}" class="admin-noti-link" title="Ver todas las notificaciones de asesoras">
                         Asesoras
                         {% if notificaciones_asesora_admin_count > 0 %}
@@ -2032,6 +2067,7 @@
         }
         activarMenuNotificaciones('noti-bell-btn', 'noti-bell-menu');
         activarMenuNotificaciones('inventario-admin-bell-btn', 'inventario-admin-bell-menu');
+        activarMenuNotificaciones('revision-admin-bell-btn', 'revision-admin-bell-menu');
 
         (function activarNavegacionMovil() {
             const header = document.querySelector('header.top');

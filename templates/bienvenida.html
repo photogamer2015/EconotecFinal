@@ -3005,6 +3005,46 @@
 {% include 'includes/observaciones_modal.html' %}
 {% endif %}
 
+{% if equipos_prueba_admin %}
+<div class="alerta-block reparacion reparacion-admin">
+  <div class="alerta-cabecera rojo-suave">
+    <div class="icono">🧪</div>
+    <div class="titulo">
+      <h3>
+        {{ equipos_prueba_admin|length }} equipo{{ equipos_prueba_admin|length|pluralize }} de prueba lleva{{ equipos_prueba_admin|length|pluralize:"n" }} {{ dias_alerta_equipo_prueba }} días o más en Revisión
+      </h3>
+      <p>
+        Siguen en la oficina como «Equipo de prueba». Revisa con el técnico si ya se puede cerrar o cambiar de subcategoría.
+      </p>
+    </div>
+  </div>
+  {% for item in equipos_prueba_admin %}
+  <div class="alerta-item rojo-suave">
+    <span class="codigo">{{ item.ingreso.codigo_equipo }}</span>
+    <div class="info">
+      <div class="cli">{{ item.ingreso.cliente.nombres }}</div>
+      <div class="det">
+        {{ item.ingreso.tipo_equipo_display }} {{ item.ingreso.marca }} — Equipo de prueba desde {{ item.salida.fecha_subestado_revision|date:"d/m/Y" }}
+        {% if item.salida.tecnico_reparo %} · Téc.: <strong>{{ item.salida.tecnico_reparo_nombre }}</strong>{% endif %}
+      </div>
+    </div>
+    <span class="pill">{{ item.dias }} día{{ item.dias|pluralize }}</span>
+    <div class="acciones">
+      {% with total_obs=item.ingreso.observaciones.all|length %}
+      <button type="button" class="btn-ver-mini btn-ver-observaciones"
+              data-obs-admin-url="{% url 'econotec:ingreso_observaciones' pk=item.ingreso.pk %}"
+              data-obs-admin-detalle="{% url 'econotec:ingreso_detalle' item.ingreso.pk %}">
+        📝 Observaciones{% if total_obs %}<span class="obs-count">{{ total_obs }}</span>{% endif %}
+      </button>
+      {% endwith %}
+      <a class="btn-ver-mini" href="{% url 'econotec:ingreso_detalle' item.ingreso.pk %}">Ver</a>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% if not reparacion_admin_total %}{% include 'includes/observaciones_modal.html' %}{% endif %}
+{% endif %}
+
 {# ════════════════════════════════════════════════════════════════ #}
 {# ALERTA 2: Bodegaje pendiente (5+ días sin que el cliente venga) #}
 {# ════════════════════════════════════════════════════════════════ #}
