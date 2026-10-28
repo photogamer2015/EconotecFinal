@@ -2514,8 +2514,9 @@ def ingreso_detalle(request, pk):
         simulacion = construir_simulacion(ingreso)
     observaciones = list(ingreso.observaciones.select_related('autor'))
     puede_actualizar_observacion = _puede_actualizar_observacion(ingreso)
+    popup_observacion_aplica = _popup_observacion_aplica(ingreso)
     mostrar_popup_observacion = (
-        puede_actualizar_observacion
+        popup_observacion_aplica
         and _popup_observacion_pendiente_hoy(request, ingreso, observaciones)
     )
     return render(request, 'ingresos/detalle.html', {
@@ -2533,6 +2534,7 @@ def ingreso_detalle(request, pk):
         'observaciones': observaciones,
         'ultima_observacion': observaciones[0] if observaciones else None,
         'puede_actualizar_observacion': puede_actualizar_observacion,
+        'popup_observacion_aplica': popup_observacion_aplica,
         'mostrar_popup_observacion': mostrar_popup_observacion,
         'observacion_max_caracteres': IngresoEquipoForm.OBSERVACION_MAX_CARACTERES,
         'estado_observacion_texto': _estado_texto_observacion(ingreso),
@@ -2601,9 +2603,15 @@ def _estado_texto_observacion(ingreso):
 
 
 def _puede_actualizar_observacion(ingreso):
-    """El botón y la ventana solo aplican mientras el equipo sigue En reparación
-    (En reparación, En reparación - Cliente o En reparación - Repuestos)."""
-    return ingreso.sede != 'ventas' and ingreso.estado == 'en_reparacion'
+    """El botón "Actualizar observación" está en el detalle de cualquier
+    equipo, en cualquier estado (también finalizado). No aplica a ventas."""
+    return ingreso.sede != 'ventas'
+
+
+def _popup_observacion_aplica(ingreso):
+    """La ventana "¿Deseas actualizar la observación?" solo sale mientras el
+    equipo sigue En reparación (Reparación, Cliente o Repuestos)."""
+    return _puede_actualizar_observacion(ingreso) and ingreso.estado == 'en_reparacion'
 
 
 def _guardar_observacion_formulario(ing_form, ingreso, user):
@@ -2640,13 +2648,10 @@ def _popup_observacion_pendiente_hoy(request, ingreso, observaciones):
 @tecnico_requerido
 @require_POST
 def ingreso_observacion_agregar(request, pk):
-    """Agrega una observación nueva (con fecha y autor) a un equipo en reparación."""
+    """Agrega una observación nueva (con fecha y autor) a un equipo."""
     ingreso = get_object_or_404(IngresoEquipo, pk=pk)
     if not _puede_actualizar_observacion(ingreso):
-        messages.error(
-            request,
-            'La observación solo se puede actualizar mientras el equipo está en reparación.',
-        )
+        messages.error(request, 'Las ventas no llevan observaciones de equipo.')
         return redirect('econotec:ingreso_detalle', pk=ingreso.pk)
 
     texto = (request.POST.get('texto') or '').strip()

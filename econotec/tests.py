@@ -11488,14 +11488,49 @@ class VentasTests(TestCase):
         self.assertFalse(response.context['mostrar_popup_observacion'])
         self.assertContains(response, '📝 Actualizar observación')
 
-    def test_detalle_fuera_de_reparacion_no_muestra_boton_ni_ventana(self):
+    def crear_ingreso_retirado(self):
+        ingreso = self.crear_ingreso_reparacion(estado='entregado', subestado_reparacion='')
+        SalidaEquipo.objects.create(
+            ingreso=ingreso,
+            fecha_salida=date(2026, 7, 9),
+            fecha_retiro_real=date(2026, 7, 10),
+            estado_reparacion='retirado',
+            cliente_recibe_conforme='si',
+            valor_final_cobrado=Decimal('0.00'),
+            metodo_pago_final='sin_pago',
+            registrado_por=self.usuario,
+        )
+        ingreso.refresh_from_db()
+        return ingreso
+
+    def test_detalle_fuera_de_reparacion_muestra_boton_sin_ventana(self):
         ingreso = self.crear_ingreso_reparacion(estado='ingresado', subestado_reparacion='')
 
         response = self.client.get(self.url_detalle(ingreso))
 
         self.assertFalse(response.context['mostrar_popup_observacion'])
-        self.assertNotContains(response, 'Actualizar observación')
+        self.assertContains(response, '📝 Actualizar observación')
+        self.assertContains(response, 'id="obs-form-modal"')
         self.assertNotContains(response, 'id="obs-pregunta-modal"')
+
+    def test_detalle_equipo_retirado_permite_agregar_observacion(self):
+        ingreso = self.crear_ingreso_retirado()
+
+        response = self.client.get(self.url_detalle(ingreso))
+
+        self.assertTrue(ingreso.retirado_por_cliente)
+        self.assertContains(response, 'Hoja de ingreso cerrada')
+        self.assertContains(response, '📝 Actualizar observación')
+        self.assertContains(response, '📝 Observaciones')
+        self.assertNotContains(response, 'id="obs-pregunta-modal"')
+
+    def test_detalle_de_venta_no_muestra_observaciones(self):
+        venta = self.crear_ingreso_reparacion(sede='ventas', estado='entregado', subestado_reparacion='')
+
+        response = self.client.get(self.url_detalle(venta))
+
+        self.assertNotContains(response, 'Actualizar observación')
+        self.assertNotContains(response, 'id="observaciones-equipo"')
 
     def test_agregar_observacion_guarda_fecha_autor_y_estado(self):
         ingreso = self.crear_ingreso_reparacion(subestado_reparacion='espera_repuesto')
@@ -11527,11 +11562,26 @@ class VentasTests(TestCase):
 
         self.assertFalse(ObservacionEquipo.objects.exists())
 
-    def test_agregar_observacion_fuera_de_reparacion_se_rechaza(self):
-        ingreso = self.crear_ingreso_reparacion(estado='ingresado', subestado_reparacion='')
+    def test_agregar_observacion_a_equipo_retirado_la_guarda(self):
+        ingreso = self.crear_ingreso_retirado()
+
+        response = self.client.post(
+            reverse('econotec:ingreso_observacion_agregar', kwargs={'pk': ingreso.pk}),
+            {'texto': 'El cliente llamó: la PC funciona bien.'},
+        )
+
+        self.assertRedirects(response, self.url_detalle(ingreso), fetch_redirect_response=False)
+        observacion = ingreso.observaciones.get()
+        self.assertEqual(observacion.texto, 'El cliente llamó: la PC funciona bien.')
+        self.assertEqual(observacion.estado_texto, 'Salida de la oficina confirmada')
+        detalle = self.client.get(self.url_detalle(ingreso))
+        self.assertContains(detalle, 'El cliente llamó: la PC funciona bien.')
+
+    def test_agregar_observacion_a_una_venta_se_rechaza(self):
+        venta = self.crear_ingreso_reparacion(sede='ventas', estado='entregado', subestado_reparacion='')
 
         self.client.post(
-            reverse('econotec:ingreso_observacion_agregar', kwargs={'pk': ingreso.pk}),
+            reverse('econotec:ingreso_observacion_agregar', kwargs={'pk': venta.pk}),
             {'texto': 'No debería guardarse'},
         )
 

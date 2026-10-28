@@ -869,6 +869,7 @@
 </div>
 
 {% if puede_actualizar_observacion %}
+{% if popup_observacion_aplica %}
 <!-- MODAL: ¿Deseas actualizar la observación? (sale 1 vez al día si sigue en reparación) -->
 <div class="obs-modal" id="obs-pregunta-modal" aria-hidden="true"
      data-auto-abrir="{% if mostrar_popup_observacion %}1{% else %}0{% endif %}">
@@ -896,6 +897,7 @@
         </div>
     </div>
 </div>
+{% endif %}
 
 <!-- MODAL: formulario para agregar la observación con fecha y hora -->
 {% get_current_timezone as zona_horaria %}
