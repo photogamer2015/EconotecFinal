@@ -1,0 +1,25 @@
+{# Historial de observaciones de un equipo; se carga dentro de includes/observaciones_modal.html #}
+<div class="obs-admin-cabecera">
+    <strong>{{ ingreso.codigo_equipo }} · {{ ingreso.cliente.nombres }}</strong>
+    <span>
+        {{ ingreso.tipo_equipo_display }} {{ ingreso.marca }} · {{ estado_observacion_texto }}
+        {% if ingreso.tecnico_encargado %} · Téc.: {{ ingreso.tecnico_encargado_nombre }}{% endif %}
+    </span>
+</div>
+{% if observaciones %}
+<ol class="obs-admin-lista">
+    {% for obs in observaciones %}
+    <li class="obs-admin-item{% if forloop.first %} is-ultima{% endif %}">
+        <div class="obs-admin-meta">
+            {% if forloop.first %}<span class="obs-admin-tag">Última</span>{% endif %}
+            <span>📅 {{ obs.creado|date:"d/m/Y" }} · {{ obs.creado|date:"H:i" }}</span>
+            <span>✍️ {{ obs.autor_nombre|default:"—" }}</span>
+            {% if obs.estado_texto %}<span class="obs-admin-estado">{{ obs.estado_texto }}</span>{% endif %}
+        </div>
+        <p>{{ obs.texto|linebreaksbr }}</p>
+    </li>
+    {% endfor %}
+</ol>
+{% else %}
+<p class="obs-admin-vacia">Todavía no hay observaciones puestas en este equipo.</p>
+{% endif %}

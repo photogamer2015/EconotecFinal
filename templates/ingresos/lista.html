@@ -284,6 +284,15 @@
                     {% if es_admin and i.salida %}
                         <a href="{% url 'econotec:salida_editar' pk=i.salida.pk %}" class="btn btn-sm btn-secondary">Ver finalización</a>
                     {% endif %}
+                    {% if es_admin and i.estado == 'en_reparacion' %}
+                        {% with total_obs=i.observaciones.all|length %}
+                        <button type="button" class="btn btn-sm btn-secondary btn-ver-observaciones"
+                                data-obs-admin-url="{% url 'econotec:ingreso_observaciones' pk=i.pk %}"
+                                data-obs-admin-detalle="{% url 'econotec:ingreso_detalle' pk=i.pk %}">
+                            📝 Ver observaciones{% if total_obs %}<span class="obs-count">{{ total_obs }}</span>{% endif %}
+                        </button>
+                        {% endwith %}
+                    {% endif %}
                     <a href="{% url 'econotec:ingreso_pdf' pk=i.pk %}" class="btn btn-sm btn-secondary" title="Descargar PDF">Descargar 📄</a>
                 </td>
             </tr>
@@ -301,4 +310,5 @@
 </div>
 {% endif %}
 {% include 'includes/paginacion.html' with page_obj=page_obj querystring=querystring page_param='pagina' aria_label='Paginación de equipos registrados' %}
+{% if es_admin %}{% include 'includes/observaciones_modal.html' %}{% endif %}
 {% endblock %}

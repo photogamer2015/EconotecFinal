@@ -295,6 +295,33 @@ class IngresoEquipoForm(forms.ModelForm):
         label='Firma del cliente'
     )
 
+    # Con "Sí" se guarda una ObservacionEquipo (con fecha y autor) que se
+    # muestra en el detalle del equipo.
+    OBSERVACION_OPCIONES = [
+        ('si', 'Sí'),
+        ('no', 'No'),
+    ]
+    OBSERVACION_MAX_CARACTERES = 2000
+
+    agregar_observacion = forms.ChoiceField(
+        choices=OBSERVACION_OPCIONES,
+        initial='no',
+        required=False,
+        widget=forms.RadioSelect(attrs={'class': 'observacion-radio'}),
+        label='¿Desea agregar una observación?',
+    )
+    observacion_nueva = forms.CharField(
+        required=False,
+        max_length=OBSERVACION_MAX_CARACTERES,
+        widget=forms.Textarea(attrs={
+            'class': 'form-input',
+            'rows': 3,
+            'id': 'id_observacion_nueva',
+            'placeholder': 'Ej.: El cliente pide que lo llamen antes de cambiar piezas.',
+        }),
+        label='Observación',
+    )
+
     valor_acordado = forms.CharField(
         required=False,
         widget=forms.TextInput(attrs={
@@ -747,6 +774,16 @@ class IngresoEquipoForm(forms.ModelForm):
             cleaned['firma_cliente_imagen'] = ''
         else:
             self.add_error('firma_cliente_opcion', 'Selecciona Sí o No firma para continuar.')
+
+        # Donado / Equipo a comprar ya usan "Problema reportado" como observación.
+        observacion = (cleaned.get('observacion_nueva') or '').strip()
+        if cleaned.get('agregar_observacion') == 'si' and not estado_administrativo:
+            if not observacion and 'observacion_nueva' not in self.errors:
+                self.add_error('observacion_nueva', 'Escribe la observación o selecciona No.')
+            cleaned['observacion_nueva'] = observacion
+        else:
+            cleaned['agregar_observacion'] = 'no'
+            cleaned['observacion_nueva'] = ''
 
         if self.estado_bloqueado_por_salida:
             cleaned['valor_acordado'] = self.instance.valor_acordado

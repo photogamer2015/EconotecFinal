@@ -40,8 +40,8 @@ from .busqueda import (
 from .models import (
     Abono, BitacoraTecnico, CategoriaEgreso, Cliente, Egreso, IngresoEquipo,
     InventarioItem, NotificacionAsesora, NotificacionInventarioAdmin,
-    SalidaEquipo, SEDE_PREFIJOS, SEDES_EQUIPOS, TIPOS_EQUIPO, UsuarioActividad,
-    VentaInventarioItem,
+    ObservacionEquipo, SalidaEquipo, SEDE_PREFIJOS, SEDES_EQUIPOS, TIPOS_EQUIPO,
+    UsuarioActividad, VentaInventarioItem,
 )
 from .bitacora import registrar_bitacora, nombre_corto_usuario, construir_bitacora_usuario
 from .date_filters import aplicar_rango_fecha, contexto_rango_fecha, obtener_rango_fecha
@@ -395,7 +395,7 @@ def bienvenida(request):
         reparacion_admin_qs = equipos_reparacion_demorada_qs(
             usuario=None,
             umbral_dias=UMBRAL_DIAS_REPARACION_ADMIN,
-        ).select_related('reporte_por')  # autor del reporte que se muestra en la alerta
+        ).select_related('reporte_por').prefetch_related('observaciones')  # reporte y botón "Observaciones" de la alerta
 
     def _items_reparacion(qs):
         return [{
@@ -1924,6 +1924,7 @@ def ingreso_registrar(request):
                 ingreso.cliente = cliente
                 ingreso.save()
                 _sincronizar_egreso_compra(ingreso, request.user)
+                _guardar_observacion_formulario(ing_form, ingreso, request.user)
                 registrar_bitacora(
                     request.user,
                     'ingreso',
@@ -2201,6 +2202,7 @@ def ingreso_editar(request, pk):
             cliente_editado.save()
             ingreso = ing_form.save()
             _sincronizar_egreso_compra(ingreso, request.user)
+            _guardar_observacion_formulario(ing_form, ingreso, request.user)
 
             # ── Auto-crear Salida si estado=entregado + subestado definido ──
             subestado = ingreso.subestado_entregado
@@ -2355,6 +2357,9 @@ def ingreso_lista(request):
     qs = (ingresos_operativos_qs()
           .select_related('cliente', 'registrado_por', 'salida')
           .prefetch_related('abonos'))
+    if es_admin(request.user):
+        # Cuenta para el botón "Ver observaciones" de los equipos en reparación.
+        qs = qs.prefetch_related('observaciones')
 
     if sede_filtro in ('guayaquil', 'quito'):
         qs = qs.filter(sede=sede_filtro)
@@ -2507,6 +2512,12 @@ def ingreso_detalle(request, pk):
     if ingreso.sede != 'ventas' and ingreso.estado not in ('donado', 'equipo_a_comprar'):
         from .simulacion import construir_simulacion
         simulacion = construir_simulacion(ingreso)
+    observaciones = list(ingreso.observaciones.select_related('autor'))
+    puede_actualizar_observacion = _puede_actualizar_observacion(ingreso)
+    mostrar_popup_observacion = (
+        puede_actualizar_observacion
+        and _popup_observacion_pendiente_hoy(request, ingreso, observaciones)
+    )
     return render(request, 'ingresos/detalle.html', {
         'ingreso': ingreso,
         'abonos': abonos,
@@ -2519,6 +2530,12 @@ def ingreso_detalle(request, pk):
         'reparacion_check_fecha': reparacion_check_fecha.isoformat(),
         'reparacion_check_tecnico_nombre': nombre_corto_usuario(usuario_bitacora_check),
         'simulacion': simulacion,
+        'observaciones': observaciones,
+        'ultima_observacion': observaciones[0] if observaciones else None,
+        'puede_actualizar_observacion': puede_actualizar_observacion,
+        'mostrar_popup_observacion': mostrar_popup_observacion,
+        'observacion_max_caracteres': IngresoEquipoForm.OBSERVACION_MAX_CARACTERES,
+        'estado_observacion_texto': _estado_texto_observacion(ingreso),
     })
 
 
@@ -2569,6 +2586,105 @@ def ingreso_reparacion_check(request, pk):
         'texto': evento.texto if evento else '',
         'fecha': dia.isoformat(),
         'bitacora_total': construir_bitacora_usuario(usuario_bitacora)['total'],
+    })
+
+
+# ── Observaciones del equipo ─────────────────────────────────────
+
+# Sesión: equipos en reparación a los que ya se les mostró hoy la ventana
+# "¿Deseas actualizar la observación?" → {'fecha': 'AAAA-MM-DD', 'ids': [pk, ...]}
+_SESION_POPUP_OBSERVACION = 'observacion_popup_vistos'
+
+
+def _estado_texto_observacion(ingreso):
+    return ingreso.subestado_visual_display or ingreso.estado_visual_display
+
+
+def _puede_actualizar_observacion(ingreso):
+    """El botón y la ventana solo aplican mientras el equipo sigue En reparación
+    (En reparación, En reparación - Cliente o En reparación - Repuestos)."""
+    return ingreso.sede != 'ventas' and ingreso.estado == 'en_reparacion'
+
+
+def _guardar_observacion_formulario(ing_form, ingreso, user):
+    """Guarda la observación marcada con "Sí" en el formulario de ingreso."""
+    if ing_form.cleaned_data.get('agregar_observacion') != 'si':
+        return None
+    texto = ing_form.cleaned_data.get('observacion_nueva') or ''
+    if not texto:
+        return None
+    return ObservacionEquipo.objects.create(
+        ingreso=ingreso,
+        texto=texto,
+        autor=user,
+        estado_texto=_estado_texto_observacion(ingreso),
+    )
+
+
+def _popup_observacion_pendiente_hoy(request, ingreso, observaciones):
+    """La ventana sale una sola vez al día por equipo y usuario. Si alguien
+    ya escribió una observación hoy, no se vuelve a preguntar."""
+    hoy = timezone.localdate()
+    if any(timezone.localdate(obs.creado) == hoy for obs in observaciones):
+        return False
+    vistos = request.session.get(_SESION_POPUP_OBSERVACION) or {}
+    if vistos.get('fecha') != hoy.isoformat():
+        vistos = {'fecha': hoy.isoformat(), 'ids': []}
+    if ingreso.pk in vistos['ids']:
+        return False
+    vistos['ids'].append(ingreso.pk)
+    request.session[_SESION_POPUP_OBSERVACION] = vistos
+    return True
+
+
+@tecnico_requerido
+@require_POST
+def ingreso_observacion_agregar(request, pk):
+    """Agrega una observación nueva (con fecha y autor) a un equipo en reparación."""
+    ingreso = get_object_or_404(IngresoEquipo, pk=pk)
+    if not _puede_actualizar_observacion(ingreso):
+        messages.error(
+            request,
+            'La observación solo se puede actualizar mientras el equipo está en reparación.',
+        )
+        return redirect('econotec:ingreso_detalle', pk=ingreso.pk)
+
+    texto = (request.POST.get('texto') or '').strip()
+    maximo = IngresoEquipoForm.OBSERVACION_MAX_CARACTERES
+    if not texto:
+        messages.error(request, 'Escribe la observación antes de guardarla.')
+        return redirect('econotec:ingreso_detalle', pk=ingreso.pk)
+    if len(texto) > maximo:
+        messages.error(request, f'La observación no puede pasar de {maximo} caracteres.')
+        return redirect('econotec:ingreso_detalle', pk=ingreso.pk)
+
+    observacion = ObservacionEquipo.objects.create(
+        ingreso=ingreso,
+        texto=texto,
+        autor=request.user,
+        estado_texto=_estado_texto_observacion(ingreso),
+    )
+    momento = timezone.localtime(observacion.creado)
+    messages.success(
+        request,
+        f'Observación del equipo {ingreso.codigo_equipo} guardada el '
+        f'{momento:%d/%m/%Y} a las {momento:%H:%M}.',
+    )
+    return redirect('econotec:ingreso_detalle', pk=ingreso.pk)
+
+
+@admin_requerido
+@require_GET
+def ingreso_observaciones(request, pk):
+    """Admin: historial de observaciones de un equipo (se abre en una ventana)."""
+    ingreso = get_object_or_404(
+        IngresoEquipo.objects.select_related('cliente', 'tecnico_encargado'),
+        pk=pk,
+    )
+    return render(request, 'ingresos/_observaciones_lista.html', {
+        'ingreso': ingreso,
+        'observaciones': ingreso.observaciones.select_related('autor'),
+        'estado_observacion_texto': _estado_texto_observacion(ingreso),
     })
 
 

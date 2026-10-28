@@ -1470,6 +1470,50 @@ class IngresoEquipo(RetencionFactura):
 
 
 # ─────────────────────────────────────────────────────────
+# Observaciones del equipo (historial con fecha y autor)
+# ─────────────────────────────────────────────────────────
+
+class ObservacionEquipo(models.Model):
+    """
+    Observación escrita sobre un equipo: al registrarlo (¿Desea agregar una
+    observación? → Sí) o mientras sigue en reparación. Cada actualización
+    queda como un registro nuevo, así se conserva el historial con fecha.
+    """
+    ingreso = models.ForeignKey(
+        IngresoEquipo, on_delete=models.CASCADE,
+        related_name='observaciones',
+        verbose_name='Equipo',
+    )
+    texto = models.TextField(verbose_name='Observación')
+    autor = models.ForeignKey(
+        'auth.User', on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='observaciones_equipo',
+        verbose_name='Escrita por',
+    )
+    estado_texto = models.CharField(
+        max_length=120, blank=True,
+        verbose_name='Estado del equipo en ese momento',
+    )
+    creado = models.DateTimeField(default=timezone.now, verbose_name='Fecha')
+
+    class Meta:
+        verbose_name = 'Observación de equipo'
+        verbose_name_plural = 'Observaciones de equipos'
+        ordering = ['-creado', '-pk']
+
+    @property
+    def autor_nombre(self):
+        u = self.autor
+        if not u:
+            return ''
+        return (f'{u.first_name} {u.last_name}'.strip()) or u.username
+
+    def __str__(self):
+        return f'Observación {self.ingreso.codigo_equipo} — {self.creado:%d/%m/%Y %H:%M}'
+
+
+# ─────────────────────────────────────────────────────────
 # Productos de inventario incluidos en una venta
 # ─────────────────────────────────────────────────────────
 
