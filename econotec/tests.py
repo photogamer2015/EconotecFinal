@@ -9015,7 +9015,7 @@ class VentasTests(TestCase):
         self.assertEqual(ingreso.subestado_entregado, 'no_quiso_reparar')
         self.assertEqual(ingreso.diferencia, Decimal('0.00'))
 
-    def test_salida_revision_usa_valor_acordado_propio_para_saldo(self):
+    def test_revision_suma_el_valor_adicional_al_valor_acordado(self):
         ingreso = self.crear_ingreso_reparacion(
             valor_acordado=Decimal('40.00'),
             abono_anticipo=Decimal('5.00'),
@@ -9025,7 +9025,9 @@ class VentasTests(TestCase):
             reverse('econotec:salida_registrar', kwargs={'ingreso_pk': ingreso.pk}),
             self.salida_post_data(
                 estado_reparacion='revision:equipo_prueba',
-                valor_acordado_revision='12.00',
+                aplica_valor_acordado_adicional='si',
+                valor_acordado_adicional='12.00',
+                motivo_valor_acordado_adicional='Pruebas extra de batería.',
                 valor_final_cobrado='99.00',
                 metodo_pago_final='efectivo',
                 asesora_notificacion=str(self.vendedor.pk),
@@ -9038,33 +9040,95 @@ class VentasTests(TestCase):
         ingreso.refresh_from_db()
         salida.refresh_from_db()
         self.assertEqual(salida.estado_reparacion, 'revision')
-        self.assertEqual(salida.valor_acordado_revision, Decimal('12.00'))
+        self.assertIsNone(salida.valor_acordado_revision)
+        self.assertEqual(salida.valor_acordado_adicional, Decimal('12.00'))
         self.assertEqual(salida.valor_final_cobrado, Decimal('0.00'))
         self.assertEqual(salida.metodo_pago_final, 'sin_pago')
+        # Valor acordado $40 + adicional $12; ya pagó $5 de anticipo.
         self.assertEqual(ingreso.valor_acordado, Decimal('40.00'))
-        self.assertEqual(ingreso.valor_efectivo_a_cobrar, Decimal('12.00'))
-        self.assertEqual(ingreso.diferencia, Decimal('7.00'))
+        self.assertEqual(ingreso.valor_efectivo_a_cobrar, Decimal('52.00'))
+        self.assertEqual(ingreso.diferencia, Decimal('47.00'))
+        self.assertFalse(ingreso.reparacion_cancelada)
 
         notificacion = NotificacionAsesora.objects.get(salida=salida)
         self.assertEqual(notificacion.tipo, NotificacionAsesora.TIPO_REVISION_PENDIENTE)
-        self.assertEqual(notificacion.valor_acordado, Decimal('12.00'))
+        self.assertEqual(notificacion.valor_acordado, Decimal('47.00'))
 
-    def test_salida_revision_exige_valor_acordado_propio(self):
+        detalle = self.client.get(reverse('econotec:ingreso_detalle', kwargs={'pk': ingreso.pk}))
+        self.assertContains(detalle, '<span class="adic-val">$12,00 adicional</span>', html=True)
+        self.assertContains(detalle, 'Valor acordado total')
+
+    def test_revision_sin_valor_adicional_cobra_el_valor_acordado(self):
         ingreso = self.crear_ingreso_reparacion(valor_acordado=Decimal('40.00'))
 
-        response = self.client.post(
+        self.client.post(
             reverse('econotec:salida_registrar', kwargs={'ingreso_pk': ingreso.pk}),
             self.salida_post_data(
-                estado_reparacion='revision:equipo_prueba',
-                valor_acordado_revision='',
+                estado_reparacion='revision:no_reparable',
+                aplica_valor_acordado_adicional='no',
                 metodo_pago_final='sin_pago',
                 asesora_notificacion=str(self.vendedor.pk),
             ),
         )
 
-        self.assertEqual(response.status_code, 200)
-        self.assertFalse(SalidaEquipo.objects.filter(ingreso=ingreso).exists())
-        self.assertContains(response, 'Ingresa el valor acordado por revisión')
+        salida = SalidaEquipo.objects.get(ingreso=ingreso)
+        ingreso.refresh_from_db()
+        self.assertEqual(salida.aplica_valor_acordado_adicional, 'no')
+        self.assertEqual(ingreso.valor_efectivo_a_cobrar, Decimal('40.00'))
+        self.assertEqual(NotificacionAsesora.objects.get(salida=salida).valor_acordado, Decimal('40.00'))
+
+    def test_revision_con_valor_acordado_cero_no_deja_pendiente(self):
+        ingreso = self.crear_ingreso_reparacion(valor_acordado=Decimal('0.00'))
+
+        response = self.client.post(
+            reverse('econotec:salida_registrar', kwargs={'ingreso_pk': ingreso.pk}),
+            self.salida_post_data(
+                estado_reparacion='revision:cliente_no_acepta',
+                aplica_valor_acordado_adicional='no',
+                metodo_pago_final='sin_pago',
+            ),
+        )
+
+        salida = SalidaEquipo.objects.get(ingreso=ingreso)
+        self.assertRedirects(response, reverse('econotec:salida_listo_aviso', kwargs={'pk': salida.pk}))
+        ingreso.refresh_from_db()
+        self.assertEqual(ingreso.diferencia, Decimal('0.00'))
+        # Sin saldo no hace falta asesora ni aviso de cobro.
+        self.assertFalse(NotificacionAsesora.objects.filter(salida=salida).exists())
+
+    def test_revision_anterior_con_valor_propio_se_mantiene(self):
+        ingreso = self.crear_ingreso_reparacion(valor_acordado=Decimal('50.00'))
+        salida = SalidaEquipo.objects.create(
+            ingreso=ingreso,
+            fecha_salida=date(2026, 7, 9),
+            estado_reparacion='revision',
+            valor_acordado_revision=Decimal('19.99'),
+            tecnico_reparo=self.usuario,
+            valor_final_cobrado=Decimal('0.00'),
+            metodo_pago_final='sin_pago',
+            registrado_por=self.usuario,
+        )
+        ingreso.refresh_from_db()
+        self.assertTrue(ingreso.reparacion_cancelada)
+        self.assertEqual(ingreso.valor_efectivo_a_cobrar, Decimal('19.99'))
+
+        editar = self.client.get(reverse('econotec:salida_editar', kwargs={'pk': salida.pk}))
+        self.assertContains(editar, 'Esta revisión se registró con un valor acordado por revisión de <b>$19,99</b>')
+        self.client.post(
+            reverse('econotec:salida_editar', kwargs={'pk': salida.pk}),
+            self.salida_post_data(
+                estado_reparacion='revision:equipo_prueba',
+                aplica_valor_acordado_adicional='no',
+                metodo_pago_final='sin_pago',
+                asesora_notificacion=str(self.vendedor.pk),
+            ),
+        )
+
+        salida.refresh_from_db()
+        ingreso.refresh_from_db()
+        self.assertEqual(salida.subestado_revision, 'equipo_prueba')
+        self.assertEqual(salida.valor_acordado_revision, Decimal('19.99'))
+        self.assertEqual(ingreso.valor_efectivo_a_cobrar, Decimal('19.99'))
 
     def test_salida_pendiente_retiro_con_saldo_notifica_asesora(self):
         ingreso = self.crear_ingreso_reparacion(valor_acordado=Decimal('100.00'))
@@ -9205,27 +9269,26 @@ class VentasTests(TestCase):
             'Explica por qué se aplica el valor acordado adicional.',
         )
 
-    def test_valor_adicional_no_aplica_en_estado_revision(self):
-        ingreso = self.crear_ingreso_reparacion(valor_acordado=Decimal('20.00'))
+    def test_valor_adicional_no_aplica_en_garantia(self):
+        ingreso = self.crear_ingreso_reparacion(
+            valor_acordado=Decimal('20.00'),
+            estado='garantia',
+            subestado_reparacion='',
+            motivo_garantia='No enciende otra vez',
+        )
 
-        response = self.client.post(
+        self.client.post(
             reverse('econotec:salida_registrar', kwargs={'ingreso_pk': ingreso.pk}),
             self.salida_post_data(
-                estado_reparacion='revision:equipo_prueba',
-                valor_acordado_revision='10.00',
+                estado_reparacion='garantia',
                 aplica_valor_acordado_adicional='si',
                 valor_acordado_adicional='10.00',
                 motivo_valor_acordado_adicional='No debe conservarse.',
                 metodo_pago_final='sin_pago',
-                asesora_notificacion=str(self.vendedor.pk),
             ),
         )
 
         salida = SalidaEquipo.objects.get(ingreso=ingreso)
-        self.assertRedirects(
-            response,
-            reverse('econotec:salida_listo_aviso', kwargs={'pk': salida.pk}),
-        )
         self.assertEqual(salida.aplica_valor_acordado_adicional, 'no')
         self.assertEqual(salida.valor_acordado_adicional, Decimal('0.00'))
         self.assertEqual(salida.motivo_valor_acordado_adicional, '')
@@ -11893,6 +11956,10 @@ class VentasTests(TestCase):
         self.assertContains(response, '🔎 Revisión — ❌ No se pudo reparar')
         self.assertContains(response, '🔎 Revisión — 🚫 Cliente no quiso reparar')
         self.assertNotContains(response, 'name="subestado_revision"')
+        # La ayuda explica cada Revisión sin hablar de puntos.
+        self.assertContains(response, 'Cómo funciona cada Revisión')
+        self.assertNotContains(response, 'punto al técnico')
+        self.assertNotContains(response, 'name="valor_acordado_revision"')
 
     def test_finalizacion_en_revision_guarda_subcategoria_y_avisa_al_admin(self):
         ingreso = self.crear_ingreso_reparacion(valor_acordado=Decimal('40.00'))
@@ -11901,7 +11968,6 @@ class VentasTests(TestCase):
             reverse('econotec:salida_registrar', kwargs={'ingreso_pk': ingreso.pk}),
             self.salida_post_data(
                 estado_reparacion='revision:no_reparable',
-                valor_acordado_revision='12.00',
                 metodo_pago_final='sin_pago',
                 asesora_notificacion=str(self.vendedor.pk),
             ),
@@ -11910,8 +11976,7 @@ class VentasTests(TestCase):
         salida = SalidaEquipo.objects.get(ingreso=ingreso)
         self.assertEqual(salida.subestado_revision, 'no_reparable')
         self.assertIsNotNone(salida.fecha_subestado_revision)
-        # El cobro sigue siendo el de Revisión.
-        self.assertEqual(salida.valor_acordado_revision, Decimal('12.00'))
+        self.assertIsNone(salida.valor_acordado_revision)
         aviso = NotificacionRevisionAdmin.objects.get(salida=salida)
         self.assertEqual(aviso.tipo, NotificacionRevisionAdmin.TIPO_SUBCATEGORIA)
         self.assertEqual(aviso.creado_por, self.usuario)

@@ -397,7 +397,9 @@ def _mensaje_estado_salida(salida):
         fecha = salida.fecha_retiro_real or salida.fecha_salida
         return f'Su equipo salió de la oficina el {fecha.strftime("%d/%m/%Y")}.'
     if estado == 'revision':
-        return 'Su equipo está listo para su retiro en estado de revisión. Debe cancelar el saldo pendiente antes de retirarlo.'
+        if salida.ingreso.diferencia > 0:
+            return 'Su equipo está listo para su retiro en estado de revisión. Debe cancelar el saldo pendiente antes de retirarlo.'
+        return 'Su equipo está listo para su retiro en estado de revisión.'
     if estado == 'no_reparable':
         return 'Su equipo está listo para su retiro. No se pudo reparar.'
     if estado == 'cliente_no_acepta':
