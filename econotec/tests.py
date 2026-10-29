@@ -9110,7 +9110,7 @@ class VentasTests(TestCase):
                 # Sin saldo no se pide asesora ni se crea aviso de cobro.
                 self.assertFalse(NotificacionAsesora.objects.filter(salida=salida).exists())
                 detalle = self.client.get(reverse('econotec:ingreso_detalle', kwargs={'pk': ingreso.pk}))
-                self.assertContains(detalle, 'Sin cobro: el saldo queda en $0')
+                self.assertContains(detalle, 'Sin cobro: el valor acordado queda en $0')
                 self.assertContains(detalle, 'Valor acordado original: $118,00')
 
     def test_revision_cliente_no_quiso_cobra_solo_el_adicional(self):
@@ -9218,6 +9218,7 @@ class VentasTests(TestCase):
                         estado_reparacion=f'revision:{subestado}',
                         aplica_valor_acordado_adicional='no',
                         metodo_pago_final='sin_pago',
+                        asesora_notificacion=str(self.vendedor.pk),
                     ),
                 )
                 self.assertEqual(response.status_code, 302)
@@ -9226,10 +9227,9 @@ class VentasTests(TestCase):
                 self.assertEqual(salida.subestado_revision, subestado)
                 self.assertTrue(salida.revision_sin_valor_acordado)
                 self.assertFalse(salida.revision_con_valor_propio)
-                # El saldo arranca en $0: sin valor de revisión ni domicilio.
-                self.assertEqual(ingreso.valor_domicilio_aplicable, Decimal('0.00'))
-                self.assertEqual(ingreso.valor_efectivo_a_cobrar, Decimal('0.00'))
-                self.assertEqual(ingreso.diferencia, Decimal('0.00'))
+                # El valor de revisión anterior queda en $0; el envío se cobra.
+                self.assertEqual(ingreso.valor_efectivo_a_cobrar, Decimal('10.00'))
+                self.assertEqual(ingreso.diferencia, Decimal('10.00'))
                 # El valor anterior se guarda por si vuelve a Equipo en prueba.
                 self.assertEqual(salida.valor_acordado_revision, Decimal('40.00'))
 
@@ -9237,9 +9237,10 @@ class VentasTests(TestCase):
         self.assertContains(editar, 'var valorDomicilio = parseFloat("10')
         self.assertContains(editar, 'id="nota-valor-revision-anterior"')
         detalle = self.client.get(reverse('econotec:ingreso_detalle', kwargs={'pk': ingreso.pk}))
-        self.assertContains(detalle, 'Valor a domicilio (queda en $0 en este estado)')
+        self.assertContains(detalle, 'Sin cobro: el valor acordado queda en $0')
+        self.assertContains(detalle, 'Valor a domicilio (incluido en el saldo)')
 
-        # Con valor adicional se cobra solo ese valor, a partir de $0.
+        # El valor adicional se suma desde $0: adicional $15 + envío $10.
         self.client.post(
             reverse('econotec:salida_editar', kwargs={'pk': salida.pk}),
             self.salida_post_data(
@@ -9252,10 +9253,10 @@ class VentasTests(TestCase):
             ),
         )
         ingreso.refresh_from_db()
-        self.assertEqual(ingreso.diferencia, Decimal('15.00'))
+        self.assertEqual(ingreso.diferencia, Decimal('25.00'))
         self.assertEqual(
             NotificacionAsesora.objects.filter(salida=salida).latest('creado').valor_acordado,
-            Decimal('15.00'),
+            Decimal('25.00'),
         )
 
         # De vuelta a Equipo en prueba vuelve el valor anterior + domicilio.
@@ -9273,9 +9274,10 @@ class VentasTests(TestCase):
         self.assertTrue(salida.revision_con_valor_propio)
         self.assertEqual(ingreso.diferencia, Decimal('50.00'))
 
-    def test_revision_no_se_pudo_con_domicilio_y_anticipo(self):
+    def test_revision_no_se_pudo_suma_adicional_y_envio_menos_lo_pagado(self):
+        # Caso G1037: valor acordado $10, anticipo $5, domicilio $10.
         ingreso = self.crear_ingreso_reparacion(
-            valor_acordado=Decimal('80.00'),
+            valor_acordado=Decimal('10.00'),
             a_domicilio='si',
             valor_domicilio=Decimal('10.00'),
             abono_anticipo=Decimal('5.00'),
@@ -9286,8 +9288,8 @@ class VentasTests(TestCase):
             self.salida_post_data(
                 estado_reparacion='revision:no_reparable',
                 aplica_valor_acordado_adicional='si',
-                valor_acordado_adicional='20.00',
-                motivo_valor_acordado_adicional='Mantenimiento general.',
+                valor_acordado_adicional='5.00',
+                motivo_valor_acordado_adicional='Porque se encontró otra cosa.',
                 metodo_pago_final='sin_pago',
                 asesora_notificacion=str(self.vendedor.pk),
             ),
@@ -9295,10 +9297,15 @@ class VentasTests(TestCase):
 
         salida = SalidaEquipo.objects.get(ingreso=ingreso)
         ingreso.refresh_from_db()
-        # $0 + adicional $20 − anticipo $5 (el domicilio queda en $0).
-        self.assertEqual(ingreso.valor_efectivo_a_cobrar, Decimal('20.00'))
-        self.assertEqual(ingreso.diferencia, Decimal('15.00'))
-        self.assertEqual(NotificacionAsesora.objects.get(salida=salida).valor_acordado, Decimal('15.00'))
+        # $0 + adicional $5 + envío $10 − anticipo $5 = $10.
+        self.assertEqual(ingreso.valor_servicio_a_cobrar, Decimal('5.00'))
+        self.assertEqual(ingreso.valor_efectivo_a_cobrar, Decimal('15.00'))
+        self.assertEqual(ingreso.diferencia, Decimal('10.00'))
+        self.assertEqual(NotificacionAsesora.objects.get(salida=salida).valor_acordado, Decimal('10.00'))
+
+        editar = self.client.get(reverse('econotec:salida_editar', kwargs={'pk': salida.pk}))
+        self.assertContains(editar, "desglose.push('+ envío a domicilio $'")
+
 
     def test_salida_pendiente_retiro_con_saldo_notifica_asesora(self):
         ingreso = self.crear_ingreso_reparacion(valor_acordado=Decimal('100.00'))

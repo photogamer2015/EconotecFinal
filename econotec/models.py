@@ -1221,18 +1221,8 @@ class IngresoEquipo(RetencionFactura):
         return False
 
     @property
-    def valor_domicilio_contratado(self):
-        """Valor a domicilio registrado en el ingreso, se cobre o no."""
-        return _q2(self.valor_domicilio) if self.a_domicilio == 'si' else Decimal('0.00')
-
-    @property
     def valor_domicilio_aplicable(self):
-        # Revisión — No se pudo reparar / Cliente no quiso reparar: todo queda
-        # en $0, también el domicilio; solo se cobra el valor adicional.
-        salida = self._salida_relacionada()
-        if salida is not None and salida.revision_sin_valor_acordado:
-            return Decimal('0.00')
-        return self.valor_domicilio_contratado
+        return _q2(self.valor_domicilio) if self.a_domicilio == 'si' else Decimal('0.00')
 
     @property
     def valor_efectivo_a_cobrar(self):
@@ -1247,7 +1237,7 @@ class IngresoEquipo(RetencionFactura):
           anteriores): ese valor, más el adicional si lo hay.
         - Si salió por Revisión — No se pudo reparar / Cliente no quiso
           reparar: el valor acordado (o el de revisión anterior) queda en $0;
-          solo el adicional.
+          solo el adicional (el domicilio se suma en valor_efectivo_a_cobrar).
         - Si salió por Revisión — Equipo en prueba: valor acordado + adicional.
         - Si la reparación fue cancelada: solo el valor del diagnóstico (si no lo pagó al inicio).
         - Si no: el valor acordado completo.
@@ -2432,17 +2422,17 @@ class SalidaEquipo(RetencionFactura):
         """Revisión registrada con «valor acordado por revisión» (forma anterior):
         ese valor reemplaza al valor acordado del equipo. Las revisiones nuevas
         no lo tienen y cobran valor acordado + valor adicional.
-        En No se pudo reparar / Cliente no quiso reparar no aplica: ahí todo
-        queda en $0 (ver revision_sin_valor_acordado)."""
+        En No se pudo reparar / Cliente no quiso reparar no aplica: ahí el
+        valor acordado queda en $0 (ver revision_sin_valor_acordado)."""
         return (
             self.estado_reparacion == 'revision'
             and self.valor_acordado_revision is not None
             and self.subestado_revision not in self.SUBESTADOS_REVISION_SIN_VALOR_ACORDADO
         )
 
-    # En Revisión con estas subcategorías el saldo queda en $0 (valor acordado,
-    # valor de revisión anterior y domicilio); solo se cobra el valor
-    # adicional, si lo agregan.
+    # En Revisión con estas subcategorías el valor acordado (o el de revisión
+    # anterior) queda en $0; se cobra el valor adicional, si lo agregan, más el
+    # domicilio (envío), menos lo ya pagado.
     SUBESTADOS_REVISION_SIN_VALOR_ACORDADO = ('no_reparable', 'cliente_no_acepta')
 
     @property
