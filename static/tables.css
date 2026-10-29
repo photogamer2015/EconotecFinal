@@ -1,0 +1,149 @@
+/* Tables: graphite headers, quiet rows and a compact navigation rail.
+   Screen-only so printed receipts and reports retain their own layout. */
+@media screen {
+  :root {
+    --grid-head: #263735;
+    --grid-head-text: #edf3ef;
+    --grid-row-alt: #eef1ed;
+    --grid-row-hover: #e4ebe5;
+    --grid-line: #dce2dc;
+  }
+  [data-theme="dark"] {
+    --grid-head: #111c1d;
+    --grid-head-text: #e1ebe7;
+    --grid-row-alt: #1c2829;
+    --grid-row-hover: #283b37;
+    --grid-line: #2d3c3b;
+  }
+  .table-wrap.table-scroll-viewport,
+  .table-navigation-created {
+    border: 1px solid var(--border-color);
+    border-radius: 16px;
+    background: var(--card-bg);
+    box-shadow: 0 4px 18px -12px #14282430;
+    scrollbar-width: thin;
+    scrollbar-color: #83978b var(--surface-muted);
+  }
+  .table-scroll-viewport > table {
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: 13px;
+    line-height: 1.5;
+  }
+  .table-scroll-viewport > table > thead > tr > th {
+    padding: 16px 18px;
+    background: var(--grid-head);
+    color: var(--grid-head-text);
+    border-bottom: 0;
+    font-size: 10px;
+    font-weight: 650;
+    letter-spacing: .09em;
+  }
+  .table-scroll-viewport > table > tbody > tr { background: var(--card-bg); }
+  .table-scroll-viewport > table > tbody > tr:nth-child(even) { background: var(--grid-row-alt); }
+  .table-scroll-viewport > table > tbody > tr > td {
+    padding: 18px;
+    border-bottom: 1px solid var(--grid-line);
+    vertical-align: middle;
+  }
+  .table-scroll-viewport > table > tbody > tr:last-child > td { border-bottom: 0; }
+  .table-scroll-viewport > table > tbody > tr:hover,
+  .table-scroll-viewport > table > tbody > tr:focus-within { background: var(--grid-row-hover); }
+  /* Match the frozen reference to its row in both themes, including hover. */
+  .table-scroll-viewport[data-table-overflow="true"] th.table-context-cell {
+    background: var(--grid-head);
+    color: var(--grid-head-text);
+  }
+  .table-scroll-viewport[data-table-overflow="true"] td.table-context-cell {
+    background: var(--card-bg);
+    font-weight: 600;
+  }
+  .table-scroll-viewport[data-table-overflow="true"] tr:nth-child(even) td.table-context-cell { background: var(--grid-row-alt); }
+  .table-scroll-viewport[data-table-overflow="true"] tr:hover td.table-context-cell,
+  .table-scroll-viewport[data-table-overflow="true"] tr:focus-within td.table-context-cell { background: var(--grid-row-hover); }
+  .table-scroll-viewport .badge {
+    padding: 5px 10px;
+    border-radius: 7px;
+    font-size: 10px;
+    font-weight: 650;
+    letter-spacing: .035em;
+  }
+  .table-scroll-viewport .row-actions .btn { min-height: 34px; border-radius: 8px; }
+  .table-scroll-viewport .table-scroll-tools { border-bottom: 0; }
+  .table-scroll-viewport .table-scroll-toolbar { padding: 10px 16px; gap: 10px; }
+  .table-scroll-viewport .table-scroll-hint { font-size: 11px; font-weight: 500; }
+  .table-scroll-viewport .table-scroll-context {
+    background: var(--surface-muted);
+    color: var(--text-soft);
+    font-size: 10px;
+    padding: 5px 9px;
+    border-radius: 6px;
+  }
+  .table-scroll-viewport .table-scroll-jump { font-size: 11px; border-radius: 8px; }
+  .table-scroll-viewport .table-scrollbar-top { height: 12px; background: var(--surface-muted); }
+  .table-scroll-viewport .table-scrollbar-top::-webkit-scrollbar { height: 10px; }
+  .table-scroll-viewport .table-scrollbar-top::-webkit-scrollbar-thumb { border-width: 2px; }
+  .list-pagination { background: transparent; box-shadow: none; border: 0; padding: 12px 0; gap: 12px; }
+  .list-pagination .current { font-size: 12px; }
+  .list-pagination .btn { background: var(--card-bg); }
+
+  /* Ingresos: filters get real space instead of shrinking into clipped labels. */
+  .toolbar.ingresos-filters {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: 14px;
+    padding: 18px;
+    border: 1px solid var(--border-color);
+    border-radius: 14px;
+    background: var(--card-bg);
+  }
+  .toolbar.ingresos-filters form {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    flex: 1 1 100%;
+    min-width: 0;
+    gap: 10px;
+  }
+  .toolbar.ingresos-filters form > .form-input {
+    width: 100%;
+    max-width: none !important;
+    min-width: 0;
+    min-height: 44px;
+    background-color: var(--card-bg);
+  }
+  .toolbar.ingresos-filters input[name="q"],
+  .toolbar.ingresos-filters .date-range-filter { grid-column: span 2; min-width: 0; }
+  .toolbar.ingresos-filters .date-range-trigger { min-height: 44px; font-size: 13px; font-weight: 550; }
+  .toolbar.ingresos-filters > .btn { margin-left: auto; min-height: 44px; }
+  .ingresos-table .amount-cell { font-variant-numeric: tabular-nums; font-weight: 600; }
+  .ingresos-table .estado-subestado-inline { font-size: 11px; font-weight: 400; color: var(--text-muted); margin-top: 5px; }
+  .ingresos-table .salida-registrada-badge {
+    background: transparent;
+    border: 0;
+    padding: 0;
+    margin-top: 5px;
+    color: var(--text-muted);
+    font-size: 10px;
+    font-weight: 500;
+  }
+  @media (max-width: 1100px) {
+    .toolbar.ingresos-filters form { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  }
+  @media (max-width: 760px) {
+    .toolbar.ingresos-filters form { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+    .toolbar.ingresos-filters > .btn { width: 100%; }
+    .table-scroll-viewport > table > thead > tr > th { padding: 13px 14px; }
+    .table-scroll-viewport > table > tbody > tr > td { padding: 15px 14px; }
+    .table-scroll-viewport .table-scroll-toolbar { padding: 10px; flex-wrap: wrap; }
+    .table-scroll-viewport .table-scroll-guidance { flex-wrap: wrap; }
+    .table-scroll-viewport .row-actions .btn,
+    .table-scroll-viewport .table-scroll-jump { min-height: 44px; }
+  }
+  @media (max-width: 480px) {
+    .toolbar.ingresos-filters { padding: 12px; }
+    .toolbar.ingresos-filters form { grid-template-columns: minmax(0, 1fr) !important; }
+    .toolbar.ingresos-filters input[name="q"],
+    .toolbar.ingresos-filters .date-range-filter { grid-column: auto; }
+  }
+}

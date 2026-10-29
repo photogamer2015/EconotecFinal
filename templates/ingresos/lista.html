@@ -129,43 +129,43 @@
 <div class="valor-filter-banner">⚠ Lista de equipos pendientes de valor acordado.</div>
 {% endif %}
 
-<div class="toolbar">
+<div class="toolbar ingresos-filters">
     <form method="get">
-        <input type="text" name="q" value="{{ q }}" placeholder="Buscar por N° equipo, cliente, cédula, marca…" class="form-input">
+        <input aria-label="Buscar equipos o clientes" type="text" name="q" value="{{ q }}" placeholder="Buscar por N° equipo, cliente, cédula, marca…" class="form-input">
         {% include 'includes/filtro_fecha_rango.html' %}
-        <select name="sede" class="form-input" style="max-width:180px;">
+        <select aria-label="Sede" name="sede" class="form-input" style="max-width:180px;">
             <option value="todas" {% if sede_filtro == 'todas' or not sede_filtro %}selected{% endif %}>— Todas las sedes —</option>
             <option value="guayaquil" {% if sede_filtro == 'guayaquil' %}selected{% endif %}>Guayaquil</option>
             <option value="quito" {% if sede_filtro == 'quito' %}selected{% endif %}>Quito</option>
         </select>
-        <select name="estado" class="form-input" style="max-width:240px;">
+        <select aria-label="Estado del equipo" name="estado" class="form-input" style="max-width:240px;">
             {% for value, label in estados %}
                 <option value="{{ value }}" {% if estado_filtro == value %}selected{% endif %}>{{ label }}</option>
             {% endfor %}
         </select>
-        <select name="valor" class="form-input" style="max-width:220px;">
+        <select aria-label="Valor acordado" name="valor" class="form-input" style="max-width:220px;">
             <option value="">— Valor acordado —</option>
             <option value="pendiente" {% if valor_filtro == 'pendiente' %}selected{% endif %}>Pendiente de valor acordado</option>
             <option value="con_valor" {% if valor_filtro == 'con_valor' %}selected{% endif %}>Con valor acordado</option>
         </select>
-        <select name="firma" class="form-input" style="max-width:150px;">
+        <select aria-label="Firma" name="firma" class="form-input" style="max-width:150px;">
             <option value="">— Firma —</option>
             <option value="con_firma" {% if firma_filtro == 'con_firma' %}selected{% endif %}>Con firma</option>
             <option value="sin_firma" {% if firma_filtro == 'sin_firma' %}selected{% endif %}>Sin firma</option>
         </select>
-        <select name="tipo" class="form-input" style="max-width:140px;">
+        <select aria-label="Tipo de equipo" name="tipo" class="form-input" style="max-width:140px;">
             <option value="">— Tipo —</option>
             {% for value, label in tipos %}
                 <option value="{{ value }}" {% if tipo_filtro == value %}selected{% endif %}>{{ label }}</option>
             {% endfor %}
         </select>
-        <select name="registrador" class="form-input" style="max-width:160px;">
+        <select aria-label="Registrado por" name="registrador" class="form-input" style="max-width:160px;">
             <option value="">📝 Registró...</option>
             {% for u in usuarios_all %}
                 <option value="{{ u.id }}" {% if registrador_filtro == u.id|stringformat:"s" %}selected{% endif %}>{{ u.first_name|default:u.username }}</option>
             {% endfor %}
         </select>
-        <select name="asesor" class="form-input" style="max-width:160px;">
+        <select aria-label="Asesor" name="asesor" class="form-input" style="max-width:160px;">
             <option value="">💼 Asesor...</option>
             {% for nombre in asesores_choices %}
                 <option value="{{ nombre }}" {% if asesor_filtro == nombre %}selected{% endif %}>{{ nombre }}</option>
@@ -177,7 +177,7 @@
 </div>
 
 {% if ingresos %}
-<div class="table-wrap">
+<div class="table-wrap ingresos-table">
     <table>
         <thead>
             <tr>
@@ -240,7 +240,7 @@
                         <span style="color:#ccc;">—</span>
                     {% endif %}
                 </td>
-                <td>
+                <td class="amount-cell">
                     {% if i.valor_acordado is None %}
                         <span class="valor-pendiente-badge">⚠ Pendiente valor acordado</span>
                     {% elif i.reparacion_cancelada %}

@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% load econotec_extras %}
+{% load static econotec_extras %}
 
 {% block title %}Inventario {{ tipo.nombre }} — Econotec{% endblock %}
 
@@ -478,6 +478,7 @@
         }
     }
 </style>
+<link rel="stylesheet" href="{% static 'inventario/workspace.css' %}?v=20261028-1">
 
 <div class="crumb">
     <a href="{% url 'econotec:bienvenida' %}">Inicio</a> /
@@ -488,8 +489,9 @@
 <div class="inventario-tabla-wrap">
     <div class="inventario-tabla-head">
         <div>
-            <h2 class="page-title">Inventario <span class="accent">{{ tipo.nombre }}</span></h2>
-            <p class="page-subtitle">Tabla base para organizar este inventario por sede.</p>
+            <span class="inventory-eyebrow">ECONOTEC / INVENTARIO</span>
+            <h2 class="page-title">{{ tipo.nombre }}</h2>
+            <p class="page-subtitle">Control de productos, existencias y ubicación.</p>
         </div>
         <div class="inventario-tags">
             <span class="inventario-tag">{{ sede_label }}</span>
@@ -515,6 +517,24 @@
             </a>
         {% endif %}
     </div>
+
+    <section class="inventory-overview" aria-label="Resumen del inventario">
+        <div class="inventory-metric">
+            <span>Catálogo de este tipo</span>
+            <strong>{{ total_general }}</strong>
+            <small>Productos registrados en {{ sede_label }}</small>
+        </div>
+        <div class="inventory-metric">
+            <span>En este listado</span>
+            <strong>{{ total_filtrado }}</strong>
+            <small>{% if filtros_activos %}Resultados de los filtros actuales{% else %}Todos los productos del catálogo{% endif %}</small>
+        </div>
+        <div class="inventory-metric{% if items_bajo_stock %} inventory-metric-alert{% endif %}">
+            <span>Última unidad</span>
+            <strong>{{ items_bajo_stock|length }}</strong>
+            <small>Productos con 1 unidad en el listado</small>
+        </div>
+    </section>
 
     {% if items_bajo_stock %}
         <div class="inventario-stock-alerts">
@@ -589,15 +609,14 @@
             </form>
         </div>
         <div class="inventario-table-title">
-            <h3>Tabla de inventario</h3>
+            <h3>Productos y existencias</h3>
             <span>{{ tipo.nombre }} — {{ sede_label }}</span>
         </div>
         <div class="table-wrap" style="box-shadow: none; border-radius: 0;">
-            <table>
+            <table data-context-column="0" aria-label="Productos de {{ tipo.nombre }} en {{ sede_label }}">
                 <thead>
                     <tr>
-                        <th>Código</th>
-                        <th>Producto</th>
+                        <th scope="col">Producto / Código</th>
                         <th>Marca</th>
                         <th>Modelo</th>
                         <th>Serie <small>(opcional)</small></th>
@@ -633,19 +652,20 @@
                                     </a>
                                 </div>
                             </td>
-                            <td>{{ item.producto }}</td>
                             <td>{{ item.marca }}</td>
                             <td>{{ item.modelo }}</td>
                             <td>{{ item.serie|default:"—" }}</td>
                             <td>
-                                {{ item.get_estado_display }}
+                                <span class="inventory-state inventory-state-{{ item.estado }}">{{ item.get_estado_display }}</span>
                                 {% if item.estado == 'no_disponible' and item.causa_no_disponible %}
                                     <span class="inventario-status-cause">Causa: {{ item.get_causa_no_disponible_display }}</span>
                                 {% endif %}
                             </td>
                             <td>
-                                {{ item.cantidad }}
-                                {% if item.cantidad == 1 %}
+                                <span class="inventory-quantity{% if item.cantidad == 0 %} is-empty{% elif item.cantidad == 1 %} is-low{% endif %}">{{ item.cantidad }}</span>
+                                {% if item.cantidad == 0 %}
+                                    <span class="inventory-stock-label">Sin stock</span>
+                                {% elif item.cantidad == 1 %}
                                     <span class="inventario-low-stock-pill">Solo queda 1</span>
                                 {% endif %}
                             </td>
@@ -674,7 +694,7 @@
                         </tr>
                     {% empty %}
                         <tr>
-                            <td colspan="{% if puede_gestionar_inventario %}11{% else %}10{% endif %}" class="inventario-empty-row">
+                            <td colspan="{% if puede_gestionar_inventario %}10{% else %}9{% endif %}" class="inventario-empty-row">
                                 {% if filtros_activos %}
                                     No hay productos con esos filtros en {{ tipo.nombre }} — {{ sede_label }}.
                                 {% else %}
