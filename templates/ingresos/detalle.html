@@ -1210,8 +1210,14 @@
                     {{ ingreso.valor_efectivo_a_cobrar|dinero_signo }}
                 </div>
                 <div style="text-align:center; font-size:13px; color:#666;">
-                    {% if ingreso.salida.estado_reparacion == 'revision' %}
+                    {% if ingreso.salida.revision_con_valor_propio %}
                         Valor acordado por revisión
+                    {% elif ingreso.salida.estado_reparacion == 'revision' %}
+                        {% if ingreso.salida.tiene_valor_acordado_adicional %}
+                            Cobro adicional acordado
+                        {% else %}
+                            Sin cobro: el valor acordado queda en $0
+                        {% endif %}
                     {% elif ingreso.salida.estado_reparacion == 'cliente_no_acepta' %}
                         {% if ingreso.salida.tiene_valor_acordado_adicional %}
                             Cobro adicional acordado
@@ -1237,7 +1243,7 @@
                     </span><br>
                     <strong style="color: var(--primary-dark);">
                         {% if ingreso.salida.estado_reparacion == 'revision' %}
-                            🔎 Revisión
+                            🔎 Revisión{% if ingreso.salida.subestado_revision %} — {{ ingreso.salida.subestado_revision_texto }}{% endif %}
                         {% elif ingreso.salida.estado_reparacion == 'cliente_no_acepta' %}
                             🚫 Cliente no quiso reparar
                         {% else %}

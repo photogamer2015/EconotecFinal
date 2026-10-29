@@ -3014,7 +3014,7 @@
         {{ equipos_prueba_admin|length }} equipo{{ equipos_prueba_admin|length|pluralize }} de prueba lleva{{ equipos_prueba_admin|length|pluralize:"n" }} {{ dias_alerta_equipo_prueba }} días o más en Revisión
       </h3>
       <p>
-        Siguen en la oficina como «Equipo de prueba». Revisa con el técnico si ya se puede cerrar o cambiar de subcategoría.
+        Siguen en la oficina como «Equipo en prueba (test)». Revisa con el técnico si ya se puede cerrar o cambiar de subcategoría.
       </p>
     </div>
   </div>
@@ -3024,7 +3024,7 @@
     <div class="info">
       <div class="cli">{{ item.ingreso.cliente.nombres }}</div>
       <div class="det">
-        {{ item.ingreso.tipo_equipo_display }} {{ item.ingreso.marca }} — Equipo de prueba desde {{ item.salida.fecha_subestado_revision|date:"d/m/Y" }}
+        {{ item.ingreso.tipo_equipo_display }} {{ item.ingreso.marca }} — Equipo en prueba (test) desde {{ item.salida.fecha_subestado_revision|date:"d/m/Y" }}
         {% if item.salida.tecnico_reparo %} · Téc.: <strong>{{ item.salida.tecnico_reparo_nombre }}</strong>{% endif %}
       </div>
     </div>

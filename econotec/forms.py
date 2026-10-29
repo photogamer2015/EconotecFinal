@@ -1927,8 +1927,10 @@ class SalidaEquipoForm(RetencionFacturaFormMixin, forms.ModelForm):
         self.notificacion_asesora_valor = valor
         self.notificacion_asesora_mensaje_default = mensaje_default
 
-    def _saldo_revision(self, valor_revision_anterior, valor_adicional):
+    def _saldo_revision(self, valor_revision_anterior, valor_adicional, sin_valor_acordado=False):
         """Saldo que queda al finalizar en Revisión (no se registra pago ahora)."""
+        if sin_valor_acordado:
+            return self._saldo_cobro_adicional_despues_de_pago(valor_adicional, Decimal('0.00'))
         if valor_revision_anterior is None:
             return self._saldo_pendiente_despues_de_pago(Decimal('0.00'), valor_adicional)
         if not (self.instance and self.instance.ingreso):
@@ -2077,7 +2079,7 @@ class SalidaEquipoForm(RetencionFacturaFormMixin, forms.ModelForm):
                 else:
                     self.add_error(
                         'estado_reparacion',
-                        'Elige la Revisión con su subcategoría: Equipo de prueba, '
+                        'Elige la Revisión con su subcategoría: Equipo en prueba (test), '
                         'No se pudo reparar o Cliente no quiso reparar.',
                     )
             # Se cobra el valor acordado del equipo + el valor adicional
@@ -2089,7 +2091,17 @@ class SalidaEquipoForm(RetencionFacturaFormMixin, forms.ModelForm):
                 else None
             )
             cleaned['valor_acordado_revision'] = valor_revision_anterior
-            saldo_pendiente = self._saldo_revision(valor_revision_anterior, valor_adicional)
+            # No se pudo reparar / Cliente no quiso reparar: el valor acordado
+            # no se cobra; solo el adicional.
+            sin_valor_acordado = (
+                valor_revision_anterior is None
+                and self.instance.subestado_revision in SalidaEquipo.SUBESTADOS_REVISION_SIN_VALOR_ACORDADO
+            )
+            saldo_pendiente = self._saldo_revision(
+                valor_revision_anterior,
+                valor_adicional,
+                sin_valor_acordado=sin_valor_acordado,
+            )
             if saldo_pendiente > 0:
                 if not cleaned.get('asesora_notificacion'):
                     self.add_error(

@@ -1216,6 +1216,7 @@ class IngresoEquipo(RetencionFactura):
             return (
                 self.salida.estado_reparacion in ('cliente_no_acepta', 'no_reparable')
                 or self.salida.revision_con_valor_propio
+                or self.salida.revision_sin_valor_acordado
             )
         return False
 
@@ -1234,7 +1235,9 @@ class IngresoEquipo(RetencionFactura):
         Valor que realmente se le cobra al cliente por la REPARACIÓN / SALIDA:
         - Si salió por Revisión con valor de revisión propio (revisiones
           anteriores): ese valor, más el adicional si lo hay.
-        - Si salió por Revisión sin valor propio: valor acordado + adicional.
+        - Si salió por Revisión — No se pudo reparar / Cliente no quiso
+          reparar: el valor acordado queda en $0; solo el adicional.
+        - Si salió por Revisión — Equipo en prueba: valor acordado + adicional.
         - Si la reparación fue cancelada: solo el valor del diagnóstico (si no lo pagó al inicio).
         - Si no: el valor acordado completo.
         """
@@ -1247,6 +1250,10 @@ class IngresoEquipo(RetencionFactura):
             if salida.tiene_valor_acordado_adicional:
                 valor_revision += salida.valor_acordado_adicional
             return _q2(valor_revision)
+        if salida and salida.revision_sin_valor_acordado:
+            if salida.tiene_valor_acordado_adicional:
+                return _q2(salida.valor_acordado_adicional)
+            return Decimal('0.00')
 
         if self.reparacion_cancelada:
             if salida and salida.tiene_valor_acordado_adicional:
@@ -1845,7 +1852,7 @@ class SalidaEquipo(RetencionFactura):
     # «Cliente no quiso reparar» cuentan como esos estados y «Equipo de
     # prueba» es neutro (ver gamificacion.estado_para_puntos).
     SUBESTADO_REVISION = [
-        ('equipo_prueba', '🧪 Equipo de prueba'),
+        ('equipo_prueba', '🧪 Equipo en prueba (test)'),
         ('no_reparable', '❌ No se pudo reparar'),
         ('cliente_no_acepta', '🚫 Cliente no quiso reparar'),
     ]
@@ -2416,6 +2423,19 @@ class SalidaEquipo(RetencionFactura):
         no lo tienen y cobran valor acordado + valor adicional."""
         return self.estado_reparacion == 'revision' and self.valor_acordado_revision is not None
 
+    # En Revisión con estas subcategorías el valor acordado del equipo no se
+    # cobra (queda en $0); solo el valor adicional, si lo agregan.
+    SUBESTADOS_REVISION_SIN_VALOR_ACORDADO = ('no_reparable', 'cliente_no_acepta')
+
+    @property
+    def revision_sin_valor_acordado(self):
+        """Revisión — No se pudo reparar / Cliente no quiso reparar."""
+        return (
+            self.estado_reparacion == 'revision'
+            and self.subestado_revision in self.SUBESTADOS_REVISION_SIN_VALOR_ACORDADO
+            and not self.revision_con_valor_propio
+        )
+
     @property
     def en_revision(self):
         """Sigue en Revisión dentro de la oficina."""
@@ -2448,7 +2468,7 @@ class NotificacionRevisionAdmin(models.Model):
     TIPOS = [
         (TIPO_SUBCATEGORIA, 'Subcategoría de revisión aplicada'),
         (TIPO_OBSERVACION, 'Observación nueva'),
-        (TIPO_PRUEBA_DEMORADA, 'Equipo de prueba con 5 días o más'),
+        (TIPO_PRUEBA_DEMORADA, 'Equipo en prueba (test) con 5 días o más'),
     ]
 
     salida = models.ForeignKey(
