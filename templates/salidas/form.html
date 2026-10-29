@@ -429,16 +429,16 @@
                 <div class="form-label">Cómo funciona cada Revisión</div>
                 <ul class="revision-subcategorias-ayuda">
                     <li><b>🧪 Equipo en prueba (test):</b> el equipo queda en prueba. Si sigue así 5 días o más, se avisa al admin.</li>
-                    <li><b>❌ No se pudo reparar:</b> se revisó el equipo y no se pudo reparar. El valor acordado queda en $0.</li>
-                    <li><b>🚫 Cliente no quiso reparar:</b> se revisó el equipo y el cliente decidió no repararlo. El valor acordado queda en $0.</li>
+                    <li><b>❌ No se pudo reparar:</b> se revisó el equipo y no se pudo reparar. El saldo queda en $0.</li>
+                    <li><b>🚫 Cliente no quiso reparar:</b> se revisó el equipo y el cliente decidió no repararlo. El saldo queda en $0.</li>
                 </ul>
                 <small style="display:block; color:#856404; font-weight:700; line-height:1.35;">
                     En Equipo en prueba (test) se cobra el valor acordado del equipo y, si agregas un valor adicional, se suma.
-                    En No se pudo reparar y Cliente no quiso reparar solo se cobra el valor adicional, si lo agregas (por ejemplo, el mantenimiento).
+                    En No se pudo reparar y Cliente no quiso reparar el saldo queda en $0 (valor acordado y domicilio); solo se cobra el valor adicional, si lo agregas (por ejemplo, el mantenimiento).
                     Al guardar se avisa al admin.
                 </small>
-                {% if salida and salida.revision_con_valor_propio %}
-                <small style="display:block; margin-top:8px; color:#856404; line-height:1.35;">
+                {% if salida and salida.estado_reparacion == 'revision' and salida.valor_acordado_revision is not None %}
+                <small id="nota-valor-revision-anterior" style="display:block; margin-top:8px; color:#856404; line-height:1.35;">
                     Esta revisión se registró con un valor acordado por revisión de <b>{{ salida.valor_acordado_revision|dinero_signo }}</b>, que reemplaza al valor acordado del equipo y se mantiene.
                 </small>
                 {% endif %}
@@ -631,11 +631,11 @@
         var totalAbonado = parseFloat("{{ ingreso.total_abonado|default:0 }}") || 0;
         // El bodegaje cobrado en abonos no es pago del servicio: no reduce este saldo.
         totalAbonado -= parseFloat("{{ ingreso.bodegaje_cobrado_en_abonos|default:0|stringformat:'f' }}") || 0;
-        var valorDomicilio = parseFloat("{{ ingreso.valor_domicilio_aplicable }}".replace(',', '.')) || 0;
+        var valorDomicilio = parseFloat("{{ ingreso.valor_domicilio_contratado }}".replace(',', '.')) || 0;
         var diferenciaNormal = (parseFloat("{{ ingreso.valor_acordado|default:0 }}") || 0) + valorDomicilio - totalAbonado;
         // Revisión registrada antes con «valor acordado por revisión»: ese valor
         // reemplaza al valor acordado y se mantiene.
-        var valorRevisionAnterior = {% if salida and salida.revision_con_valor_propio %}parseFloat("{{ salida.valor_acordado_revision|stringformat:'f' }}") || 0{% else %}null{% endif %};
+        var valorRevisionAnterior = {% if salida and salida.estado_reparacion == 'revision' and salida.valor_acordado_revision is not None %}parseFloat("{{ salida.valor_acordado_revision|stringformat:'f' }}") || 0{% else %}null{% endif %};
 
         // Estados considerados "positivos" → permiten enviar la hoja
         var ESTADOS_POSITIVOS = ['pendiente_retiro', 'garantia', 'garantia_fallos_adicionales', 'reparado_parcial', 'retirado'];
@@ -706,10 +706,14 @@
             // «revision:equipo_prueba» y demás subcategorías se tratan como Revisión.
             var v = selEstado.value.split(':')[0];
             var subRevision = selEstado.value.split(':')[1] || '';
-            // No se pudo / Cliente no quiso reparar: el valor acordado queda en $0.
+            // No se pudo / Cliente no quiso reparar: el saldo queda en $0
+            // (valor acordado, valor de revisión anterior y domicilio).
             var revisionSinValorAcordado = v === 'revision'
-                && valorRevisionAnterior === null
                 && (subRevision === 'no_reparable' || subRevision === 'cliente_no_acepta');
+            var notaValorRevisionAnterior = document.getElementById('nota-valor-revision-anterior');
+            if (notaValorRevisionAnterior) {
+                notaValorRevisionAnterior.style.display = revisionSinValorAcordado ? 'none' : 'block';
+            }
             var esCierreSinReparacion = v === 'cliente_no_acepta' || v === 'no_reparable';
             var esRevision = v === 'revision';
             var mostrarValorAdicional = v === 'pendiente_retiro' || esCierreSinReparacion || esRevision;
@@ -730,7 +734,7 @@
                 ayudaCobroAdicional.textContent = esCierreSinReparacion
                     ? 'Este resultado no tiene cobro por defecto. Actívalo solo si se acordó un valor adicional con el cliente.'
                     : revisionSinValorAcordado
-                        ? 'Es opcional. El valor acordado queda en $0; agrega aquí lo que sí se cobra (por ejemplo, el mantenimiento).'
+                        ? 'Es opcional. El saldo queda en $0; agrega aquí lo que sí se cobra (por ejemplo, el mantenimiento).'
                     : esRevision
                         ? 'Es opcional. Si lo activas, el valor se suma al valor acordado del equipo.'
                         : 'Es opcional. Si lo activas, el valor se suma al saldo pendiente del equipo.';
@@ -824,7 +828,7 @@
                     // Valor acordado (o el de revisión anterior) + valor adicional.
                     var adicionalRevision = aplicaAdicional ? valorInputCobrado(inputValorAdicional) : 0;
                     var baseRevision = revisionSinValorAcordado
-                        ? valorDomicilio - totalAbonado
+                        ? -totalAbonado
                         : valorRevisionAnterior === null
                             ? diferenciaNormal
                             : valorRevisionAnterior + valorDomicilio - totalAbonado;
@@ -837,7 +841,7 @@
                         if (saldoRevision <= 0) {
                             saldoNota.textContent = 'Sin saldo pendiente: no hay nada que cobrar.';
                         } else if (revisionSinValorAcordado) {
-                            saldoNota.textContent = 'El valor acordado queda en $0; se cobra solo el valor adicional.';
+                            saldoNota.textContent = 'El saldo queda en $0; se cobra solo el valor adicional.';
                         } else if (adicionalRevision > 0) {
                             saldoNota.textContent = 'Valor acordado + valor adicional de $' + adicionalRevision.toFixed(2) + '.';
                         } else {
