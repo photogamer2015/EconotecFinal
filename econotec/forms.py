@@ -1930,10 +1930,8 @@ class SalidaEquipoForm(RetencionFacturaFormMixin, forms.ModelForm):
     def _saldo_revision(self, valor_revision_anterior, valor_adicional, sin_valor_acordado=False):
         """Saldo que queda al finalizar en Revisión (no se registra pago ahora)."""
         if sin_valor_acordado:
-            # Todo queda en $0 (valor acordado, valor de revisión anterior y
-            # domicilio); solo se cobra el valor adicional.
-            pendiente = (valor_adicional or Decimal('0.00')) - self._total_abonado_previo()
-            return pendiente if pendiente > 0 else Decimal('0.00')
+            # El valor acordado queda en $0: adicional + domicilio − lo pagado.
+            return self._saldo_cobro_adicional_despues_de_pago(valor_adicional, Decimal('0.00'))
         if valor_revision_anterior is None:
             return self._saldo_pendiente_despues_de_pago(Decimal('0.00'), valor_adicional)
         if not (self.instance and self.instance.ingreso):
@@ -1941,7 +1939,7 @@ class SalidaEquipoForm(RetencionFacturaFormMixin, forms.ModelForm):
         pendiente = (
             valor_revision_anterior
             + (valor_adicional or Decimal('0.00'))
-            + self.instance.ingreso.valor_domicilio_contratado
+            + self.instance.ingreso.valor_domicilio_aplicable
             - self._total_abonado_previo()
         )
         return pendiente if pendiente > 0 else Decimal('0.00')
@@ -1958,7 +1956,7 @@ class SalidaEquipoForm(RetencionFacturaFormMixin, forms.ModelForm):
         valor_total = (
             (ingreso.valor_acordado or Decimal('0.00'))
             + (valor_acordado_adicional or Decimal('0.00'))
-            + ingreso.valor_domicilio_contratado
+            + ingreso.valor_domicilio_aplicable
         )
         abonado_previo = self._total_abonado_previo()
         pendiente = valor_total - abonado_previo - (valor_pagado_ahora or Decimal('0.00'))
@@ -1989,7 +1987,7 @@ class SalidaEquipoForm(RetencionFacturaFormMixin, forms.ModelForm):
         abonado_previo = self._total_abonado_previo()
         pendiente = (
             (valor_adicional or Decimal('0.00'))
-            + self.instance.ingreso.valor_domicilio_contratado
+            + self.instance.ingreso.valor_domicilio_aplicable
             - abonado_previo
             - (valor_pagado_ahora or Decimal('0.00'))
         )
@@ -2096,10 +2094,10 @@ class SalidaEquipoForm(RetencionFacturaFormMixin, forms.ModelForm):
                 else None
             )
             cleaned['valor_acordado_revision'] = valor_revision_anterior
-            # No se pudo reparar / Cliente no quiso reparar: el saldo queda en
-            # $0 (también un valor de revisión anterior y el domicilio); solo
-            # se cobra el adicional. El valor anterior se guarda por si vuelve
-            # a Equipo en prueba.
+            # No se pudo reparar / Cliente no quiso reparar: el valor acordado
+            # (también un valor de revisión anterior) queda en $0; se cobra el
+            # adicional + domicilio − lo pagado. El valor anterior se guarda
+            # por si vuelve a Equipo en prueba.
             sin_valor_acordado = (
                 self.instance.subestado_revision in SalidaEquipo.SUBESTADOS_REVISION_SIN_VALOR_ACORDADO
             )
