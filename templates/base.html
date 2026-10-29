@@ -1677,9 +1677,10 @@
             document.documentElement.setAttribute('data-theme', 'dark');
         }
     </script>
-    <link rel="stylesheet" href="{% static 'design.css' %}?v=20260930-1">
+    <link rel="stylesheet" href="{% static 'design.css' %}?v=20261028-1">
     {% block extra_head %}{% endblock %}
-    <link rel="stylesheet" href="{% static 'responsive.css' %}?v=20260927-1">
+    <link rel="stylesheet" href="{% static 'responsive.css' %}?v=20261028-1">
+    <link rel="stylesheet" href="{% static 'tables.css' %}?v=20261028-1">
     {% if puede_gestionar_equipos or puede_gestionar_pagos %}
     <link rel="stylesheet" href="{% static 'econobot/econobot.css' %}?v=20261025-3">
     {% endif %}
@@ -1877,7 +1878,7 @@
                 var enlace = document.querySelector('header.top a.econobot-nav-link');
                 if (!enlace || !window.matchMedia) return;
                 var nav = enlace.parentNode;
-                var escritorio = window.matchMedia('(min-width: 901px)');
+                var escritorio = window.matchMedia('(min-width: 1101px)');
                 function filas() {
                     var centros = [];
                     for (var i = 0; i < nav.children.length; i += 1) {
@@ -2087,14 +2088,14 @@
             });
 
             nav.addEventListener('click', function(event) {
-                if (window.matchMedia('(max-width: 900px)').matches && event.target.closest('a')) {
+                if (window.matchMedia('(max-width: 1100px)').matches && event.target.closest('a')) {
                     cerrarMenuMovil();
                 }
             });
 
             document.addEventListener('click', function(event) {
                 if (
-                    window.matchMedia('(max-width: 900px)').matches &&
+                    window.matchMedia('(max-width: 1100px)').matches &&
                     header.classList.contains('nav-open') &&
                     !header.contains(event.target)
                 ) {
@@ -2107,7 +2108,7 @@
             });
 
             window.addEventListener('resize', function() {
-                if (!window.matchMedia('(max-width: 900px)').matches) cerrarMenuMovil();
+                if (!window.matchMedia('(max-width: 1100px)').matches) cerrarMenuMovil();
             });
         })();
 
