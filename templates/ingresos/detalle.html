@@ -1216,7 +1216,7 @@
                         {% if ingreso.salida.tiene_valor_acordado_adicional %}
                             Cobro adicional acordado
                         {% else %}
-                            Sin cobro: el valor acordado queda en $0
+                            Sin cobro: el saldo queda en $0
                         {% endif %}
                     {% elif ingreso.salida.estado_reparacion == 'cliente_no_acepta' %}
                         {% if ingreso.salida.tiene_valor_acordado_adicional %}
@@ -1331,7 +1331,11 @@
                 </div>
             {% endif %}
             {% if ingreso.a_domicilio == 'si' %}
+            {% if ingreso.salida.revision_sin_valor_acordado %}
+            <div class="field-row"><span class="label">Valor a domicilio (queda en $0 en este estado)</span><span class="value"><span style="color:#999; text-decoration: line-through;">{{ ingreso.valor_domicilio_contratado|dinero_signo }}</span> {{ ingreso.valor_domicilio_aplicable|dinero_signo }}</span></div>
+            {% else %}
             <div class="field-row"><span class="label">Valor a domicilio (incluido en el saldo)</span><span class="value">{{ ingreso.valor_domicilio_aplicable|dinero_signo }}</span></div>
+            {% endif %}
             {% endif %}
             {% with bodegaje_cobrado=ingreso.bodegaje_cobrado_en_abonos %}
             {% if bodegaje_cobrado > 0 %}
