@@ -12348,3 +12348,146 @@ class VentasTests(TestCase):
         )
         self.assertFalse(NotificacionRevisionAdmin.objects.filter(leida=False).exists())
         self.assertNotContains(self.client.get(reverse('econotec:bienvenida')), 'id="revision-admin-bell-btn"')
+
+    def crear_salida_con_bodegaje_vencido(self, estado='pendiente_retiro', salida_extra=None, **ingreso_overrides):
+        return self.crear_salida_ranking(
+            self.usuario,
+            date.today() - timedelta(days=20),
+            estado,
+            salida_extra=salida_extra,
+            **ingreso_overrides,
+        )
+
+    def test_poner_en_equipo_prueba_lo_quita_de_los_avisos_y_no_cobra_bodegaje(self):
+        from .alertas import salidas_bodegaje_qs
+
+        salida = self.crear_salida_con_bodegaje_vencido()
+        codigo = salida.ingreso.codigo_equipo
+        self.assertIn(salida, salidas_bodegaje_qs())
+        self.assertContains(self.client.get(reverse('econotec:alertas_bodegaje')), codigo)
+        self.assertGreater(salida.ingreso.bodegaje_pendiente, Decimal('0.00'))
+
+        self.client.post(
+            reverse('econotec:salida_editar', kwargs={'pk': salida.pk}),
+            self.salida_post_data(
+                fecha_salida=salida.fecha_salida.isoformat(),
+                estado_reparacion='revision:equipo_prueba',
+                metodo_pago_final='sin_pago',
+                asesora_notificacion=str(self.vendedor.pk),
+            ),
+        )
+
+        salida = SalidaEquipo.objects.get(pk=salida.pk)
+        self.assertEqual(salida.subestado_revision, 'equipo_prueba')
+        self.assertNotIn(salida, salidas_bodegaje_qs())
+        self.assertNotIn(salida, salidas_bodegaje_qs(incluir_silenciados=True))
+        for ruta in ('alertas_bodegaje', 'admin_activos_bodegaje', 'bienvenida'):
+            pagina = self.client.get(reverse(f'econotec:{ruta}')).content.decode()
+            self.assertNotIn(reverse('econotec:salida_bodegaje_silenciar', kwargs={'pk': salida.pk}), pagina)
+        self.assertNotContains(self.client.get(reverse('econotec:alertas_bodegaje')), codigo)
+        self.assertNotContains(self.client.get(reverse('econotec:admin_activos_bodegaje')), codigo)
+        self.assertFalse(salida.calcular_bodegaje()['aplica'])
+        self.assertEqual(salida.ingreso.bodegaje_pendiente, Decimal('0.00'))
+        self.assertEqual(salida.ingreso.bodegaje_dias_pendiente, 0)
+
+    def test_al_salir_de_equipo_prueba_los_dias_de_gracia_cuentan_desde_ese_dia(self):
+        from .alertas import salidas_bodegaje_qs
+
+        salida = self.crear_salida_con_bodegaje_vencido('revision', salida_extra={'subestado_revision': 'equipo_prueba'})
+        self.assertIsNone(salida.fecha_fin_prueba)
+        fecha_finalizacion = salida.fecha_salida
+
+        salida.estado_reparacion = 'pendiente_retiro'
+        salida.save()
+
+        salida.refresh_from_db()
+        hoy = date.today()
+        self.assertEqual(salida.fecha_fin_prueba, hoy)
+        # La fecha de finalización (ranking, reportes) no se toca.
+        self.assertEqual(salida.fecha_salida, fecha_finalizacion)
+        self.assertFalse(salida.calcular_bodegaje()['aplica'])
+        self.assertFalse(salida.calcular_bodegaje(hoy=hoy + timedelta(days=4))['aplica'])
+        self.assertEqual(salida.calcular_bodegaje(hoy=hoy + timedelta(days=5))['monto'], Decimal('1.00'))
+        self.assertNotIn(salida, salidas_bodegaje_qs())
+
+        # Cuando ya pasaron los días de gracia vuelve a los avisos y sí cobra.
+        SalidaEquipo.objects.filter(pk=salida.pk).update(fecha_fin_prueba=hoy - timedelta(days=6))
+        salida.refresh_from_db()
+        self.assertIn(salida, salidas_bodegaje_qs())
+        self.assertEqual(salida.calcular_bodegaje()['dias'], 2)
+        self.assertEqual(salida.ingreso.bodegaje_pendiente, Decimal('2.00'))
+
+    def test_cambiar_de_equipo_prueba_a_otra_subcategoria_tambien_arranca_la_gracia(self):
+        from .alertas import salidas_bodegaje_qs
+
+        salida = self.crear_salida_con_bodegaje_vencido('revision', salida_extra={'subestado_revision': 'equipo_prueba'})
+        salida.subestado_revision = 'no_reparable'
+        salida.save()
+
+        salida.refresh_from_db()
+        self.assertEqual(salida.fecha_fin_prueba, date.today())
+        self.assertFalse(salida.calcular_bodegaje()['aplica'])
+        self.assertNotIn(salida, salidas_bodegaje_qs())
+
+    def test_equipo_que_nunca_estuvo_en_prueba_sigue_cobrando_igual(self):
+        from .alertas import salidas_bodegaje_qs
+
+        for estado, extra in (
+            ('pendiente_retiro', None),
+            ('revision', {'subestado_revision': 'cliente_no_acepta'}),
+            ('revision', {'subestado_revision': 'no_reparable'}),
+            ('revision', None),
+            ('no_reparable', None),
+        ):
+            with self.subTest(estado=estado, extra=extra):
+                salida = self.crear_salida_con_bodegaje_vencido(estado, salida_extra=extra)
+                self.assertIsNone(salida.fecha_fin_prueba)
+                self.assertEqual(salida.calcular_bodegaje()['dias'], 16)
+                self.assertEqual(salida.calcular_bodegaje()['monto'], Decimal('16.00'))
+                self.assertIn(salida, salidas_bodegaje_qs())
+
+    def test_equipo_en_prueba_silenciado_tampoco_aparece_en_silenciados(self):
+        salida = self.crear_salida_con_bodegaje_vencido(
+            'revision',
+            salida_extra={'subestado_revision': 'equipo_prueba', 'bodegaje_silenciado': True},
+        )
+        silenciada = self.crear_salida_con_bodegaje_vencido(salida_extra={'bodegaje_silenciado': True})
+
+        response = self.client.get(reverse('econotec:alertas_bodegaje'))
+        silenciados = [item['salida'] for item in response.context['items_silenciados']]
+        self.assertNotIn(salida, silenciados)
+        self.assertIn(silenciada, silenciados)
+
+    def test_equipo_en_prueba_conserva_el_bodegaje_ya_cobrado(self):
+        salida = self.crear_salida_con_bodegaje_vencido(
+            'revision',
+            salida_extra={
+                'subestado_revision': 'equipo_prueba',
+                'bodegaje_dias_congelado': 3,
+                'bodegaje_monto_congelado': Decimal('3.00'),
+                'bodegaje_aplicado_al_pago': True,
+            },
+        )
+
+        calculo = salida.calcular_bodegaje()
+        self.assertTrue(calculo['cerrado'])
+        self.assertEqual(calculo['monto'], Decimal('3.00'))
+
+    def test_retirar_desde_equipo_prueba_no_cobra_bodegaje(self):
+        salida = self.crear_salida_con_bodegaje_vencido(
+            'revision',
+            salida_extra={'subestado_revision': 'equipo_prueba'},
+            valor_acordado=Decimal('0.00'),
+        )
+        self.assertEqual(salida.ingreso.diferencia, Decimal('0.00'))
+
+        self.client.post(
+            reverse('econotec:salida_marcar_retirada', kwargs={'pk': salida.pk}),
+            {'aplicar_bodegaje': ''},
+        )
+
+        salida = SalidaEquipo.objects.get(pk=salida.pk)
+        self.assertEqual(salida.fecha_retiro_real, date.today())
+        self.assertFalse(salida.bodegaje_aplicado_al_pago)
+        self.assertEqual(salida.bodegaje_monto_congelado, Decimal('0.00'))
+        self.assertEqual(salida.ingreso.bodegaje_pendiente, Decimal('0.00'))

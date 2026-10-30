@@ -1899,6 +1899,11 @@ class SalidaEquipo(RetencionFactura):
         verbose_name='Subcategoría de revisión desde',
         help_text='Se actualiza sola cada vez que cambia la subcategoría de revisión.',
     )
+    fecha_fin_prueba = models.DateField(
+        null=True, blank=True, editable=False,
+        verbose_name='Salió de Equipo en prueba el',
+        help_text='Se llena sola. Desde esta fecha cuentan los días de gracia del bodegaje.',
+    )
 
     # ── Técnico que REPARÓ el equipo (se declara en la salida) ───────────
     # Es el responsable real de la reparación: el técnico seleccionado en la
@@ -2181,6 +2186,19 @@ class SalidaEquipo(RetencionFactura):
         return self.fecha_retiro_real is not None
 
     @property
+    def en_equipo_prueba(self):
+        """¿Está en Revisión — Equipo en prueba (test)? No acumula bodegaje."""
+        return self.estado_reparacion == 'revision' and self.subestado_revision == 'equipo_prueba'
+
+    @property
+    def fecha_inicio_bodegaje(self):
+        """Desde cuándo cuentan los días de gracia: la fecha de finalización o,
+        si el equipo pasó por Equipo en prueba, el día en que salió de ahí."""
+        if self.fecha_fin_prueba and self.fecha_salida:
+            return max(self.fecha_salida, self.fecha_fin_prueba)
+        return self.fecha_salida
+
+    @property
     def estado_operativo_key(self):
         """Estado de ubicación que debe prevalecer en las pantallas operativas."""
         return 'retirado' if self.cliente_ya_retiro else self.estado_reparacion
@@ -2216,7 +2234,8 @@ class SalidaEquipo(RetencionFactura):
         Reglas:
           - Solo aplica a salidas POSITIVAS (cliente se llevaba equipo).
           - Solo aplica si el cliente NO ha venido a retirar todavía.
-          - Empieza a cobrar pasados `umbral` días desde fecha_salida.
+          - No aplica mientras esté en Equipo en prueba (test).
+          - Empieza a cobrar pasados `umbral` días desde fecha_inicio_bodegaje.
           - Cobra `costo_dia` USD por día acumulado.
 
         Si la salida ya está cerrada (fecha_retiro_real != None),
@@ -2245,6 +2264,10 @@ class SalidaEquipo(RetencionFactura):
                 'cerrado': True,
             }
 
+        # Equipo en prueba: como en reparación, todavía no corre el bodegaje.
+        if self.en_equipo_prueba:
+            return {'aplica': False, 'dias': 0, 'monto': D('0.00'), 'cerrado': False}
+
         # Si el cliente ya retiró pero NO se congeló el bodegaje, calculamos
         # los días reales hasta la fecha de retiro (no hasta hoy), para no
         # seguir acumulando después de que físicamente se llevó el equipo.
@@ -2261,7 +2284,7 @@ class SalidaEquipo(RetencionFactura):
         if not self.fecha_salida:
             return {'aplica': False, 'dias': 0, 'monto': D('0.00'), 'cerrado': False}
 
-        dias_pasados = (hoy_calc - self.fecha_salida).days
+        dias_pasados = (hoy_calc - self.fecha_inicio_bodegaje).days
         if dias_pasados < umbral:
             return {'aplica': False, 'dias': 0, 'monto': D('0.00'), 'cerrado': False}
 
@@ -2385,11 +2408,15 @@ class SalidaEquipo(RetencionFactura):
             self.fecha_subestado_revision = None
         elif self.subestado_revision != subestado_anterior or not self.fecha_subestado_revision:
             self.fecha_subestado_revision = timezone.now()
+        # Al salir de Equipo en prueba arrancan los días de gracia del bodegaje.
+        if subestado_anterior == 'equipo_prueba' and self.subestado_revision != 'equipo_prueba':
+            self.fecha_fin_prueba = date.today()
         update_fields = kwargs.get('update_fields')
         if update_fields is not None:
             kwargs['update_fields'] = set(update_fields) | {
                 'subestado_revision',
                 'fecha_subestado_revision',
+                'fecha_fin_prueba',
             }
 
         if self.valor_final_cobrado and self.valor_final_cobrado > 0 and not self.numero_recibo:

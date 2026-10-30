@@ -67,6 +67,7 @@ from .gamificacion import (
 )
 from .alertas import (
     equipos_demorados_qs,
+    filtrar_plazo_bodegaje_vencido,
     salidas_bodegaje_qs,
     dias_en_taller,
     dias_desde_salida,
@@ -446,9 +447,8 @@ def bienvenida(request):
     # 2b. Bodegajes silenciados
     fecha_limite_bod = date.today() - _td(days=UMBRAL_DIAS_BODEGAJE)
     qs_bod_silenciados = (
-        SalidaEquipo.objects
+        filtrar_plazo_bodegaje_vencido(SalidaEquipo.objects, fecha_limite_bod)
         .select_related('ingreso', 'ingreso__cliente', 'ingreso__tecnico_encargado', 'tecnico_reparo')
-        .filter(fecha_salida__lte=fecha_limite_bod)
         .filter(fecha_retiro_real__isnull=True)
         .filter(bodegaje_silenciado=True)
     )
@@ -5142,9 +5142,8 @@ def alertas_bodegaje(request):
     from datetime import timedelta as _td
     fecha_limite = date.today() - _td(days=UMBRAL_DIAS_BODEGAJE)
     qs_silenciados = (
-        SalidaEquipo.objects
+        filtrar_plazo_bodegaje_vencido(SalidaEquipo.objects, fecha_limite)
         .select_related('ingreso', 'ingreso__cliente', 'ingreso__tecnico_encargado', 'tecnico_reparo')
-        .filter(fecha_salida__lte=fecha_limite)
         .filter(fecha_retiro_real__isnull=True)
         .filter(bodegaje_silenciado=True)
         .order_by('fecha_salida')
