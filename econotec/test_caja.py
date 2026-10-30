@@ -154,7 +154,7 @@ class VistaDeOtrosRolesTests(RankingAdminBase):
         self.preparar_datos()
         respuesta = self.ver()
         self.assertIn('caja', respuesta.context)
-        self.assertContains(respuesta, 'Guardado en caja')
+        self.assertContains(respuesta, 'Ver Caja')
         self.assertContains(respuesta, 'Cuadre con Pagos')
 
 
@@ -433,8 +433,10 @@ class CajaTests(RankingAdminBase):
         self.assertEqual(len(caja['meses']), 1)
         self.assertEqual(caja['meses'][0]['neto'], Decimal('0.00'))
         self.assertEqual(caja_del_periodo('', '')['meses'], [])
-        respuesta = self.ver(periodo='rango', desde='', hasta='')
-        self.assertContains(respuesta, 'Todavía no hay pagos ni egresos')
+        self.client.force_login(self.admin)
+        respuesta = self.client.get(reverse('econotec:admin_dashboard'), {'ano': '2026', 'mes': '3'})
+        self.assertEqual(len(respuesta.context['caja']['meses']), 3)
+        self.assertEqual(respuesta.context['caja']['saldo_final'], Decimal('0.00'))
 
     def test_metodos_separan_las_formas_de_pago(self):
         ingreso = self.ingreso()
@@ -449,7 +451,8 @@ class CajaTests(RankingAdminBase):
 
     def test_caja_tiene_animacion_y_numeros_reales(self):
         self.preparar_historial()
-        respuesta = self.ver(periodo='anio', anio='2026')
+        self.client.force_login(self.admin)
+        respuesta = self.client.get(reverse('econotec:admin_dashboard'), {'ano': '2026', 'mes': '10'})
         self.assertContains(respuesta, 'data-final="230.00"')
         self.assertContains(respuesta, 'caja-fuerte')
         self.assertContains(respuesta, 'prefers-reduced-motion')
@@ -745,3 +748,106 @@ class RegistroAdministrativoTests(RankingAdminBase):
 
         self.assertEqual(contexto['salidas_tecnicos_total'], 1)
         self.assertEqual(contexto['salidas_tecnicos_resumen'][0]['tecnico_id'], self.otro_tecnico.pk)
+
+
+class ResumenRankingEnRegistroTests(RankingAdminBase):
+    """El Registro Administrativo muestra la Caja y todo el Ranking de Técnicos."""
+
+    def registro(self, usuario=None, **parametros):
+        self.client.force_login(usuario or self.admin)
+        return self.client.get(
+            reverse('econotec:admin_dashboard'),
+            {'ano': '2026', 'mes': '10', **parametros},
+        )
+
+    def preparar(self):
+        pagado = self.ingreso(valor_acordado=Decimal('60.00'))
+        self.salida(pagado)
+        self.abono(pagado, '60.00')
+        self.abono(pagado, '4.00', bodegaje_decision='si', bodegaje_monto_aplicado=Decimal('4.00'))
+        debe = self.ingreso(
+            valor_acordado=Decimal('90.00'), abono_anticipo=Decimal('5.00'),
+            a_domicilio='si', valor_domicilio=Decimal('10.00'),
+        )
+        self.salida(debe, tecnico=self.otro_tecnico, estado='no_reparable')
+        anterior = self.ingreso(fecha=date(2026, 8, 1), valor_acordado=Decimal('30.00'), abono_anticipo=Decimal('30.00'))
+        self.salida(anterior, fecha=date(2026, 8, 10))
+        self.egreso('7.00')
+
+    def test_cifras_iguales_al_ranking_en_cada_alcance(self):
+        self.preparar()
+        for alcance, parametros in (
+            ('mes', OCTUBRE),
+            ('anio', {'periodo': 'anio', 'anio': '2026'}),
+            ('todo', {'periodo': 'rango', 'desde': '', 'hasta': ''}),
+        ):
+            with self.subTest(alcance=alcance):
+                registro = self.registro(ranking=alcance).context
+                ranking = self.ver(**parametros).context
+                for clave in (
+                    'num_equipos', 'salidas_positivas', 'salidas_negativas', 'efectividad',
+                    'total_acordado', 'total_domicilio', 'total_recaudado', 'total_por_cobrar',
+                    'total_bodegaje_cobrado', 'total_bodegaje_pendiente', 'total_bodegaje_perdonado',
+                ):
+                    self.assertEqual(registro['ranking_resumen'][clave], ranking['resumen_salidas'][clave], clave)
+                self.assertEqual(
+                    [(f['tecnico_id'], f['puntos'], f['puesto']) for f in registro['ranking_filas']],
+                    [(f['tecnico_id'], f['puntos'], f['puesto']) for f in ranking['ranking']],
+                )
+                self.assertEqual(len(registro['cuadres']), len(ranking['cuadres']))
+
+    def test_muestra_todo_lo_del_ranking(self):
+        self.preparar()
+        respuesta = self.registro()
+        for texto in (
+            'id="ranking-admin"', 'Tabla de posiciones', 'Nivel del técnico', 'Puntos de este período',
+            'Resultados de los equipos', 'Ubicación', 'Bodegaje cobrado', 'Bodegaje sin cobrar',
+            'Bodegaje perdonado', 'con pagos y bodegaje', 'Cuadre con Pagos', 'Ver ranking completo',
+            'Cliente Prueba', '$4,00',
+        ):
+            self.assertContains(respuesta, texto)
+
+    def test_la_caja_esta_en_el_registro_y_no_en_el_ranking(self):
+        self.preparar()
+        registro = self.registro()
+        self.assertContains(registro, 'id="caja"')
+        self.assertContains(registro, 'Guardado en caja')
+        self.assertEqual(registro.context['caja']['saldo_final'], Decimal('92.00'))
+        self.assertEqual(
+            [m['etiqueta'] for m in registro.context['caja']['meses']],
+            ['agosto 2026', 'septiembre 2026', 'octubre 2026'],
+        )
+        ranking = self.ver()
+        self.assertNotContains(ranking, 'id="caja"')
+        self.assertNotContains(ranking, 'Guardado en caja')
+        self.assertContains(ranking, f"{reverse('econotec:admin_dashboard')}?ano=2026&mes=10#caja")
+
+    def test_el_filtro_de_tecnico_muestra_solo_a_ese_tecnico(self):
+        self.preparar()
+        contexto = self.registro(tecnico_resumen=str(self.otro_tecnico.pk)).context
+        self.assertEqual([f['tecnico_id'] for f in contexto['ranking_filas']], [self.otro_tecnico.pk])
+        self.assertEqual(contexto['ranking_resumen']['total_recaudado'], Decimal('5.00'))
+        self.assertEqual(contexto['caja']['saldo_final'], Decimal('92.00'))
+
+    def test_tecnico_sin_equipos_no_rompe_la_pagina(self):
+        self.preparar()
+        respuesta = self.registro(tecnico_resumen=str(self.asesora.pk))
+        self.assertEqual(respuesta.status_code, 200)
+        self.assertEqual(respuesta.context['ranking_filas'], [])
+        self.assertContains(respuesta, 'No hay equipos finalizados de este técnico')
+
+    def test_periodo_largo_trae_mes_a_mes_por_tecnico(self):
+        self.preparar()
+        contexto = self.registro(ranking='anio').context
+        fila = next(f for f in contexto['ranking_filas'] if f['tecnico_id'] == self.tecnico.pk)
+        self.assertEqual([m['etiqueta'] for m in fila['por_mes']], ['Octubre 2026', 'Agosto 2026'])
+        self.assertEqual(fila['por_mes'][1]['resumen']['total_recaudado'], Decimal('30.00'))
+
+    def test_alcance_invalido_usa_el_mes(self):
+        self.assertEqual(self.registro(ranking='otro').context['ranking_alcance'], 'mes')
+
+    def test_otros_roles_no_entran_al_registro(self):
+        self.preparar()
+        for usuario in (self.tecnico, self.asesora):
+            with self.subTest(usuario=usuario.username):
+                self.assertEqual(self.registro(usuario).status_code, 302)

@@ -1,0 +1,357 @@
+{% load econotec_extras %}
+{# Caja y resumen completo del Ranking de Técnicos dentro del Registro Administrativo. Mismos cálculos del Ranking. #}
+{% include 'includes/ranking_admin_estilos.html' %}
+<style>
+    .registro-ranking { display: block; margin-bottom: 26px; }
+    .registro-ranking .rank-card {
+        background: var(--card-bg);
+        border-radius: 14px;
+        padding: 22px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        margin-bottom: 22px;
+    }
+    .registro-ranking .rank-card > h3 {
+        color: var(--primary);
+        font-size: 16px;
+        margin-bottom: 14px;
+        text-transform: uppercase;
+        padding-bottom: 8px;
+        border-bottom: 2px solid var(--primary);
+    }
+    .ranking-admin-section {
+        border-color: #fde68a;
+        border-top-color: #d97706;
+        box-shadow: 0 3px 12px rgba(217, 119, 6, 0.1);
+        scroll-margin-top: 90px;
+    }
+    .ranking-admin-section .assignment-head { background: #fffbeb; border-bottom-color: #fef3c7; }
+    .ranking-admin-section .assignment-kicker { color: #b45309; }
+    .ranking-admin-section .assignment-head h3 { color: #92400e; }
+    .ranking-admin-section .assignment-period { border-color: #fcd34d; color: #92400e; }
+    [data-theme="dark"] .ranking-admin-section { border-color: rgba(251, 191, 36, 0.25); border-top-color: #f59e0b; }
+    [data-theme="dark"] .ranking-admin-section .assignment-head { background: rgba(245, 158, 11, 0.1); border-bottom-color: rgba(251, 191, 36, 0.2); }
+    [data-theme="dark"] .ranking-admin-section .assignment-kicker,
+    [data-theme="dark"] .ranking-admin-section .assignment-period { color: #fcd34d; }
+    [data-theme="dark"] .ranking-admin-section .assignment-head h3 { color: var(--text-main); }
+
+    .ra-opciones { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 16px; }
+    .ra-opcion {
+        display: inline-flex;
+        align-items: center;
+        min-height: 38px;
+        padding: 7px 14px;
+        border: 1px solid var(--border-color);
+        border-radius: 999px;
+        font-size: 12px;
+        font-weight: 800;
+        text-decoration: none;
+        color: var(--text-main);
+    }
+    .ra-opcion.activa { background: #d97706; border-color: #d97706; color: #fff; }
+    .ra-opcion.completo { margin-left: auto; color: #b45309; }
+    [data-theme="dark"] .ra-opcion.completo { color: #fcd34d; }
+
+    .ra-grupo-titulo {
+        margin: 18px 0 8px;
+        font-size: 11px;
+        font-weight: 900;
+        letter-spacing: .4px;
+        text-transform: uppercase;
+        color: var(--text-muted);
+    }
+    .ra-grupo-titulo:first-of-type { margin-top: 0; }
+    .ra-cifras {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(135px, 1fr));
+        gap: 10px;
+    }
+    .ra-cifra {
+        min-width: 0;
+        padding: 12px 14px;
+        border: 1px solid var(--border-color);
+        border-radius: 10px;
+    }
+    .ra-cifra span { display: block; font-size: 10px; font-weight: 800; line-height: 1.3; text-transform: uppercase; color: var(--text-muted); }
+    .ra-cifra strong { display: block; margin-top: 4px; font-size: 19px; font-weight: 800; color: var(--text-main); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+    .ra-cifra small { display: block; margin-top: 2px; font-size: 10.5px; font-weight: 700; color: var(--text-muted); }
+    .ra-cifra.bien strong { color: var(--success); }
+    .ra-cifra.mal strong { color: var(--danger); }
+    .ra-cifra.cobrar strong { color: #c2410c; }
+    .ra-cifra.plus strong { color: #7c3aed; }
+    [data-theme="dark"] .ra-cifra.cobrar strong { color: #fdba74; }
+    [data-theme="dark"] .ra-cifra.plus strong { color: #c4b5fd; }
+
+    .ra-posiciones { margin-top: 8px; }
+    .ra-posiciones .tabla-admin { min-width: 1240px; }
+    .ra-puesto {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 26px;
+        height: 26px;
+        border-radius: 50%;
+        font-weight: 900;
+        color: #78350f;
+        background: #fde68a;
+    }
+    .ra-puesto.sin { color: var(--text-muted); background: transparent; border: 1px solid var(--border-color); }
+
+    .ra-tecnicos { display: grid; gap: 10px; margin-top: 14px; }
+    .ra-tecnico { min-width: 0; border: 1px solid var(--border-color); border-radius: 12px; }
+    .ra-tecnico > summary {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px 14px;
+        padding: 13px 15px;
+        cursor: pointer;
+        font-size: 13px;
+        font-weight: 800;
+        color: var(--text-main);
+    }
+    .ra-tecnico-datos { margin-left: auto; font-size: 12px; font-weight: 700; color: var(--text-soft); }
+    .ra-tecnico-cuerpo { padding: 0 15px 15px; }
+    .ra-bloques { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+    .ra-bloque { min-width: 0; padding: 13px 14px; border-radius: 10px; background: rgba(127, 127, 127, .07); }
+    .ra-bloque h5 { margin: 0 0 9px; font-size: 11px; font-weight: 900; text-transform: uppercase; color: var(--text-muted); }
+    .ra-lista { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+    .ra-lista li { display: flex; justify-content: space-between; gap: 12px; font-size: 12px; font-weight: 600; color: var(--text-soft); }
+    .ra-lista li b { color: var(--text-main); white-space: nowrap; }
+    .ra-lista li.cero { opacity: .55; }
+    .ra-lista li.total { padding-top: 6px; border-top: 1px dashed var(--border-color); font-weight: 800; }
+    .ra-lista .pos { color: var(--success); }
+    .ra-lista .neg { color: var(--danger); }
+    .ra-nivel { font-size: 18px; font-weight: 800; color: var(--text-main); }
+    .ra-nivel-nota { margin: 6px 0 0; font-size: 12px; font-weight: 600; color: var(--text-soft); }
+    .ra-barra { height: 8px; margin-top: 8px; border-radius: 999px; overflow: hidden; background: rgba(127, 127, 127, .2); }
+    .ra-barra span { display: block; height: 100%; border-radius: 999px; background: #d97706; }
+    .ra-mes-a-mes { margin-top: 12px; }
+    .ra-mes-a-mes .tabla-admin { min-width: 760px; }
+    .ra-vacio { padding: 18px; text-align: center; font-size: 13px; font-weight: 700; color: var(--text-muted); }
+    @media (max-width: 720px) {
+        .registro-ranking .rank-card { padding: 16px; }
+        .ra-cifras { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .ra-opcion.completo { margin-left: 0; }
+        .ra-tecnico-datos { margin-left: 0; width: 100%; }
+    }
+</style>
+
+<div class="registro-ranking">
+    {% include 'includes/ranking_admin_caja.html' %}
+
+    <section class="assignment-section ranking-admin-section" id="ranking-admin" aria-labelledby="titulo-ranking-admin">
+        <div class="assignment-head">
+            <div>
+                <span class="assignment-kicker">Resumen administrativo</span>
+                <h3 id="titulo-ranking-admin">🏆 Ranking de Técnicos</h3>
+                <p>Los mismos resultados y puntos del Ranking, con todo el dinero y el bodegaje a nombre del técnico que finalizó cada equipo.</p>
+            </div>
+            <div class="assignment-period">{{ periodo_filtro.etiqueta }}</div>
+        </div>
+
+        <div class="assignment-body">
+            <nav class="ra-opciones" aria-label="Período del resumen">
+                {% for valor, texto in ranking_alcances %}
+                <a class="ra-opcion{% if valor == ranking_alcance %} activa{% endif %}"{% if valor == ranking_alcance %} aria-current="true"{% endif %} href="?ano={{ year }}&mes={{ month }}&ranking={{ valor }}{% if tecnico_resumen_filtro %}&tecnico_resumen={{ tecnico_resumen_filtro }}{% endif %}#ranking-admin">{{ texto }}</a>
+                {% endfor %}
+                <a class="ra-opcion completo" href="{% url 'econotec:salida_totales' %}?{{ ranking_parametros }}">Ver ranking completo →</a>
+            </nav>
+
+            <h4 class="ra-grupo-titulo">Equipos y resultados{% if tecnico_resumen_filtro %} · {{ tecnico_resumen_nombre }}{% endif %}</h4>
+            <div class="ra-cifras">
+                <div class="ra-cifra"><span>Ingresados</span><strong>{{ ranking_ingresados }}</strong></div>
+                <div class="ra-cifra"><span>Finalizados</span><strong>{{ ranking_resumen.num_equipos }}</strong></div>
+                <div class="ra-cifra bien"><span>Suman</span><strong>{{ ranking_resumen.salidas_positivas }}</strong></div>
+                <div class="ra-cifra mal"><span>Restan</span><strong>{{ ranking_resumen.salidas_negativas }}</strong></div>
+                <div class="ra-cifra"><span>No afectan</span><strong>{{ ranking_resumen.salidas_neutras }}</strong></div>
+                <div class="ra-cifra"><span>Efectividad</span><strong>{% if ranking_resumen.efectividad is None %}—{% else %}{{ ranking_resumen.efectividad|floatformat:1 }}%{% endif %}</strong></div>
+                <div class="ra-cifra"><span>Puntos del período</span><strong>{{ ranking_puntos }}</strong></div>
+                <div class="ra-cifra"><span>Fuera / en oficina</span><strong>{{ ranking_resumen.entregados }} / {{ ranking_resumen.pendientes }}</strong></div>
+            </div>
+
+            <h4 class="ra-grupo-titulo">Dinero de estos equipos (igual que en Pagos)</h4>
+            <div class="ra-cifras">
+                <div class="ra-cifra"><span>Acordado</span><strong>{{ ranking_resumen.total_acordado|dinero_signo }}</strong></div>
+                <div class="ra-cifra"><span>Domicilio</span><strong>{{ ranking_resumen.total_domicilio|dinero_signo }}</strong></div>
+                <div class="ra-cifra"><span>Total a cobrar</span><strong>{{ ranking_resumen.total_a_cobrar|dinero_signo }}</strong></div>
+                <div class="ra-cifra bien"><span>Recaudado</span><strong>{{ ranking_resumen.total_recaudado|dinero_signo }}</strong></div>
+                <div class="ra-cifra cobrar"><span>Por cobrar</span><strong>{{ ranking_resumen.total_por_cobrar|dinero_signo }}</strong></div>
+                <div class="ra-cifra bien"><span>A favor de clientes</span><strong>{{ ranking_resumen.total_a_favor|dinero_signo }}</strong></div>
+                <div class="ra-cifra"><span>Diagnóstico inmediato</span><strong>{{ ranking_resumen.total_diagnostico_inmediato|dinero_signo }}</strong></div>
+                <div class="ra-cifra"><span>Diagnóstico (no reparados)</span><strong>{{ ranking_resumen.acordado_no_reparados|dinero_signo }}</strong></div>
+            </div>
+
+            <h4 class="ra-grupo-titulo">Bodegaje · es un plus, no cambia los valores de arriba</h4>
+            <div class="ra-cifras">
+                <div class="ra-cifra plus"><span>Bodegaje cobrado</span><strong>{{ ranking_resumen.total_bodegaje_cobrado|dinero_signo }}</strong><small>Ya entró en la Caja</small></div>
+                <div class="ra-cifra cobrar"><span>Bodegaje sin cobrar</span><strong>{{ ranking_resumen.total_bodegaje_pendiente|dinero_signo }}</strong><small>Acumulado a hoy</small></div>
+                <div class="ra-cifra"><span>Bodegaje perdonado</span><strong>{{ ranking_resumen.total_bodegaje_perdonado|dinero_signo }}</strong><small>No se cobró al retirar</small></div>
+            </div>
+
+            {% if ranking_filas %}
+            <h4 class="ra-grupo-titulo">Tabla de posiciones</h4>
+            <div class="ra-posiciones tabla-scroll" tabindex="0" role="region" aria-label="Tabla de posiciones de los técnicos">
+                <table class="tabla-admin">
+                    <thead>
+                        <tr>
+                            <th class="texto" scope="col">Puesto</th>
+                            <th class="texto" scope="col">Técnico</th>
+                            <th class="texto" scope="col">Nivel</th>
+                            <th scope="col">Puntos</th>
+                            <th scope="col">Efectividad</th>
+                            <th scope="col">Finalizados</th>
+                            <th scope="col">Suman</th>
+                            <th scope="col">Restan</th>
+                            <th scope="col">Ventas</th>
+                            <th scope="col">Acordado</th>
+                            <th scope="col">Domicilio</th>
+                            <th scope="col">Recaudado</th>
+                            <th scope="col">Por cobrar</th>
+                            <th scope="col">Bod. cobrado</th>
+                            <th scope="col">Bod. sin cobrar</th>
+                            <th scope="col">Bod. perdonado</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for r in ranking_filas %}
+                        <tr>
+                            <td class="texto"><span class="ra-puesto{% if not r.puesto %} sin{% endif %}">{% if r.puesto %}{{ r.puesto }}{% else %}–{% endif %}</span></td>
+                            <td class="texto"><b>{{ r.nombre }}</b></td>
+                            <td class="texto">{% if r.perfil %}{{ r.perfil.nivel }}{% else %}—{% endif %}</td>
+                            <td><b>{{ r.puntos }}</b></td>
+                            <td>{% if r.efectividad is None %}—{% else %}{{ r.efectividad|floatformat:1 }}%{% endif %}</td>
+                            <td>{{ r.num_equipos }}</td>
+                            <td class="positivo">{{ r.salidas_positivas }}</td>
+                            <td class="negativo">{{ r.salidas_negativas }}</td>
+                            <td>{{ r.ventas_producto }}</td>
+                            <td>{{ r.total_acordado|dinero_signo }}</td>
+                            <td>{{ r.total_domicilio|dinero_signo:"—" }}</td>
+                            <td class="positivo">{{ r.total_recaudado|dinero_signo }}</td>
+                            <td class="por-cobrar">{{ r.total_por_cobrar|dinero_signo }}</td>
+                            <td class="plus">{{ r.total_bodegaje_cobrado|dinero_signo:"—" }}</td>
+                            <td>{{ r.total_bodegaje_pendiente|dinero_signo:"—" }}</td>
+                            <td>{{ r.total_bodegaje_perdonado|dinero_signo:"—" }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <h4 class="ra-grupo-titulo">Detalle por técnico</h4>
+            <div class="ra-tecnicos">
+                {% for r in ranking_filas %}
+                <details class="ra-tecnico"{% if ranking_filas|length == 1 %} open{% endif %}>
+                    <summary>
+                        <span class="ra-puesto{% if not r.puesto %} sin{% endif %}" aria-hidden="true">{% if r.puesto %}{{ r.puesto }}{% else %}–{% endif %}</span>
+                        {{ r.nombre }}
+                        <span class="ra-tecnico-datos">{{ r.puntos }} pts · {% if r.efectividad is None %}—{% else %}{{ r.efectividad|floatformat:1 }}%{% endif %} · Recaudado {{ r.total_recaudado|dinero_signo }} · Por cobrar {{ r.total_por_cobrar|dinero_signo }}</span>
+                    </summary>
+                    <div class="ra-tecnico-cuerpo">
+                        <div class="ra-bloques">
+                            {% if r.perfil %}
+                            <div class="ra-bloque">
+                                <h5>Nivel del técnico</h5>
+                                <div class="ra-nivel">{{ r.perfil.nivel }}</div>
+                                <div class="ra-barra" role="img" aria-label="{{ r.perfil.porcentaje }} % del camino al siguiente nivel"><span style="width: {{ r.perfil.porcentaje }}%;"></span></div>
+                                <p class="ra-nivel-nota">
+                                    {{ r.perfil.total }} pts acumulados.
+                                    {% if r.perfil.proximo %}Le faltan {{ r.perfil.faltan }} para {{ r.perfil.siguiente }}.{% else %}Llegó al nivel máximo.{% endif %}
+                                </p>
+                            </div>
+                            {% endif %}
+                            <div class="ra-bloque">
+                                <h5>Puntos de este período</h5>
+                                <ul class="ra-lista">
+                                    {% for d in r.puntos_detalle %}
+                                    <li><span>{{ d.cantidad }} × {{ d.etiqueta }} ({% if d.unitario > 0 %}+{% endif %}{{ d.unitario }})</span><b class="{% if d.subtotal > 0 %}pos{% else %}neg{% endif %}">{% if d.subtotal > 0 %}+{% endif %}{{ d.subtotal }}</b></li>
+                                    {% empty %}
+                                    <li class="cero"><span>Sin resultados que den o quiten puntos.</span></li>
+                                    {% endfor %}
+                                    <li class="total"><span>Total</span><b>{{ r.puntos }} pts</b></li>
+                                </ul>
+                            </div>
+                            <div class="ra-bloque">
+                                <h5>Resultados de los equipos</h5>
+                                <ul class="ra-lista">
+                                    {% for g in r.grupos %}{% for p in g.partes %}
+                                    <li{% if not p.cantidad %} class="cero"{% endif %}><span>{{ p.etiqueta }}</span><b>{{ p.cantidad }}</b></li>
+                                    {% endfor %}{% endfor %}
+                                </ul>
+                            </div>
+                            <div class="ra-bloque">
+                                <h5>Ubicación</h5>
+                                <ul class="ra-lista">
+                                    <li><span>Fuera de oficina</span><b>{{ r.entregados }}</b></li>
+                                    <li><span>En oficina</span><b>{{ r.pendientes }}</b></li>
+                                    <li><span>Ventas de producto</span><b>{{ r.ventas_producto }}</b></li>
+                                </ul>
+                            </div>
+                            <div class="ra-bloque">
+                                <h5>Dinero</h5>
+                                <ul class="ra-lista">
+                                    <li><span>Acordado</span><b>{{ r.total_acordado|dinero_signo }}</b></li>
+                                    <li><span>Domicilio</span><b>{{ r.total_domicilio|dinero_signo }}</b></li>
+                                    <li><span>Recaudado</span><b class="pos">{{ r.total_recaudado|dinero_signo }}</b></li>
+                                    <li><span>Por cobrar</span><b>{{ r.total_por_cobrar|dinero_signo }}</b></li>
+                                    <li><span>A favor del cliente</span><b>{{ r.total_a_favor|dinero_signo }}</b></li>
+                                    <li><span>Diagnóstico inmediato</span><b>{{ r.total_diagnostico_inmediato|dinero_signo }}</b></li>
+                                </ul>
+                            </div>
+                            <div class="ra-bloque">
+                                <h5>Bodegaje</h5>
+                                <ul class="ra-lista">
+                                    <li><span>Cobrado</span><b>{{ r.total_bodegaje_cobrado|dinero_signo }}</b></li>
+                                    <li><span>Sin cobrar</span><b>{{ r.total_bodegaje_pendiente|dinero_signo }}</b></li>
+                                    <li><span>Perdonado</span><b>{{ r.total_bodegaje_perdonado|dinero_signo }}</b></li>
+                                </ul>
+                            </div>
+                        </div>
+
+                        {% if r.por_mes %}
+                        <div class="ra-mes-a-mes tabla-scroll" tabindex="0" role="region" aria-label="Mes a mes de {{ r.nombre }}">
+                            <table class="tabla-admin">
+                                <thead>
+                                    <tr>
+                                        <th class="texto" scope="col">Mes</th>
+                                        <th scope="col">Finalizados</th>
+                                        <th scope="col">Suman</th>
+                                        <th scope="col">Restan</th>
+                                        <th scope="col">Efectividad</th>
+                                        <th scope="col">Acordado</th>
+                                        <th scope="col">Recaudado</th>
+                                        <th scope="col">Por cobrar</th>
+                                        <th scope="col">Bod. cobrado</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for mes in r.por_mes %}
+                                    <tr>
+                                        <td class="texto">{{ mes.etiqueta }}</td>
+                                        <td>{{ mes.resumen.num_equipos }}</td>
+                                        <td class="positivo">{{ mes.resumen.salidas_positivas }}</td>
+                                        <td class="negativo">{{ mes.resumen.salidas_negativas }}</td>
+                                        <td>{% if mes.resumen.efectividad is None %}—{% else %}{{ mes.resumen.efectividad|floatformat:1 }}%{% endif %}</td>
+                                        <td>{{ mes.resumen.total_acordado|dinero_signo }}</td>
+                                        <td class="positivo">{{ mes.resumen.total_recaudado|dinero_signo }}</td>
+                                        <td class="por-cobrar">{{ mes.resumen.total_por_cobrar|dinero_signo }}</td>
+                                        <td class="plus">{{ mes.resumen.total_bodegaje_cobrado|dinero_signo:"—" }}</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        {% endif %}
+
+                        {% if r.equipos %}{% include 'includes/ranking_admin_equipos.html' %}{% endif %}
+                    </div>
+                </details>
+                {% endfor %}
+            </div>
+            {% else %}
+            <p class="ra-vacio">No hay equipos finalizados de este técnico en {{ periodo_filtro.etiqueta }}.</p>
+            {% endif %}
+        </div>
+    </section>
+
+    {% include 'includes/ranking_admin_cuadre.html' %}
+</div>

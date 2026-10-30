@@ -29,7 +29,7 @@ from .gamificacion import (
 )
 from .busqueda import filtrar_objetos_normalizado, texto_salida_busqueda, total_resultados
 from .bitacora import construir_bitacora_usuario
-from .caja import cobrado_sin_bodegaje
+from .caja import caja_del_periodo, cobrado_sin_bodegaje, cuadres_del_periodo, movimientos_de_dinero
 from .date_filters import aplicar_rango_fecha, contexto_rango_fecha, obtener_rango_fecha
 from .emails import enviar_correo_bodegaje_seguro
 from .models import (
@@ -427,6 +427,90 @@ def _salidas_reparadas_tecnicos_mes(year, month, tecnico_filtro=''):
     }
 
 
+# Qué período muestra el resumen del Ranking en el Registro: (valor, texto).
+_ALCANCES_RANKING_REGISTRO = (
+    ('mes', 'Este mes'),
+    ('anio', 'Este año'),
+    ('todo', 'Todo el historial'),
+)
+
+
+def _ranking_admin_registro(alcance, year, month, tecnico_filtro):
+    """
+    Resumen del Ranking de Técnicos para el Registro, con el mismo cálculo del
+    Ranking. El filtro de técnico muestra solo a ese técnico; la Caja y el
+    Cuadre siempre son de todo el taller.
+    """
+    from .views import ranking_con_dinero, resumir_salidas_con_dinero
+
+    if alcance not in dict(_ALCANCES_RANKING_REGISTRO):
+        alcance = 'mes'
+    primer_dia = date(year, month, 1)
+    fin_mes = (primer_dia + timedelta(days=32)).replace(day=1) - timedelta(days=1)
+    if alcance == 'mes':
+        desde, hasta = primer_dia.isoformat(), fin_mes.isoformat()
+        etiqueta = f'{MESES_ES[month]} {year}'
+        parametros_ranking = f'periodo=mes&mes={month}&mes_anio={year}'
+    elif alcance == 'anio':
+        desde, hasta = f'{year}-01-01', f'{year}-12-31'
+        etiqueta = f'Año {year}'
+        parametros_ranking = f'periodo=anio&anio={year}'
+    else:
+        desde, hasta = '', ''
+        etiqueta = 'Todo el historial'
+        parametros_ranking = 'periodo=rango&desde=&hasta='
+
+    registros, filas, resumen = ranking_con_dinero(desde, hasta)
+    movimientos = movimientos_de_dinero()
+    cuadres = cuadres_del_periodo(
+        desde, hasta, registros, resumen,
+        caja_del_periodo(desde, hasta, movimientos),
+        movimientos,
+    )
+
+    if tecnico_filtro:
+        tecnico_id = None if tecnico_filtro == 'sin_asignar' else int(tecnico_filtro)
+        filas = [fila for fila in filas if fila['tecnico_id'] == tecnico_id]
+        resumen = filas[0] if filas else resumir_salidas_con_dinero([])
+
+    # En un período largo cada técnico muestra también su mes a mes.
+    if alcance != 'mes':
+        for fila in filas:
+            por_mes = {}
+            for equipo in fila['equipos']:
+                por_mes.setdefault(equipo['fecha_salida'].replace(day=1), []).append(equipo)
+            fila['por_mes'] = [
+                {
+                    'etiqueta': f'{MESES_ES[mes.month]} {mes.year}',
+                    'resumen': resumir_salidas_con_dinero(por_mes[mes]),
+                }
+                for mes in sorted(por_mes, reverse=True)
+            ]
+
+    ingresados = IngresoEquipo.objects.filter(sede__in=SEDES_EQUIPOS)
+    if tecnico_filtro:
+        ingresados = _filtrar_resumen_por_tecnico(ingresados, 'tecnico_encargado', tecnico_filtro)
+    if desde:
+        ingresados = ingresados.filter(fecha_ingreso__gte=desde, fecha_ingreso__lte=hasta)
+
+    return {
+        'ranking_alcance': alcance,
+        'ranking_alcances': _ALCANCES_RANKING_REGISTRO,
+        'ranking_parametros': parametros_ranking,
+        'ranking_filas': filas,
+        'ranking_resumen': resumen,
+        'ranking_puntos': sum(fila['puntos'] for fila in filas),
+        'ranking_ingresados': ingresados.count(),
+        'periodo_filtro': {'etiqueta': etiqueta},
+        'cuadres': cuadres,
+        'cuadres_con_diferencia': sum(1 for cuadre in cuadres if cuadre['estado'] == 'diferencia'),
+        'cuadres_con_aviso': sum(1 for cuadre in cuadres if cuadre['estado'] == 'aviso'),
+        # La Caja va del inicio del año hasta el mes elegido, para verla guardarse.
+        'caja': caja_del_periodo(f'{year}-01-01', fin_mes.isoformat(), movimientos),
+        'caja_etiqueta': f'{MESES_ES[month].lower()} {year}',
+    }
+
+
 def _periodo_admin_request(request, metodo='GET'):
     datos = request.POST if metodo == 'POST' else request.GET
     hoy = date.today()
@@ -656,6 +740,12 @@ def admin_dashboard(request):
     horarios_tecnicos, avisos_laborales_hoy, avisos_fuera_laboral_hoy = _horarios_tecnicos_dashboard()
 
     return render(request, 'admin_panel/dashboard.html', {
+        **_ranking_admin_registro(
+            request.GET.get('ranking'),
+            year,
+            month,
+            tecnico_resumen_filtro,
+        ),
         'year': year,
         'month': month,
         'mes_nombre': MESES_ES[month],

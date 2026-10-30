@@ -1,5 +1,5 @@
 {% load econotec_extras %}
-{# Caja fuerte: lo recaudado, guardado mes a mes. Solo administrador. Los números salen de los pagos reales (econotec/caja.py). #}
+{# Caja fuerte del Registro Administrativo: lo recaudado del año, guardado mes a mes. Recibe: caja, caja_etiqueta, year y month. #}
 <section class="rank-card caja" id="caja" aria-labelledby="titulo-caja">
     <h3 id="titulo-caja">🔐 Caja</h3>
 
@@ -22,14 +22,14 @@
         <div class="caja-resumen">
             <div class="caja-saldo-etiqueta">Guardado en caja</div>
             <div class="caja-saldo{% if caja.saldo_final < 0 %} negativo{% endif %}" data-caja-contador data-final="{{ caja.saldo_final|stringformat:'.2f' }}" data-inicial="{{ caja.saldo_inicial|stringformat:'.2f' }}">{{ caja.saldo_final|dinero_signo }}</div>
-            <div class="caja-saldo-nota">Hasta el final de: {{ periodo_filtro.etiqueta }}</div>
+            <div class="caja-saldo-nota">Hasta el final de {{ caja_etiqueta }}</div>
             <dl class="caja-cuentas">
-                <div><dt>Ya guardado antes</dt><dd>{{ caja.saldo_inicial|dinero_signo }}</dd></div>
-                <div><dt>Entró en el período</dt><dd class="entra">+ {{ caja.entro|dinero_signo }}</dd></div>
-                <div><dt>Egresos del período</dt><dd class="sale">− {{ caja.egresos|dinero_signo }}</dd></div>
-                <div><dt>Queda del período</dt><dd>{{ caja.neto|dinero_signo }}</dd></div>
+                <div><dt>Guardado de años anteriores</dt><dd>{{ caja.saldo_inicial|dinero_signo }}</dd></div>
+                <div><dt>Entró en {{ year }}</dt><dd class="entra">+ {{ caja.entro|dinero_signo }}</dd></div>
+                <div><dt>Egresos de {{ year }}</dt><dd class="sale">− {{ caja.egresos|dinero_signo }}</dd></div>
+                <div><dt>Queda de {{ year }}</dt><dd>{{ caja.neto|dinero_signo }}</dd></div>
             </dl>
-            <ul class="caja-metodos" aria-label="Cómo entró el dinero del período">
+            <ul class="caja-metodos" aria-label="Cómo entró el dinero">
                 {% for metodo in caja.metodos %}<li>{{ metodo.nombre }}: <b>{{ metodo.monto|dinero_signo }}</b></li>{% endfor %}
             </ul>
             <button type="button" class="caja-repetir" data-caja-repetir hidden>▶ Ver guardar de nuevo</button>
@@ -39,7 +39,7 @@
     {% if caja.meses %}
     <ol class="caja-meses" data-caja-lista>
         {% for mes in caja.meses %}
-        <li class="caja-mes" data-caja-mes data-guardado="{{ mes.guardado|stringformat:'.2f' }}" data-neto="{{ mes.neto|stringformat:'.2f' }}">
+        <li class="caja-mes{% if mes.mes.year == year and mes.mes.month == month %} actual{% endif %}" data-caja-mes data-guardado="{{ mes.guardado|stringformat:'.2f' }}" data-neto="{{ mes.neto|stringformat:'.2f' }}">
             <span class="caja-mes-sello" aria-hidden="true">✓</span>
             <span class="caja-mes-nombre">{{ mes.etiqueta|capfirst }}{% if mes.parcial %} (parte){% endif %}</span>
             <span class="caja-mes-neto{% if mes.neto < 0 %} negativo{% elif not mes.neto %} cero{% endif %}">{% if mes.neto > 0 %}+ {% endif %}{{ mes.neto|dinero_signo }}</span>
@@ -80,7 +80,7 @@
             </tbody>
             <tfoot>
                 <tr>
-                    <td class="texto">Total del período</td>
+                    <td class="texto">Total de {{ year }}</td>
                     <td>{{ caja.reparaciones|dinero_signo }}</td>
                     <td>{{ caja.bodegaje|dinero_signo }}</td>
                     <td>{{ caja.diagnostico|dinero_signo }}</td>
@@ -93,8 +93,6 @@
             </tfoot>
         </table>
     </div>
-    {% else %}
-    <p class="caja-aclaracion">Todavía no hay pagos ni egresos registrados en este período.</p>
     {% endif %}
 
     <p class="caja-aclaracion">

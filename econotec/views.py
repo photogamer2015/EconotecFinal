@@ -4861,6 +4861,39 @@ def _comprobaciones_totales(resumen, filas, meses_resumen, mostrar_valores_monet
     return comprobaciones
 
 
+def _agregar_nivel_ranking(filas):
+    """Nivel de cada técnico: el mismo de Mi perfil (puntos acumulados)."""
+    usuarios_ranking = {
+        usuario.pk: usuario
+        for usuario in get_user_model().objects.filter(
+            pk__in=[fila['tecnico_id'] for fila in filas if fila['tecnico_id']],
+        )
+    }
+    for fila in filas:
+        usuario = usuarios_ranking.get(fila['tecnico_id'])
+        fila['perfil'] = None
+        if usuario is not None:
+            perfil = puntaje_tecnico(usuario)
+            perfil['porcentaje'] = round(
+                100 * (perfil['total'] - perfil['desde']) / (perfil['proximo'] - perfil['desde'])
+            ) if perfil['proximo'] else 100
+            perfil['faltan'] = perfil['proximo'] - perfil['total'] if perfil['proximo'] else 0
+            perfil['siguiente'] = nivel_por_puntos(perfil['proximo'])['nivel'] if perfil['proximo'] else ''
+            fila['perfil'] = perfil
+
+
+def ranking_con_dinero(desde, hasta):
+    """El Ranking de Técnicos con todo su dinero, para el Registro Administrativo."""
+    registros = _registros_salidas_ranking(desde, hasta, True)
+    filas = _ranking_salidas_por_tecnico(registros, True, _ventas_producto_ranking(desde, hasta))
+    _agregar_nivel_ranking(filas)
+    return registros, filas, _resumir_salidas(registros, True)
+
+
+def resumir_salidas_con_dinero(registros):
+    return _resumir_salidas(registros, True)
+
+
 @_ranking_requerido
 def salida_totales(request):
     """
@@ -4954,24 +4987,7 @@ def salida_totales(request):
     )
     resumen_salidas = _resumir_salidas(registros, mostrar_valores_monetarios)
 
-    # Nivel de cada técnico: el mismo de Mi perfil (puntos acumulados).
-    usuarios_ranking = {
-        usuario.pk: usuario
-        for usuario in get_user_model().objects.filter(
-            pk__in=[fila['tecnico_id'] for fila in ranking_list if fila['tecnico_id']],
-        )
-    }
-    for fila in ranking_list:
-        usuario = usuarios_ranking.get(fila['tecnico_id'])
-        fila['perfil'] = None
-        if usuario is not None:
-            perfil = puntaje_tecnico(usuario)
-            perfil['porcentaje'] = round(
-                100 * (perfil['total'] - perfil['desde']) / (perfil['proximo'] - perfil['desde'])
-            ) if perfil['proximo'] else 100
-            perfil['faltan'] = perfil['proximo'] - perfil['total'] if perfil['proximo'] else 0
-            perfil['siguiente'] = nivel_por_puntos(perfil['proximo'])['nivel'] if perfil['proximo'] else ''
-            fila['perfil'] = perfil
+    _agregar_nivel_ranking(ranking_list)
 
     # Varios meses: además del total, cada mes por separado (para el equipo
     # completo y para cada técnico).
@@ -5102,6 +5118,8 @@ def salida_totales(request):
             'cuadres': cuadres,
             'cuadres_con_diferencia': sum(1 for cuadre in cuadres if cuadre['estado'] == 'diferencia'),
             'cuadres_con_aviso': sum(1 for cuadre in cuadres if cuadre['estado'] == 'aviso'),
+            # La Caja se ve en el Registro Administrativo, en el mes donde termina el período.
+            'mes_caja': _parse_date(hasta) or timezone.localdate(),
         })
 
     return render(request, 'salidas/totales.html', contexto)

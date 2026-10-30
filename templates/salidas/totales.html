@@ -870,7 +870,7 @@
         </button>{% endif %}
         <button type="button" class="btn-guia" id="btn-guia-totales" data-guia="guia-totales" data-titulo="📖 Guía de los totales" aria-controls="guia-totales">📖 Guía de los totales</button>{% if mostrar_valores_monetarios %}
         <a class="chip-enlace {% if cuadres_con_diferencia %}mal{% else %}ok{% endif %}" href="#cuadre-pagos">{% if cuadres_con_diferencia %}⚠ {{ cuadres_con_diferencia }} diferencia{{ cuadres_con_diferencia|pluralize }} con Pagos{% else %}✓ Cuadra con Pagos{% endif %}</a>
-        <a class="chip-enlace caja-enlace" href="#caja">🔐 Ver Caja</a>{% endif %}
+        <a class="chip-enlace caja-enlace" href="{% url 'econotec:admin_dashboard' %}?ano={{ mes_caja.year }}&mes={{ mes_caja.month }}#caja">🔐 Ver Caja</a>{% endif %}
     </div>
 </div>
 
@@ -1357,8 +1357,7 @@
         <p>Aún no se han registrado equipos en el período seleccionado.</p>
     </div>
     {% endif %}
-</section>{% if mostrar_valores_monetarios %}
-{% include 'includes/ranking_admin_caja.html' %}{% endif %}
+</section>
 
 <!-- Top tipos de equipo -->
 {% if por_tipo %}
