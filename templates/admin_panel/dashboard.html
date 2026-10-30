@@ -263,6 +263,8 @@
         border-color: rgba(249, 118, 24, 0.28);
         background: rgba(249, 118, 24, 0.08);
     }
+    .balance-card .val-facturas { color: #0d47a1; }
+    [data-theme="dark"] .balance-card .val-facturas { color: #93c5fd; }
 
     .productivity-panel {
         margin: 4px 0 28px;
@@ -888,6 +890,14 @@
             text-transform: uppercase;
         }
         .assignment-records-content { padding: 10px; }
+        /* En tarjetas el texto largo baja de línea; la tabla global lo deja sin saltos. */
+        .table-scroll-viewport > table.assignment-table > tbody > tr > td,
+        .table-scroll-viewport > table.equipos-mes-table > tbody > tr > td,
+        .assignment-table td,
+        .equipos-mes-table td {
+            white-space: normal;
+            overflow-wrap: anywhere;
+        }
         [data-theme="dark"] .assignment-table tr,
         [data-theme="dark"] .assignment-table td { border-color: rgba(255,255,255,0.12); }
         .equipos-mes-card {
@@ -1025,7 +1035,7 @@
     <div class="productivity-actions">
         <a href="{% url 'econotec:admin_perfiles_exportar' formato='pdf' %}" class="btn btn-secondary" style="background: #dc2626; color: white; border: none;">📄 Exportar PDF</a>
         <a href="{% url 'econotec:admin_perfiles_exportar' formato='excel' %}" class="btn btn-secondary" style="background: #16a34a; color: white; border: none;">📊 Exportar Excel</a>
-        <button type="button" class="btn btn-primary" style="background: #111827; border: none;" onclick="confirmarReinicioPerfiles()">🔄 Reiniciar Perfiles</button>
+        <button type="button" class="btn btn-primary" style="background: #111827; border: none; color: #fff;" onclick="confirmarReinicioPerfiles()">🔄 Reiniciar Perfiles</button>
     </div>
 </div>
 
@@ -1198,6 +1208,8 @@
             <p>
                 Esta sección usa exclusivamente el técnico registrado al finalizar el equipo.
                 Las asignaciones hechas al ingresar el equipo no intervienen en estos resultados.
+                La efectividad es la misma del Ranking: positivas ÷ (positivas + negativas).
+                Recaudado es lo que estos equipos ya pagaron, sin contar el bodegaje.
             </p>
         </div>
         <div class="assignment-period">{{ mes_nombre }} {{ year }}</div>
@@ -1218,10 +1230,10 @@
         </div>
         <div class="assignment-metric">
             <span>Efectividad</span>
-            <strong>{{ salidas_tecnicos_efectividad|floatformat:1 }}%</strong>
+            <strong>{% if salidas_tecnicos_efectividad is None %}—{% else %}{{ salidas_tecnicos_efectividad|floatformat:1 }}%{% endif %}</strong>
         </div>
         <div class="assignment-metric">
-            <span>Recaudado al finalizar</span>
+            <span>Recaudado</span>
             <strong>{{ salidas_tecnicos_recaudado|dinero_signo }}</strong>
         </div>
     </div>
@@ -1247,7 +1259,6 @@
                 </thead>
                 <tbody>
                     {% for fila in salidas_tecnicos_resumen %}
-                    {% widthratio fila.positivas fila.total 100 as efectividad_barra %}
                     <tr>
                         <td data-label="Posición"><span class="assignment-rank">{{ fila.posicion }}</span></td>
                         <td data-label="Técnico que reparó">
@@ -1261,8 +1272,12 @@
                         <td data-label="Negativas"><span class="count-negative">{{ fila.negativas }}</span></td>
                         <td data-label="Otras">{{ fila.otras }}</td>
                         <td data-label="Efectividad">
-                            <strong>{{ fila.efectividad|floatformat:1 }}%</strong>
-                            <div class="assignment-progress" aria-hidden="true"><span style="width: {{ efectividad_barra }}%;"></span></div>
+                            {% if fila.efectividad is None %}
+                                <strong>—</strong>
+                            {% else %}
+                                <strong>{{ fila.efectividad|floatformat:1 }}%</strong>
+                                <div class="assignment-progress" aria-hidden="true"><span style="width: {{ fila.efectividad|stringformat:'.1f' }}%;"></span></div>
+                            {% endif %}
                         </td>
                         <td data-label="Recaudado"><strong>{{ fila.recaudado|dinero_signo }}</strong></td>
                         <td data-label="Registros">
@@ -1314,8 +1329,8 @@
                                 <td data-label="Clasificación">
                                     <span class="result-badge {{ salida.clasificacion_admin }}">{{ salida.clasificacion_admin_nombre }}</span>
                                 </td>
-                                <td data-label="Resultado final">{{ salida.get_estado_reparacion_display }}</td>
-                                <td data-label="Recaudado"><strong>{{ salida.valor_final_cobrado|dinero_signo }}</strong></td>
+                                <td data-label="Resultado final">{{ salida.get_estado_reparacion_display }}{% if salida.estado_reparacion == 'revision' and salida.subestado_revision %} — {{ salida.get_subestado_revision_display }}{% endif %}</td>
+                                <td data-label="Recaudado"><strong>{{ salida.recaudado_admin|dinero_signo }}</strong></td>
                             </tr>
                             {% endfor %}
                         </tbody>
@@ -1428,7 +1443,7 @@
     <div class="balance-card" style="border-top-color: #00bcd4;">
         <div class="lbl">Ventas de Productos</div>
         <div class="val" style="color: #0097a7;">{{ dinero_in.cobros_ventas|dinero_signo }}</div>
-        <div class="sub">Total por ventas P</div>
+        <div class="sub">Lo que entró por ventas</div>
     </div>
     <div class="balance-card expense">
         <div class="lbl">Egresos del Mes</div>
@@ -1462,7 +1477,7 @@
     </a>
     <a href="{% url 'econotec:salida_facturas_lista' %}?ano={{ year }}&mes={{ month }}" class="balance-card card-link" style="border-top-color:#0d47a1;">
         <div class="lbl">Facturas en Salida</div>
-        <div class="val" style="color:#0d47a1;">{{ facturas_si_count }}</div>
+        <div class="val val-facturas">{{ facturas_si_count }}</div>
         <div class="sub">Salidas con factura realizada</div>
     </a>
 </div>
@@ -1594,11 +1609,11 @@
             <span class="info">{{ dinero_in.cobros_diagnostico|dinero_signo }}</span>
         </div>
         <div class="row-item">
-            <span class="name">Bodegaje cobrado (retiros)</span>
+            <span class="name">Bodegaje cobrado (ya incluido en abonos)</span>
             <span class="info">{{ bodegaje_cobrado|dinero_signo }}</span>
         </div>
         <div class="row-item">
-            <span class="name">Bodegaje no cobrado / perdonado</span>
+            <span class="name">Bodegaje no cobrado / perdonado (no suma)</span>
             <span class="info">{{ bodegaje_perdonado|dinero_signo }}</span>
         </div>
         <div class="row-item" style="border-top: 2px solid var(--success); padding-top: 12px; margin-top: 8px;">

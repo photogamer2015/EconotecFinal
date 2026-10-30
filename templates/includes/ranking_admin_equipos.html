@@ -1,0 +1,69 @@
+{% load econotec_extras %}
+{# Cada equipo que finalizó el técnico, con su dinero y su bodegaje. Solo administrador. Recibe: r. #}
+<details class="equipos-tecnico">
+    <summary>Ver {% if r.num_equipos == 1 %}el equipo{% else %}los {{ r.num_equipos }} equipos{% endif %} de {{ r.nombre }}, con pagos y bodegaje</summary>
+    <div class="tabla-scroll" tabindex="0" role="region" aria-label="Equipos finalizados por {{ r.nombre }}">
+        <table class="tabla-admin">
+            <thead>
+                <tr>
+                    <th class="texto" scope="col">Equipo</th>
+                    <th class="texto" scope="col">Cliente</th>
+                    <th class="texto" scope="col">Finalizó</th>
+                    <th class="texto" scope="col">Resultado</th>
+                    <th class="texto" scope="col">Ubicación</th>
+                    <th scope="col">Acordado</th>
+                    <th scope="col">Domicilio</th>
+                    <th scope="col">Recaudado</th>
+                    <th scope="col">Por cobrar</th>
+                    <th scope="col">Diag. inmediato</th>
+                    <th class="texto" scope="col">Bodegaje</th>
+                    <th scope="col">Días</th>
+                    <th scope="col">Cobrado</th>
+                    <th scope="col">Sin cobrar</th>
+                    <th scope="col">Perdonado</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for equipo in r.equipos %}
+                <tr>
+                    <td class="texto"><a href="{{ equipo.url_pagos }}" title="Ver los pagos de este equipo">{{ equipo.codigo }}</a></td>
+                    <td class="texto">{{ equipo.cliente }}</td>
+                    <td class="texto">{{ equipo.fecha_salida|date:"d/m/Y" }}</td>
+                    <td class="texto">{{ equipo.resultado_texto }}</td>
+                    <td class="texto">{% if equipo.fuera_de_oficina %}Fuera de oficina{% else %}En oficina{% endif %}</td>
+                    <td>{{ equipo.acordado|dinero_signo }}</td>
+                    <td>{{ equipo.domicilio|dinero_signo:"—" }}</td>
+                    <td class="positivo">{{ equipo.cobrado|dinero_signo }}</td>
+                    <td>{% if equipo.a_favor %}<span class="positivo">A favor {{ equipo.a_favor|dinero_signo }}</span>{% elif equipo.por_cobrar %}<span class="por-cobrar">{{ equipo.por_cobrar|dinero_signo }}</span>{% else %}$0,00{% endif %}</td>
+                    <td>{{ equipo.diagnostico|dinero_signo:"—" }}</td>
+                    <td class="texto">
+                        {% if equipo.bodegaje_estado == 'cobrado' %}<span class="bodegaje-estado cobrado">Cobrado</span>
+                        {% elif equipo.bodegaje_estado == 'pendiente' %}<span class="bodegaje-estado pendiente">Sin cobrar</span>
+                        {% elif equipo.bodegaje_estado == 'perdonado' %}<span class="bodegaje-estado perdonado">Perdonado</span>
+                        {% else %}<span class="bodegaje-estado sin">Sin bodegaje</span>{% endif %}
+                    </td>
+                    <td>{{ equipo.bodegaje_dias|default:"—" }}</td>
+                    <td class="plus">{{ equipo.bodegaje_cobrado|dinero_signo:"—" }}</td>
+                    <td>{{ equipo.bodegaje_pendiente|dinero_signo:"—" }}</td>
+                    <td>{{ equipo.bodegaje_perdonado|dinero_signo:"—" }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+            <tfoot>
+                <tr>
+                    <td class="texto" colspan="5">Total de {{ r.nombre }}</td>
+                    <td>{{ r.total_acordado|dinero_signo }}</td>
+                    <td>{{ r.total_domicilio|dinero_signo }}</td>
+                    <td>{{ r.total_recaudado|dinero_signo }}</td>
+                    <td>{{ r.total_por_cobrar|dinero_signo }}{% if r.total_a_favor %}<br>A favor {{ r.total_a_favor|dinero_signo }}{% endif %}</td>
+                    <td>{{ r.total_diagnostico_inmediato|dinero_signo }}</td>
+                    <td class="texto"></td>
+                    <td></td>
+                    <td>{{ r.total_bodegaje_cobrado|dinero_signo }}</td>
+                    <td>{{ r.total_bodegaje_pendiente|dinero_signo }}</td>
+                    <td>{{ r.total_bodegaje_perdonado|dinero_signo }}</td>
+                </tr>
+            </tfoot>
+        </table>
+    </div>
+</details>

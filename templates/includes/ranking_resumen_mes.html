@@ -22,6 +22,8 @@
             <div class="separador"><dt>Acordado</dt><dd>{{ resumen.total_acordado|dinero_signo }}</dd></div>
             <div><dt>Recaudado</dt><dd>{{ resumen.total_recaudado|dinero_signo }}</dd></div>
             <div><dt>Por cobrar</dt><dd>{{ resumen.total_por_cobrar|dinero_signo }}</dd></div>
+            <div><dt>Domicilio</dt><dd>{{ resumen.total_domicilio|dinero_signo }}</dd></div>
+            <div><dt>Bodegaje cobrado</dt><dd>{{ resumen.total_bodegaje_cobrado|dinero_signo }}</dd></div>
         {% endif %}
     </dl>
 </article>

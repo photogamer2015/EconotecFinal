@@ -4313,6 +4313,7 @@ def cliente_export(request):
 
 from django.utils.formats import date_format
 
+from .caja import caja_del_periodo, cuadres_del_periodo, dinero_de_salida, movimientos_de_dinero
 from .date_filters import _month_bounds, _parse_date
 from .permisos import (
     puede_ver_valores_ranking as _puede_ver_valores_ranking,
@@ -4498,6 +4499,10 @@ _PUNTOS_POR_RESULTADO = {
     clave: PUNTOS_POR_ESTADO_SALIDA.get(estados[0].split(':')[-1], 0)
     for clave, _etiqueta, _efecto, estados in _RESULTADOS_RANKING
 }
+_ETIQUETA_POR_RESULTADO = {
+    clave: etiqueta
+    for clave, etiqueta, _efecto, _estados in _RESULTADOS_RANKING
+}
 
 
 def _estado_ranking(salida):
@@ -4518,8 +4523,9 @@ def _registros_salidas_ranking(desde, hasta, mostrar_valores_monetarios):
     totales siempre coinciden.
 
     Acordado es lo que se le cobra al cliente por el servicio (incluye el
-    valor adicional y el valor de revisión, sin domicilio ni bodegaje).
-    El equipo está en saldo cero cuando ya no debe nada.
+    valor adicional y el valor de revisión, sin domicilio ni bodegaje). El
+    resto del dinero sale de las mismas propiedades que usa Pagos (ver
+    `caja.dinero_de_salida`) y solo se calcula para el administrador.
     """
     salidas = SalidaEquipo.objects.select_related('ingreso', 'tecnico_reparo')
     if desde:
@@ -4527,7 +4533,7 @@ def _registros_salidas_ranking(desde, hasta, mostrar_valores_monetarios):
     if hasta:
         salidas = salidas.filter(fecha_salida__lte=hasta)
     if mostrar_valores_monetarios:
-        salidas = salidas.prefetch_related('ingreso__abonos')
+        salidas = salidas.select_related('ingreso__cliente').prefetch_related('ingreso__abonos')
 
     registros = []
     for salida in salidas.order_by('pk'):
@@ -4543,9 +4549,8 @@ def _registros_salidas_ranking(desde, hasta, mostrar_valores_monetarios):
             'resultado': _RESULTADO_POR_ESTADO.get(_estado_ranking(salida)),
         }
         if mostrar_valores_monetarios:
-            ingreso = salida.ingreso
-            registro['acordado'] = ingreso.valor_servicio_a_cobrar
-            registro['saldo_cero'] = ingreso.diferencia <= 0
+            registro.update(dinero_de_salida(salida))
+            registro['resultado_texto'] = _ETIQUETA_POR_RESULTADO.get(registro['resultado'], '—')
         registros.append(registro)
     return registros
 
@@ -4557,8 +4562,10 @@ def _resumir_salidas(registros, mostrar_valores_monetarios):
 
     Efectividad = suman / (suman + restan). Puntos = cada resultado por sus
     puntos (las ventas de producto se agregan por técnico en el ranking).
-    Recaudado es el acordado de los equipos en saldo cero; Por cobrar, el
-    de los que todavía deben algo.
+    El dinero es el mismo de Pagos: Recaudado es lo que el cliente pagó sin
+    contar el bodegaje y Por cobrar, su saldo pendiente. Siempre se cumple
+    Acordado + Domicilio + A favor = Recaudado + Por cobrar. El bodegaje es un
+    plus: se suma aparte y no cambia ninguno de esos valores.
     """
     resumen = {
         'num_equipos': len(registros),
@@ -4621,19 +4628,28 @@ def _resumir_salidas(registros, mostrar_valores_monetarios):
     ) if base_efectividad else None
 
     if mostrar_valores_monetarios:
-        acordado = sum((registro['acordado'] for registro in registros), D('0.00'))
-        recaudado = sum(
-            (registro['acordado'] for registro in registros if registro['saldo_cero']),
-            D('0.00'),
-        )
+        def suma(clave):
+            return sum((registro[clave] for registro in registros), D('0.00'))
+
+        acordado = suma('acordado')
+        domicilio = suma('domicilio')
+        recaudado = suma('cobrado')
+        a_cobrar = acordado + domicilio
         resumen.update({
             'total_acordado': acordado,
+            'total_domicilio': domicilio,
+            'total_a_cobrar': a_cobrar,
             'total_recaudado': recaudado,
-            'total_por_cobrar': acordado - recaudado,
-            'porcentaje_recaudado': round(
-                float(recaudado / acordado * 100),
-                1,
-            ) if acordado else None,
+            'total_por_cobrar': suma('por_cobrar'),
+            'total_a_favor': suma('a_favor'),
+            'total_diagnostico_inmediato': suma('diagnostico'),
+            'total_bodegaje_cobrado': suma('bodegaje_cobrado'),
+            'total_bodegaje_pendiente': suma('bodegaje_pendiente'),
+            'total_bodegaje_perdonado': suma('bodegaje_perdonado'),
+            'porcentaje_recaudado': min(
+                round(float(recaudado / a_cobrar * 100), 1),
+                100.0,
+            ) if a_cobrar > 0 else None,
             # Lo que se cobra por equipos que no se repararon (no se pudo o
             # el cliente no quiso): diagnóstico, revisión o valor adicional.
             'acordado_no_reparados': sum(
@@ -4726,6 +4742,12 @@ def _ranking_salidas_por_tecnico(registros, mostrar_valores_monetarios, ventas_p
             'nombre': registros_tecnico[0]['nombre'] if registros_tecnico else nombre_ventas,
             'sin_asignar': tid is None,
         })
+        if mostrar_valores_monetarios:
+            fila['equipos'] = sorted(
+                registros_tecnico,
+                key=lambda registro: (registro['fecha_salida'], registro['ingreso_id']),
+                reverse=True,
+            )
         filas.append(fila)
 
     def orden(fila):
@@ -4804,15 +4826,20 @@ def _comprobaciones_totales(resumen, filas, meses_resumen, mostrar_valores_monet
     if mostrar_valores_monetarios:
         for titulo, clave in (
             ('Total acordado', 'total_acordado'),
+            ('Domicilio', 'total_domicilio'),
             ('Total recaudado', 'total_recaudado'),
             ('Por cobrar', 'total_por_cobrar'),
+            ('Saldo a favor', 'total_a_favor'),
             ('Diagnóstico (No reparados)', 'acordado_no_reparados'),
+            ('Bodegaje cobrado', 'total_bodegaje_cobrado'),
+            ('Bodegaje sin cobrar', 'total_bodegaje_pendiente'),
+            ('Bodegaje perdonado', 'total_bodegaje_perdonado'),
         ):
             comprobar(f'{titulo} = suma de los técnicos', por_tecnico(clave), resumen[clave], dinero_signo)
         comprobar(
-            'Total recaudado + Por cobrar = Total acordado',
+            'Total recaudado + Por cobrar = Acordado + Domicilio + A favor',
             [('Recaudado', resumen['total_recaudado']), ('Por cobrar', resumen['total_por_cobrar'])],
-            resumen['total_acordado'],
+            resumen['total_acordado'] + resumen['total_domicilio'] + resumen['total_a_favor'],
             dinero_signo,
         )
 
@@ -4828,6 +4855,7 @@ def _comprobaciones_totales(resumen, filas, meses_resumen, mostrar_valores_monet
                 ('Total acordado', 'total_acordado'),
                 ('Total recaudado', 'total_recaudado'),
                 ('Por cobrar', 'total_por_cobrar'),
+                ('Bodegaje cobrado', 'total_bodegaje_cobrado'),
             ):
                 comprobar(f'{titulo} = suma de los meses', por_mes(clave), resumen[clave], dinero_signo)
     return comprobaciones
@@ -4958,7 +4986,7 @@ def salida_totales(request):
             'resumen': _resumir_salidas(registros_mes, mostrar_valores_monetarios),
             'por_tecnico': {
                 fila['tecnico_id']: fila
-                for fila in _ranking_salidas_por_tecnico(registros_mes, False)
+                for fila in _ranking_salidas_por_tecnico(registros_mes, mostrar_valores_monetarios)
             },
         })
     for fila in ranking_list:
@@ -4966,7 +4994,7 @@ def salida_totales(request):
             {
                 'etiqueta': mes['etiqueta'],
                 'resumen': mes['por_tecnico'].get(fila['tecnico_id'])
-                or _resumir_salidas([], False),
+                or _resumir_salidas([], mostrar_valores_monetarios),
             }
             for mes in meses_resumen
         ]
@@ -5064,6 +5092,16 @@ def salida_totales(request):
             'total_recaudado_global': resumen_salidas['total_recaudado'],
             'total_por_cobrar_global': resumen_salidas['total_por_cobrar'],
             'total_diag_no_reparado': resumen_salidas['acordado_no_reparados'],
+        })
+        # Caja y cuadres contra Pagos: solo existen para el administrador.
+        movimientos = movimientos_de_dinero()
+        caja = caja_del_periodo(desde, hasta, movimientos)
+        cuadres = cuadres_del_periodo(desde, hasta, registros, resumen_salidas, caja, movimientos)
+        contexto.update({
+            'caja': caja,
+            'cuadres': cuadres,
+            'cuadres_con_diferencia': sum(1 for cuadre in cuadres if cuadre['estado'] == 'diferencia'),
+            'cuadres_con_aviso': sum(1 for cuadre in cuadres if cuadre['estado'] == 'aviso'),
         })
 
     return render(request, 'salidas/totales.html', contexto)

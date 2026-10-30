@@ -6,18 +6,6 @@ PUNTOS_SALIDA_MALA_RESTA = 1
 # Compatibilidad con llamadas anteriores; las garantías ya no descuentan.
 PUNTOS_SALIDA_GARANTIA_RESTA = 0
 
-# Positivas y negativas del panel de administración (Resumen de técnicos).
-SALIDA_BUENA_ESTADOS = (
-    'pendiente_retiro',
-    'garantia',
-    'garantia_fallos_adicionales',
-    'retirado',
-)
-SALIDA_MALA_ESTADOS = (
-    'no_reparable',
-    'cliente_no_acepta',
-    'chatarrerizacion',
-)
 # Se conserva por compatibilidad con el cálculo histórico. Las garantías ahora
 # forman parte de las salidas positivas y no se descuentan por separado.
 SALIDA_GARANTIA_ESTADOS = ()

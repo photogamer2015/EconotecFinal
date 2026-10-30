@@ -2485,19 +2485,6 @@ class VentasTests(TestCase):
         self.assertEqual(perfil_registrador['salidas_buenas'], 0)
         self.assertEqual(perfil_registrador['salidas_malas'], 0)
 
-        from .gamificacion import SALIDA_BUENA_ESTADOS, SALIDA_MALA_ESTADOS
-        self.assertEqual(set(SALIDA_BUENA_ESTADOS), {
-            'pendiente_retiro',
-            'garantia',
-            'garantia_fallos_adicionales',
-            'retirado',
-        })
-        self.assertEqual(set(SALIDA_MALA_ESTADOS), {
-            'no_reparable',
-            'cliente_no_acepta',
-            'chatarrerizacion',
-        })
-
     def test_menu_ventas_muestra_control_de_pago_de_ventas(self):
         response = self.client.get(reverse('econotec:venta_menu'))
 
@@ -3980,7 +3967,7 @@ class VentasTests(TestCase):
         self.assertNotContains(response, '🏁 Tabla de posiciones')
         self.assertEqual(response.context['ranking'][0]['puesto'], 1)
 
-    def test_ranking_salidas_recaudado_solo_cuenta_equipos_en_saldo_cero(self):
+    def test_ranking_salidas_recaudado_es_lo_pagado_como_en_pagos(self):
         tecnico = self.crear_tecnico_ranking('RecaudoRanking')
         fecha = date(2026, 8, 10)
         # Valor acordado + adicional, pagado con un abono facturado con
@@ -4002,7 +3989,7 @@ class VentasTests(TestCase):
             valor_con_retencion=Decimal('60.00'),
             registrado_por=self.usuario,
         )
-        # Pago parcial: todavía tiene saldo.
+        # Pago parcial: lo pagado cuenta y el resto queda por cobrar.
         self.crear_salida_ranking(
             tecnico, fecha, 'pendiente_retiro',
             valor_acordado=Decimal('40.00'),
@@ -4034,15 +4021,15 @@ class VentasTests(TestCase):
 
         fila = self.ranking_por_tecnico(response)[tecnico.pk]
         self.assertEqual(fila['total_acordado'], Decimal('120.00'))
-        self.assertEqual(fila['total_recaudado'], Decimal('80.00'))
-        self.assertEqual(fila['total_por_cobrar'], Decimal('40.00'))
+        self.assertEqual(fila['total_recaudado'], Decimal('95.00'))
+        self.assertEqual(fila['total_por_cobrar'], Decimal('25.00'))
         self.assertEqual(
             fila['total_acordado'],
             fila['total_recaudado'] + fila['total_por_cobrar'],
         )
         self.assertContains(response, '>Por cobrar<')
         self.assertContains(response, '$120,00')
-        self.assertContains(response, '$80,00')
+        self.assertContains(response, '$95,00')
 
     def test_ranking_sin_permiso_de_valores_no_ve_por_cobrar(self):
         self.crear_salida_ranking(
@@ -4205,7 +4192,7 @@ class VentasTests(TestCase):
             'Qué son estos totales',
             'Son <b>generales</b>: suman a <b>todos los técnicos</b> del ranking en el período elegido.',
             'Si en el período solo trabajó un técnico, los totales son iguales a los de ese técnico.',
-            '<b>Total acordado = Total recaudado + Por cobrar</b>',
+            '<b>Acordado + Domicilio + A favor = Recaudado + Por cobrar</b>',
             'Comprobación: 01/08/2026 – 31/08/2026',
         ):
             self.assertContains(response, texto)
@@ -4359,9 +4346,9 @@ class VentasTests(TestCase):
         self.assertContains(response, 'Mes a mes de Constante</h5>')
         self.assertContains(response, 'Mes a mes de SoloAgosto</h5>')
         # 5 de equipos + 5 de dinero + 2 de equipos por mes + 3 de dinero por mes.
-        self.assertEqual(len(response.context['comprobaciones']), 15)
+        self.assertEqual(len(response.context['comprobaciones']), 21)
         self.assertTrue(response.context['todo_cuadra'])
-        self.assertContains(response, '✓ Las 15 cuentas cuadran.')
+        self.assertContains(response, '✓ Las 21 cuentas cuadran.')
         self.assertContains(
             response,
             'agosto 2026: 3 + septiembre 2026: 1 + octubre 2026: 1 = 5',

@@ -864,11 +864,13 @@
         <h3 class="totales-titulo">Totales de todos los técnicos</h3>
         <span class="totales-sub">{{ periodo_filtro.etiqueta|capfirst }}</span>
     </div>
-    <div class="totales-acciones">
+    <div class="totales-acciones">{% if not cuadres_con_diferencia or not todo_cuadra %}
         <button type="button" class="chip-cuadre {% if todo_cuadra %}ok{% else %}mal{% endif %}" data-guia="guia-totales" data-titulo="📖 Guía de los totales" data-paso="ultimo" aria-controls="guia-totales">
             {% if todo_cuadra %}✓ Todo cuadra{% else %}⚠ Hay cuentas que no cuadran{% endif %}
-        </button>
-        <button type="button" class="btn-guia" id="btn-guia-totales" data-guia="guia-totales" data-titulo="📖 Guía de los totales" aria-controls="guia-totales">📖 Guía de los totales</button>
+        </button>{% endif %}
+        <button type="button" class="btn-guia" id="btn-guia-totales" data-guia="guia-totales" data-titulo="📖 Guía de los totales" aria-controls="guia-totales">📖 Guía de los totales</button>{% if mostrar_valores_monetarios %}
+        <a class="chip-enlace {% if cuadres_con_diferencia %}mal{% else %}ok{% endif %}" href="#cuadre-pagos">{% if cuadres_con_diferencia %}⚠ {{ cuadres_con_diferencia }} diferencia{{ cuadres_con_diferencia|pluralize }} con Pagos{% else %}✓ Cuadra con Pagos{% endif %}</a>
+        <a class="chip-enlace caja-enlace" href="#caja">🔐 Ver Caja</a>{% endif %}
     </div>
 </div>
 
@@ -891,11 +893,14 @@
         <h4>Tarjetas de dinero</h4>
         <ul>
             <li><span><b>Total acordado:</b> lo que se le cobra al cliente por el servicio de los equipos finalizados (con valor adicional y valor de revisión; sin domicilio ni bodegaje).</span></li>
-            <li><span><b>Total recaudado:</b> el acordado de los equipos que ya quedaron en saldo cero.</span></li>
-            <li><span><b>Por cobrar:</b> el acordado de los equipos que todavía tienen saldo pendiente.</span></li>
+            <li><span><b>Domicilio:</b> el valor de domicilio de esos equipos. <b>Total a cobrar</b> es Acordado + Domicilio, igual que en Pagos.</span></li>
+            <li><span><b>Total recaudado:</b> lo que esos clientes ya pagaron, en cualquier fecha, sin contar el bodegaje.</span></li>
+            <li><span><b>Por cobrar:</b> el saldo que todavía deben, el mismo de Pagos.</span></li>
+            <li><span><b>Saldo a favor:</b> lo que algún cliente pagó de más.</span></li>
             <li><span><b>Diagnóstico (No reparados):</b> la parte del acordado de los equipos que no se pudieron reparar o que el cliente no quiso reparar.</span></li>
+            <li><span><b>Bodegaje:</b> es un plus y va aparte. Si se cobra, suma; si no se cobra, solo se muestra. Nunca cambia acordado, recaudado, por cobrar, efectividad ni puntos.</span></li>
         </ul>
-        <p>Siempre se cumple: <b>Total acordado = Total recaudado + Por cobrar</b>.</p>
+        <p>Siempre se cumple: <b>Acordado + Domicilio + A favor = Recaudado + Por cobrar</b>.</p>
     </section>
     {% endif %}
     <section>
@@ -940,10 +945,20 @@
     </div>
 </div>
 {% if mostrar_valores_monetarios %}
+{% include 'includes/ranking_admin_estilos.html' %}
 <div class="stats-row">
     <div class="stat-card">
         <div class="label">Total acordado</div>
         <div class="value">{{ total_acordado_global|dinero_signo }}</div>
+    </div>
+    <div class="stat-card">
+        <div class="label">Domicilio</div>
+        <div class="value">{{ resumen_salidas.total_domicilio|dinero_signo }}</div>
+    </div>
+    <div class="stat-card">
+        <div class="label">Total a cobrar</div>
+        <div class="value">{{ resumen_salidas.total_a_cobrar|dinero_signo }}</div>
+        <div class="nota">Acordado + Domicilio</div>
     </div>
     <div class="stat-card success">
         <div class="label">Total recaudado</div>
@@ -958,6 +973,32 @@
         <div class="value" style="color: var(--warning);">{{ total_diag_no_reparado|dinero_signo }}</div>
     </div>
 </div>
+<p class="fila-titulo">Bodegaje de estos equipos · es un plus, no cambia los valores de arriba</p>
+<div class="stats-row">
+    <div class="stat-card bodegaje">
+        <div class="label">Bodegaje cobrado</div>
+        <div class="value">{{ resumen_salidas.total_bodegaje_cobrado|dinero_signo }}</div>
+        <div class="nota">Ya entró en Pagos y en la Caja</div>
+    </div>
+    <div class="stat-card bodegaje sin-cobrar">
+        <div class="label">Bodegaje sin cobrar</div>
+        <div class="value">{{ resumen_salidas.total_bodegaje_pendiente|dinero_signo }}</div>
+        <div class="nota">Acumulado a hoy, sin decidir</div>
+    </div>
+    <div class="stat-card bodegaje perdonado">
+        <div class="label">Bodegaje perdonado</div>
+        <div class="value">{{ resumen_salidas.total_bodegaje_perdonado|dinero_signo }}</div>
+        <div class="nota">No se cobró al retirar</div>
+    </div>
+    {% if resumen_salidas.total_a_favor %}
+    <div class="stat-card success">
+        <div class="label">Saldo a favor de clientes</div>
+        <div class="value">{{ resumen_salidas.total_a_favor|dinero_signo }}</div>
+        <div class="nota">Pagaron de más</div>
+    </div>
+    {% endif %}
+</div>
+{% include 'includes/ranking_admin_cuadre.html' %}
 {% endif %}
 
 {% if meses_resumen %}
@@ -1258,18 +1299,24 @@
                     <h5 class="tech-block-title">Dinero</h5>
                     <dl class="dinero">
                         <div><dt>Acordado</dt><dd>{{ r.total_acordado|dinero_signo }}</dd></div>
+                        <div><dt>Domicilio</dt><dd>{{ r.total_domicilio|dinero_signo }}</dd></div>
                         <div><dt>Recaudado</dt><dd class="recaudado">{{ r.total_recaudado|dinero_signo }}</dd></div>
                         <div><dt>Por cobrar</dt><dd class="por-cobrar">{{ r.total_por_cobrar|dinero_signo }}</dd></div>
+                        {% if r.total_a_favor %}<div><dt>A favor del cliente</dt><dd class="a-favor">{{ r.total_a_favor|dinero_signo }}</dd></div>{% endif %}
+                        <div class="separador"><dt>Bodegaje cobrado</dt><dd class="plus">+ {{ r.total_bodegaje_cobrado|dinero_signo }}</dd></div>
+                        <div><dt>Bodegaje sin cobrar</dt><dd>{{ r.total_bodegaje_pendiente|dinero_signo }}</dd></div>
+                        <div><dt>Bodegaje perdonado</dt><dd>{{ r.total_bodegaje_perdonado|dinero_signo }}</dd></div>
                     </dl>
                     {% if r.porcentaje_recaudado is not None %}
-                        <div class="meter ancho" role="img" aria-label="{{ r.porcentaje_recaudado|floatformat:1 }} % del acordado recaudado">
+                        <div class="meter ancho" role="img" aria-label="{{ r.porcentaje_recaudado|floatformat:1 }} % de lo que se debe cobrar ya está recaudado">
                             <span style="width: {{ r.porcentaje_recaudado|stringformat:'.1f' }}%;"></span>
                         </div>
-                        <div class="dinero-nota">{{ r.porcentaje_recaudado|floatformat:1 }} % del acordado ya está en saldo cero</div>
+                        <div class="dinero-nota">{{ r.porcentaje_recaudado|floatformat:1 }} % de lo que se debe cobrar ya entró</div>
                     {% endif %}
                 </div>
                 {% endif %}
-            </div>
+            </div>{% if mostrar_valores_monetarios and r.equipos %}
+            {% include 'includes/ranking_admin_equipos.html' %}{% endif %}
 
             {% if r.por_mes %}
             <div class="tech-block tech-meses">
@@ -1289,7 +1336,11 @@
                         <span class="tech-mes-detalle">
                             {{ mes.resumen.num_equipos }} finalizado{{ mes.resumen.num_equipos|pluralize }} ·
                             {{ mes.resumen.salidas_positivas }} suma{{ mes.resumen.salidas_positivas|pluralize:"n" }} ·
-                            {{ mes.resumen.salidas_negativas }} resta{{ mes.resumen.salidas_negativas|pluralize:"n" }}
+                            {{ mes.resumen.salidas_negativas }} resta{{ mes.resumen.salidas_negativas|pluralize:"n" }}{% if mostrar_valores_monetarios %} ·
+                            Acordado {{ mes.resumen.total_acordado|dinero_signo }} ·
+                            Recaudado {{ mes.resumen.total_recaudado|dinero_signo }} ·
+                            Por cobrar {{ mes.resumen.total_por_cobrar|dinero_signo }} ·
+                            Bodegaje cobrado {{ mes.resumen.total_bodegaje_cobrado|dinero_signo }}{% endif %}
                         </span>
                     </li>
                     {% endfor %}
@@ -1306,7 +1357,8 @@
         <p>Aún no se han registrado equipos en el período seleccionado.</p>
     </div>
     {% endif %}
-</section>
+</section>{% if mostrar_valores_monetarios %}
+{% include 'includes/ranking_admin_caja.html' %}{% endif %}
 
 <!-- Top tipos de equipo -->
 {% if por_tipo %}

@@ -23,11 +23,13 @@ from django.views.decorators.http import require_POST
 
 from .forms import EgresoForm
 from .gamificacion import (
-    SALIDA_BUENA_ESTADOS,
-    SALIDA_MALA_ESTADOS,
+    SALIDA_PUNTOS_NEGATIVOS,
+    SALIDA_PUNTOS_POSITIVOS,
+    estado_para_puntos,
 )
 from .busqueda import filtrar_objetos_normalizado, texto_salida_busqueda, total_resultados
 from .bitacora import construir_bitacora_usuario
+from .caja import cobrado_sin_bodegaje
 from .date_filters import aplicar_rango_fecha, contexto_rango_fecha, obtener_rango_fecha
 from .emails import enviar_correo_bodegaje_seguro
 from .models import (
@@ -44,15 +46,17 @@ MESES_ES = [
     'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre',
 ]
 
-SALIDAS_POSITIVAS_ADMIN = SALIDA_BUENA_ESTADOS
-SALIDAS_NEGATIVAS_ADMIN = SALIDA_MALA_ESTADOS
-
-
 def _ingresos_dinero_mes(year, month):
-    """Suma de dinero recibido en el mes (anticipos + abonos + cobros finales)."""
+    """
+    Dinero recibido en el mes: cada pago una sola vez, en el mes de su fecha.
+
+    Las ventas de producto van solo en `cobros_ventas`, con lo que de verdad
+    entró por ellas; el resto de líneas son del taller. El total es el mismo
+    que entra a la Caja del Ranking (ver caja.py).
+    """
     anticipos = IngresoEquipo.objects.filter(
         fecha_ingreso__year=year, fecha_ingreso__month=month,
-    ).aggregate(s=Sum('abono_anticipo'))['s'] or Decimal('0.00')
+    ).exclude(sede='ventas').aggregate(s=Sum('abono_anticipo'))['s'] or Decimal('0.00')
 
     diagnosticos_rapidos = IngresoEquipo.objects.filter(
         fecha_ingreso__year=year, fecha_ingreso__month=month,
@@ -61,12 +65,12 @@ def _ingresos_dinero_mes(year, month):
 
     abonos = Abono.objects.filter(
         fecha__year=year, fecha__month=month,
-    ).aggregate(s=Sum('monto'))['s'] or Decimal('0.00')
+    ).exclude(ingreso__sede='ventas').aggregate(s=Sum('monto'))['s'] or Decimal('0.00')
 
     salidas_mes = SalidaEquipo.objects.filter(
         fecha_salida__year=year, fecha_salida__month=month,
     )
-    
+
     # Reparaciones (todo menos ventas)
     cobros_finales = salidas_mes.exclude(
         estado_reparacion='cliente_no_acepta'
@@ -74,14 +78,25 @@ def _ingresos_dinero_mes(year, month):
         ingreso__sede='ventas'
     ).aggregate(s=Sum('valor_final_cobrado'))['s'] or Decimal('0.00')
 
-    # Ventas de producto
-    cobros_ventas = IngresoEquipo.objects.filter(
-        fecha_ingreso__year=year, fecha_ingreso__month=month,
-        sede='ventas'
-    ).aggregate(s=Sum('valor_acordado'))['s'] or Decimal('0.00')
+    # Ventas de producto: lo que entró por ellas, no el valor de la venta.
+    cobros_ventas = (
+        (IngresoEquipo.objects.filter(
+            fecha_ingreso__year=year, fecha_ingreso__month=month,
+            sede='ventas',
+        ).aggregate(s=Sum('abono_anticipo'))['s'] or Decimal('0.00'))
+        + (Abono.objects.filter(
+            fecha__year=year, fecha__month=month,
+            ingreso__sede='ventas',
+        ).aggregate(s=Sum('monto'))['s'] or Decimal('0.00'))
+        + (salidas_mes.filter(
+            ingreso__sede='ventas',
+        ).aggregate(s=Sum('valor_final_cobrado'))['s'] or Decimal('0.00'))
+    )
 
     cobros_diagnostico = salidas_mes.filter(
         estado_reparacion='cliente_no_acepta'
+    ).exclude(
+        ingreso__sede='ventas'
     ).aggregate(s=Sum('valor_final_cobrado'))['s'] or Decimal('0.00')
 
     return {
@@ -318,8 +333,29 @@ def _ingresos_asignados_tecnicos_mes(year, month, tecnico_filtro=''):
     }
 
 
+def _clasificar_salida_admin(salida):
+    """Positiva o negativa según el signo de sus puntos, igual que en el Ranking."""
+    estado = estado_para_puntos(salida.estado_reparacion, salida.subestado_revision)
+    if estado in SALIDA_PUNTOS_POSITIVOS:
+        return 'positive', 'Positiva'
+    if estado in SALIDA_PUNTOS_NEGATIVOS:
+        return 'negative', 'Negativa'
+    return 'neutral', 'Otra'
+
+
+def _efectividad_admin(positivas, negativas):
+    """Suman ÷ (Suman + Restan), como en el Ranking; None si nada cuenta."""
+    base = positivas + negativas
+    return round((positivas / base) * 100, 1) if base else None
+
+
 def _salidas_reparadas_tecnicos_mes(year, month, tecnico_filtro=''):
-    """Resume equipos finalizados por quien terminó la reparación."""
+    """
+    Resume equipos finalizados por quien terminó la reparación.
+
+    Positivas, negativas y efectividad son las del Ranking de Técnicos.
+    Recaudado es lo que esos equipos ya pagaron, sin contar el bodegaje.
+    """
     salidas_qs = (
         SalidaEquipo.objects
         .filter(
@@ -327,57 +363,13 @@ def _salidas_reparadas_tecnicos_mes(year, month, tecnico_filtro=''):
             fecha_salida__month=month,
         )
         .select_related('ingreso', 'ingreso__cliente', 'tecnico_reparo')
+        .prefetch_related('ingreso__abonos')
     )
     salidas_qs = _filtrar_resumen_por_tecnico(
         salidas_qs,
         'tecnico_reparo',
         tecnico_filtro,
     )
-
-    metricas = salidas_qs.aggregate(
-        total=Count('id'),
-        positivas=Count('id', filter=Q(estado_reparacion__in=SALIDAS_POSITIVAS_ADMIN)),
-        negativas=Count('id', filter=Q(estado_reparacion__in=SALIDAS_NEGATIVAS_ADMIN)),
-        recaudado=Sum('valor_final_cobrado'),
-    )
-    total = metricas['total'] or 0
-    positivas = metricas['positivas'] or 0
-    negativas = metricas['negativas'] or 0
-
-    resumen = list(
-        salidas_qs
-        .order_by()
-        .values(
-            'tecnico_reparo_id',
-            'tecnico_reparo__first_name',
-            'tecnico_reparo__last_name',
-            'tecnico_reparo__username',
-        )
-        .annotate(
-            total=Count('id'),
-            retirados=Count('id', filter=Q(fecha_retiro_real__isnull=False)),
-            pendientes=Count('id', filter=Q(fecha_retiro_real__isnull=True)),
-            positivas=Count('id', filter=Q(estado_reparacion__in=SALIDAS_POSITIVAS_ADMIN)),
-            negativas=Count('id', filter=Q(estado_reparacion__in=SALIDAS_NEGATIVAS_ADMIN)),
-            recaudado=Sum('valor_final_cobrado'),
-        )
-        .order_by('-positivas', '-total', 'tecnico_reparo__first_name', 'tecnico_reparo__username')
-    )
-    for posicion, fila in enumerate(resumen, start=1):
-        nombre = 'Sin técnico que reparó'
-        if fila['tecnico_reparo_id']:
-            nombre = (
-                f"{fila['tecnico_reparo__first_name']} "
-                f"{fila['tecnico_reparo__last_name']}"
-            ).strip() or fila['tecnico_reparo__username']
-        fila.update({
-            'posicion': posicion,
-            'tecnico_id': fila['tecnico_reparo_id'],
-            'tecnico_nombre': nombre,
-            'otras': fila['total'] - fila['positivas'] - fila['negativas'],
-            'efectividad': round((fila['positivas'] / fila['total']) * 100, 1) if fila['total'] else 0,
-            'recaudado': fila['recaudado'] or Decimal('0.00'),
-        })
 
     registros = list(
         salidas_qs.order_by(
@@ -387,17 +379,42 @@ def _salidas_reparadas_tecnicos_mes(year, month, tecnico_filtro=''):
             '-id',
         )
     )
+    por_tecnico = {}
     for salida in registros:
-        if salida.estado_reparacion in SALIDAS_POSITIVAS_ADMIN:
-            salida.clasificacion_admin = 'positive'
-            salida.clasificacion_admin_nombre = 'Positiva'
-        elif salida.estado_reparacion in SALIDAS_NEGATIVAS_ADMIN:
-            salida.clasificacion_admin = 'negative'
-            salida.clasificacion_admin_nombre = 'Negativa'
-        else:
-            salida.clasificacion_admin = 'neutral'
-            salida.clasificacion_admin_nombre = 'Otra'
+        salida.clasificacion_admin, salida.clasificacion_admin_nombre = _clasificar_salida_admin(salida)
+        salida.recaudado_admin = cobrado_sin_bodegaje(salida.ingreso)
+        tecnico = salida.tecnico_reparo
+        fila = por_tecnico.setdefault(salida.tecnico_reparo_id, {
+            'tecnico_id': salida.tecnico_reparo_id,
+            'tecnico_nombre': salida.tecnico_reparo_nombre or 'Sin técnico que reparó',
+            'orden_nombre': (tecnico.first_name, tecnico.username) if tecnico else ('', ''),
+            'total': 0,
+            'retirados': 0,
+            'pendientes': 0,
+            'positivas': 0,
+            'negativas': 0,
+            'recaudado': Decimal('0.00'),
+        })
+        fila['total'] += 1
+        fila['retirados' if salida.fecha_retiro_real else 'pendientes'] += 1
+        fila['positivas'] += salida.clasificacion_admin == 'positive'
+        fila['negativas'] += salida.clasificacion_admin == 'negative'
+        fila['recaudado'] += salida.recaudado_admin
 
+    resumen = sorted(
+        por_tecnico.values(),
+        key=lambda fila: (-fila['positivas'], -fila['total'], fila['orden_nombre']),
+    )
+    for posicion, fila in enumerate(resumen, start=1):
+        fila.update({
+            'posicion': posicion,
+            'otras': fila['total'] - fila['positivas'] - fila['negativas'],
+            'efectividad': _efectividad_admin(fila['positivas'], fila['negativas']),
+        })
+
+    total = len(registros)
+    positivas = sum(fila['positivas'] for fila in resumen)
+    negativas = sum(fila['negativas'] for fila in resumen)
     return {
         'resumen': resumen,
         'registros': registros,
@@ -405,8 +422,8 @@ def _salidas_reparadas_tecnicos_mes(year, month, tecnico_filtro=''):
         'positivas': positivas,
         'negativas': negativas,
         'otras': total - positivas - negativas,
-        'efectividad': round((positivas / total) * 100, 1) if total else 0,
-        'recaudado': metricas['recaudado'] or Decimal('0.00'),
+        'efectividad': _efectividad_admin(positivas, negativas),
+        'recaudado': sum((fila['recaudado'] for fila in resumen), Decimal('0.00')),
     }
 
 
@@ -2078,12 +2095,12 @@ def export_reporte_mes(request):
         ('Cobros en salida (reparaciones)', dinero_in['cobros_finales']),
         ('Ventas de productos', dinero_in['cobros_ventas']),
         ('Cobros por diagnóstico (no reparado)', dinero_in['cobros_diagnostico']),
-        ('Bodegaje cobrado (en retiros)', bodegaje_cobrado),
+        ('Bodegaje cobrado (ya incluido en abonos)', bodegaje_cobrado),
         ('N° casos bodegaje cobrados', SalidaEquipo.objects.filter(
             fecha_retiro_real__year=year, fecha_retiro_real__month=month,
             bodegaje_monto_congelado__gt=0, bodegaje_aplicado_al_pago=True,
         ).count()),
-        ('Bodegaje no cobrado / perdonado', bodegaje_perdonado),
+        ('Bodegaje no cobrado / perdonado (no suma)', bodegaje_perdonado),
         ('N° casos bodegaje no cobrados', SalidaEquipo.objects.filter(
             fecha_retiro_real__year=year, fecha_retiro_real__month=month,
             bodegaje_monto_congelado__gt=0, bodegaje_aplicado_al_pago=False,

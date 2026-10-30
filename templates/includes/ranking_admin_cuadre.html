@@ -1,0 +1,37 @@
+{% load econotec_extras %}
+{# Cuadre del Ranking y la Caja contra Pagos. Solo administrador. Lo que no cuadra se muestra con su causa. #}
+<section class="rank-card" id="cuadre-pagos" aria-labelledby="titulo-cuadre">
+    <h3 id="titulo-cuadre">Cuadre con Pagos</h3>
+    <p class="cuadre-resumen">
+        {{ periodo_filtro.etiqueta|capfirst }}:
+        {% if cuadres_con_diferencia %}<b>{{ cuadres_con_diferencia }} diferencia{{ cuadres_con_diferencia|pluralize }}</b> por revisar{% else %}todo coincide{% endif %}{% if cuadres_con_aviso %} y {{ cuadres_con_aviso }} aviso{{ cuadres_con_aviso|pluralize }}{% endif %}.
+        Ningún número se ajusta para que cuadre.
+    </p>
+    <ul class="cuadre-lista">
+        {% for cuadre in cuadres %}{% if cuadre.estado != 'ok' %}
+        <li class="cuadre-item {{ cuadre.estado }}">
+            <span class="cuadre-marca" aria-hidden="true">{% if cuadre.estado == 'diferencia' %}✗{% else %}!{% endif %}</span>
+            <div>
+                <div class="cuadre-titulo">{{ cuadre.titulo }}</div>
+                <div class="cuadre-cuenta">{{ cuadre.cuenta }}</div>
+                <div class="cuadre-causa">{{ cuadre.causa }}</div>
+            </div>
+            <span class="cuadre-diferencia"><span class="visually-hidden">Diferencia: </span>{{ cuadre.diferencia|dinero_signo }}</span>
+        </li>
+        {% endif %}{% endfor %}
+    </ul>
+    <details class="cuadre-ok">
+        <summary>✓ Ver las cuentas que sí cuadran</summary>
+        <ul class="cuadre-lista">
+            {% for cuadre in cuadres %}{% if cuadre.estado == 'ok' %}
+            <li class="cuadre-item">
+                <span class="cuadre-marca" aria-hidden="true">✓</span>
+                <div>
+                    <div class="cuadre-titulo">{{ cuadre.titulo }}</div>
+                    <div class="cuadre-cuenta">{{ cuadre.cuenta }}</div>
+                </div>
+            </li>
+            {% endif %}{% endfor %}
+        </ul>
+    </details>
+</section>
