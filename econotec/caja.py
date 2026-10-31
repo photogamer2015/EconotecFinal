@@ -13,7 +13,7 @@ Caja y cuadres del Ranking de Técnicos (solo para el administrador).
 - Los cuadres comparan estas cifras con Pagos. Si algo no coincide se muestra
   la diferencia y su causa; no se ajusta ningún número para que cuadre.
 """
-from datetime import timedelta
+from datetime import date, timedelta
 from decimal import Decimal
 
 from django.db.models import Sum
@@ -22,7 +22,7 @@ from django.utils import timezone
 from django.utils.formats import date_format
 
 from .date_filters import _month_bounds, _parse_date
-from .models import Abono, Egreso, IngresoEquipo, SalidaEquipo
+from .models import Abono, CajaGrande, Egreso, IngresoEquipo, SalidaEquipo
 from .seguimiento_pago import (
     METODOS_RESUMEN,
     OTROS,
@@ -39,6 +39,12 @@ CERO = Decimal('0.00')
 OK = 'ok'
 DIFERENCIA = 'diferencia'
 AVISO = 'aviso'
+
+# El Histórico mensual y la primera caja grande empiezan aquí.
+PRIMER_MES_HISTORICO = date(2026, 6, 1)
+PRIMER_ANIO_CAJA = PRIMER_MES_HISTORICO.year
+
+TITULO_CUADRE_GUARDADO = 'Caja: guardado antes + entró − egresos = guardado'
 
 
 # ─────────────────────────────────────────────────────────
@@ -208,12 +214,13 @@ def _sumar_metodos(movimientos):
     ]
 
 
-def caja_del_periodo(desde, hasta, movimientos=None, hoy=None):
+def caja_del_periodo(desde, hasta, movimientos=None, hoy=None, todos_los_meses=False):
     """
     Lo que entró, lo que salió y lo que queda guardado, mes a mes.
 
     `saldo_inicial` es lo guardado antes del período y `saldo_final` lo guardado
     al terminar; siempre se cumple saldo_inicial + entró − egresos = saldo_final.
+    Con `todos_los_meses` se dibuja cada mes del período, aunque no tenga dinero.
     """
     hoy = hoy or timezone.localdate()
     inicio = _parse_date(desde) if desde else None
@@ -234,6 +241,8 @@ def caja_del_periodo(desde, hasta, movimientos=None, hoy=None):
     fechas = [m['fecha'] for m in del_periodo] + [f for f, _monto in egresos_periodo]
     primer_mes = min(fechas) if fechas else inicio
     ultimo_mes = max(fechas) if fechas else fin
+    if todos_los_meses:
+        primer_mes, ultimo_mes = inicio, fin
     # Sin datos no se dibujan meses que todavía no llegan.
     if not fechas and ultimo_mes and primer_mes and ultimo_mes > hoy >= primer_mes:
         ultimo_mes = hoy
@@ -295,6 +304,97 @@ def caja_del_periodo(desde, hasta, movimientos=None, hoy=None):
         'saldo_final': saldo_inicial + entro - egresos_total,
         'metodos': _sumar_metodos(del_periodo),
     }
+
+
+# ─────────────────────────────────────────────────────────
+# Histórico mensual y cajas grandes
+# ─────────────────────────────────────────────────────────
+
+def historico_mensual(movimientos=None, hoy=None):
+    """Cada mes desde junio 2026 hasta el último con dinero o el actual."""
+    hoy = hoy or timezone.localdate()
+    movimientos = movimientos_de_dinero() if movimientos is None else movimientos
+    fechas = [m['fecha'] for m in movimientos] + [fecha for fecha, _monto in _egresos()]
+    _primer_dia, fin = _month_bounds(max([hoy, *fechas]))
+    return caja_del_periodo(
+        PRIMER_MES_HISTORICO.isoformat(), fin.isoformat(), movimientos, hoy,
+        todos_los_meses=True,
+    )['meses']
+
+
+def cajas_grandes():
+    """
+    Las cajas en orden. Cada una guarda desde su año hasta que empiece la
+    siguiente; la primera no se compra y, si no se compra otra, la última sigue
+    guardando.
+    """
+    compradas = {caja.anio: caja for caja in CajaGrande.objects.all()}
+    anios = sorted({PRIMER_ANIO_CAJA, *compradas})
+    return [
+        {
+            'anio': anio,
+            'hasta': anios[i + 1] - 1 if i + 1 < len(anios) else None,
+            'comprada': anio in compradas,
+            'mezclada': anio in compradas and compradas[anio].mezclada,
+        }
+        for i, anio in enumerate(anios)
+    ]
+
+
+def caja_por_comprar(cajas, hoy=None):
+    """El año que todavía no tiene caja: el actual o, si ya la tiene, el que viene."""
+    hoy = hoy or timezone.localdate()
+    anios = {caja['anio'] for caja in cajas}
+    for anio in (hoy.year, hoy.year + 1):
+        if anio not in anios:
+            return anio
+    return None
+
+
+def caja_grande(caja, year, month, movimientos=None, hoy=None):
+    """
+    La Caja de una caja grande hasta el mes elegido.
+
+    Una caja comprada empieza en $0 sin tocar el dinero: lo guardado antes de su
+    año solo deja de contarse aquí. Si está mezclada, muestra todos los años juntos.
+    """
+    hoy = hoy or timezone.localdate()
+    movimientos = movimientos_de_dinero() if movimientos is None else movimientos
+    if year < caja['anio']:
+        ultimo_anio, fin = caja['anio'], date(caja['anio'], 12, 31)
+    elif caja['hasta'] and year > caja['hasta']:
+        ultimo_anio, fin = caja['hasta'], date(caja['hasta'], 12, 31)
+    else:
+        ultimo_anio, fin = year, _month_bounds(date(year, month, 1))[1]
+    primer_anio = PRIMER_ANIO_CAJA if caja['mezclada'] else ultimo_anio
+
+    datos = caja_del_periodo(f'{primer_anio}-01-01', fin.isoformat(), movimientos, hoy)
+    if caja['comprada'] and not caja['mezclada']:
+        inicio_caja = f"{caja['anio']}-01-01"
+        anterior = caja_del_periodo(inicio_caja, inicio_caja, movimientos, hoy)['saldo_inicial']
+        datos['saldo_inicial'] -= anterior
+        datos['saldo_final'] -= anterior
+        for mes in datos['meses']:
+            mes['guardado'] -= anterior
+
+    union = 'y' if ultimo_anio - primer_anio == 1 else 'a'
+    datos['periodo'] = (
+        str(ultimo_anio) if primer_anio == ultimo_anio else f'{primer_anio} {union} {ultimo_anio}'
+    )
+    # Una caja de un año que no llega está vacía: no se dibujan sus meses.
+    datos['por_estrenar'] = primer_anio > hoy.year
+    if datos['por_estrenar']:
+        datos['meses'] = []
+    datos['etiqueta_fin'] = date_format(min(fin, _month_bounds(hoy)[1]), 'F Y')
+    return datos
+
+
+def ocultar_guardado(cuadres):
+    """Con la Caja cerrada, el Cuadre no deja ver lo guardado que ella protege."""
+    for cuadre in cuadres:
+        if cuadre['titulo'] == TITULO_CUADRE_GUARDADO:
+            cuadre['cuenta'] = 'Ingresa tu contraseña en Histórico mensual para ver esta cuenta.'
+    return cuadres
 
 
 # ─────────────────────────────────────────────────────────
@@ -581,7 +681,7 @@ def _cuadres_registro_administrativo(caja):
 def _cuadres_internos_caja(caja):
     return [
         _cuadre(
-            'Caja: guardado antes + entró − egresos = guardado',
+            TITULO_CUADRE_GUARDADO,
             f"{dinero_signo(caja['saldo_inicial'])} + {dinero_signo(caja['entro'])} − "
             f"{dinero_signo(caja['egresos'])} = {dinero_signo(caja['saldo_final'])}",
             caja['saldo_inicial'] + sum((fila['neto'] for fila in caja['meses']), CERO),

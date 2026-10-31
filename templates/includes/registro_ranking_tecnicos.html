@@ -1,5 +1,5 @@
 {% load econotec_extras %}
-{# Caja y Ranking de Técnicos dentro del Registro Administrativo. Solo administrador. Usa las mismas tarjetas y cálculos del Ranking. #}
+{# Ranking de Técnicos dentro del Registro Administrativo. Solo administrador. Usa las mismas tarjetas y cálculos del Ranking. #}
 <style>{% include 'includes/ranking_estilos.html' with en_registro=True %}</style>
 {% include 'includes/ranking_admin_estilos.html' %}
 <style>
@@ -66,8 +66,6 @@
 </style>
 
 <div class="registro-ranking">
-    {% include 'includes/ranking_admin_caja.html' %}
-
     <section class="assignment-section ranking-admin-section" id="ranking-admin" aria-labelledby="titulo-ranking-admin">
         <div class="assignment-head">
             <div>

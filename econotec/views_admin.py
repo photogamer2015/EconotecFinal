@@ -15,9 +15,11 @@ from django.db.models import (
     Subquery, Sum, Value,
 )
 from django.db.models.functions import Coalesce
-from django.http import HttpResponse, JsonResponse
+from django.http import HttpResponse, JsonResponse, QueryDict
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
+from django.utils.cache import add_never_cache_headers
+from django.utils.formats import date_format
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.utils import timezone
 from django.views.decorators.http import require_POST
@@ -25,16 +27,20 @@ from django.views.decorators.http import require_POST
 from .forms import EgresoForm
 from .busqueda import filtrar_objetos_normalizado, texto_salida_busqueda, total_resultados
 from .bitacora import construir_bitacora_usuario
-from .caja import caja_del_periodo, cuadres_del_periodo, movimientos_de_dinero
+from .caja import (
+    caja_del_periodo, caja_grande, caja_por_comprar, cajas_grandes, cuadres_del_periodo,
+    historico_mensual, movimientos_de_dinero, ocultar_guardado,
+)
 from .date_filters import aplicar_rango_fecha, contexto_rango_fecha, obtener_rango_fecha
 from .emails import enviar_correo_bodegaje_seguro
 from .models import (
-    IngresoEquipo, SalidaEquipo, Abono, Egreso, CategoriaEgreso, Cliente,
+    IngresoEquipo, SalidaEquipo, Abono, CajaGrande, Egreso, CategoriaEgreso, Cliente,
     AvisoPanel, BitacoraTecnico, HorarioTecnico, InventarioItem,
     NotificacionCambioAdmin, SEDES_EQUIPOS, VentaInventarioItem,
 )
 from .pagination import paginar_resultados
 from .permisos import GRUPOS_TECNICO, admin_requerido, es_admin, puede_ver_valores_ranking, tecnico_requerido
+from .seguridad import consumir_intento
 
 
 MESES_ES = [
@@ -408,9 +414,65 @@ def _ranking_admin_registro(alcance, year, month, tecnico_filtro):
         'cuadres': cuadres,
         'cuadres_con_diferencia': sum(1 for cuadre in cuadres if cuadre['estado'] == 'diferencia'),
         'cuadres_con_aviso': sum(1 for cuadre in cuadres if cuadre['estado'] == 'aviso'),
-        # La Caja va del inicio del año hasta el mes elegido, para verla guardarse.
-        'caja': caja_del_periodo(f'{year}-01-01', fin_mes.isoformat(), movimientos),
-        'caja_etiqueta': f'{MESES_ES[month].lower()} {year}',
+    }
+
+
+# La contraseña abre la Caja por este tiempo; luego se vuelve a pedir.
+CAJA_ABIERTA_SEGUNDOS = 10 * 60
+
+
+def _caja_abierta(request):
+    return request.session.get('caja_abierta_hasta', 0) > timezone.now().timestamp()
+
+
+def _puede_usar_caja(request):
+    """Comprar o editar una caja también exige haber puesto la contraseña."""
+    if puede_ver_valores_ranking(request.user) and _caja_abierta(request):
+        return True
+    messages.error(request, 'Ingresa tu contraseña en Histórico mensual para usar la Caja.')
+    return False
+
+
+def _volver_al_historico(request, **extra):
+    """De vuelta al Registro con los mismos filtros, abierto en el Histórico mensual."""
+    filtros = QueryDict(request.POST.get('filtros', ''), mutable=True)
+    for clave in ('caja', 'vista', 'estrenada'):
+        filtros.pop(clave, None)
+    for clave, valor in extra.items():
+        filtros[clave] = str(valor)
+    return redirect(f"{reverse('econotec:admin_dashboard')}?{filtros.urlencode()}#historico-mensual")
+
+
+def _historico_registro(request, year, month):
+    """Lo que se ve al abrir el Histórico mensual: por mes y por año."""
+    movimientos = movimientos_de_dinero()
+    hoy = timezone.localdate()
+    meses = historico_mensual(movimientos, hoy)
+    cajas = cajas_grandes()
+    pedida = request.GET.get('caja', '')
+    elegida = next((caja for caja in cajas if str(caja['anio']) == pedida), None) or next(
+        (caja for caja in reversed(cajas) if caja['anio'] <= year),
+        cajas[0],
+    )
+    filtros = request.GET.copy()
+    for clave in ('caja', 'vista', 'estrenada'):
+        filtros.pop(clave, None)
+    filtros['ano'], filtros['mes'] = str(year), str(month)
+    caja = caja_grande(elegida, year, month, movimientos, hoy)
+    return {
+        'caja': caja,
+        'caja_etiqueta': caja['etiqueta_fin'],
+        'caja_elegida': elegida,
+        'caja_estrenada': request.GET.get('estrenada') == '1',
+        'cajas_grandes': cajas,
+        'caja_por_comprar': caja_por_comprar(cajas, hoy),
+        'historico_meses': meses,
+        'historico_grafico': {
+            'etiquetas': [date_format(mes['mes'], 'M Y').capitalize() for mes in meses],
+            'valores': [float(mes['entro']) for mes in meses],
+        },
+        'historico_vista': 'anio' if request.GET.get('vista') == 'anio' else 'mes',
+        'historico_filtros': filtros.urlencode(),
     }
 
 
@@ -640,13 +702,19 @@ def admin_dashboard(request):
     # La Caja y el resumen del Ranking son solo del administrador puro: una
     # cuenta que además sea técnico o asesor tampoco los ve aquí.
     mostrar_valores_monetarios = puede_ver_valores_ranking(request.user)
-    return render(request, 'admin_panel/dashboard.html', {
-        **(_ranking_admin_registro(
-            request.GET.get('ranking'),
-            year,
-            month,
-            tecnico_resumen_filtro,
-        ) if mostrar_valores_monetarios else {}),
+    caja_abierta = mostrar_valores_monetarios and _caja_abierta(request)
+    contexto_ranking = _ranking_admin_registro(
+        request.GET.get('ranking'),
+        year,
+        month,
+        tecnico_resumen_filtro,
+    ) if mostrar_valores_monetarios else {}
+    if mostrar_valores_monetarios and not caja_abierta:
+        ocultar_guardado(contexto_ranking['cuadres'])
+    respuesta = render(request, 'admin_panel/dashboard.html', {
+        **contexto_ranking,
+        **(_historico_registro(request, year, month) if caja_abierta else {}),
+        'caja_abierta': caja_abierta,
         'mostrar_valores_monetarios': mostrar_valores_monetarios,
         'year': year,
         'month': month,
@@ -697,6 +765,65 @@ def admin_dashboard(request):
         'chart_egresos_cat_labels': json.dumps(column_egresos_labels),
         'chart_egresos_cat_data': json.dumps(column_egresos_data),
     })
+    # Abierta la Caja, «atrás» en el navegador no debe volver a mostrarla ya cerrada.
+    if caja_abierta:
+        add_never_cache_headers(respuesta)
+    return respuesta
+
+
+@admin_requerido
+@require_POST
+def admin_caja_abrir(request):
+    """Pide la contraseña de quien tiene la sesión: cada administrador usa la suya."""
+    if not puede_ver_valores_ranking(request.user):
+        messages.error(request, 'La Caja es solo del administrador.')
+        return redirect('econotec:admin_dashboard')
+    if not consumir_intento(f'caja:{request.user.pk}', 10):
+        messages.error(request, 'Demasiados intentos. Espera unos minutos y vuelve a probar.')
+    elif request.user.check_password(request.POST.get('password', '')):
+        request.session['caja_abierta_hasta'] = timezone.now().timestamp() + CAJA_ABIERTA_SEGUNDOS
+    else:
+        messages.error(request, 'Contraseña incorrecta. La Caja sigue cerrada.')
+    return _volver_al_historico(request)
+
+
+@admin_requerido
+@require_POST
+def admin_caja_cerrar(request):
+    request.session.pop('caja_abierta_hasta', None)
+    return _volver_al_historico(request)
+
+
+@admin_requerido
+@require_POST
+def admin_caja_comprar(request):
+    """Compra de juego: crea la caja del año, no mueve ni descuenta dinero."""
+    if not _puede_usar_caja(request):
+        return _volver_al_historico(request)
+    anio = caja_por_comprar(cajas_grandes())
+    if anio is None:
+        messages.info(request, 'Ya tienes la caja del año que viene.')
+        return _volver_al_historico(request, vista='anio')
+    CajaGrande.objects.get_or_create(anio=anio, defaults={'comprada_por': request.user})
+    messages.success(request, f'🎉 ¡Caja {anio} comprada! No se descontó dinero.')
+    return _volver_al_historico(request, vista='anio', caja=anio, estrenada=1)
+
+
+@admin_requerido
+@require_POST
+def admin_caja_editar(request):
+    """Elige si la caja comprada muestra solo su año o todos los años mezclados."""
+    if not _puede_usar_caja(request):
+        return _volver_al_historico(request)
+    anio = request.POST.get('anio', '')
+    caja = get_object_or_404(CajaGrande, anio=int(anio) if anio.isdigit() else 0)
+    caja.mezclada = request.POST.get('mezcla') == 'si'
+    caja.save(update_fields=['mezclada'])
+    messages.success(
+        request,
+        f'Caja {caja.anio}: ' + ('valores de todos los años mezclados.' if caja.mezclada else 'solo su año.'),
+    )
+    return _volver_al_historico(request, vista='anio', caja=caja.anio)
 
 
 @admin_requerido

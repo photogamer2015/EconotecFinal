@@ -12,8 +12,11 @@ from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
 
-from .caja import caja_del_periodo, cuadres_del_periodo, movimientos_de_dinero
-from .models import Abono, CategoriaEgreso, Cliente, Egreso, IngresoEquipo, SalidaEquipo
+from .caja import (
+    caja_del_periodo, caja_grande, caja_por_comprar, cajas_grandes, cuadres_del_periodo,
+    historico_mensual, movimientos_de_dinero,
+)
+from .models import Abono, CajaGrande, CategoriaEgreso, Cliente, Egreso, IngresoEquipo, SalidaEquipo
 from .views import ranking_con_dinero
 from .views_admin import _ingresos_dinero_mes
 
@@ -119,6 +122,10 @@ class RankingAdminBase(TestCase):
 
     def cuadres_con_problema(self, respuesta):
         return [c for c in self.cuadres(respuesta) if c['estado'] == 'diferencia']
+
+    def abrir_caja(self, usuario=None, clave='x'):
+        self.client.force_login(usuario or self.admin)
+        return self.client.post(reverse('econotec:admin_caja_abrir'), {'password': clave})
 
 
 class VistaDeOtrosRolesTests(RankingAdminBase):
@@ -462,7 +469,7 @@ class CajaTests(RankingAdminBase):
         self.assertEqual(len(caja['meses']), 1)
         self.assertEqual(caja['meses'][0]['neto'], Decimal('0.00'))
         self.assertEqual(caja_del_periodo('', '')['meses'], [])
-        self.client.force_login(self.admin)
+        self.abrir_caja()
         respuesta = self.client.get(reverse('econotec:admin_dashboard'), {'ano': '2026', 'mes': '3'})
         self.assertEqual(len(respuesta.context['caja']['meses']), 3)
         self.assertEqual(respuesta.context['caja']['saldo_final'], Decimal('0.00'))
@@ -480,7 +487,7 @@ class CajaTests(RankingAdminBase):
 
     def test_caja_tiene_animacion_y_numeros_reales(self):
         self.preparar_historial()
-        self.client.force_login(self.admin)
+        self.abrir_caja()
         respuesta = self.client.get(reverse('econotec:admin_dashboard'), {'ano': '2026', 'mes': '10'})
         self.assertContains(respuesta, 'data-final="230.00"')
         self.assertContains(respuesta, 'caja-fuerte')
@@ -779,6 +786,7 @@ class ResumenRankingEnRegistroTests(RankingAdminBase):
 
     def test_la_caja_esta_en_el_registro_y_no_en_el_ranking(self):
         self.preparar()
+        self.abrir_caja()
         registro = self.registro()
         self.assertContains(registro, 'id="caja"')
         self.assertContains(registro, 'Guardado en caja')
@@ -791,10 +799,12 @@ class ResumenRankingEnRegistroTests(RankingAdminBase):
         self.assertNotContains(ranking, 'id="cuadre-pagos"')
         self.assertNotContains(ranking, 'id="caja"')
         self.assertNotContains(ranking, 'Guardado en caja')
-        self.assertContains(ranking, f"{reverse('econotec:admin_dashboard')}?ano=2026&mes=10#caja")
+        self.assertContains(ranking, f"{reverse('econotec:admin_dashboard')}?ano=2026&mes=10#historico-mensual")
+        self.assertContains(ranking, 'Ingrese su contraseña de administrador')
 
     def test_el_filtro_de_tecnico_muestra_solo_a_ese_tecnico(self):
         self.preparar()
+        self.abrir_caja()
         contexto = self.registro(tecnico_resumen=str(self.otro_tecnico.pk)).context
         self.assertEqual([f['tecnico_id'] for f in contexto['ranking_filas']], [self.otro_tecnico.pk])
         self.assertEqual(contexto['ranking_resumen']['total_recaudado'], Decimal('5.00'))
@@ -839,5 +849,205 @@ class ResumenRankingEnRegistroTests(RankingAdminBase):
         self.assertEqual(respuesta.status_code, 200)
         for clave in ('caja', 'cuadres', 'ranking_filas'):
             self.assertNotIn(clave, respuesta.context)
-        for texto in ('id="caja"', 'Guardado en caja', 'id="ranking-admin"', 'Cuadre con Pagos', '🔐 Caja'):
+        for texto in (
+            'id="caja"', 'Guardado en caja', 'id="ranking-admin"', 'Cuadre con Pagos', '🔐 Caja',
+            'Histórico mensual',
+        ):
             self.assertNotContains(respuesta, texto)
+
+
+class HistoricoMensualTests(RankingAdminBase):
+    """La Caja vive en un renglón con contraseña; ver cajas nunca toca el dinero."""
+
+    def registro(self, **parametros):
+        return self.client.get(
+            reverse('econotec:admin_dashboard'),
+            {'ano': '2026', 'mes': '10', **parametros},
+        )
+
+    def preparar(self):
+        julio = self.ingreso(fecha=date(2026, 7, 5), abono_anticipo=Decimal('100.00'))
+        self.salida(julio, fecha=date(2026, 7, 20))
+        self.abono(self.ingreso(fecha=date(2026, 10, 1)), '50.00', fecha=date(2026, 10, 5))
+        self.egreso('30.00', fecha=date(2026, 10, 6))
+
+    def test_cerrado_pide_contrasena_y_no_lleva_valores_de_la_caja(self):
+        self.preparar()
+        self.client.force_login(self.admin)
+        respuesta = self.registro()
+        self.assertContains(respuesta, 'Histórico mensual')
+        self.assertContains(respuesta, 'Ingrese su contraseña de administrador')
+        for clave in ('caja', 'historico_meses', 'historico_grafico'):
+            self.assertNotIn(clave, respuesta.context)
+        for texto in ('id="caja"', 'Guardado en caja', 'id="historico-grafico-datos"', 'data-final='):
+            self.assertNotContains(respuesta, texto)
+        cuadre = next(
+            c for c in respuesta.context['cuadres']
+            if c['titulo'] == 'Caja: guardado antes + entró − egresos = guardado'
+        )
+        self.assertIn('contraseña', cuadre['cuenta'])
+
+    def test_cada_administrador_abre_con_su_propia_contrasena(self):
+        otro = get_user_model().objects.create_superuser(
+            username='OtroAdmin', email='otro@example.com', password='clave-del-otro',
+        )
+        self.abrir_caja(clave='clave-del-otro')
+        self.assertNotIn('caja', self.registro().context)
+
+        self.abrir_caja(otro, clave='clave-del-otro')
+        self.assertIn('caja', self.registro().context)
+
+    def test_contrasena_mala_no_abre_y_los_intentos_tienen_limite(self):
+        self.client.force_login(self.admin)
+        for _ in range(10):
+            self.abrir_caja(clave='mala')
+        self.abrir_caja(clave='x')
+        self.assertNotIn('caja', self.registro().context)
+
+    def test_se_cierra_con_el_boton_y_con_el_tiempo(self):
+        self.abrir_caja()
+        self.assertIn('caja', self.registro().context)
+        self.assertIn('no-store', self.registro()['Cache-Control'])
+        self.client.post(reverse('econotec:admin_caja_cerrar'))
+        self.assertNotIn('caja', self.registro().context)
+
+        self.abrir_caja()
+        mas_tarde = timezone.now() + timedelta(minutes=11)
+        with patch('econotec.views_admin.timezone.now', return_value=mas_tarde):
+            self.assertNotIn('caja', self.registro().context)
+
+    def test_otros_roles_no_pueden_abrir_ni_con_su_contrasena(self):
+        self.superusuario_tecnico.set_password('x')
+        self.superusuario_tecnico.save()
+        self.abrir_caja(self.superusuario_tecnico)
+        self.assertNotIn('caja', self.registro().context)
+        self.assertEqual(self.client.post(reverse('econotec:admin_caja_comprar')).status_code, 302)
+        self.assertFalse(CajaGrande.objects.exists())
+        self.client.force_login(self.tecnico)
+        self.client.post(reverse('econotec:admin_caja_abrir'), {'password': 'x'})
+        self.assertEqual(self.registro().status_code, 302)
+
+    def test_comprar_y_editar_exigen_la_caja_abierta(self):
+        self.client.force_login(self.admin)
+        self.client.post(reverse('econotec:admin_caja_comprar'))
+        self.assertFalse(CajaGrande.objects.exists())
+        CajaGrande.objects.create(anio=2027)
+        self.client.post(reverse('econotec:admin_caja_editar'), {'anio': '2027', 'mezcla': 'si'})
+        self.assertFalse(CajaGrande.objects.get(anio=2027).mezclada)
+
+    def test_historico_va_de_junio_2026_al_ultimo_mes_con_lo_recaudado(self):
+        self.preparar()
+        meses = historico_mensual(hoy=date(2026, 12, 15))
+        self.assertEqual(
+            [(m['mes'], m['entro']) for m in meses],
+            [
+                (date(2026, 6, 1), Decimal('0.00')),
+                (date(2026, 7, 1), Decimal('100.00')),
+                (date(2026, 8, 1), Decimal('0.00')),
+                (date(2026, 9, 1), Decimal('0.00')),
+                (date(2026, 10, 1), Decimal('50.00')),
+                (date(2026, 11, 1), Decimal('0.00')),
+                (date(2026, 12, 1), Decimal('0.00')),
+            ],
+        )
+
+    def test_grafico_y_cajitas_con_el_mismo_dinero(self):
+        self.preparar()
+        self.abrir_caja()
+        with patch('econotec.views_admin.timezone.localdate', return_value=date(2026, 10, 31)):
+            contexto = self.registro().context
+        self.assertEqual(contexto['historico_grafico']['etiquetas'][0], 'Jun 2026')
+        self.assertEqual(contexto['historico_grafico']['etiquetas'][-1], 'Oct 2026')
+        self.assertEqual(contexto['historico_grafico']['valores'], [0.0, 100.0, 0.0, 0.0, 50.0])
+
+    def test_oferta_de_caja_nueva_segun_el_anio(self):
+        hoy = date(2026, 10, 31)
+        self.assertEqual(caja_por_comprar(cajas_grandes(), hoy), 2027)
+        CajaGrande.objects.create(anio=2027)
+        self.assertIsNone(caja_por_comprar(cajas_grandes(), hoy))
+        self.assertEqual(caja_por_comprar(cajas_grandes(), date(2027, 2, 1)), 2028)
+        CajaGrande.objects.all().delete()
+        self.assertEqual(caja_por_comprar(cajas_grandes(), date(2027, 2, 1)), 2027)
+
+    def test_comprar_no_cambia_el_dinero_ni_el_cuadre(self):
+        self.preparar()
+        self.abrir_caja()
+        antes = caja_del_periodo('', '')
+        with patch('econotec.views_admin.timezone.localdate', return_value=date(2026, 10, 31)):
+            respuesta = self.client.post(
+                reverse('econotec:admin_caja_comprar'), {'filtros': 'ano=2026&mes=10&ranking=anio'},
+            )
+        self.assertIn('ranking=anio', respuesta['Location'])
+        self.assertIn('caja=2027', respuesta['Location'])
+        self.assertTrue(respuesta['Location'].endswith('#historico-mensual'))
+        self.assertEqual(CajaGrande.objects.get().anio, 2027)
+        self.assertEqual(CajaGrande.objects.get().comprada_por, self.admin)
+        self.assertEqual(caja_del_periodo('', ''), antes)
+        self.assertEqual(self.cuadres_con_problema(self.ver()), [])
+
+    def preparar_dos_anios(self):
+        self.preparar()
+        self.abono(self.ingreso(fecha=date(2027, 1, 2)), '40.00', fecha=date(2027, 1, 5))
+        CajaGrande.objects.create(anio=2027)
+
+    def test_caja_nueva_empieza_en_cero_y_la_vieja_queda_como_estaba(self):
+        self.preparar_dos_anios()
+        hoy = date(2027, 2, 1)
+        vieja, nueva = cajas_grandes()
+
+        datos_vieja = caja_grande(vieja, 2027, 2, hoy=hoy)
+        self.assertEqual(datos_vieja['saldo_final'], Decimal('120.00'))
+        self.assertEqual(datos_vieja['periodo'], '2026')
+
+        datos_nueva = caja_grande(nueva, 2027, 2, hoy=hoy)
+        self.assertEqual(datos_nueva['saldo_inicial'], Decimal('0.00'))
+        self.assertEqual(datos_nueva['saldo_final'], Decimal('40.00'))
+        self.assertEqual([m['guardado'] for m in datos_nueva['meses']], [Decimal('40.00')])
+        self.assertEqual(datos_vieja['saldo_final'] + datos_nueva['saldo_final'], Decimal('160.00'))
+
+    def test_caja_mezclada_junta_los_anios(self):
+        self.preparar_dos_anios()
+        CajaGrande.objects.update(mezclada=True)
+        _vieja, nueva = cajas_grandes()
+
+        datos = caja_grande(nueva, 2027, 2, hoy=date(2027, 2, 1))
+
+        self.assertEqual(datos['periodo'], '2026 y 2027')
+        self.assertEqual(datos['saldo_final'], Decimal('160.00'))
+        self.assertEqual(datos['entro'], Decimal('190.00'))
+        self.assertEqual(datos['meses'][0]['mes'], date(2026, 7, 1))
+
+    def test_sin_comprar_la_misma_caja_sigue_guardando(self):
+        self.preparar()
+        self.abono(self.ingreso(fecha=date(2027, 1, 2)), '40.00', fecha=date(2027, 1, 5))
+        caja = cajas_grandes()[0]
+        datos = caja_grande(caja, 2027, 1, hoy=date(2027, 1, 31))
+        self.assertEqual(datos['saldo_inicial'], Decimal('120.00'))
+        self.assertEqual(datos['saldo_final'], Decimal('160.00'))
+
+    def test_caja_de_un_anio_que_no_llega_esta_vacia(self):
+        self.preparar()
+        CajaGrande.objects.create(anio=2027)
+        datos = caja_grande(cajas_grandes()[1], 2026, 10, hoy=date(2026, 10, 31))
+        self.assertTrue(datos['por_estrenar'])
+        self.assertEqual(datos['meses'], [])
+        self.assertEqual(datos['saldo_final'], Decimal('0.00'))
+
+    def test_pantalla_de_caja_comprada_ofrece_editar_y_mezclar(self):
+        self.preparar()
+        CajaGrande.objects.create(anio=2027)
+        self.abrir_caja()
+
+        respuesta = self.registro(vista='anio', caja='2027')
+        self.assertContains(respuesta, 'Quiero editar mi caja grande')
+        self.assertContains(respuesta, 'Caja nueva: empieza a guardar en enero 2027')
+        self.assertNotContains(self.registro(vista='anio', caja='2026'), 'Quiero editar mi caja grande')
+
+        self.client.post(reverse('econotec:admin_caja_editar'), {'anio': '2027', 'mezcla': 'si'})
+        self.assertTrue(CajaGrande.objects.get(anio=2027).mezclada)
+        self.assertContains(self.registro(vista='anio', caja='2027'), 'años mezclados')
+
+    def test_caja_invalida_en_la_url_no_rompe(self):
+        self.abrir_caja()
+        self.assertEqual(self.registro(caja='abc').status_code, 200)
+        self.assertEqual(self.client.post(reverse('econotec:admin_caja_editar'), {'anio': 'abc'}).status_code, 404)

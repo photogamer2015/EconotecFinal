@@ -933,7 +933,7 @@
     </div>
     <div style="display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end;">
         {% if mostrar_valores_monetarios %}
-        <a href="#caja" class="btn btn-secondary">🔐 Caja</a>
+        <a href="#historico-mensual" class="btn btn-secondary">🔐 Caja</a>
         <a href="#ranking-admin" class="btn btn-secondary">🏆 Ranking de Técnicos</a>
         {% endif %}
         <a href="{% url 'econotec:admin_egresos_lista' %}" class="btn btn-secondary">Ver Egresos</a>
@@ -1489,6 +1489,8 @@
         </div>
     </div>
 </div>
+
+{% if mostrar_valores_monetarios %}{% include 'includes/historico_mensual.html' %}{% endif %}
 
 <!-- USUARIOS EN LÍNEA -->
 <div class="breakdown-grid" style="margin-top: 22px;">

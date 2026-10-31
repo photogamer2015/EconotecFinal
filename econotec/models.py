@@ -3186,3 +3186,25 @@ class LimiteAcceso(models.Model):
     clave = models.CharField(max_length=64, primary_key=True)
     intentos = models.PositiveIntegerField(default=0)
     expira = models.DateTimeField(db_index=True)
+
+
+class CajaGrande(models.Model):
+    """
+    Caja grande comprada para un año. Solo decide cómo se ve el dinero: no guarda
+    montos ni descuenta nada; la Caja se sigue calculando de los pagos reales.
+    """
+    anio = models.PositiveIntegerField('Año', unique=True)
+    mezclada = models.BooleanField('Mezclada con años anteriores', default=False)
+    comprada_por = models.ForeignKey(
+        'auth.User', on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='+',
+    )
+    comprada_en = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'Caja grande'
+        verbose_name_plural = 'Cajas grandes'
+        ordering = ['anio']
+
+    def __str__(self):
+        return f'Caja {self.anio}'
