@@ -682,72 +682,15 @@ class RegistroAdministrativoTests(RankingAdminBase):
         ):
             self.salida(self.ingreso(), estado=estado, subestado_revision=subestado)
 
-    def test_efectividad_y_resultados_iguales_al_ranking(self):
-        self.preparar_todos_los_resultados()
-
-        registro = self.registro().context
-        ranking = self.ver().context['resumen_salidas']
-
-        self.assertEqual(registro['salidas_tecnicos_positivas'], ranking['salidas_positivas'])
-        self.assertEqual(registro['salidas_tecnicos_negativas'], ranking['salidas_negativas'])
-        self.assertEqual(registro['salidas_tecnicos_otras'], ranking['salidas_neutras'])
-        self.assertEqual(registro['salidas_tecnicos_efectividad'], ranking['efectividad'])
-        self.assertEqual(registro['salidas_tecnicos_positivas'], 4)
-        self.assertEqual(registro['salidas_tecnicos_negativas'], 4)
-        self.assertEqual(registro['salidas_tecnicos_otras'], 3)
-        self.assertEqual(registro['salidas_tecnicos_efectividad'], 50.0)
-        fila = registro['salidas_tecnicos_resumen'][0]
-        self.assertEqual(fila['efectividad'], 50.0)
-        clases = {
-            (salida.estado_reparacion, salida.subestado_revision): salida.clasificacion_admin
-            for salida in registro['salidas_tecnicos_registros']
-        }
-        self.assertEqual(clases[('cliente_no_acepta', '')], 'positive')
-        self.assertEqual(clases[('garantia', '')], 'negative')
-        self.assertEqual(clases[('revision', 'cliente_no_acepta')], 'positive')
-        self.assertEqual(clases[('revision', 'no_reparable')], 'negative')
-        self.assertEqual(clases[('revision', 'equipo_prueba')], 'neutral')
-        self.assertEqual(clases[('chatarrerizacion', '')], 'neutral')
-
-    def test_sin_equipos_que_cuenten_no_inventa_efectividad(self):
-        self.salida(self.ingreso(), estado='cortesia')
-
+    def test_ya_no_muestra_la_seccion_de_equipos_finalizados(self):
+        self.preparar_mes()
         respuesta = self.registro()
-
-        self.assertIsNone(respuesta.context['salidas_tecnicos_efectividad'])
-        self.assertIsNone(respuesta.context['salidas_tecnicos_resumen'][0]['efectividad'])
-
-    def test_recaudado_es_lo_pagado_sin_bodegaje_igual_que_el_ranking(self):
-        ingreso = self.ingreso(valor_acordado=Decimal('60.00'), abono_anticipo=Decimal('10.00'))
-        self.salida(ingreso)
-        self.abono(ingreso, '50.00')
-        self.abono(ingreso, '8.00', bodegaje_decision='si', bodegaje_monto_aplicado=Decimal('8.00'))
-        otro = self.ingreso(valor_acordado=Decimal('40.00'))
-        self.salida(otro, fecha=date(2026, 10, 11), tecnico=self.otro_tecnico)
-        self.abono(otro, '15.00')
-
-        respuesta = self.registro()
-
-        contexto = respuesta.context
-        self.assertEqual(contexto['salidas_tecnicos_recaudado'], Decimal('75.00'))
-        self.assertEqual(
-            contexto['salidas_tecnicos_recaudado'],
-            self.ver().context['resumen_salidas']['total_recaudado'],
-        )
-        por_tecnico = {f['tecnico_id']: f['recaudado'] for f in contexto['salidas_tecnicos_resumen']}
-        self.assertEqual(por_tecnico[self.tecnico.pk], Decimal('60.00'))
-        self.assertEqual(por_tecnico[self.otro_tecnico.pk], Decimal('15.00'))
+        self.assertNotContains(respuesta, 'id="salidas-tecnicos"')
         self.assertNotContains(respuesta, 'Recaudado al finalizar')
-        self.assertContains(respuesta, '$75,00')
-
-    def test_filtro_por_tecnico_sigue_funcionando(self):
-        self.salida(self.ingreso(), tecnico=self.tecnico)
-        self.salida(self.ingreso(), tecnico=self.otro_tecnico)
-
-        contexto = self.registro(ano='2026', mes='10', tecnico_resumen=str(self.otro_tecnico.pk)).context
-
-        self.assertEqual(contexto['salidas_tecnicos_total'], 1)
-        self.assertEqual(contexto['salidas_tecnicos_resumen'][0]['tecnico_id'], self.otro_tecnico.pk)
+        self.assertNotIn('salidas_tecnicos_total', respuesta.context)
+        # Sus datos siguen en el resumen del Ranking.
+        self.assertEqual(respuesta.context['ranking_resumen']['num_equipos'], 1)
+        self.assertEqual(respuesta.context['ranking_resumen']['total_recaudado'], Decimal('60.00'))
 
 
 class ResumenRankingEnRegistroTests(RankingAdminBase):

@@ -22,14 +22,9 @@ from django.utils import timezone
 from django.views.decorators.http import require_POST
 
 from .forms import EgresoForm
-from .gamificacion import (
-    SALIDA_PUNTOS_NEGATIVOS,
-    SALIDA_PUNTOS_POSITIVOS,
-    estado_para_puntos,
-)
 from .busqueda import filtrar_objetos_normalizado, texto_salida_busqueda, total_resultados
 from .bitacora import construir_bitacora_usuario
-from .caja import caja_del_periodo, cobrado_sin_bodegaje, cuadres_del_periodo, movimientos_de_dinero
+from .caja import caja_del_periodo, cuadres_del_periodo, movimientos_de_dinero
 from .date_filters import aplicar_rango_fecha, contexto_rango_fecha, obtener_rango_fecha
 from .emails import enviar_correo_bodegaje_seguro
 from .models import (
@@ -333,100 +328,6 @@ def _ingresos_asignados_tecnicos_mes(year, month, tecnico_filtro=''):
     }
 
 
-def _clasificar_salida_admin(salida):
-    """Positiva o negativa según el signo de sus puntos, igual que en el Ranking."""
-    estado = estado_para_puntos(salida.estado_reparacion, salida.subestado_revision)
-    if estado in SALIDA_PUNTOS_POSITIVOS:
-        return 'positive', 'Positiva'
-    if estado in SALIDA_PUNTOS_NEGATIVOS:
-        return 'negative', 'Negativa'
-    return 'neutral', 'Otra'
-
-
-def _efectividad_admin(positivas, negativas):
-    """Suman ÷ (Suman + Restan), como en el Ranking; None si nada cuenta."""
-    base = positivas + negativas
-    return round((positivas / base) * 100, 1) if base else None
-
-
-def _salidas_reparadas_tecnicos_mes(year, month, tecnico_filtro=''):
-    """
-    Resume equipos finalizados por quien terminó la reparación.
-
-    Positivas, negativas y efectividad son las del Ranking de Técnicos.
-    Recaudado es lo que esos equipos ya pagaron, sin contar el bodegaje.
-    """
-    salidas_qs = (
-        SalidaEquipo.objects
-        .filter(
-            fecha_salida__year=year,
-            fecha_salida__month=month,
-        )
-        .select_related('ingreso', 'ingreso__cliente', 'tecnico_reparo')
-        .prefetch_related('ingreso__abonos')
-    )
-    salidas_qs = _filtrar_resumen_por_tecnico(
-        salidas_qs,
-        'tecnico_reparo',
-        tecnico_filtro,
-    )
-
-    registros = list(
-        salidas_qs.order_by(
-            'tecnico_reparo__first_name',
-            'tecnico_reparo__username',
-            '-fecha_salida',
-            '-id',
-        )
-    )
-    por_tecnico = {}
-    for salida in registros:
-        salida.clasificacion_admin, salida.clasificacion_admin_nombre = _clasificar_salida_admin(salida)
-        salida.recaudado_admin = cobrado_sin_bodegaje(salida.ingreso)
-        tecnico = salida.tecnico_reparo
-        fila = por_tecnico.setdefault(salida.tecnico_reparo_id, {
-            'tecnico_id': salida.tecnico_reparo_id,
-            'tecnico_nombre': salida.tecnico_reparo_nombre or 'Sin técnico que reparó',
-            'orden_nombre': (tecnico.first_name, tecnico.username) if tecnico else ('', ''),
-            'total': 0,
-            'retirados': 0,
-            'pendientes': 0,
-            'positivas': 0,
-            'negativas': 0,
-            'recaudado': Decimal('0.00'),
-        })
-        fila['total'] += 1
-        fila['retirados' if salida.fecha_retiro_real else 'pendientes'] += 1
-        fila['positivas'] += salida.clasificacion_admin == 'positive'
-        fila['negativas'] += salida.clasificacion_admin == 'negative'
-        fila['recaudado'] += salida.recaudado_admin
-
-    resumen = sorted(
-        por_tecnico.values(),
-        key=lambda fila: (-fila['positivas'], -fila['total'], fila['orden_nombre']),
-    )
-    for posicion, fila in enumerate(resumen, start=1):
-        fila.update({
-            'posicion': posicion,
-            'otras': fila['total'] - fila['positivas'] - fila['negativas'],
-            'efectividad': _efectividad_admin(fila['positivas'], fila['negativas']),
-        })
-
-    total = len(registros)
-    positivas = sum(fila['positivas'] for fila in resumen)
-    negativas = sum(fila['negativas'] for fila in resumen)
-    return {
-        'resumen': resumen,
-        'registros': registros,
-        'total': total,
-        'positivas': positivas,
-        'negativas': negativas,
-        'otras': total - positivas - negativas,
-        'efectividad': _efectividad_admin(positivas, negativas),
-        'recaudado': sum((fila['recaudado'] for fila in resumen), Decimal('0.00')),
-    }
-
-
 # Qué período muestra el resumen del Ranking en el Registro: (valor, texto).
 _ALCANCES_RANKING_REGISTRO = (
     ('mes', 'Este mes'),
@@ -582,11 +483,6 @@ def admin_dashboard(request):
     ).count()
     equipos_mes_resumen = _equipos_mes_resumen(year, month)
     ingresos_tecnicos = _ingresos_asignados_tecnicos_mes(
-        year,
-        month,
-        tecnico_resumen_filtro,
-    )
-    salidas_tecnicos = _salidas_reparadas_tecnicos_mes(
         year,
         month,
         tecnico_resumen_filtro,
@@ -769,14 +665,6 @@ def admin_dashboard(request):
         'ingresos_tecnicos_count': ingresos_tecnicos['tecnicos'],
         'ingresos_tecnicos_desde': ingresos_tecnicos['fecha_desde'],
         'ingresos_tecnicos_hasta': ingresos_tecnicos['fecha_hasta'],
-        'salidas_tecnicos_resumen': salidas_tecnicos['resumen'],
-        'salidas_tecnicos_registros': salidas_tecnicos['registros'],
-        'salidas_tecnicos_total': salidas_tecnicos['total'],
-        'salidas_tecnicos_positivas': salidas_tecnicos['positivas'],
-        'salidas_tecnicos_negativas': salidas_tecnicos['negativas'],
-        'salidas_tecnicos_otras': salidas_tecnicos['otras'],
-        'salidas_tecnicos_efectividad': salidas_tecnicos['efectividad'],
-        'salidas_tecnicos_recaudado': salidas_tecnicos['recaudado'],
         'salidas_fisicas_admin_total': salidas_fisicas_admin_total,
         'salidas_fisicas_admin_con_bodegaje': salidas_fisicas_admin_con_bodegaje,
         'salidas_fisicas_admin_bodegaje_cobrado': salidas_fisicas_admin_bodegaje_cobrado,

@@ -5652,16 +5652,16 @@ class VentasTests(TestCase):
         })
         salidas_por_tecnico = {
             fila['tecnico_id']: fila
-            for fila in response.context['salidas_tecnicos_resumen']
+            for fila in response.context['ranking_filas']
         }
         self.assertNotIn(self.usuario.pk, salidas_por_tecnico)
-        self.assertEqual(salidas_por_tecnico[tecnico_salida.pk]['total'], 2)
-        self.assertEqual(salidas_por_tecnico[tecnico_salida.pk]['positivas'], 1)
-        self.assertEqual(salidas_por_tecnico[tecnico_salida.pk]['negativas'], 1)
-        self.assertEqual(salidas_por_tecnico[tecnico_salida.pk]['retirados'], 1)
+        self.assertEqual(salidas_por_tecnico[tecnico_salida.pk]['num_equipos'], 2)
+        self.assertEqual(salidas_por_tecnico[tecnico_salida.pk]['salidas_positivas'], 1)
+        self.assertEqual(salidas_por_tecnico[tecnico_salida.pk]['salidas_negativas'], 1)
+        self.assertEqual(salidas_por_tecnico[tecnico_salida.pk]['entregados'], 1)
         self.assertEqual(salidas_por_tecnico[tecnico_salida.pk]['pendientes'], 1)
         self.assertEqual(salidas_por_tecnico[tecnico_salida.pk]['efectividad'], 50.0)
-        self.assertEqual(response.context['salidas_tecnicos_recaudado'], Decimal('30.00'))
+        self.assertEqual(response.context['ranking_resumen']['total_recaudado'], Decimal('30.00'))
         self.assertEqual(response.context['salidas_fisicas_admin_total'], 1)
         self.assertEqual(response.context['salidas_fisicas_admin_con_bodegaje'], 1)
         self.assertEqual(response.context['salidas_fisicas_admin_bodegaje_cobrado'], 1)
@@ -5679,10 +5679,8 @@ class VentasTests(TestCase):
         self.assertContains(response, 'No representa quién hizo la reparación')
         self.assertContains(response, 'Técnico asignado al ingresar')
         self.assertContains(response, 'Técnico que deseas consultar')
-        self.assertContains(response, 'Equipos finalizados por técnico que terminó la reparación')
-        self.assertContains(response, 'Equipos finalizados del mes')
-        self.assertContains(response, 'Resultados positivos')
-        self.assertContains(response, 'Resultados negativos')
+        self.assertNotContains(response, 'Equipos finalizados por técnico que terminó la reparación')
+        self.assertContains(response, 'Tabla de posiciones')
         self.assertContains(response, 'Salidas físicas confirmadas')
         self.assertContains(response, 'Ver lista completa →')
         self.assertContains(response, reverse('econotec:salida_retiros_lista'))
@@ -5700,9 +5698,9 @@ class VentasTests(TestCase):
         )
         self.assertEqual(response_tecnico_salida.context['tecnico_resumen_nombre'], 'Tecnico Salida')
         self.assertEqual(response_tecnico_salida.context['ingresos_tecnicos_total'], 0)
-        self.assertEqual(response_tecnico_salida.context['salidas_tecnicos_total'], 2)
-        self.assertEqual(response_tecnico_salida.context['salidas_tecnicos_positivas'], 1)
-        self.assertEqual(response_tecnico_salida.context['salidas_tecnicos_negativas'], 1)
+        self.assertEqual(response_tecnico_salida.context['ranking_resumen']['num_equipos'], 2)
+        self.assertEqual(response_tecnico_salida.context['ranking_resumen']['salidas_positivas'], 1)
+        self.assertEqual(response_tecnico_salida.context['ranking_resumen']['salidas_negativas'], 1)
 
         response_tecnico_ingreso = self.client.get(
             reverse('econotec:admin_dashboard'),
@@ -5713,7 +5711,7 @@ class VentasTests(TestCase):
             },
         )
         self.assertEqual(response_tecnico_ingreso.context['ingresos_tecnicos_total'], 2)
-        self.assertEqual(response_tecnico_ingreso.context['salidas_tecnicos_total'], 0)
+        self.assertEqual(response_tecnico_ingreso.context['ranking_resumen']['num_equipos'], 0)
 
         from .views_admin import _obtener_estadisticas_gamificacion
         perfiles = {
