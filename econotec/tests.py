@@ -3247,7 +3247,7 @@ class VentasTests(TestCase):
                 response = self.client.get(reverse('econotec:bienvenida'))
 
                 self.assertEqual(response.status_code, 200)
-                self.assertContains(response, 'Bodegaje / Chatarrerización')
+                self.assertContains(response, 'Bodegaje / Chatarrización')
                 self.assertContains(response, f'href="{ruta}"')
 
     def test_panel_bodegaje_permite_avisos_a_todos_y_reserva_chatarrerizacion_al_admin(self):
@@ -3313,7 +3313,7 @@ class VentasTests(TestCase):
         self.assertIn('Bodegaje acumulado (6 día(s)): *$6,00*', mensaje)
         self.assertIn('Total a regularizar al día de hoy: *$26,00*', mensaje)
         self.assertIn('5 días de gracia', mensaje)
-        self.assertIn('chatarrerización', mensaje)
+        self.assertIn('chatarrización', mensaje)
 
     @override_settings(
         EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend',
@@ -3366,7 +3366,7 @@ class VentasTests(TestCase):
         self.assertIn('$26,00', html)
         self.assertIn('5 días de gracia', html)
         self.assertIn('Pago anterior en efectivo.', html)
-        self.assertIn('Advertencia de chatarrerización', html)
+        self.assertIn('Advertencia de chatarrización', html)
         self.assertIn('https://econotec-ec.com/', html)
         self.assertNotIn('econotec.ec.com', html)
         self.assertNotIn('{{', html)
@@ -3771,7 +3771,7 @@ class VentasTests(TestCase):
         self.crear_salida_ranking(tecnico, fecha, 'no_reparable')
         self.crear_salida_ranking(tecnico, fecha, 'no_reparable')
         # Cliente no quiso reparar suma (+1). Ni suman ni restan: revisión,
-        # cortesía y chatarrerización.
+        # cortesía y chatarrización.
         self.crear_salida_ranking(tecnico, fecha, 'cliente_no_acepta')
         self.crear_salida_ranking(tecnico, fecha, 'revision')
         self.crear_salida_ranking(tecnico, fecha, 'cortesia')
@@ -3841,7 +3841,7 @@ class VentasTests(TestCase):
             'Garantía + fallos adicionales',
             'Cliente no quiso reparar',
             'No se pudo reparar',
-            'Chatarrerización',
+            'Chatarrización',
         ):
             self.assertContains(response, f'<span>{etiqueta}</span><span class="parte-valor"><span class="parte-puntos')
         self.assertNotContains(response, 'Salidas +')
@@ -4175,7 +4175,7 @@ class VentasTests(TestCase):
             'Cuenta exclusivamente al <b>técnico que reparó registrado en la salida</b>',
             'Las garantías se cuentan al técnico registrado en la salida de la garantía.',
             '<b>Restan:</b> Garantía finalizada, Garantía + fallos adicionales y No se pudo reparar, también cuando es la subcategoría de una Revisión.',
-            '<b>No afectan:</b> Revisión — Equipo en prueba (test), Cortesía y Chatarrerización.',
+            '<b>No afectan:</b> Revisión — Equipo en prueba (test), Cortesía y Chatarrización.',
             '14 reparados, 2 que el cliente no quiso reparar, 1 garantía y 1 que no se pudo reparar dan (14 + 2) ÷ 18 = <b>88,9 %</b>',
             'Puntos y niveles',
             '<td>Finalizado y reparado (en espera de retiro o retirado)</td><td>+3</td>',
@@ -11990,7 +11990,7 @@ class VentasTests(TestCase):
 
         data = self.client.get(reverse('econotec:api_perfil')).json()
 
-        # 3 × 3 + 1 − 1 + venta 1 = 10; chatarrerización, revisión y cortesía valen 0.
+        # 3 × 3 + 1 − 1 + venta 1 = 10; chatarrización, revisión y cortesía valen 0.
         self.assertEqual(data['total'], 10)
         self.assertEqual(data['salidas_buenas'], 4)
         self.assertEqual(data['salidas_malas'], 1)

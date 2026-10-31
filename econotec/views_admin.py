@@ -1683,7 +1683,7 @@ def admin_activos_bodegaje(request):
         if not es_admin(request.user):
             return JsonResponse({
                 'status': 'error',
-                'msg': 'Solo un administrador puede enviar equipos a chatarrerización.',
+                'msg': 'Solo un administrador puede enviar equipos a chatarrización.',
             }, status=403)
         try:
             data = json.loads(request.body)
@@ -1744,7 +1744,7 @@ def admin_activos_bodegaje(request):
 @tecnico_requerido
 @require_POST
 def bodegaje_enviar_correo(request, pk):
-    """Envía al cliente el recordatorio formal de retiro y chatarrerización."""
+    """Envía al cliente el recordatorio formal de retiro y chatarrización."""
     salida = get_object_or_404(
         SalidaEquipo.objects.select_related('ingreso', 'ingreso__cliente'),
         pk=pk,

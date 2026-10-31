@@ -417,7 +417,7 @@ def _contexto_correo_bodegaje(salida, *, adjunto_incluido):
 
 
 def enviar_correo_bodegaje(salida):
-    """Envía un aviso formal de retiro, deuda, bodegaje y chatarrerización."""
+    """Envía un aviso formal de retiro, deuda, bodegaje y chatarrización."""
     destino = (salida.ingreso.cliente.correo or '').strip()
     if not destino:
         return False

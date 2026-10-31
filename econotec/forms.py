@@ -1739,7 +1739,7 @@ class SalidaEquipoForm(RetencionFacturaFormMixin, forms.ModelForm):
 
         choices = list(self.fields['estado_reparacion'].choices)
         
-        # Ocultar la opción de chatarrerización del formulario normal.
+        # Ocultar la opción de chatarrización del formulario normal.
         if not (self.instance and self.instance.pk and self.instance.estado_reparacion == 'chatarrerizacion'):
             choices = [c for c in choices if c[0] != 'chatarrerizacion']
 

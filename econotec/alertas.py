@@ -400,7 +400,7 @@ def whatsapp_link_bodegaje(salida):
         f"hasta el retiro.\n\n"
         f"Le solicitamos coordinar el pago y retiro a la brevedad. De continuar sin "
         f"retiro ni coordinación, el equipo será derivado al proceso de "
-        f"*chatarrerización*, cerrando definitivamente su permanencia en bodega.\n\n"
+        f"*chatarrización*, cerrando definitivamente su permanencia en bodega.\n\n"
         f"Por favor responda a este mensaje para coordinar su atención.\n\n"
         f"Saludos cordiales,\n"
         f"{nombre_tecnico} — Econotec"

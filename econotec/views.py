@@ -4482,7 +4482,7 @@ _RESULTADOS_RANKING = (
     ),
     ('revision', 'Revisión — Equipo en prueba (test)', 'neutro', ('revision',)),
     ('cortesia', 'Cortesía', 'neutro', ('cortesia',)),
-    ('chatarrerizacion', 'Chatarrerización', 'neutro', ('chatarrerizacion',)),
+    ('chatarrerizacion', 'Chatarrización', 'neutro', ('chatarrerizacion',)),
 )
 _GRUPOS_RANKING = (
     ('suma', 'Suman'),

@@ -1845,7 +1845,7 @@ class SalidaEquipo(RetencionFactura):
         ('garantia_fallos_adicionales', '🛡 Garantía finalizada + fallos adicionales'),
         ('cortesia', 'Equipo de cortesía finalizado'),
         ('retirado', '✅ Salió de la oficina'),
-        ('chatarrerizacion', '♻️ Chatarrerización'),
+        ('chatarrerizacion', '♻️ Chatarrización'),
     ]
 
     # Subcategoría obligatoria cuando el resultado es Revisión. El cobro sigue

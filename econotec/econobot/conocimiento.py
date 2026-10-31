@@ -37,7 +37,8 @@ SECCIONES = [
     (('pagos', 'abonos', 'cobros'), 'Pagos', 'pagos_lista', None),
     (('venta de producto', 'ventas'), 'Venta de Producto', 'venta_menu', None),
     (('inventario',), 'Inventario', 'inventario_menu', None),
-    (('bodegaje / chatarrerizacion', 'chatarrerizacion', 'panel de bodegaje'), 'Bodegaje / Chatarrerización',
+    (('bodegaje / chatarrizacion', 'chatarrizacion', 'chatarrerizacion', 'panel de bodegaje'),
+     'Bodegaje / Chatarrización',
      'admin_activos_bodegaje', None),
     (('ranking de tecnicos', 'ranking'), 'Ranking de Técnicos', 'salida_totales', 'ranking'),
     (('alertas de demora', 'demoras'), 'Alertas de demora', 'alertas_demora', None),
@@ -177,9 +178,9 @@ def _bodegaje(request):
         '• Al confirmar la salida física (o al registrar un pago) se decide si se cobra o se perdona, y el monto '
         'queda congelado.\n'
         '• Puedes silenciar la alerta de un equipo con 🔕; el bodegaje sigue sumando.\n'
-        '• Desde «Bodegaje / Chatarrerización» se envían avisos por WhatsApp o correo; enviar a chatarrerización '
+        '• Desde «Bodegaje / Chatarrización» se envían avisos por WhatsApp o correo; enviar a chatarrización '
         'es solo para administradores.',
-        [enlace('Alertas de bodegaje', 'alertas_bodegaje'), enlace('Bodegaje / Chatarrerización', 'admin_activos_bodegaje')],
+        [enlace('Alertas de bodegaje', 'alertas_bodegaje'), enlace('Bodegaje / Chatarrización', 'admin_activos_bodegaje')],
         [opcion('📦 Ver equipos con bodegaje', 'alertas')],
     )
 
@@ -299,7 +300,7 @@ def _roles(request):
     return respuesta(
         'Roles del sistema:\n'
         '• Administrador: acceso total (Registro Administrativo, egresos, auditoría, avisos, deshacer salidas, '
-        'chatarrerización, valores del ranking).\n'
+        'chatarrización, valores del ranking).\n'
         '• Técnico y Asesora comercial: registran ingresos, finalizan equipos, registran pagos, confirman salidas '
         'y consultan clientes e historial.\n'
         '• Las asesoras reciben notificaciones cuando queda un saldo por cobrar.',
@@ -310,7 +311,7 @@ def _ranking(request):
     return respuesta(
         f'Ranking de técnicos: el técnico que reparó (el que se indica al finalizar) suma {PUNTOS_SALIDA_BUENA} '
         f'puntos por cada salida buena (reparado, garantía) y {PUNTOS_SALIDA_PRODUCTO} por venta de producto; '
-        f'resta {PUNTOS_SALIDA_MALA_RESTA} por salida mala (no se pudo reparar, cliente no quiso, chatarrerización). '
+        f'resta {PUNTOS_SALIDA_MALA_RESTA} por salida mala (no se pudo reparar, cliente no quiso, chatarrización). '
         'Los valores económicos del ranking solo los ve el administrador.',
         [enlace('Ranking de Técnicos', 'salida_totales')] if puede_ver_ranking(request.user) else [],
     )
