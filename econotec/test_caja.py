@@ -12,8 +12,9 @@ from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
 
-from .caja import caja_del_periodo, movimientos_de_dinero
+from .caja import caja_del_periodo, cuadres_del_periodo, movimientos_de_dinero
 from .models import Abono, CategoriaEgreso, Cliente, Egreso, IngresoEquipo, SalidaEquipo
+from .views import ranking_con_dinero
 from .views_admin import _ingresos_dinero_mes
 
 URL = 'econotec:salida_totales'
@@ -102,8 +103,22 @@ class RankingAdminBase(TestCase):
         tecnico = tecnico or self.tecnico
         return next(f for f in respuesta.context['ranking'] if f['tecnico_id'] == tecnico.pk)
 
+    def caja(self, respuesta):
+        filtros = respuesta.context['filtros']
+        return caja_del_periodo(filtros['desde'], filtros['hasta'])
+
+    def cuadres(self, respuesta):
+        filtros = respuesta.context['filtros']
+        registros, _filas, resumen = ranking_con_dinero(filtros['desde'], filtros['hasta'])
+        movimientos = movimientos_de_dinero()
+        return cuadres_del_periodo(
+            filtros['desde'], filtros['hasta'], registros, resumen,
+            caja_del_periodo(filtros['desde'], filtros['hasta'], movimientos),
+            movimientos,
+        )
+
     def cuadres_con_problema(self, respuesta):
-        return [c for c in respuesta.context['cuadres'] if c['estado'] == 'diferencia']
+        return [c for c in self.cuadres(respuesta) if c['estado'] == 'diferencia']
 
 
 class VistaDeOtrosRolesTests(RankingAdminBase):
@@ -153,9 +168,9 @@ class VistaDeOtrosRolesTests(RankingAdminBase):
     def test_solo_el_superusuario_puro_ve_la_caja(self):
         self.preparar_datos()
         respuesta = self.ver()
-        self.assertIn('caja', respuesta.context)
         self.assertContains(respuesta, 'Ver Caja')
-        self.assertContains(respuesta, 'Cuadre con Pagos')
+        self.assertNotContains(respuesta, 'Cuadre con Pagos')
+        self.assertNotContains(respuesta, 'Cuadra con Pagos')
 
 
 class DineroDelAdminTests(RankingAdminBase):
@@ -221,7 +236,7 @@ class DineroDelAdminTests(RankingAdminBase):
         self.assertEqual(fila['total_por_cobrar'], Decimal('0.00'))
         self.assertEqual(fila['total_a_favor'], Decimal('20.00'))
         self.assertEqual(fila['total_recaudado'], Decimal('20.00'))
-        avisos = [c for c in respuesta.context['cuadres'] if c['titulo'] == 'Clientes con saldo a favor']
+        avisos = [c for c in self.cuadres(respuesta) if c['titulo'] == 'Clientes con saldo a favor']
         self.assertEqual(avisos[0]['estado'], 'aviso')
         self.assertEqual(avisos[0]['diferencia'], Decimal('20.00'))
         self.assertContains(respuesta, 'A favor $20,00')
@@ -244,14 +259,14 @@ class BodegajeComoPlusTests(RankingAdminBase):
     def test_cobrar_bodegaje_suma_aparte_sin_danar_los_valores(self):
         ingreso, _salida = self.preparar_equipo()
         antes = self.valores_de_ranking()
-        entro_antes = self.ver().context['caja']['entro']
+        entro_antes = self.caja(self.ver())['entro']
 
         self.abono(ingreso, '8.00', bodegaje_decision='si', bodegaje_monto_aplicado=Decimal('8.00'))
 
         self.assertEqual(self.valores_de_ranking(), antes)
         respuesta = self.ver()
         self.assertEqual(self.fila(respuesta)['total_bodegaje_cobrado'], Decimal('8.00'))
-        caja = respuesta.context['caja']
+        caja = self.caja(respuesta)
         self.assertEqual(caja['bodegaje'], Decimal('8.00'))
         self.assertEqual(caja['reparaciones'], Decimal('50.00'))
         self.assertEqual(caja['entro'], entro_antes + Decimal('8.00'))
@@ -272,8 +287,8 @@ class BodegajeComoPlusTests(RankingAdminBase):
         self.assertGreater(fila['total_bodegaje_pendiente'], Decimal('0.00'))
         self.assertEqual(fila['total_recaudado'], Decimal('50.00'))
         self.assertEqual(fila['total_por_cobrar'], Decimal('0.00'))
-        self.assertEqual(respuesta.context['caja']['bodegaje'], Decimal('0.00'))
-        self.assertEqual(respuesta.context['caja']['entro'], Decimal('50.00'))
+        self.assertEqual(self.caja(respuesta)['bodegaje'], Decimal('0.00'))
+        self.assertEqual(self.caja(respuesta)['entro'], Decimal('50.00'))
         self.assertEqual(fila['equipos'][0]['bodegaje_estado'], 'pendiente')
 
     def test_bodegaje_perdonado_al_retirar_no_entra_a_la_caja(self):
@@ -291,7 +306,7 @@ class BodegajeComoPlusTests(RankingAdminBase):
         self.assertEqual(fila['total_bodegaje_perdonado'], Decimal('6.00'))
         self.assertEqual(fila['total_bodegaje_cobrado'], Decimal('0.00'))
         self.assertEqual(fila['equipos'][0]['bodegaje_estado'], 'perdonado')
-        self.assertEqual(respuesta.context['caja']['entro'], Decimal('50.00'))
+        self.assertEqual(self.caja(respuesta)['entro'], Decimal('50.00'))
         self.assertEqual(self.cuadres_con_problema(respuesta), [])
 
     def test_bodegaje_va_a_nombre_del_tecnico_que_finalizo(self):
@@ -327,7 +342,7 @@ class BodegajeComoPlusTests(RankingAdminBase):
 
         respuesta = self.ver()
 
-        caja = respuesta.context['caja']
+        caja = self.caja(respuesta)
         self.assertEqual(caja['bodegaje'], Decimal('7.00'))
         self.assertEqual(caja['entro'], Decimal('57.00'))
         self.assertEqual(self.fila(respuesta)['total_recaudado'], Decimal('50.00'))
@@ -393,7 +408,7 @@ class CajaTests(RankingAdminBase):
         self.preparar_historial()
         for nombre, parametros in TODOS_LOS_FILTROS:
             with self.subTest(filtro=nombre):
-                caja = self.ver(**parametros).context['caja']
+                caja = self.caja(self.ver(**parametros))
                 self.assertEqual(caja['saldo_inicial'] + caja['entro'] - caja['egresos'], caja['saldo_final'])
                 self.assertEqual(sum(m['entro'] for m in caja['meses']), caja['entro'])
                 self.assertEqual(sum(m['monto'] for m in caja['metodos']), caja['entro'])
@@ -406,10 +421,10 @@ class CajaTests(RankingAdminBase):
         self.preparar_historial()
         guardado_anterior = Decimal('0.00')
         for mes in range(7, 11):
-            caja = self.ver(periodo='mes', mes=str(mes), mes_anio='2026').context['caja']
+            caja = self.caja(self.ver(periodo='mes', mes=str(mes), mes_anio='2026'))
             self.assertEqual(caja['saldo_inicial'], guardado_anterior)
             guardado_anterior = caja['saldo_final']
-        anual = self.ver(periodo='anio', anio='2026').context['caja']
+        anual = self.caja(self.ver(periodo='anio', anio='2026'))
         self.assertEqual(anual['saldo_final'], guardado_anterior)
 
     def test_rango_a_medio_mes_se_marca_y_arrastra_lo_anterior(self):
@@ -479,9 +494,7 @@ class CuadresConPagosTests(RankingAdminBase):
             with self.subTest(filtro=nombre):
                 respuesta = self.ver(**parametros)
                 self.assertEqual(self.cuadres_con_problema(respuesta), [])
-                self.assertEqual(respuesta.context['cuadres_con_diferencia'], 0)
                 self.assertTrue(respuesta.context['todo_cuadra'])
-                self.assertContains(respuesta, '✓ Cuadra con Pagos')
 
     def test_la_caja_coincide_con_la_pantalla_de_pagos(self):
         self.preparar_limpio()
@@ -534,38 +547,38 @@ class CuadresConPagosTests(RankingAdminBase):
         self.assertIn(primero.numero_recibo, problemas[0]['causa'])
         self.assertIn(segundo.numero_recibo, problemas[0]['causa'])
         self.assertIn('$14,00', problemas[0]['causa'])
-        self.assertContains(respuesta, '⚠ 1 diferencia con Pagos')
-        self.assertNotContains(respuesta, '✓ Todo cuadra')
-        self.assertContains(respuesta, 'Revisa si se cobró dos veces')
+        registro = self.client.get(reverse('econotec:admin_dashboard'), {'ano': '2026', 'mes': '10'})
+        self.assertEqual(registro.context['cuadres_con_diferencia'], 1)
+        self.assertContains(registro, 'Revisa si se cobró dos veces')
         # El dinero real no se toca: se queda lo que de verdad se pagó.
         self.assertEqual(self.fila(respuesta)['total_bodegaje_cobrado'], Decimal('14.00'))
-        self.assertEqual(respuesta.context['caja']['entro'], Decimal('24.00'))
+        self.assertEqual(self.caja(respuesta)['entro'], Decimal('24.00'))
 
     def test_diferencia_con_el_registro_administrativo_se_muestra(self):
         self.ingreso(sede='ventas', valor_acordado=Decimal('500.00'), abono_anticipo=Decimal('350.00'), estado='entregado')
         con_ventas_dobles = {'total': Decimal('850.00')}
 
+        respuesta = self.ver()
         with patch('econotec.views_admin._ingresos_dinero_mes', return_value=con_ventas_dobles):
-            respuesta = self.ver()
+            problemas = self.cuadres_con_problema(respuesta)
 
-        problemas = self.cuadres_con_problema(respuesta)
         self.assertEqual(len(problemas), 1)
         self.assertEqual(problemas[0]['titulo'], 'Registro Administrativo: octubre 2026')
         self.assertEqual(problemas[0]['diferencia'], Decimal('500.00'))
         self.assertTrue(problemas[0]['causa'])
-        self.assertEqual(respuesta.context['caja']['ventas'], Decimal('350.00'))
+        self.assertEqual(self.caja(respuesta)['ventas'], Decimal('350.00'))
 
     def test_mes_parcial_no_se_compara_con_el_registro(self):
         respuesta = self.ver(periodo='rango', desde='2026-10-02', hasta='2026-10-20')
-        self.assertFalse(any('Registro Administrativo' in c['titulo'] for c in respuesta.context['cuadres']))
+        self.assertFalse(any('Registro Administrativo' in c['titulo'] for c in self.cuadres(respuesta)))
 
     def test_puente_explica_pagos_de_otros_periodos(self):
         self.preparar_limpio()
         respuesta = self.ver(**AGOSTO)
-        puente = next(c for c in respuesta.context['cuadres'] if c['titulo'] == 'Del Ranking a la Caja')
+        puente = next(c for c in self.cuadres(respuesta) if c['titulo'] == 'Del Ranking a la Caja')
         self.assertEqual(puente['estado'], 'ok')
         respuesta = self.ver(periodo='mes', mes='9', mes_anio='2026')
-        puente = next(c for c in respuesta.context['cuadres'] if c['titulo'] == 'Del Ranking a la Caja')
+        puente = next(c for c in self.cuadres(respuesta) if c['titulo'] == 'Del Ranking a la Caja')
         self.assertEqual(puente['estado'], 'ok')
         self.assertIn('$35,00', puente['cuenta'])
 
@@ -737,7 +750,7 @@ class ResumenRankingEnRegistroTests(RankingAdminBase):
                     [(f['tecnico_id'], f['puntos'], f['puesto']) for f in registro['ranking_filas']],
                     [(f['tecnico_id'], f['puntos'], f['puesto']) for f in ranking['ranking']],
                 )
-                self.assertEqual(len(registro['cuadres']), len(ranking['cuadres']))
+                self.assertEqual(len(registro['cuadres']), len(self.cuadres(self.ver(**parametros))))
 
     def test_muestra_todo_lo_del_ranking(self):
         self.preparar()
@@ -761,6 +774,7 @@ class ResumenRankingEnRegistroTests(RankingAdminBase):
             ['agosto 2026', 'septiembre 2026', 'octubre 2026'],
         )
         ranking = self.ver()
+        self.assertNotContains(ranking, 'id="cuadre-pagos"')
         self.assertNotContains(ranking, 'id="caja"')
         self.assertNotContains(ranking, 'Guardado en caja')
         self.assertContains(ranking, f"{reverse('econotec:admin_dashboard')}?ano=2026&mes=10#caja")
@@ -794,3 +808,22 @@ class ResumenRankingEnRegistroTests(RankingAdminBase):
         for usuario in (self.tecnico, self.asesora):
             with self.subTest(usuario=usuario.username):
                 self.assertEqual(self.registro(usuario).status_code, 302)
+
+    def test_tarjeta_igual_a_la_del_ranking_con_enlaces_de_ubicacion(self):
+        self.preparar()
+        respuesta = self.registro()
+        for texto in (
+            'class="tech-card', 'Le faltan', 'Ver detalle', 'Equipos finalizados', 'class="composicion"',
+            '💡', 'id="guia-efectividad-1"',
+        ):
+            self.assertContains(respuesta, texto)
+        self.assertContains(respuesta, f'tecnico_salida={self.tecnico.pk}&fecha_por=finalizacion&fecha_desde=2026-10-01')
+
+    def test_la_caja_es_solo_del_administrador_puro(self):
+        self.preparar()
+        respuesta = self.registro(self.superusuario_tecnico)
+        self.assertEqual(respuesta.status_code, 200)
+        for clave in ('caja', 'cuadres', 'ranking_filas'):
+            self.assertNotIn(clave, respuesta.context)
+        for texto in ('id="caja"', 'Guardado en caja', 'id="ranking-admin"', 'Cuadre con Pagos', '🔐 Caja'):
+            self.assertNotContains(respuesta, texto)

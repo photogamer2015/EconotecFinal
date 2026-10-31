@@ -1,0 +1,53 @@
+// Guías por pasos (ranking y totales) con el mismo estilo de la Guía rápida.
+(function () {
+    function abrirGuia(guia, titulo, paso) {
+        const paginas = Array.prototype.map.call(
+            guia.querySelectorAll(':scope > section'),
+            function (seccion) { return seccion.innerHTML; }
+        );
+
+        function mostrarPaso(indice) {
+            const esUltima = indice === paginas.length - 1;
+            const progreso = paginas.map(function (_, i) {
+                return '<span' + (i <= indice ? ' class="hecho"' : '') + '></span>';
+            }).join('');
+            Swal.fire({
+                title: titulo,
+                html:
+                    '<div class="guia-ranking-pagina">' +
+                        '<div class="guia-paso">PASO ' + (indice + 1) + ' DE ' + paginas.length + '</div>' +
+                        paginas[indice] +
+                        '<div class="guia-progreso" aria-hidden="true">' + progreso + '</div>' +
+                    '</div>',
+                width: 560,
+                showCloseButton: true,
+                showDenyButton: indice > 0,
+                denyButtonText: '← Anterior',
+                confirmButtonText: esUltima ? 'Entendido' : 'Siguiente →',
+                confirmButtonColor: '#f97618',
+                denyButtonColor: '#6b7280',
+                reverseButtons: true
+            }).then(function (resultado) {
+                if (resultado.isDenied) {
+                    mostrarPaso(indice - 1);
+                } else if (resultado.isConfirmed && !esUltima) {
+                    mostrarPaso(indice + 1);
+                }
+            });
+        }
+
+        mostrarPaso(paso === 'ultimo' ? paginas.length - 1 : 0);
+    }
+
+    document.querySelectorAll('[data-guia]').forEach(function (boton) {
+        const guia = document.getElementById(boton.dataset.guia);
+        if (!guia) return;
+        boton.addEventListener('click', function () {
+            if (window.Swal) {
+                abrirGuia(guia, boton.dataset.titulo, boton.dataset.paso);
+            } else {
+                guia.hidden = !guia.hidden;
+            }
+        });
+    });
+})();

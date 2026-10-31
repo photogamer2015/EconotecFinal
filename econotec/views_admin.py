@@ -33,7 +33,7 @@ from .models import (
     SEDES_EQUIPOS, VentaInventarioItem,
 )
 from .pagination import paginar_resultados
-from .permisos import GRUPOS_TECNICO, admin_requerido, es_admin, tecnico_requerido
+from .permisos import GRUPOS_TECNICO, admin_requerido, es_admin, puede_ver_valores_ranking, tecnico_requerido
 
 
 MESES_ES = [
@@ -403,6 +403,7 @@ def _ranking_admin_registro(alcance, year, month, tecnico_filtro):
         'ranking_puntos': sum(fila['puntos'] for fila in filas),
         'ranking_ingresados': ingresados.count(),
         'periodo_filtro': {'etiqueta': etiqueta},
+        'filtros': {'desde': desde, 'hasta': hasta},
         'cuadres': cuadres,
         'cuadres_con_diferencia': sum(1 for cuadre in cuadres if cuadre['estado'] == 'diferencia'),
         'cuadres_con_aviso': sum(1 for cuadre in cuadres if cuadre['estado'] == 'aviso'),
@@ -635,13 +636,17 @@ def admin_dashboard(request):
 
     horarios_tecnicos, avisos_laborales_hoy, avisos_fuera_laboral_hoy = _horarios_tecnicos_dashboard()
 
+    # La Caja y el resumen del Ranking son solo del administrador puro: una
+    # cuenta que además sea técnico o asesor tampoco los ve aquí.
+    mostrar_valores_monetarios = puede_ver_valores_ranking(request.user)
     return render(request, 'admin_panel/dashboard.html', {
-        **_ranking_admin_registro(
+        **(_ranking_admin_registro(
             request.GET.get('ranking'),
             year,
             month,
             tecnico_resumen_filtro,
-        ),
+        ) if mostrar_valores_monetarios else {}),
+        'mostrar_valores_monetarios': mostrar_valores_monetarios,
         'year': year,
         'month': month,
         'mes_nombre': MESES_ES[month],

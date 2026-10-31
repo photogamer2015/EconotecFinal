@@ -4313,7 +4313,7 @@ def cliente_export(request):
 
 from django.utils.formats import date_format
 
-from .caja import caja_del_periodo, cuadres_del_periodo, dinero_de_salida, movimientos_de_dinero
+from .caja import dinero_de_salida
 from .date_filters import _month_bounds, _parse_date
 from .permisos import (
     puede_ver_valores_ranking as _puede_ver_valores_ranking,
@@ -5109,18 +5109,8 @@ def salida_totales(request):
             'total_por_cobrar_global': resumen_salidas['total_por_cobrar'],
             'total_diag_no_reparado': resumen_salidas['acordado_no_reparados'],
         })
-        # Caja y cuadres contra Pagos: solo existen para el administrador.
-        movimientos = movimientos_de_dinero()
-        caja = caja_del_periodo(desde, hasta, movimientos)
-        cuadres = cuadres_del_periodo(desde, hasta, registros, resumen_salidas, caja, movimientos)
-        contexto.update({
-            'caja': caja,
-            'cuadres': cuadres,
-            'cuadres_con_diferencia': sum(1 for cuadre in cuadres if cuadre['estado'] == 'diferencia'),
-            'cuadres_con_aviso': sum(1 for cuadre in cuadres if cuadre['estado'] == 'aviso'),
-            # La Caja se ve en el Registro Administrativo, en el mes donde termina el período.
-            'mes_caja': _parse_date(hasta) or timezone.localdate(),
-        })
+        # La Caja se ve en el Registro Administrativo, en el mes donde termina el período.
+        contexto['mes_caja'] = _parse_date(hasta) or timezone.localdate()
 
     return render(request, 'salidas/totales.html', contexto)
 

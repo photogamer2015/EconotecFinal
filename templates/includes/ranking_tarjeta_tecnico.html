@@ -1,0 +1,201 @@
+{% load econotec_extras %}<li class="tech-card{% if r.puesto and r.puesto <= 3 %} puesto-{{ r.puesto }}{% endif %}" aria-labelledby="tecnico-ranking-{{ forloop.counter }}">
+            <div class="tech-card__head">
+                <div class="tech-id">
+                    <span class="medal {% if r.puesto == 1 %}gold{% elif r.puesto == 2 %}silver{% elif r.puesto == 3 %}bronze{% else %}normal{% endif %}" aria-hidden="true">{% if r.puesto %}{{ r.puesto }}{% else %}–{% endif %}</span>
+                    <div>
+                        <h4 class="tech-name{% if r.sin_asignar %} sin-asignar{% endif %}" id="tecnico-ranking-{{ forloop.counter }}">
+                            <span class="visually-hidden">{% if r.puesto %}Puesto {{ r.puesto }}: {% else %}Sin puesto: {% endif %}</span>{{ r.nombre }}
+                        </h4>
+                        <div class="tech-sub">
+                            {{ r.num_equipos }} equipo{{ r.num_equipos|pluralize }} finalizado{{ r.num_equipos|pluralize }}{% if r.sin_asignar %} sin técnico que reparó{% endif %}
+                        </div>
+                    </div>
+                </div>
+
+                <div class="tech-kpis">
+                    <div class="kpi puntos">
+                        <span class="kpi-label">Puntos</span>
+                        <span class="kpi-value{% if r.puntos < 0 %} negativo{% endif %}">{{ r.puntos }}</span>
+                        <span class="trend same">en este período</span>
+                    </div>
+                    <div class="kpi">
+                        <span class="kpi-label">Reparados</span>
+                        <span class="kpi-value">{{ r.reparados }}</span>
+                        {% if comparacion %}
+                            {% if r.delta_positivas > 0 %}
+                                <span class="trend up" title="En {{ comparacion.etiqueta }}: {{ r.positivas_anterior }}">▲ {{ r.delta_positivas|stringformat:'+d' }} vs. {{ comparacion.etiqueta_corta }}</span>
+                            {% elif r.delta_positivas < 0 %}
+                                <span class="trend down" title="En {{ comparacion.etiqueta }}: {{ r.positivas_anterior }}">▼ {{ r.delta_positivas|stringformat:'+d' }} vs. {{ comparacion.etiqueta_corta }}</span>
+                            {% else %}
+                                <span class="trend same" title="En {{ comparacion.etiqueta }}: {{ r.positivas_anterior }}">= sin cambio vs. {{ comparacion.etiqueta_corta }}</span>
+                            {% endif %}
+                        {% endif %}
+                    </div>
+                    <div class="kpi">
+                        <span class="kpi-label">
+                            Efectividad
+                            <button type="button" class="btn-foco" data-guia="guia-efectividad-{{ forloop.counter }}" data-titulo="💡 Cómo funciona la efectividad" aria-controls="guia-efectividad-{{ forloop.counter }}" aria-label="Cómo funciona la efectividad de {{ r.nombre }}" title="¿Cómo funciona la efectividad?">💡</button>
+                        </span>
+                        {% include 'includes/guia_efectividad.html' with guia_id='guia-efectividad-' guia_sufijo=forloop.counter nombre=r.nombre resumen=r %}
+                        {% if r.efectividad is None %}
+                            <span class="kpi-value vacio">—</span>
+                            <span class="trend same">Sin equipos que sumen o resten</span>
+                        {% else %}
+                            <span class="kpi-value">{{ r.efectividad|floatformat:1 }}%</span>
+                            <div class="meter{% if r.efectividad < 50 %} low{% elif r.efectividad < 75 %} mid{% endif %}" role="img" aria-label="Efectividad {{ r.efectividad|floatformat:1 }} %">
+                                <span style="width: {{ r.efectividad|stringformat:'.1f' }}%;"></span>
+                            </div>
+                            {% if comparacion %}
+                                {% if r.delta_efectividad is None %}
+                                    <span class="trend same">Sin datos en {{ comparacion.etiqueta_corta }}</span>
+                                {% elif r.delta_efectividad > 0 %}
+                                    <span class="trend up" title="En {{ comparacion.etiqueta }}: {{ r.efectividad_anterior|floatformat:1 }} %">▲ +{{ r.delta_efectividad|floatformat:1 }} pts vs. {{ comparacion.etiqueta_corta }}</span>
+                                {% elif r.delta_efectividad < 0 %}
+                                    <span class="trend down" title="En {{ comparacion.etiqueta }}: {{ r.efectividad_anterior|floatformat:1 }} %">▼ {{ r.delta_efectividad|floatformat:1 }} pts vs. {{ comparacion.etiqueta_corta }}</span>
+                                {% else %}
+                                    <span class="trend same" title="En {{ comparacion.etiqueta }}: {{ r.efectividad_anterior|floatformat:1 }} %">= sin cambio vs. {{ comparacion.etiqueta_corta }}</span>
+                                {% endif %}
+                            {% endif %}
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            {% if r.perfil %}
+            <div class="tech-nivel">
+                <div class="tech-block nivel-perfil" style="--nivel-color: {{ r.perfil.color }};">
+                    <h5 class="tech-block-title">Nivel del técnico</h5>
+                    <div class="nivel-cabeza">
+                        <span class="nivel-dot" aria-hidden="true"></span>
+                        <span class="nivel-nombre">{{ r.perfil.nivel }}</span>
+                        <span class="nivel-total">{{ r.perfil.total }} pts acumulados</span>
+                    </div>
+                    <div class="nivel-meter" role="img" aria-label="{{ r.perfil.porcentaje }} % del camino al siguiente nivel">
+                        <span style="width: {{ r.perfil.porcentaje }}%;"></span>
+                    </div>
+                    <p class="nivel-nota">
+                        {% if r.perfil.proximo %}
+                            Le faltan <strong>{{ r.perfil.faltan }} punto{{ r.perfil.faltan|pluralize }}</strong> para <strong>{{ r.perfil.siguiente }}</strong> ({{ r.perfil.total }} / {{ r.perfil.proximo }}).
+                        {% else %}
+                            Llegó al <strong>nivel máximo</strong>.
+                        {% endif %}
+                        Es el mismo nivel de Mi perfil: cuenta todo su historial{% if r.perfil.fecha_reinicio %} desde el {{ r.perfil.fecha_reinicio|date:"d/m/Y" }}{% endif %}.
+                    </p>
+                </div>
+                <div class="tech-block puntos-periodo">
+                    <h5 class="tech-block-title">Puntos de este período</h5>
+                    <ul class="puntos-desglose">
+                        {% for d in r.puntos_detalle %}
+                        <li>
+                            <span>{{ d.cantidad }} × {{ d.etiqueta }} ({% if d.unitario > 0 %}+{% endif %}{{ d.unitario }})</span>
+                            <strong class="{% if d.subtotal > 0 %}pos{% else %}neg{% endif %}">{% if d.subtotal > 0 %}+{% endif %}{{ d.subtotal }}</strong>
+                        </li>
+                        {% empty %}
+                        <li class="vacio">Sin resultados que den o quiten puntos en este período.</li>
+                        {% endfor %}
+                        <li class="total"><span>Total del período</span><strong>{{ r.puntos }} pts</strong></li>
+                    </ul>
+                </div>
+            </div>
+            {% endif %}
+
+            <div class="tech-card__body{% if not mostrar_valores_monetarios %} sin-dinero{% endif %}">
+                <div class="tech-block resultados">
+                    <h5 class="tech-block-title">Resultados de los equipos finalizados</h5>
+                    <div class="composicion" role="img" aria-label="{% for g in r.grupos %}{{ g.titulo }}: {{ g.total }}{% if not forloop.last %}, {% endif %}{% endfor %}">
+                        {% for g in r.grupos %}{% if g.total %}<span class="{{ g.efecto }}" style="flex: {{ g.total }} 1 0;" title="{{ g.titulo }}: {{ g.total }} ({{ g.porcentaje|floatformat:1 }} %)"></span>{% endif %}{% endfor %}
+                    </div>
+                    <div class="grupos">
+                        {% for g in r.grupos %}
+                        <div class="grupo">
+                            <div class="grupo-head">
+                                <span class="efecto-icono {{ g.efecto }}" aria-hidden="true">{% if g.efecto == 'suma' %}✓{% elif g.efecto == 'resta' %}−{% else %}○{% endif %}</span>
+                                {{ g.titulo }}
+                                <span class="grupo-total">{{ g.total }}</span>
+                            </div>
+                            <ul>
+                                {% for p in g.partes %}
+                                <li class="parte{% if not p.cantidad %} cero{% endif %}"><span>{{ p.etiqueta }}</span><span class="parte-valor"><span class="parte-puntos {% if p.puntos > 0 %}pos{% elif p.puntos < 0 %}neg{% else %}cero{% endif %}" title="Puntos por cada equipo">{% if p.puntos > 0 %}+{% endif %}{{ p.puntos }} pts</span><strong>{{ p.cantidad }}</strong></span></li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <div class="tech-block">
+                    <h5 class="tech-block-title">Ubicación</h5>
+                    <div class="ubicacion-item">
+                        <span class="ubi-label">Fuera de oficina</span>
+                        <span class="ubi-valor">{{ r.entregados }}</span>
+                        {% if not r.sin_asignar %}
+                            <a href="{% url 'econotec:salida_retiros_lista' %}?tecnico_salida={{ r.tecnico_id }}&fecha_por=finalizacion{% if filtros.desde %}&fecha_desde={{ filtros.desde }}{% endif %}{% if filtros.hasta %}&fecha_hasta={{ filtros.hasta }}{% endif %}"
+                               class="btn btn-outside"
+                               title="Ver equipos de este técnico que ya salieron de la oficina">Ver detalle</a>
+                        {% endif %}
+                    </div>
+                    <div class="ubicacion-item">
+                        <span class="ubi-label">En oficina</span>
+                        <span class="ubi-valor">{{ r.pendientes }}</span>
+                        {% if not r.sin_asignar %}
+                            <a href="{% url 'econotec:salida_lista' %}?tecnico_salida={{ r.tecnico_id }}{% if filtros.desde %}&fecha_desde={{ filtros.desde }}{% endif %}{% if filtros.hasta %}&fecha_hasta={{ filtros.hasta }}{% endif %}"
+                               class="btn btn-finalized"
+                               title="Ver equipos finalizados por este técnico que aún están en la oficina">Equipos finalizados</a>
+                        {% endif %}
+                    </div>
+                </div>
+
+                {% if mostrar_valores_monetarios %}
+                <div class="tech-block">
+                    <h5 class="tech-block-title">Dinero</h5>
+                    <dl class="dinero">
+                        <div><dt>Acordado</dt><dd>{{ r.total_acordado|dinero_signo }}</dd></div>
+                        <div><dt>Domicilio</dt><dd>{{ r.total_domicilio|dinero_signo }}</dd></div>
+                        <div><dt>Recaudado</dt><dd class="recaudado">{{ r.total_recaudado|dinero_signo }}</dd></div>
+                        <div><dt>Por cobrar</dt><dd class="por-cobrar">{{ r.total_por_cobrar|dinero_signo }}</dd></div>
+                        {% if r.total_a_favor %}<div><dt>A favor del cliente</dt><dd class="a-favor">{{ r.total_a_favor|dinero_signo }}</dd></div>{% endif %}
+                        <div class="separador"><dt>Bodegaje cobrado</dt><dd class="plus">+ {{ r.total_bodegaje_cobrado|dinero_signo }}</dd></div>
+                        <div><dt>Bodegaje sin cobrar</dt><dd>{{ r.total_bodegaje_pendiente|dinero_signo }}</dd></div>
+                        <div><dt>Bodegaje perdonado</dt><dd>{{ r.total_bodegaje_perdonado|dinero_signo }}</dd></div>
+                    </dl>
+                    {% if r.porcentaje_recaudado is not None %}
+                        <div class="meter ancho" role="img" aria-label="{{ r.porcentaje_recaudado|floatformat:1 }} % de lo que se debe cobrar ya está recaudado">
+                            <span style="width: {{ r.porcentaje_recaudado|stringformat:'.1f' }}%;"></span>
+                        </div>
+                        <div class="dinero-nota">{{ r.porcentaje_recaudado|floatformat:1 }} % de lo que se debe cobrar ya entró</div>
+                    {% endif %}
+                </div>
+                {% endif %}
+            </div>{% if mostrar_valores_monetarios and r.equipos %}
+            {% include 'includes/ranking_admin_equipos.html' %}{% endif %}
+
+            {% if r.por_mes %}
+            <div class="tech-block tech-meses">
+                <h5 class="tech-block-title">Mes a mes de {{ r.nombre }}</h5>
+                <ol class="tech-meses-lista">
+                    {% for mes in r.por_mes %}
+                    <li class="tech-mes">
+                        <span class="tech-mes-nombre">{{ mes.etiqueta|capfirst }}</span>
+                        {% if mes.resumen.efectividad is None %}
+                            <span class="tech-mes-valor vacio">—</span>
+                        {% else %}
+                            <span class="tech-mes-valor">{{ mes.resumen.efectividad|floatformat:1 }}%</span>
+                            <div class="meter ancho{% if mes.resumen.efectividad < 50 %} low{% elif mes.resumen.efectividad < 75 %} mid{% endif %}" role="img" aria-label="Efectividad {{ mes.resumen.efectividad|floatformat:1 }} %">
+                                <span style="width: {{ mes.resumen.efectividad|stringformat:'.1f' }}%;"></span>
+                            </div>
+                        {% endif %}
+                        <span class="tech-mes-detalle">
+                            {{ mes.resumen.num_equipos }} finalizado{{ mes.resumen.num_equipos|pluralize }} ·
+                            {{ mes.resumen.salidas_positivas }} suma{{ mes.resumen.salidas_positivas|pluralize:"n" }} ·
+                            {{ mes.resumen.salidas_negativas }} resta{{ mes.resumen.salidas_negativas|pluralize:"n" }}{% if mostrar_valores_monetarios %} ·
+                            Acordado {{ mes.resumen.total_acordado|dinero_signo }} ·
+                            Recaudado {{ mes.resumen.total_recaudado|dinero_signo }} ·
+                            Por cobrar {{ mes.resumen.total_por_cobrar|dinero_signo }} ·
+                            Bodegaje cobrado {{ mes.resumen.total_bodegaje_cobrado|dinero_signo }}{% endif %}
+                        </span>
+                    </li>
+                    {% endfor %}
+                </ol>
+            </div>
+            {% endif %}
+        </li>
