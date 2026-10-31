@@ -2000,6 +2000,49 @@ class SalidaEquipoForm(RetencionFacturaFormMixin, forms.ModelForm):
         self._limpiar_retencion(cleaned)
         return cleaned
 
+    def _clean_adicional_tras_salida(self, cleaned):
+        """
+        Equipo reparado que ya salió: el adicional solo puede cubrir lo que el
+        cliente ya pagó de más, para no crear una deuda después de la salida.
+        Los pagos registrados en la salida no cambian.
+        """
+        for campo in (
+            'valor_final_cobrado', 'valor_acordado_revision', 'metodo_pago_final',
+            'banco', 'banco_otro', 'tarjeta_app', 'comprobante_url', 'numero_recibo',
+            'monto_1', 'metodo_1', 'banco_1', 'monto_2', 'metodo_2', 'banco_2',
+        ):
+            cleaned[campo] = getattr(self.instance, campo)
+
+        if cleaned.get('aplica_valor_acordado_adicional') != 'si':
+            self._limpiar_valor_acordado_adicional(cleaned)
+            return
+
+        valor = cleaned.get('valor_acordado_adicional') or Decimal('0.00')
+        motivo = (cleaned.get('motivo_valor_acordado_adicional') or '').strip()
+        actual = (
+            self.instance.valor_acordado_adicional
+            if self.instance.tiene_valor_acordado_adicional
+            else Decimal('0.00')
+        )
+        maximo = actual + self.instance.ingreso.saldo_a_favor
+        if valor < Decimal('0.01'):
+            self.add_error(
+                'valor_acordado_adicional',
+                'Ingresa un valor adicional de al menos $0.01.',
+            )
+        elif valor > maximo:
+            self.add_error(
+                'valor_acordado_adicional',
+                f'El equipo ya salió: el adicional no puede pasar de ${maximo:.2f}, '
+                'lo que el cliente ya pagó de más.',
+            )
+        if not motivo:
+            self.add_error(
+                'motivo_valor_acordado_adicional',
+                'Explica por qué se aplica el valor acordado adicional.',
+            )
+        cleaned['motivo_valor_acordado_adicional'] = motivo
+
     def _clean_finalizacion(self):
         cleaned = super().clean()
         estado_reparacion = cleaned.get('estado_reparacion')
@@ -2015,6 +2058,9 @@ class SalidaEquipoForm(RetencionFacturaFormMixin, forms.ModelForm):
         if estado_reparacion == 'retirado':
             if self.instance and self.instance.ingreso and self.instance.ingreso.diferencia > 0:
                 self.add_error('estado_reparacion', f'No se puede marcar como retirado porque hay un saldo pendiente de ${self.instance.ingreso.diferencia}. El cliente debe pagar todo primero.')
+            if self.instance and self.instance.pk and self.instance.fecha_retiro_real:
+                self._clean_adicional_tras_salida(cleaned)
+                return cleaned
             # El cargo adicional forma parte del valor histórico del trabajo y
             # debe conservarse cuando el equipo pasa de pendiente a retirado.
             if self.instance and self.instance.pk:

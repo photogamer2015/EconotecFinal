@@ -891,6 +891,13 @@
                                     </div>
                                 </div>
                             </div>
+                            {% with a_favor=ingreso.saldo_a_favor %}
+                            {% if a_favor > 0 %}
+                                <div style="text-align:center; margin-top:10px; font-size:12px; color:#856404; font-weight:700;">
+                                    💰 El cliente pagó {{ a_favor|dinero_signo }} más de lo registrado: queda a su favor.
+                                </div>
+                            {% endif %}
+                            {% endwith %}
                             {% if valor_acordado_bloqueado %}
                                 <div class="valor-paid-lock">
                                     Ya está pagado todo. El valor acordado queda bloqueado y puedes finalizar el equipo.

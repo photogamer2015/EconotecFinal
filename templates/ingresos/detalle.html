@@ -1325,6 +1325,13 @@
                     </div>
                 </div>
             {% endif %}
+            {% with a_favor=ingreso.saldo_a_favor %}
+            {% if a_favor > 0 %}
+                <div style="text-align:center; margin-top:10px; font-size:12px; color:#856404; font-weight:700;">
+                    💰 El cliente pagó {{ a_favor|dinero_signo }} más de lo registrado: queda a su favor.
+                </div>
+            {% endif %}
+            {% endwith %}
             {% if ingreso.pago_con_retencion %}
                 <div style="text-align:center; margin-top:10px;">
                     <span class="retencion-nota">🧾 Se aplicó retención</span>

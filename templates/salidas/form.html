@@ -716,7 +716,8 @@
             }
             var esCierreSinReparacion = v === 'cliente_no_acepta' || v === 'no_reparable';
             var esRevision = v === 'revision';
-            var mostrarValorAdicional = v === 'pendiente_retiro' || esCierreSinReparacion || esRevision;
+            var esReparadoYaSalio = v === 'retirado' && {% if salida.cliente_ya_retiro %}true{% else %}false{% endif %};
+            var mostrarValorAdicional = v === 'pendiente_retiro' || esCierreSinReparacion || esRevision || esReparadoYaSalio;
             var aplicaAdicional = (
                 mostrarValorAdicional
                 && aplicaValorAdicional
@@ -731,7 +732,9 @@
                     : '¿Registrar un cobro adicional opcional?';
             }
             if (ayudaCobroAdicional) {
-                ayudaCobroAdicional.textContent = esCierreSinReparacion
+                ayudaCobroAdicional.textContent = esReparadoYaSalio
+                    ? 'El equipo ya salió: el adicional solo puede cubrir lo que el cliente ya pagó de más ({{ ingreso.saldo_a_favor|dinero_signo }} a su favor ahora). Si ya tiene un adicional, escribe el valor total.'
+                    : esCierreSinReparacion
                     ? 'Este resultado no tiene cobro por defecto. Actívalo solo si se acordó un valor adicional con el cliente.'
                     : revisionSinValorAcordado
                         ? 'Es opcional. El valor acordado queda en $0; lo que pongas aquí se suma al saldo (por ejemplo, el mantenimiento).'

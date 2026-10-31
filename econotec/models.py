@@ -1348,6 +1348,11 @@ class IngresoEquipo(RetencionFactura):
         return _q2(self.valor_total_con_bodegaje - self.total_abonado)
 
     @property
+    def saldo_a_favor(self):
+        """Lo que el cliente pagó de más sobre lo que se le cobra."""
+        return max(-self.diferencia, Decimal('0.00'))
+
+    @property
     def bodegaje_pendiente(self):
         """
         Bodegaje acumulado del equipo que aún NO tiene una decisión tomada.

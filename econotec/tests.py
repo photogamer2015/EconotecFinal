@@ -9057,6 +9057,155 @@ class VentasTests(TestCase):
         self.assertContains(detalle, '<span class="adic-val">$12,00 adicional</span>', html=True)
         self.assertContains(detalle, 'Valor acordado total')
 
+    def _salida_retirada_con_pago_de(self, monto, **datos_salida):
+        ingreso = self.crear_ingreso_reparacion(valor_acordado=Decimal('30.00'))
+        salida = SalidaEquipo.objects.create(
+            ingreso=ingreso,
+            fecha_salida=date.today(),
+            estado_reparacion='pendiente_retiro',
+            tecnico_reparo=self.usuario,
+            valor_final_cobrado=Decimal('0.00'),
+            metodo_pago_final='sin_pago',
+            registrado_por=self.usuario,
+            **datos_salida,
+        )
+        Abono.objects.create(
+            ingreso=ingreso,
+            fecha=date.today(),
+            monto=Decimal(monto),
+            metodo='efectivo',
+            registrado_por=self.usuario,
+        )
+        salida.fecha_retiro_real = date.today()
+        salida.save()
+        return ingreso
+
+    def test_adicional_registrado_sube_el_total_y_no_deja_saldo_a_favor(self):
+        ingreso = self._salida_retirada_con_pago_de(
+            '37.00',
+            aplica_valor_acordado_adicional='si',
+            valor_acordado_adicional=Decimal('7.00'),
+            motivo_valor_acordado_adicional='Cambio de pupito',
+        )
+
+        self.assertEqual(ingreso.diferencia, Decimal('0.00'))
+        self.assertEqual(ingreso.saldo_a_favor, Decimal('0.00'))
+        self.client.force_login(self.usuario)
+        detalle = self.client.get(reverse('econotec:ingreso_detalle', kwargs={'pk': ingreso.pk}))
+        self.assertContains(detalle, '<span class="adic-val">$7,00 adicional</span>', html=True)
+        self.assertContains(detalle, 'Cambio de pupito')
+        self.assertNotContains(detalle, 'queda a su favor')
+
+    def test_pago_de_mas_sin_adicional_avisa_el_saldo_a_favor(self):
+        ingreso = self._salida_retirada_con_pago_de('37.00')
+
+        self.assertEqual(ingreso.diferencia, Decimal('-7.00'))
+        self.assertEqual(ingreso.saldo_a_favor, Decimal('7.00'))
+        self.client.force_login(self.usuario)
+        detalle = self.client.get(reverse('econotec:ingreso_detalle', kwargs={'pk': ingreso.pk}))
+        self.assertContains(detalle, 'El cliente pagó $7,00 más de lo registrado: queda a su favor.')
+        hoja = self.client.get(
+            reverse('econotec:tecnico_hoja', kwargs={'token': token_para_ingreso(ingreso.pk)}),
+        )
+        self.assertContains(hoja, 'El cliente pagó $7,00 más de lo registrado: queda a su favor.')
+
+    def _editar_adicional_tras_salida(self, ingreso, **datos):
+        self.client.force_login(self.admin)
+        return self.client.post(
+            reverse('econotec:salida_editar', kwargs={'pk': ingreso.salida.pk}),
+            self.salida_post_data(estado_reparacion='retirado', **datos),
+        )
+
+    def test_adicional_tras_la_salida_sube_el_total_y_deja_saldo_cero(self):
+        ingreso = self._salida_retirada_con_pago_de('37.00')
+
+        respuesta = self._editar_adicional_tras_salida(
+            ingreso,
+            aplica_valor_acordado_adicional='si',
+            valor_acordado_adicional='7.00',
+            motivo_valor_acordado_adicional='Cambio de pupito',
+        )
+
+        self.assertEqual(respuesta.status_code, 302)
+        ingreso = IngresoEquipo.objects.get(pk=ingreso.pk)
+        self.assertEqual(ingreso.salida.valor_acordado_adicional, Decimal('7.00'))
+        self.assertEqual(ingreso.valor_efectivo_a_cobrar, Decimal('37.00'))
+        self.assertEqual(ingreso.total_abonado, Decimal('37.00'))
+        self.assertEqual(ingreso.diferencia, Decimal('0.00'))
+        self.assertEqual(ingreso.salida.estado_reparacion, 'retirado')
+        self.assertIsNotNone(ingreso.salida.fecha_retiro_real)
+        detalle = self.client.get(reverse('econotec:ingreso_detalle', kwargs={'pk': ingreso.pk}))
+        self.assertContains(detalle, '<span class="adic-val">$7,00 adicional</span>', html=True)
+        self.assertNotContains(detalle, 'queda a su favor')
+
+    def test_adicional_tras_la_salida_no_puede_crear_deuda(self):
+        ingreso = self._salida_retirada_con_pago_de('37.00')
+
+        respuesta = self._editar_adicional_tras_salida(
+            ingreso,
+            aplica_valor_acordado_adicional='si',
+            valor_acordado_adicional='7.01',
+            motivo_valor_acordado_adicional='Más de lo pagado',
+        )
+
+        self.assertEqual(respuesta.status_code, 200)
+        self.assertContains(respuesta, 'no puede pasar de $7.00')
+        ingreso = IngresoEquipo.objects.get(pk=ingreso.pk)
+        self.assertFalse(ingreso.salida.tiene_valor_acordado_adicional)
+        self.assertEqual(ingreso.diferencia, Decimal('-7.00'))
+
+    def test_adicional_tras_la_salida_se_puede_ajustar_o_quitar(self):
+        ingreso = self._salida_retirada_con_pago_de(
+            '37.00',
+            aplica_valor_acordado_adicional='si',
+            valor_acordado_adicional=Decimal('5.00'),
+            motivo_valor_acordado_adicional='Primero',
+        )
+
+        self._editar_adicional_tras_salida(
+            ingreso,
+            aplica_valor_acordado_adicional='si',
+            valor_acordado_adicional='7.00',
+            motivo_valor_acordado_adicional='Corregido',
+        )
+        ingreso = IngresoEquipo.objects.get(pk=ingreso.pk)
+        self.assertEqual(ingreso.diferencia, Decimal('0.00'))
+
+        self._editar_adicional_tras_salida(ingreso, aplica_valor_acordado_adicional='no')
+        ingreso = IngresoEquipo.objects.get(pk=ingreso.pk)
+        self.assertFalse(ingreso.salida.tiene_valor_acordado_adicional)
+        self.assertEqual(ingreso.diferencia, Decimal('-7.00'))
+
+    def test_editar_equipo_que_ya_salio_conserva_el_pago_final(self):
+        ingreso = self._salida_retirada_con_pago_de('20.00')
+        SalidaEquipo.objects.filter(ingreso=ingreso).update(
+            valor_final_cobrado=Decimal('17.00'),
+            metodo_pago_final='efectivo',
+            numero_recibo='REC-PRUEBA',
+        )
+
+        self._editar_adicional_tras_salida(
+            IngresoEquipo.objects.get(pk=ingreso.pk),
+            aplica_valor_acordado_adicional='si',
+            valor_acordado_adicional='7.00',
+            motivo_valor_acordado_adicional='Cambio de pupito',
+        )
+
+        ingreso = IngresoEquipo.objects.get(pk=ingreso.pk)
+        self.assertEqual(ingreso.salida.valor_final_cobrado, Decimal('17.00'))
+        self.assertEqual(ingreso.salida.metodo_pago_final, 'efectivo')
+        self.assertEqual(ingreso.salida.numero_recibo, 'REC-PRUEBA')
+        self.assertEqual(ingreso.total_abonado, Decimal('37.00'))
+        self.assertEqual(ingreso.diferencia, Decimal('0.00'))
+
+    def test_pago_exacto_no_muestra_saldo_a_favor(self):
+        ingreso = self._salida_retirada_con_pago_de('30.00')
+
+        self.assertEqual(ingreso.saldo_a_favor, Decimal('0.00'))
+        self.client.force_login(self.usuario)
+        detalle = self.client.get(reverse('econotec:ingreso_detalle', kwargs={'pk': ingreso.pk}))
+        self.assertNotContains(detalle, 'queda a su favor')
+
     def test_revision_equipo_en_prueba_sin_adicional_cobra_el_valor_acordado(self):
         ingreso = self.crear_ingreso_reparacion(valor_acordado=Decimal('40.00'))
 
