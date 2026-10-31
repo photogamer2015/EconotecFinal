@@ -342,7 +342,17 @@
         <section>
             <h4>Acordado, recaudado y por cobrar</h4>
             <p><b>Acordado</b> es lo que se le cobra al cliente por el servicio: incluye el valor adicional y el valor de revisión, sin domicilio ni bodegaje.</p>
-            <p><b>Recaudado</b> es el valor acordado de los equipos que ya quedaron en saldo cero; <b>Por cobrar</b>, el de los que todavía tienen saldo pendiente.</p>
+            <p><b>Recaudado</b> es lo que esos clientes ya pagaron, en cualquier fecha, sin contar el bodegaje, aunque el equipo todavía tenga saldo pendiente; <b>Por cobrar</b>, el saldo que todavía deben, el mismo de Pagos.</p>
+        </section>
+        <section>
+            <h4>A favor del cliente</h4>
+            <p>Es el dinero que un cliente <b>pagó de más</b> en un equipo finalizado. Ejemplo: si el equipo cuesta $50 y pagó $55, quedan <b>$5 a favor</b>. Ese dinero sí entró a la caja.</p>
+            <ul>
+                <li><span><b>Cuándo pasa:</b> se registró un pago mayor al valor, o el valor bajó después del pago; por ejemplo, el cliente dejó un anticipo y el equipo salió como garantía o cortesía.</span></li>
+                <li><span><b>Cómo se cuenta:</b> equipo por equipo. Lo que un cliente tiene a favor no descuenta lo que deben otros, por eso va separado de <b>Por cobrar</b>.</span></li>
+                <li><span><b>Dónde verlo:</b> en la tarjeta del técnico solo aparece si hay saldo. Para saber qué equipo es, abre <b>Ver los equipos</b>: en la columna <b>Por cobrar</b> dice «A favor» con el monto.</span></li>
+                <li><span><b>Qué hacer:</b> el sistema no lo devuelve solo. Hay que devolvérselo al cliente o, si fue un error de registro, corregir el pago.</span></li>
+            </ul>
         </section>
         {% endif %}
         <section>

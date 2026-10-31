@@ -4183,6 +4183,8 @@ class VentasTests(TestCase):
             '<b>1.</b> Gana quien más puntos tiene en el período.',
             '<b>Suman ÷ (Suman + Restan)</b>',
             'Acordado, recaudado y por cobrar',
+            '<h4>A favor del cliente</h4>',
+            'Es el dinero que un cliente <b>pagó de más</b> en un equipo finalizado.',
             '<b>Ver detalle</b> muestra los equipos que ya están fuera de la oficina',
             'Cómo elegir el período',
             '<b>Mes:</b> solo ese mes. No se compara con ningún otro.',
