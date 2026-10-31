@@ -397,14 +397,15 @@ def _mensaje_estado_salida(salida):
         fecha = salida.fecha_retiro_real or salida.fecha_salida
         return f'Su equipo salió de la oficina el {fecha.strftime("%d/%m/%Y")}.'
     if estado == 'revision':
-        inicio = (
-            'Por favor, venga a retirar su equipo'
-            if salida.sin_reparar_por_retirar
-            else 'Su equipo está listo para su retiro'
-        )
+        if salida.en_equipo_prueba:
+            inicio = 'Su equipo se encuentra en prueba'
+        elif salida.sin_reparar_por_retirar:
+            inicio = 'Por favor, venga a retirar su equipo en estado de revisión'
+        else:
+            inicio = 'Su equipo está listo para su retiro en estado de revisión'
         if salida.ingreso.diferencia > 0:
-            return f'{inicio} en estado de revisión. Debe cancelar el saldo pendiente antes de retirarlo.'
-        return f'{inicio} en estado de revisión.'
+            return f'{inicio}. Debe cancelar el saldo pendiente antes de retirarlo.'
+        return f'{inicio}.'
     if estado == 'no_reparable':
         return 'Por favor, venga a retirar su equipo. No se pudo reparar.'
     if estado == 'cliente_no_acepta':
@@ -1244,13 +1245,15 @@ def _draw_anexo_economico_salida(c, width, height, salida, pagos):
             estado_bodegaje = 'Perdonado y cerrado'
         else:
             estado_bodegaje = 'Cerrado sin cargos'
+    elif salida.en_equipo_prueba:
+        estado_bodegaje = 'En prueba: todavía no corre el bodegaje'
     elif ingreso.bodegaje_pendiente > Decimal('0.00'):
         estado_bodegaje = 'Pendiente de decisión'
     else:
         estado_bodegaje = 'Dentro del período de gracia'
 
     regla = (
-        f'Regla: {UMBRAL_DIAS_BODEGAJE} días de gracia desde la fecha de finalización. '
+        f'Regla: {UMBRAL_DIAS_BODEGAJE} días de gracia desde {salida.inicio_gracia_texto}. '
         f'Al cumplirse el plazo se cobra {_money_text(COSTO_BODEGAJE_DIA)} por cada día '
         'de bodegaje hasta el retiro del equipo.'
     )

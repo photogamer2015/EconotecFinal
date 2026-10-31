@@ -3087,7 +3087,7 @@
       <div class="cli">{{ b.ingreso.cliente.nombres }}</div>
       <div class="det">
         {{ b.ingreso.tipo_equipo_display }} {{ b.ingreso.marca }} — Listo desde
-        {{ b.salida.fecha_salida|date:"d/m/Y" }} ({{ b.dias_desde_salida }}
+        {{ b.salida.fecha_inicio_bodegaje|date:"d/m/Y" }} ({{ b.dias_desde_salida }}
         día{{ b.dias_desde_salida|pluralize }}) {% if b.salida.tecnico_reparo %} · Téc.:
         <strong>{{ b.salida.tecnico_reparo_nombre }}</strong>
         {% endif %}

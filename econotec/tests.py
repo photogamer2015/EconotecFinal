@@ -4,6 +4,7 @@ from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 from io import BytesIO
 from unittest.mock import ANY, patch
+from types import SimpleNamespace
 from urllib.parse import parse_qs, urlparse
 from zoneinfo import ZoneInfo
 
@@ -26,7 +27,8 @@ from .alertas import (
     whatsapp_link_equipo_listo,
     whatsapp_link_venta_producto,
 )
-from .emails import enviar_correo_finalizacion_seguro
+from .econobot import conocimiento
+from .emails import enviar_correo_bodegaje_seguro, enviar_correo_finalizacion_seguro
 from .horarios import registrar_entrada_laboral
 from .models import (
     Abono, BitacoraTecnico, Cliente, Egreso, HorarioTecnico, IngresoEquipo, InventarioItem,
@@ -9684,7 +9686,6 @@ class VentasTests(TestCase):
             ('cliente_no_acepta', '', None, True),
             ('revision', 'no_reparable', None, True),
             ('revision', 'cliente_no_acepta', None, True),
-            ('revision', 'equipo_prueba', None, False),
             ('pendiente_retiro', '', None, False),
             ('garantia', '', None, False),
             ('cortesia', '', None, False),
@@ -9727,6 +9728,108 @@ class VentasTests(TestCase):
                     self.assertIn('RESUMEN ECONÓMICO', correo.body)
                 elif not retiro:
                     self.assertIn('listo para retiro', texto)
+
+    def _salida_bodegaje(self, **datos):
+        return SalidaEquipo.objects.create(
+            ingreso=self.crear_ingreso_reparacion(),
+            tecnico_reparo=self.usuario,
+            valor_final_cobrado=Decimal('0.00'),
+            metodo_pago_final='sin_pago',
+            registrado_por=self.usuario,
+            **datos,
+        )
+
+    def test_tras_salir_de_prueba_dias_y_fechas_cuentan_desde_ese_dia(self):
+        self.cliente_existente.whatsapp = '0986168066'
+        self.cliente_existente.correo = 'cliente@example.com'
+        self.cliente_existente.save()
+        hoy = date.today()
+        salida = self._salida_bodegaje(
+            fecha_salida=hoy - timedelta(days=60),
+            fecha_fin_prueba=hoy - timedelta(days=6),
+            estado_reparacion='pendiente_retiro',
+        )
+        inicio = (hoy - timedelta(days=6)).strftime('%d/%m/%Y')
+
+        texto = parse_qs(urlparse(whatsapp_link_bodegaje(salida)).query)['text'][0]
+        self.assertIn(f'listo desde el {inicio}', texto)
+        self.assertIn('desde hace *6 día(s)*', texto)
+        self.assertIn('Bodegaje acumulado (2 día(s))', texto)
+
+        self.client.force_login(self.admin)
+        panel = self.client.get(reverse('econotec:admin_activos_bodegaje'))
+        fila = next(item for item in panel.context['activos'] if item['salida'].pk == salida.pk)
+        self.assertEqual(fila['dias_totales'], 6)
+        self.assertEqual(fila['dias_bodegaje'], 2)
+
+        self.assertTrue(enviar_correo_bodegaje_seguro(salida.pk))
+        correo = mail.outbox[-1]
+        self.assertIn(f'finalizado desde el {inicio}', correo.body)
+        self.assertIn('hace 6 días', correo.body)
+        self.assertIn(f'el día en que el equipo salió de prueba ({inicio})', correo.body)
+
+        self.assertTrue(enviar_correo_finalizacion_seguro(salida.pk))
+        self.assertIn(f'el día en que el equipo salió de prueba ({inicio})', mail.outbox[-1].body)
+
+    def test_equipo_en_prueba_no_recibe_aviso_de_listo_ni_de_bodegaje(self):
+        self.cliente_existente.whatsapp = '0986168066'
+        self.cliente_existente.correo = 'cliente@example.com'
+        self.cliente_existente.save()
+        salida = self._salida_bodegaje(
+            fecha_salida=date.today() - timedelta(days=20),
+            estado_reparacion='revision',
+            subestado_revision='equipo_prueba',
+        )
+
+        texto = parse_qs(urlparse(whatsapp_link_equipo_listo(salida)).query)['text'][0]
+        self.assertIn('se encuentra *en prueba*', texto)
+        self.assertNotIn('listo para retiro', texto)
+        self.assertNotIn('Política de bodegaje', texto)
+        self.assertIn('Código de equipo', texto)
+        self.assertIn('Quedamos atentos', texto)
+
+        self.assertTrue(enviar_correo_finalizacion_seguro(salida.pk))
+        correo = mail.outbox[-1]
+        self.assertIn('Tu equipo está en prueba', correo.body)
+        self.assertNotIn('Tu equipo está listo', correo.body)
+        self.assertIn('el día en que el equipo salga de prueba', correo.body)
+        self.assertIn('En prueba: todavía no corre el bodegaje', correo.body)
+        self.assertNotIn('listo', views_print._mensaje_estado_salida(salida))
+
+    def test_recordatorio_de_bodegaje_sin_reparar_pide_venir_a_retirar(self):
+        self.cliente_existente.whatsapp = '0986168066'
+        self.cliente_existente.save()
+        hoy = date.today()
+        casos = (
+            ('no_reparable', ''),
+            ('cliente_no_acepta', ''),
+            ('revision', 'no_reparable'),
+            ('revision', 'cliente_no_acepta'),
+        )
+        for estado, subestado in casos:
+            with self.subTest(estado=estado, subestado=subestado):
+                salida = self._salida_bodegaje(
+                    fecha_salida=hoy - timedelta(days=10),
+                    estado_reparacion=estado,
+                    subestado_revision=subestado,
+                )
+                texto = parse_qs(urlparse(whatsapp_link_bodegaje(salida)).query)['text'][0]
+                self.assertIn('venga a retirarlo', texto)
+                self.assertNotIn('listo', texto)
+                self.assertIn('hace *10 día(s)*', texto)
+                self.assertIn('Bodegaje acumulado', texto)
+
+    def test_ayuda_y_econobot_explican_los_puntos_reales(self):
+        self.client.force_login(self.usuario)
+        pagina = self.client.get(reverse('econotec:bienvenida'))
+        self.assertContains(pagina, '<b>equipo reparado suma 3 puntos</b>')
+        self.assertContains(pagina, '<b>garantía resta 4</b>')
+        self.assertNotContains(pagina, 'salida buena suma 4 puntos')
+
+        texto = str(conocimiento._ranking(SimpleNamespace(user=self.admin)))
+        self.assertIn('suma 3 puntos por equipo reparado', texto)
+        self.assertIn('1 si el cliente no quiso reparar', texto)
+        self.assertIn('resta 1 si no se pudo reparar y 4 por garantía', texto)
 
     def test_notificacion_asesora_se_puede_marcar_como_vista(self):
         ingreso = self.crear_ingreso_reparacion(

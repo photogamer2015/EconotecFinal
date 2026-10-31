@@ -70,6 +70,7 @@ from .alertas import (
     filtrar_plazo_bodegaje_vencido,
     salidas_bodegaje_qs,
     dias_en_taller,
+    dias_desde_inicio_bodegaje,
     dias_desde_salida,
     whatsapp_link_demora,
     whatsapp_link_equipo_listo,
@@ -383,7 +384,7 @@ def bienvenida(request):
         bodegajes.append({
             'salida': sal,
             'ingreso': sal.ingreso,
-            'dias_desde_salida': dias_desde_salida(sal, hoy=hoy),
+            'dias_desde_salida': dias_desde_inicio_bodegaje(sal, hoy=hoy),
             'bodegaje_dias': bod['dias'],
             'bodegaje_monto': bod['monto'],
             'wa_link': whatsapp_link_bodegaje(sal),
@@ -460,7 +461,7 @@ def bienvenida(request):
         bodegajes_silenciados.append({
             'salida': sal,
             'ingreso': sal.ingreso,
-            'dias_desde_salida': dias_desde_salida(sal, hoy=hoy),
+            'dias_desde_salida': dias_desde_inicio_bodegaje(sal, hoy=hoy),
             'bodegaje_dias': bod['dias'],
             'bodegaje_monto': bod['monto'],
         })
@@ -4646,9 +4647,10 @@ def _resumir_salidas(registros, mostrar_valores_monetarios):
             'total_bodegaje_cobrado': suma('bodegaje_cobrado'),
             'total_bodegaje_pendiente': suma('bodegaje_pendiente'),
             'total_bodegaje_perdonado': suma('bodegaje_perdonado'),
-            'porcentaje_recaudado': min(
-                round(float(recaudado / a_cobrar * 100), 1),
-                100.0,
+            # Lo pagado de más en un equipo no cubre lo que deben otros.
+            'porcentaje_recaudado': max(
+                round(float((a_cobrar - suma('por_cobrar')) / a_cobrar * 100), 1),
+                0.0,
             ) if a_cobrar > 0 else None,
             # Lo que se cobra por equipos que no se repararon (no se pudo o
             # el cliente no quiso): diagnóstico, revisión o valor adicional.
@@ -5206,7 +5208,7 @@ def alertas_bodegaje(request):
             out.append({
                 'salida': sal,
                 'ingreso': sal.ingreso,
-                'dias_desde_salida': dias_desde_salida(sal, hoy=hoy),
+                'dias_desde_salida': dias_desde_inicio_bodegaje(sal, hoy=hoy),
                 'bodegaje_dias': bod['dias'],
                 'bodegaje_monto': bod['monto'],
                 'wa_link': whatsapp_link_bodegaje(sal),

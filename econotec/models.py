@@ -2205,6 +2205,15 @@ class SalidaEquipo(RetencionFactura):
         return self.fecha_salida
 
     @property
+    def inicio_gracia_texto(self):
+        """Desde cuándo corren los días de gracia, en palabras para el cliente."""
+        if self.en_equipo_prueba:
+            return 'el día en que el equipo salga de prueba'
+        if self.fecha_inicio_bodegaje != self.fecha_salida:
+            return f'el día en que el equipo salió de prueba ({self.fecha_inicio_bodegaje:%d/%m/%Y})'
+        return 'la fecha de finalización'
+
+    @property
     def estado_operativo_key(self):
         """Estado de ubicación que debe prevalecer en las pantallas operativas."""
         return 'retirado' if self.cliente_ya_retiro else self.estado_reparacion

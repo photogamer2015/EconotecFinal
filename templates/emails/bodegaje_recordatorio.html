@@ -38,7 +38,7 @@
                         <td style="padding:30px 30px 14px;">
                             <div style="color:#c62828; font-size:12px; font-weight:900; letter-spacing:1.1px; text-transform:uppercase;">Aviso importante de retiro</div>
                             <h1 style="margin:8px 0 10px; color:#202936; font-size:27px; line-height:1.2;">Tu equipo continúa en bodegaje</h1>
-                            <p style="margin:0; color:#5f6875; font-size:15px; line-height:1.6;">Hola, {{ cliente.nombres }}. Tu equipo está finalizado desde el {{ salida.fecha_salida|date:"d/m/Y" }} y permanece en nuestras instalaciones desde hace <strong>{{ dias_totales }} días</strong>.</p>
+                            <p style="margin:0; color:#5f6875; font-size:15px; line-height:1.6;">Hola, {{ cliente.nombres }}. Tu equipo está finalizado desde el {{ salida.fecha_inicio_bodegaje|date:"d/m/Y" }} y permanece en nuestras instalaciones desde hace <strong>{{ dias_totales }} días</strong>.</p>
                         </td>
                     </tr>
                     <tr>
@@ -84,7 +84,7 @@
                                 <tr>
                                     <td style="padding:17px; color:#6d4c00; font-size:13px; line-height:1.6;">
                                         <strong style="font-size:14px;">Política de bodegaje</strong><br>
-                                        Se conceden {{ dias_gracia }} días de gracia desde la finalización. Al cumplirse ese plazo se cobra {{ costo_dia|dinero_signo }} por cada día hasta el retiro; el valor continúa acumulándose mientras el equipo permanezca en bodega.
+                                        Se conceden {{ dias_gracia }} días de gracia desde {{ salida.inicio_gracia_texto }}. Al cumplirse ese plazo se cobra {{ costo_dia|dinero_signo }} por cada día hasta el retiro; el valor continúa acumulándose mientras el equipo permanezca en bodega.
                                     </td>
                                 </tr>
                             </table>

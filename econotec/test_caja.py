@@ -225,6 +225,20 @@ class DineroDelAdminTests(RankingAdminBase):
         antiguo.refresh_from_db()
         self.assertEqual(fila['total_por_cobrar'], antiguo.diferencia)
 
+    def test_pago_de_mas_no_infla_el_porcentaje_recaudado(self):
+        sin_pagar = self.ingreso(valor_acordado=Decimal('100.00'))
+        self.salida(sin_pagar)
+        pago_de_mas = self.ingreso(valor_acordado=Decimal('100.00'))
+        self.salida(pago_de_mas)
+        self.abono(pago_de_mas, '200.00')
+
+        fila = self.fila(self.ver())
+
+        self.assertEqual(fila['total_recaudado'], Decimal('200.00'))
+        self.assertEqual(fila['total_por_cobrar'], Decimal('100.00'))
+        self.assertEqual(fila['total_a_favor'], Decimal('100.00'))
+        self.assertEqual(fila['porcentaje_recaudado'], 50.0)
+
     def test_pago_de_mas_queda_como_saldo_a_favor(self):
         garantia = self.ingreso(valor_acordado=Decimal('0.00'))
         self.salida(garantia, estado='garantia')

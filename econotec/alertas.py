@@ -213,6 +213,13 @@ def dias_desde_salida(salida, hoy=None):
     return (hoy - salida.fecha_salida).days
 
 
+def dias_desde_inicio_bodegaje(salida, hoy=None):
+    """Días desde que corre el bodegaje: los que explican lo que se cobra."""
+    if hoy is None:
+        hoy = date.today()
+    return (hoy - salida.fecha_inicio_bodegaje).days
+
+
 # ═════════════════════════════════════════════════════════════════
 # 3. Mensajes de WhatsApp predefinidos
 # ═════════════════════════════════════════════════════════════════
@@ -328,10 +335,20 @@ def whatsapp_link_equipo_listo(salida):
         )
         return f"https://wa.me/{numero_limpio}?text={quote(mensaje)}"
 
-    if salida.sin_reparar_por_retirar:
+    if salida.en_equipo_prueba:
+        linea_aviso = "Le informamos que su equipo se encuentra *en prueba*:"
+    elif salida.sin_reparar_por_retirar:
         linea_aviso = "Le pedimos amablemente que *venga a retirar su equipo*:"
     else:
         linea_aviso = "Nos complace informarle que su equipo se encuentra *listo para retiro*:"
+
+    # Un equipo en prueba todavía no se retira ni acumula bodegaje.
+    lineas_retiro = "\n" if salida.en_equipo_prueba else (
+        f"\nPor favor, coordine con nosotros el día y horario para pasar a retirar su equipo. "
+        f"Le recordamos presentar su comprobante de ingreso al momento del retiro.\n\n"
+        f"📦 *Política de bodegaje:* Le informamos que, para garantizar la seguridad y el espacio adecuado, "
+        f"todo equipo no retirado generará un cargo de *${COSTO_BODEGAJE_DIA:.2f}* diarios a partir del 5to día desde esta notificación.\n\n"
+    )
 
     # Mensaje formal estilo correspondencia profesional para equipos aún sin retirar
     mensaje = (
@@ -347,10 +364,7 @@ def whatsapp_link_equipo_listo(salida):
         f"• Técnico que reparó: {nombre_tecnico}\n\n"
         f"{linea_saldo}"
         f"{linea_garantia}"
-        f"\nPor favor, coordine con nosotros el día y horario para pasar a retirar su equipo. "
-        f"Le recordamos presentar su comprobante de ingreso al momento del retiro.\n\n"
-        f"📦 *Política de bodegaje:* Le informamos que, para garantizar la seguridad y el espacio adecuado, "
-        f"todo equipo no retirado generará un cargo de *${COSTO_BODEGAJE_DIA:.2f}* diarios a partir del 5to día desde esta notificación.\n\n"
+        f"{lineas_retiro}"
         f"Agradecemos su confianza en Econotec. Quedamos atentos a sus comentarios.\n\n"
         f"Saludos cordiales,\n"
         f"*Econotec — Reparación de Tecnología*"
@@ -376,7 +390,18 @@ def whatsapp_link_bodegaje(salida):
     if not bodegaje['aplica']:
         return None
 
-    dias_desde = dias_desde_salida(salida)
+    dias_desde = dias_desde_inicio_bodegaje(salida)
+    fecha_inicio = salida.fecha_inicio_bodegaje.strftime('%d/%m/%Y')
+    if salida.sin_reparar_por_retirar:
+        linea_estado = (
+            f"permanece en nuestras instalaciones desde el {fecha_inicio}, hace *{dias_desde} día(s)*. "
+            f"Le pedimos amablemente que venga a retirarlo."
+        )
+    else:
+        linea_estado = (
+            f"se encuentra listo desde el {fecha_inicio} "
+            f"y permanece en nuestras instalaciones desde hace *{dias_desde} día(s)*."
+        )
     nombre_cliente = (ingreso.cliente.nombres or '').split(' ')[0] or 'cliente'
     nombre_tecnico = salida.tecnico_reparo_nombre or 'el equipo técnico de Econotec'
 
@@ -393,9 +418,7 @@ def whatsapp_link_bodegaje(salida):
         f"⚠️ *AVISO IMPORTANTE DE RETIRO Y BODEGAJE*\n\n"
         f"Su equipo "
         f"({ingreso.tipo_equipo_display} {ingreso.marca}) "
-        f"con código *{ingreso.codigo_equipo}* se encuentra listo desde el "
-        f"{salida.fecha_salida.strftime('%d/%m/%Y')} "
-        f"y permanece en nuestras instalaciones desde hace *{dias_desde} día(s)*.\n\n"
+        f"con código *{ingreso.codigo_equipo}* {linea_estado}\n\n"
         f"📋 *Detalle actualizado*\n"
         f"• Saldo pendiente del servicio: *${saldo_fmt}*\n"
         f"• Bodegaje acumulado ({bodegaje['dias']} día(s)): *${monto_fmt}*\n"

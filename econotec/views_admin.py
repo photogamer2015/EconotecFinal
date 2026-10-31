@@ -1718,7 +1718,7 @@ def admin_activos_bodegaje(request):
     for s in activos_qs:
         bod = s.calcular_bodegaje()
         if bod['dias'] > 0:
-            dias_totales = (hoy - s.fecha_salida).days if s.fecha_salida else 0
+            dias_totales = (hoy - s.fecha_inicio_bodegaje).days
             saldo_reparacion = max(s.ingreso.diferencia, Decimal('0.00'))
             activos.append({
                 'salida': s,

@@ -125,6 +125,7 @@ def _contexto_bodegaje(salida):
             'dias_gracia': UMBRAL_DIAS_BODEGAJE,
             'costo_dia': COSTO_BODEGAJE_DIA,
             'fecha_inicio': None,
+            'inicio_gracia': 'la fecha de finalización',
             'dias_actuales': 0,
             'monto_actual': Decimal('0.00'),
             'estado': 'La regla inicia cuando el equipo sea finalizado y quede pendiente de retiro',
@@ -140,6 +141,8 @@ def _contexto_bodegaje(salida):
             estado = 'Perdonado y cerrado'
         else:
             estado = 'Cerrado sin cargos'
+    elif salida.en_equipo_prueba:
+        estado = 'En prueba: todavía no corre el bodegaje'
     elif ingreso.bodegaje_pendiente > Decimal('0.00'):
         estado = 'Pendiente de decisión'
     else:
@@ -158,7 +161,8 @@ def _contexto_bodegaje(salida):
     return {
         'dias_gracia': UMBRAL_DIAS_BODEGAJE,
         'costo_dia': COSTO_BODEGAJE_DIA,
-        'fecha_inicio': salida.fecha_salida,
+        'fecha_inicio': salida.fecha_inicio_bodegaje,
+        'inicio_gracia': salida.inicio_gracia_texto,
         'dias_actuales': calculo['dias'] if calculo['aplica'] else 0,
         'monto_actual': calculo['monto'] if calculo['aplica'] else Decimal('0.00'),
         'estado': estado,
@@ -189,11 +193,12 @@ def _contexto_correo_actualizacion(ingreso, *, tipo, abonos_evento, adjunto_incl
     monto_evento = sum((abono.monto for abono in abonos_evento), Decimal('0.00'))
     if tipo == 'finalizacion':
         etiqueta = 'Equipo finalizado'
-        titulo = (
-            'Por favor, ven a retirar tu equipo'
-            if salida and salida.sin_reparar_por_retirar
-            else 'Tu equipo está listo'
-        )
+        if salida and salida.en_equipo_prueba:
+            titulo = 'Tu equipo está en prueba'
+        elif salida and salida.sin_reparar_por_retirar:
+            titulo = 'Por favor, ven a retirar tu equipo'
+        else:
+            titulo = 'Tu equipo está listo'
         introduccion = (
             'El trabajo técnico de tu equipo fue finalizado. '
             'A continuación encontrarás el estado, los valores y el historial registrado.'
@@ -406,7 +411,7 @@ def _contexto_correo_bodegaje(salida, *, adjunto_incluido):
         'ingreso': ingreso,
         'cliente': ingreso.cliente,
         'sede': sede,
-        'dias_totales': max((date.today() - salida.fecha_salida).days, 0),
+        'dias_totales': max((date.today() - salida.fecha_inicio_bodegaje).days, 0),
         'dias_bodegaje': calculo['dias'] if calculo['aplica'] else 0,
         'bodegaje_monto': bodegaje_monto,
         'saldo_reparacion': saldo_reparacion,

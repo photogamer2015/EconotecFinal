@@ -9,7 +9,7 @@ from ..alertas import (
     COSTO_BODEGAJE_DIA, UMBRAL_DIAS_BODEGAJE, UMBRAL_DIAS_DIAGNOSTICO, UMBRAL_DIAS_REPARACION_ADMIN,
     UMBRAL_DIAS_REPARACION_TECNICO,
 )
-from ..gamificacion import PUNTOS_SALIDA_BUENA, PUNTOS_SALIDA_MALA_RESTA, PUNTOS_SALIDA_PRODUCTO
+from ..gamificacion import PUNTOS_POR_ESTADO_SALIDA, PUNTOS_VENTA_PRODUCTO
 from ..permisos import es_admin, puede_ver_ranking
 from . import texto as tx
 from .respuesta import enlace, opcion, respuesta
@@ -146,8 +146,8 @@ def _finalizar(request):
         '• Cliente no quiso reparar / No se pudo reparar.\n'
         '• Garantía finalizada (con o sin fallos adicionales) y Cortesía finalizada.\n'
         'Reglas: el equipo debe tener valor acordado para finalizarse como reparado; se indica el técnico que '
-        f'reparó (una salida buena le suma {PUNTOS_SALIDA_BUENA} puntos y una mala le resta '
-        f'{PUNTOS_SALIDA_MALA_RESTA}). Si queda saldo, se notifica a una asesora para cobrarlo.\n'
+        f'reparó (un equipo reparado le suma {PUNTOS_POR_ESTADO_SALIDA["pendiente_retiro"]} puntos; pregúntame '
+        'por el ranking para ver el resto). Si queda saldo, se notifica a una asesora para cobrarlo.\n'
         'Finalizar NO es la salida física: el equipo sigue en la oficina hasta que confirmes que el cliente se lo llevó.\n'
         'Puedo hacerlo por ti: escribe «finalizar G1031».',
         [enlace('Equipos finalizados', 'salida_lista')],
@@ -309,9 +309,13 @@ def _roles(request):
 
 def _ranking(request):
     return respuesta(
-        f'Ranking de técnicos: el técnico que reparó (el que se indica al finalizar) suma {PUNTOS_SALIDA_BUENA} '
-        f'puntos por cada salida buena (reparado, garantía) y {PUNTOS_SALIDA_PRODUCTO} por venta de producto; '
-        f'resta {PUNTOS_SALIDA_MALA_RESTA} por salida mala (no se pudo reparar, cliente no quiso, chatarrización). '
+        f'Ranking de técnicos: el técnico que reparó (el que se indica al finalizar) suma '
+        f'{PUNTOS_POR_ESTADO_SALIDA["pendiente_retiro"]} puntos por equipo reparado, '
+        f'{PUNTOS_POR_ESTADO_SALIDA["cliente_no_acepta"]} si el cliente no quiso reparar y '
+        f'{PUNTOS_VENTA_PRODUCTO} por venta de producto; resta '
+        f'{abs(PUNTOS_POR_ESTADO_SALIDA["no_reparable"])} si no se pudo reparar y '
+        f'{abs(PUNTOS_POR_ESTADO_SALIDA["garantia"])} por garantía. '
+        'Revisión en prueba, cortesía y chatarrización no suman ni restan. '
         'Los valores económicos del ranking solo los ve el administrador.',
         [enlace('Ranking de Técnicos', 'salida_totales')] if puede_ver_ranking(request.user) else [],
     )

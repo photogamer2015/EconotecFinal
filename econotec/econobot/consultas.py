@@ -7,7 +7,7 @@ from datetime import date
 from django.db.models import Count, Q
 
 from ..alertas import (
-    UMBRAL_DIAS_REPARACION_ADMIN, UMBRAL_DIAS_REPARACION_TECNICO, dias_desde_salida,
+    UMBRAL_DIAS_REPARACION_ADMIN, UMBRAL_DIAS_REPARACION_TECNICO, dias_desde_inicio_bodegaje, dias_desde_salida,
     dias_en_estado_reparacion, dias_en_taller, equipos_demorados_qs, equipos_reparacion_demorada_qs,
     salidas_bodegaje_qs, whatsapp_link_equipo_listo,
 )
