@@ -328,10 +328,15 @@ def whatsapp_link_equipo_listo(salida):
         )
         return f"https://wa.me/{numero_limpio}?text={quote(mensaje)}"
 
+    if salida.sin_reparar_por_retirar:
+        linea_aviso = "Le pedimos amablemente que *venga a retirar su equipo*:"
+    else:
+        linea_aviso = "Nos complace informarle que su equipo se encuentra *listo para retiro*:"
+
     # Mensaje formal estilo correspondencia profesional para equipos aún sin retirar
     mensaje = (
         f"Estimado(a) {nombre_cliente}, reciba un cordial saludo de parte de *Econotec — Reparación de Tecnología*.\n\n"
-        f"Nos complace informarle que su equipo se encuentra *listo para retiro*:\n\n"
+        f"{linea_aviso}\n\n"
         f"📋 *Detalle de salida*\n"
         f"• Código de equipo: *{ingreso.codigo_equipo}*\n"
         f"{linea_equipo}"

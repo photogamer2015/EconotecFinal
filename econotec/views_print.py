@@ -397,13 +397,18 @@ def _mensaje_estado_salida(salida):
         fecha = salida.fecha_retiro_real or salida.fecha_salida
         return f'Su equipo salió de la oficina el {fecha.strftime("%d/%m/%Y")}.'
     if estado == 'revision':
+        inicio = (
+            'Por favor, venga a retirar su equipo'
+            if salida.sin_reparar_por_retirar
+            else 'Su equipo está listo para su retiro'
+        )
         if salida.ingreso.diferencia > 0:
-            return 'Su equipo está listo para su retiro en estado de revisión. Debe cancelar el saldo pendiente antes de retirarlo.'
-        return 'Su equipo está listo para su retiro en estado de revisión.'
+            return f'{inicio} en estado de revisión. Debe cancelar el saldo pendiente antes de retirarlo.'
+        return f'{inicio} en estado de revisión.'
     if estado == 'no_reparable':
-        return 'Su equipo está listo para su retiro. No se pudo reparar.'
+        return 'Por favor, venga a retirar su equipo. No se pudo reparar.'
     if estado == 'cliente_no_acepta':
-        return 'Su equipo está listo para su retiro. El cliente no aceptó la reparación.'
+        return 'Por favor, venga a retirar su equipo. El cliente no aceptó la reparación.'
     if estado == 'garantia':
         return 'Su equipo ya está listo para su retiro por garantía.'
     if estado == 'garantia_fallos_adicionales':

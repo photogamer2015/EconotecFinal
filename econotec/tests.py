@@ -26,6 +26,7 @@ from .alertas import (
     whatsapp_link_equipo_listo,
     whatsapp_link_venta_producto,
 )
+from .emails import enviar_correo_finalizacion_seguro
 from .horarios import registrar_entrada_laboral
 from .models import (
     Abono, BitacoraTecnico, Cliente, Egreso, HorarioTecnico, IngresoEquipo, InventarioItem,
@@ -9673,6 +9674,59 @@ class VentasTests(TestCase):
         self.assertNotIn('listo para retiro', texto)
         self.assertNotIn('coordine con nosotros', texto)
         self.assertNotIn('Política de bodegaje', texto)
+
+    def test_sin_reparar_pide_venir_a_retirar_por_whatsapp_y_correo(self):
+        self.cliente_existente.whatsapp = '0986168066'
+        self.cliente_existente.correo = 'cliente@example.com'
+        self.cliente_existente.save()
+        casos = (
+            ('no_reparable', '', None, True),
+            ('cliente_no_acepta', '', None, True),
+            ('revision', 'no_reparable', None, True),
+            ('revision', 'cliente_no_acepta', None, True),
+            ('revision', 'equipo_prueba', None, False),
+            ('pendiente_retiro', '', None, False),
+            ('garantia', '', None, False),
+            ('cortesia', '', None, False),
+            # Ya lo retiró: no se le pide venir.
+            ('no_reparable', '', date(2026, 7, 18), False),
+        )
+        for estado, subestado, retiro, pide_venir in casos:
+            with self.subTest(estado=estado, subestado=subestado, retiro=retiro):
+                mail.outbox.clear()
+                salida = SalidaEquipo.objects.create(
+                    ingreso=self.crear_ingreso_reparacion(),
+                    fecha_salida=date(2026, 7, 17),
+                    fecha_retiro_real=retiro,
+                    estado_reparacion=estado,
+                    subestado_revision=subestado,
+                    tecnico_reparo=self.usuario,
+                    valor_final_cobrado=Decimal('0.00'),
+                    metodo_pago_final='sin_pago',
+                    registrado_por=self.usuario,
+                )
+
+                link = whatsapp_link_equipo_listo(salida)
+                texto = parse_qs(urlparse(link).query)['text'][0]
+                self.assertEqual('venga a retirar su equipo' in texto, pide_venir)
+                self.assertTrue(enviar_correo_finalizacion_seguro(salida.pk))
+                correo = mail.outbox[0]
+                self.assertEqual('ven a retirar tu equipo' in correo.body, pide_venir)
+                self.assertEqual('Tu equipo está listo' in correo.body, not pide_venir)
+                self.assertEqual(len(correo.attachments), 1)
+                acta = views_print._mensaje_estado_salida(salida)
+                self.assertEqual('venga a retirar su equipo' in acta, pide_venir)
+                self.assertEqual('listo' in acta, not pide_venir and not retiro)
+
+                if pide_venir:
+                    # Solo cambia la frase: el resto de la información sigue.
+                    self.assertNotIn('listo para retiro', texto)
+                    self.assertIn('Código de equipo', texto)
+                    self.assertIn('Técnico que reparó', texto)
+                    self.assertIn('Política de bodegaje', texto)
+                    self.assertIn('RESUMEN ECONÓMICO', correo.body)
+                elif not retiro:
+                    self.assertIn('listo para retiro', texto)
 
     def test_notificacion_asesora_se_puede_marcar_como_vista(self):
         ingreso = self.crear_ingreso_reparacion(

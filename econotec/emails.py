@@ -189,7 +189,11 @@ def _contexto_correo_actualizacion(ingreso, *, tipo, abonos_evento, adjunto_incl
     monto_evento = sum((abono.monto for abono in abonos_evento), Decimal('0.00'))
     if tipo == 'finalizacion':
         etiqueta = 'Equipo finalizado'
-        titulo = 'Tu equipo está listo'
+        titulo = (
+            'Por favor, ven a retirar tu equipo'
+            if salida and salida.sin_reparar_por_retirar
+            else 'Tu equipo está listo'
+        )
         introduccion = (
             'El trabajo técnico de tu equipo fue finalizado. '
             'A continuación encontrarás el estado, los valores y el historial registrado.'

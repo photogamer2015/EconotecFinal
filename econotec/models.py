@@ -2186,6 +2186,12 @@ class SalidaEquipo(RetencionFactura):
         return self.fecha_retiro_real is not None
 
     @property
+    def sin_reparar_por_retirar(self):
+        """¿Quedó sin reparar (también como subcategoría de Revisión) y sigue en la oficina?"""
+        estado = self.subestado_revision if self.estado_reparacion == 'revision' else self.estado_reparacion
+        return estado in ('no_reparable', 'cliente_no_acepta') and not self.cliente_ya_retiro
+
+    @property
     def en_equipo_prueba(self):
         """¿Está en Revisión — Equipo en prueba (test)? No acumula bodegaje."""
         return self.estado_reparacion == 'revision' and self.subestado_revision == 'equipo_prueba'
