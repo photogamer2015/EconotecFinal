@@ -2485,19 +2485,6 @@ class VentasTests(TestCase):
         self.assertEqual(perfil_registrador['salidas_buenas'], 0)
         self.assertEqual(perfil_registrador['salidas_malas'], 0)
 
-        from .gamificacion import SALIDA_BUENA_ESTADOS, SALIDA_MALA_ESTADOS
-        self.assertEqual(set(SALIDA_BUENA_ESTADOS), {
-            'pendiente_retiro',
-            'garantia',
-            'garantia_fallos_adicionales',
-            'retirado',
-        })
-        self.assertEqual(set(SALIDA_MALA_ESTADOS), {
-            'no_reparable',
-            'cliente_no_acepta',
-            'chatarrerizacion',
-        })
-
     def test_menu_ventas_muestra_control_de_pago_de_ventas(self):
         response = self.client.get(reverse('econotec:venta_menu'))
 
@@ -3980,7 +3967,7 @@ class VentasTests(TestCase):
         self.assertNotContains(response, '🏁 Tabla de posiciones')
         self.assertEqual(response.context['ranking'][0]['puesto'], 1)
 
-    def test_ranking_salidas_recaudado_solo_cuenta_equipos_en_saldo_cero(self):
+    def test_ranking_salidas_recaudado_es_lo_pagado_como_en_pagos(self):
         tecnico = self.crear_tecnico_ranking('RecaudoRanking')
         fecha = date(2026, 8, 10)
         # Valor acordado + adicional, pagado con un abono facturado con
@@ -4002,7 +3989,7 @@ class VentasTests(TestCase):
             valor_con_retencion=Decimal('60.00'),
             registrado_por=self.usuario,
         )
-        # Pago parcial: todavía tiene saldo.
+        # Pago parcial: lo pagado cuenta y el resto queda por cobrar.
         self.crear_salida_ranking(
             tecnico, fecha, 'pendiente_retiro',
             valor_acordado=Decimal('40.00'),
@@ -4034,15 +4021,15 @@ class VentasTests(TestCase):
 
         fila = self.ranking_por_tecnico(response)[tecnico.pk]
         self.assertEqual(fila['total_acordado'], Decimal('120.00'))
-        self.assertEqual(fila['total_recaudado'], Decimal('80.00'))
-        self.assertEqual(fila['total_por_cobrar'], Decimal('40.00'))
+        self.assertEqual(fila['total_recaudado'], Decimal('95.00'))
+        self.assertEqual(fila['total_por_cobrar'], Decimal('25.00'))
         self.assertEqual(
             fila['total_acordado'],
             fila['total_recaudado'] + fila['total_por_cobrar'],
         )
         self.assertContains(response, '>Por cobrar<')
         self.assertContains(response, '$120,00')
-        self.assertContains(response, '$80,00')
+        self.assertContains(response, '$95,00')
 
     def test_ranking_sin_permiso_de_valores_no_ve_por_cobrar(self):
         self.crear_salida_ranking(
@@ -4205,7 +4192,7 @@ class VentasTests(TestCase):
             'Qué son estos totales',
             'Son <b>generales</b>: suman a <b>todos los técnicos</b> del ranking en el período elegido.',
             'Si en el período solo trabajó un técnico, los totales son iguales a los de ese técnico.',
-            '<b>Total acordado = Total recaudado + Por cobrar</b>',
+            '<b>Acordado + Domicilio + A favor = Recaudado + Por cobrar</b>',
             'Comprobación: 01/08/2026 – 31/08/2026',
         ):
             self.assertContains(response, texto)
@@ -4359,9 +4346,9 @@ class VentasTests(TestCase):
         self.assertContains(response, 'Mes a mes de Constante</h5>')
         self.assertContains(response, 'Mes a mes de SoloAgosto</h5>')
         # 5 de equipos + 5 de dinero + 2 de equipos por mes + 3 de dinero por mes.
-        self.assertEqual(len(response.context['comprobaciones']), 15)
+        self.assertEqual(len(response.context['comprobaciones']), 21)
         self.assertTrue(response.context['todo_cuadra'])
-        self.assertContains(response, '✓ Las 15 cuentas cuadran.')
+        self.assertContains(response, '✓ Las 21 cuentas cuadran.')
         self.assertContains(
             response,
             'agosto 2026: 3 + septiembre 2026: 1 + octubre 2026: 1 = 5',
@@ -5665,16 +5652,16 @@ class VentasTests(TestCase):
         })
         salidas_por_tecnico = {
             fila['tecnico_id']: fila
-            for fila in response.context['salidas_tecnicos_resumen']
+            for fila in response.context['ranking_filas']
         }
         self.assertNotIn(self.usuario.pk, salidas_por_tecnico)
-        self.assertEqual(salidas_por_tecnico[tecnico_salida.pk]['total'], 2)
-        self.assertEqual(salidas_por_tecnico[tecnico_salida.pk]['positivas'], 1)
-        self.assertEqual(salidas_por_tecnico[tecnico_salida.pk]['negativas'], 1)
-        self.assertEqual(salidas_por_tecnico[tecnico_salida.pk]['retirados'], 1)
+        self.assertEqual(salidas_por_tecnico[tecnico_salida.pk]['num_equipos'], 2)
+        self.assertEqual(salidas_por_tecnico[tecnico_salida.pk]['salidas_positivas'], 1)
+        self.assertEqual(salidas_por_tecnico[tecnico_salida.pk]['salidas_negativas'], 1)
+        self.assertEqual(salidas_por_tecnico[tecnico_salida.pk]['entregados'], 1)
         self.assertEqual(salidas_por_tecnico[tecnico_salida.pk]['pendientes'], 1)
         self.assertEqual(salidas_por_tecnico[tecnico_salida.pk]['efectividad'], 50.0)
-        self.assertEqual(response.context['salidas_tecnicos_recaudado'], Decimal('30.00'))
+        self.assertEqual(response.context['ranking_resumen']['total_recaudado'], Decimal('30.00'))
         self.assertEqual(response.context['salidas_fisicas_admin_total'], 1)
         self.assertEqual(response.context['salidas_fisicas_admin_con_bodegaje'], 1)
         self.assertEqual(response.context['salidas_fisicas_admin_bodegaje_cobrado'], 1)
@@ -5692,10 +5679,8 @@ class VentasTests(TestCase):
         self.assertContains(response, 'No representa quién hizo la reparación')
         self.assertContains(response, 'Técnico asignado al ingresar')
         self.assertContains(response, 'Técnico que deseas consultar')
-        self.assertContains(response, 'Equipos finalizados por técnico que terminó la reparación')
-        self.assertContains(response, 'Equipos finalizados del mes')
-        self.assertContains(response, 'Resultados positivos')
-        self.assertContains(response, 'Resultados negativos')
+        self.assertNotContains(response, 'Equipos finalizados por técnico que terminó la reparación')
+        self.assertContains(response, 'Tabla de posiciones')
         self.assertContains(response, 'Salidas físicas confirmadas')
         self.assertContains(response, 'Ver lista completa →')
         self.assertContains(response, reverse('econotec:salida_retiros_lista'))
@@ -5713,9 +5698,9 @@ class VentasTests(TestCase):
         )
         self.assertEqual(response_tecnico_salida.context['tecnico_resumen_nombre'], 'Tecnico Salida')
         self.assertEqual(response_tecnico_salida.context['ingresos_tecnicos_total'], 0)
-        self.assertEqual(response_tecnico_salida.context['salidas_tecnicos_total'], 2)
-        self.assertEqual(response_tecnico_salida.context['salidas_tecnicos_positivas'], 1)
-        self.assertEqual(response_tecnico_salida.context['salidas_tecnicos_negativas'], 1)
+        self.assertEqual(response_tecnico_salida.context['ranking_resumen']['num_equipos'], 2)
+        self.assertEqual(response_tecnico_salida.context['ranking_resumen']['salidas_positivas'], 1)
+        self.assertEqual(response_tecnico_salida.context['ranking_resumen']['salidas_negativas'], 1)
 
         response_tecnico_ingreso = self.client.get(
             reverse('econotec:admin_dashboard'),
@@ -5726,7 +5711,7 @@ class VentasTests(TestCase):
             },
         )
         self.assertEqual(response_tecnico_ingreso.context['ingresos_tecnicos_total'], 2)
-        self.assertEqual(response_tecnico_ingreso.context['salidas_tecnicos_total'], 0)
+        self.assertEqual(response_tecnico_ingreso.context['ranking_resumen']['num_equipos'], 0)
 
         from .views_admin import _obtener_estadisticas_gamificacion
         perfiles = {
@@ -12348,3 +12333,146 @@ class VentasTests(TestCase):
         )
         self.assertFalse(NotificacionRevisionAdmin.objects.filter(leida=False).exists())
         self.assertNotContains(self.client.get(reverse('econotec:bienvenida')), 'id="revision-admin-bell-btn"')
+
+    def crear_salida_con_bodegaje_vencido(self, estado='pendiente_retiro', salida_extra=None, **ingreso_overrides):
+        return self.crear_salida_ranking(
+            self.usuario,
+            date.today() - timedelta(days=20),
+            estado,
+            salida_extra=salida_extra,
+            **ingreso_overrides,
+        )
+
+    def test_poner_en_equipo_prueba_lo_quita_de_los_avisos_y_no_cobra_bodegaje(self):
+        from .alertas import salidas_bodegaje_qs
+
+        salida = self.crear_salida_con_bodegaje_vencido()
+        codigo = salida.ingreso.codigo_equipo
+        self.assertIn(salida, salidas_bodegaje_qs())
+        self.assertContains(self.client.get(reverse('econotec:alertas_bodegaje')), codigo)
+        self.assertGreater(salida.ingreso.bodegaje_pendiente, Decimal('0.00'))
+
+        self.client.post(
+            reverse('econotec:salida_editar', kwargs={'pk': salida.pk}),
+            self.salida_post_data(
+                fecha_salida=salida.fecha_salida.isoformat(),
+                estado_reparacion='revision:equipo_prueba',
+                metodo_pago_final='sin_pago',
+                asesora_notificacion=str(self.vendedor.pk),
+            ),
+        )
+
+        salida = SalidaEquipo.objects.get(pk=salida.pk)
+        self.assertEqual(salida.subestado_revision, 'equipo_prueba')
+        self.assertNotIn(salida, salidas_bodegaje_qs())
+        self.assertNotIn(salida, salidas_bodegaje_qs(incluir_silenciados=True))
+        for ruta in ('alertas_bodegaje', 'admin_activos_bodegaje', 'bienvenida'):
+            pagina = self.client.get(reverse(f'econotec:{ruta}')).content.decode()
+            self.assertNotIn(reverse('econotec:salida_bodegaje_silenciar', kwargs={'pk': salida.pk}), pagina)
+        self.assertNotContains(self.client.get(reverse('econotec:alertas_bodegaje')), codigo)
+        self.assertNotContains(self.client.get(reverse('econotec:admin_activos_bodegaje')), codigo)
+        self.assertFalse(salida.calcular_bodegaje()['aplica'])
+        self.assertEqual(salida.ingreso.bodegaje_pendiente, Decimal('0.00'))
+        self.assertEqual(salida.ingreso.bodegaje_dias_pendiente, 0)
+
+    def test_al_salir_de_equipo_prueba_los_dias_de_gracia_cuentan_desde_ese_dia(self):
+        from .alertas import salidas_bodegaje_qs
+
+        salida = self.crear_salida_con_bodegaje_vencido('revision', salida_extra={'subestado_revision': 'equipo_prueba'})
+        self.assertIsNone(salida.fecha_fin_prueba)
+        fecha_finalizacion = salida.fecha_salida
+
+        salida.estado_reparacion = 'pendiente_retiro'
+        salida.save()
+
+        salida.refresh_from_db()
+        hoy = date.today()
+        self.assertEqual(salida.fecha_fin_prueba, hoy)
+        # La fecha de finalización (ranking, reportes) no se toca.
+        self.assertEqual(salida.fecha_salida, fecha_finalizacion)
+        self.assertFalse(salida.calcular_bodegaje()['aplica'])
+        self.assertFalse(salida.calcular_bodegaje(hoy=hoy + timedelta(days=4))['aplica'])
+        self.assertEqual(salida.calcular_bodegaje(hoy=hoy + timedelta(days=5))['monto'], Decimal('1.00'))
+        self.assertNotIn(salida, salidas_bodegaje_qs())
+
+        # Cuando ya pasaron los días de gracia vuelve a los avisos y sí cobra.
+        SalidaEquipo.objects.filter(pk=salida.pk).update(fecha_fin_prueba=hoy - timedelta(days=6))
+        salida.refresh_from_db()
+        self.assertIn(salida, salidas_bodegaje_qs())
+        self.assertEqual(salida.calcular_bodegaje()['dias'], 2)
+        self.assertEqual(salida.ingreso.bodegaje_pendiente, Decimal('2.00'))
+
+    def test_cambiar_de_equipo_prueba_a_otra_subcategoria_tambien_arranca_la_gracia(self):
+        from .alertas import salidas_bodegaje_qs
+
+        salida = self.crear_salida_con_bodegaje_vencido('revision', salida_extra={'subestado_revision': 'equipo_prueba'})
+        salida.subestado_revision = 'no_reparable'
+        salida.save()
+
+        salida.refresh_from_db()
+        self.assertEqual(salida.fecha_fin_prueba, date.today())
+        self.assertFalse(salida.calcular_bodegaje()['aplica'])
+        self.assertNotIn(salida, salidas_bodegaje_qs())
+
+    def test_equipo_que_nunca_estuvo_en_prueba_sigue_cobrando_igual(self):
+        from .alertas import salidas_bodegaje_qs
+
+        for estado, extra in (
+            ('pendiente_retiro', None),
+            ('revision', {'subestado_revision': 'cliente_no_acepta'}),
+            ('revision', {'subestado_revision': 'no_reparable'}),
+            ('revision', None),
+            ('no_reparable', None),
+        ):
+            with self.subTest(estado=estado, extra=extra):
+                salida = self.crear_salida_con_bodegaje_vencido(estado, salida_extra=extra)
+                self.assertIsNone(salida.fecha_fin_prueba)
+                self.assertEqual(salida.calcular_bodegaje()['dias'], 16)
+                self.assertEqual(salida.calcular_bodegaje()['monto'], Decimal('16.00'))
+                self.assertIn(salida, salidas_bodegaje_qs())
+
+    def test_equipo_en_prueba_silenciado_tampoco_aparece_en_silenciados(self):
+        salida = self.crear_salida_con_bodegaje_vencido(
+            'revision',
+            salida_extra={'subestado_revision': 'equipo_prueba', 'bodegaje_silenciado': True},
+        )
+        silenciada = self.crear_salida_con_bodegaje_vencido(salida_extra={'bodegaje_silenciado': True})
+
+        response = self.client.get(reverse('econotec:alertas_bodegaje'))
+        silenciados = [item['salida'] for item in response.context['items_silenciados']]
+        self.assertNotIn(salida, silenciados)
+        self.assertIn(silenciada, silenciados)
+
+    def test_equipo_en_prueba_conserva_el_bodegaje_ya_cobrado(self):
+        salida = self.crear_salida_con_bodegaje_vencido(
+            'revision',
+            salida_extra={
+                'subestado_revision': 'equipo_prueba',
+                'bodegaje_dias_congelado': 3,
+                'bodegaje_monto_congelado': Decimal('3.00'),
+                'bodegaje_aplicado_al_pago': True,
+            },
+        )
+
+        calculo = salida.calcular_bodegaje()
+        self.assertTrue(calculo['cerrado'])
+        self.assertEqual(calculo['monto'], Decimal('3.00'))
+
+    def test_retirar_desde_equipo_prueba_no_cobra_bodegaje(self):
+        salida = self.crear_salida_con_bodegaje_vencido(
+            'revision',
+            salida_extra={'subestado_revision': 'equipo_prueba'},
+            valor_acordado=Decimal('0.00'),
+        )
+        self.assertEqual(salida.ingreso.diferencia, Decimal('0.00'))
+
+        self.client.post(
+            reverse('econotec:salida_marcar_retirada', kwargs={'pk': salida.pk}),
+            {'aplicar_bodegaje': ''},
+        )
+
+        salida = SalidaEquipo.objects.get(pk=salida.pk)
+        self.assertEqual(salida.fecha_retiro_real, date.today())
+        self.assertFalse(salida.bodegaje_aplicado_al_pago)
+        self.assertEqual(salida.bodegaje_monto_congelado, Decimal('0.00'))
+        self.assertEqual(salida.ingreso.bodegaje_pendiente, Decimal('0.00'))

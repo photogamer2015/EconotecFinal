@@ -27,6 +27,7 @@ predefinidos profesionales.
 from datetime import date, timedelta
 from decimal import Decimal
 from urllib.parse import quote
+from django.db.models import Q
 from django.urls import reverse
 from django.utils import timezone
 
@@ -155,6 +156,19 @@ def dias_en_estado_reparacion(ingreso, hoy=None):
 # 2. ALERTA: salidas con bodegaje pendiente
 # ═════════════════════════════════════════════════════════════════
 
+def filtrar_plazo_bodegaje_vencido(qs, fecha_limite):
+    """
+    Deja las salidas que ya pasaron los días de gracia. Un equipo en prueba
+    nunca entra y, si salió de prueba, los días cuentan desde ese momento.
+    """
+    return (
+        qs
+        .filter(fecha_salida__lte=fecha_limite)
+        .filter(Q(fecha_fin_prueba__isnull=True) | Q(fecha_fin_prueba__lte=fecha_limite))
+        .exclude(estado_reparacion='revision', subestado_revision='equipo_prueba')
+    )
+
+
 def salidas_bodegaje_qs(usuario=None, umbral_dias=UMBRAL_DIAS_BODEGAJE, incluir_silenciados=False):
     """
     Devuelve un QuerySet de SalidaEquipo POSITIVAS, sin retiro real
@@ -174,9 +188,8 @@ def salidas_bodegaje_qs(usuario=None, umbral_dias=UMBRAL_DIAS_BODEGAJE, incluir_
     fecha_limite = date.today() - timedelta(days=umbral_dias)
 
     qs = (
-        SalidaEquipo.objects
+        filtrar_plazo_bodegaje_vencido(SalidaEquipo.objects, fecha_limite)
         .select_related('ingreso', 'ingreso__cliente', 'ingreso__tecnico_encargado', 'tecnico_reparo')
-        .filter(fecha_salida__lte=fecha_limite)
         .filter(estado_reparacion__in=ESTADOS_SALIDA_CON_BODEGAJE)
         .filter(fecha_retiro_real__isnull=True)
         .order_by('fecha_salida')

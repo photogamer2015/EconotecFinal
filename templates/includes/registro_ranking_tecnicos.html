@@ -1,0 +1,225 @@
+{% load econotec_extras %}
+{# Caja y Ranking de Técnicos dentro del Registro Administrativo. Solo administrador. Usa las mismas tarjetas y cálculos del Ranking. #}
+<style>{% include 'includes/ranking_estilos.html' with en_registro=True %}</style>
+{% include 'includes/ranking_admin_estilos.html' %}
+<style>
+    .registro-ranking { display: block; margin-bottom: 26px; }
+    .ranking-admin-section {
+        border-color: #fde68a;
+        border-top-color: #d97706;
+        box-shadow: 0 3px 12px rgba(217, 119, 6, 0.1);
+        scroll-margin-top: 90px;
+    }
+    .ranking-admin-section .assignment-head { background: #fffbeb; border-bottom-color: #fef3c7; }
+    .ranking-admin-section .assignment-kicker { color: #b45309; }
+    .ranking-admin-section .assignment-head h3 { color: #92400e; }
+    .ranking-admin-section .assignment-period { border-color: #fcd34d; color: #92400e; }
+    [data-theme="dark"] .ranking-admin-section { border-color: rgba(251, 191, 36, 0.25); border-top-color: #f59e0b; }
+    [data-theme="dark"] .ranking-admin-section .assignment-head { background: rgba(245, 158, 11, 0.1); border-bottom-color: rgba(251, 191, 36, 0.2); }
+    [data-theme="dark"] .ranking-admin-section .assignment-kicker,
+    [data-theme="dark"] .ranking-admin-section .assignment-period { color: #fcd34d; }
+    [data-theme="dark"] .ranking-admin-section .assignment-head h3 { color: var(--text-main); }
+
+    .ra-opciones { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 18px; }
+    .ra-opcion {
+        display: inline-flex;
+        align-items: center;
+        min-height: 38px;
+        padding: 7px 14px;
+        border: 1px solid var(--border-color);
+        border-radius: 999px;
+        font-size: 12px;
+        font-weight: 800;
+        text-decoration: none;
+        color: var(--text-main);
+    }
+    .ra-opcion.activa { background: #d97706; border-color: #d97706; color: #fff; }
+    .ra-opcion.completo { margin-left: auto; color: #b45309; }
+    [data-theme="dark"] .ra-opcion.completo { color: #fcd34d; }
+    .ra-grupo-titulo {
+        margin: 4px 0 10px;
+        font-size: 11px;
+        font-weight: 900;
+        letter-spacing: .4px;
+        text-transform: uppercase;
+        color: var(--text-muted);
+    }
+    .ranking-admin-section .stat-card .value { overflow-wrap: anywhere; }
+    .ra-posiciones { margin-bottom: 22px; }
+    .ra-posiciones .tabla-admin { min-width: 1240px; }
+    .ra-puesto {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 26px;
+        height: 26px;
+        border-radius: 50%;
+        font-weight: 900;
+        color: #78350f;
+        background: #fde68a;
+    }
+    .ra-puesto.sin { color: var(--text-muted); background: transparent; border: 1px solid var(--border-color); }
+    .ra-vacio { padding: 18px; text-align: center; font-size: 13px; font-weight: 700; color: var(--text-muted); }
+    @media (max-width: 720px) {
+        .ra-opcion.completo { margin-left: 0; }
+    }
+</style>
+
+<div class="registro-ranking">
+    {% include 'includes/ranking_admin_caja.html' %}
+
+    <section class="assignment-section ranking-admin-section" id="ranking-admin" aria-labelledby="titulo-ranking-admin">
+        <div class="assignment-head">
+            <div>
+                <span class="assignment-kicker">Solo administración</span>
+                <h3 id="titulo-ranking-admin">🏆 Ranking de Técnicos</h3>
+                <p>Los mismos resultados y puntos del Ranking, con todo el dinero y el bodegaje a nombre del técnico que finalizó cada equipo.</p>
+            </div>
+            <div class="assignment-period">{{ periodo_filtro.etiqueta }}</div>
+        </div>
+
+        <div class="assignment-body">
+            <nav class="ra-opciones" aria-label="Período del Ranking">
+                {% for valor, texto in ranking_alcances %}
+                <a class="ra-opcion{% if valor == ranking_alcance %} activa{% endif %}"{% if valor == ranking_alcance %} aria-current="true"{% endif %} href="?ano={{ year }}&mes={{ month }}&ranking={{ valor }}{% if tecnico_resumen_filtro %}&tecnico_resumen={{ tecnico_resumen_filtro }}{% endif %}#ranking-admin">{{ texto }}</a>
+                {% endfor %}
+                <a class="ra-opcion completo" href="{% url 'econotec:salida_totales' %}?{{ ranking_parametros }}">Ver ranking completo →</a>
+            </nav>
+
+            <div class="stats-row">
+                <div class="stat-card alt">
+                    <div class="label">Equipos ingresados</div>
+                    <div class="value">{{ ranking_ingresados }}</div>
+                </div>
+                <div class="stat-card success">
+                    <div class="label">Equipos finalizados positivos</div>
+                    <div class="value">{{ ranking_resumen.salidas_positivas }} <small style="font-size:14px; color:#888;">/ {{ ranking_resumen.num_equipos }}</small></div>
+                </div>
+                <div class="stat-card">
+                    <div class="label">Efectividad total</div>
+                    <div class="value">{% if ranking_resumen.efectividad is None %}—{% else %}{{ ranking_resumen.efectividad|floatformat:1 }}%{% endif %}</div>
+                    <div class="nota">{{ ranking_resumen.salidas_negativas }} restan · {{ ranking_resumen.salidas_neutras }} no afectan</div>
+                </div>
+                <div class="stat-card">
+                    <div class="label">Puntos del período</div>
+                    <div class="value">{{ ranking_puntos }}</div>
+                    <div class="nota">{{ ranking_resumen.entregados }} fuera de oficina · {{ ranking_resumen.pendientes }} en oficina</div>
+                </div>
+            </div>
+            <div class="stats-row">
+                <div class="stat-card">
+                    <div class="label">Total acordado</div>
+                    <div class="value">{{ ranking_resumen.total_acordado|dinero_signo }}</div>
+                </div>
+                <div class="stat-card">
+                    <div class="label">Domicilio</div>
+                    <div class="value">{{ ranking_resumen.total_domicilio|dinero_signo }}</div>
+                </div>
+                <div class="stat-card">
+                    <div class="label">Total a cobrar</div>
+                    <div class="value">{{ ranking_resumen.total_a_cobrar|dinero_signo }}</div>
+                    <div class="nota">Acordado + Domicilio</div>
+                </div>
+                <div class="stat-card success">
+                    <div class="label">Total recaudado</div>
+                    <div class="value">{{ ranking_resumen.total_recaudado|dinero_signo }}</div>
+                </div>
+                <div class="stat-card" style="border-left-color: #e65100;">
+                    <div class="label">Por cobrar</div>
+                    <div class="value" style="color: #e65100;">{{ ranking_resumen.total_por_cobrar|dinero_signo }}</div>
+                </div>
+                <div class="stat-card success">
+                    <div class="label">Saldo a favor de clientes</div>
+                    <div class="value">{{ ranking_resumen.total_a_favor|dinero_signo }}</div>
+                </div>
+                <div class="stat-card">
+                    <div class="label">Diagnóstico inmediato</div>
+                    <div class="value">{{ ranking_resumen.total_diagnostico_inmediato|dinero_signo }}</div>
+                </div>
+                <div class="stat-card" style="border-left-color: var(--warning);">
+                    <div class="label">Diagnóstico (No reparados)</div>
+                    <div class="value" style="color: var(--warning);">{{ ranking_resumen.acordado_no_reparados|dinero_signo }}</div>
+                </div>
+            </div>
+            <p class="fila-titulo">Bodegaje de estos equipos · es un plus, no cambia los valores de arriba</p>
+            <div class="stats-row">
+                <div class="stat-card bodegaje">
+                    <div class="label">Bodegaje cobrado</div>
+                    <div class="value">{{ ranking_resumen.total_bodegaje_cobrado|dinero_signo }}</div>
+                    <div class="nota">Ya entró en Pagos y en la Caja</div>
+                </div>
+                <div class="stat-card bodegaje sin-cobrar">
+                    <div class="label">Bodegaje sin cobrar</div>
+                    <div class="value">{{ ranking_resumen.total_bodegaje_pendiente|dinero_signo }}</div>
+                    <div class="nota">Acumulado a hoy, sin decidir</div>
+                </div>
+                <div class="stat-card bodegaje perdonado">
+                    <div class="label">Bodegaje perdonado</div>
+                    <div class="value">{{ ranking_resumen.total_bodegaje_perdonado|dinero_signo }}</div>
+                    <div class="nota">No se cobró al retirar</div>
+                </div>
+            </div>
+
+            {% if ranking_filas %}
+            <h4 class="ra-grupo-titulo">Tabla de posiciones</h4>
+            <div class="ra-posiciones tabla-scroll" tabindex="0" role="region" aria-label="Tabla de posiciones de los técnicos">
+                <table class="tabla-admin">
+                    <thead>
+                        <tr>
+                            <th class="texto" scope="col">Puesto</th>
+                            <th class="texto" scope="col">Técnico</th>
+                            <th class="texto" scope="col">Nivel</th>
+                            <th scope="col">Puntos</th>
+                            <th scope="col">Efectividad</th>
+                            <th scope="col">Finalizados</th>
+                            <th scope="col">Suman</th>
+                            <th scope="col">Restan</th>
+                            <th scope="col">Ventas</th>
+                            <th scope="col">Acordado</th>
+                            <th scope="col">Domicilio</th>
+                            <th scope="col">Recaudado</th>
+                            <th scope="col">Por cobrar</th>
+                            <th scope="col">Bod. cobrado</th>
+                            <th scope="col">Bod. sin cobrar</th>
+                            <th scope="col">Bod. perdonado</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for r in ranking_filas %}
+                        <tr>
+                            <td class="texto"><span class="ra-puesto{% if not r.puesto %} sin{% endif %}">{% if r.puesto %}{{ r.puesto }}{% else %}–{% endif %}</span></td>
+                            <td class="texto"><b>{{ r.nombre }}</b></td>
+                            <td class="texto">{% if r.perfil %}{{ r.perfil.nivel }}{% else %}—{% endif %}</td>
+                            <td><b>{{ r.puntos }}</b></td>
+                            <td>{% if r.efectividad is None %}—{% else %}{{ r.efectividad|floatformat:1 }}%{% endif %}</td>
+                            <td>{{ r.num_equipos }}</td>
+                            <td class="positivo">{{ r.salidas_positivas }}</td>
+                            <td class="negativo">{{ r.salidas_negativas }}</td>
+                            <td>{{ r.ventas_producto }}</td>
+                            <td>{{ r.total_acordado|dinero_signo }}</td>
+                            <td>{{ r.total_domicilio|dinero_signo:"—" }}</td>
+                            <td class="positivo">{{ r.total_recaudado|dinero_signo }}</td>
+                            <td class="por-cobrar">{{ r.total_por_cobrar|dinero_signo }}</td>
+                            <td class="plus">{{ r.total_bodegaje_cobrado|dinero_signo:"—" }}</td>
+                            <td>{{ r.total_bodegaje_pendiente|dinero_signo:"—" }}</td>
+                            <td>{{ r.total_bodegaje_perdonado|dinero_signo:"—" }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <h4 class="ra-grupo-titulo">Detalle por técnico</h4>
+            <ol class="tech-list">
+                {% for r in ranking_filas %}{% include 'includes/ranking_tarjeta_tecnico.html' %}{% endfor %}
+            </ol>
+            {% else %}
+            <p class="ra-vacio">No hay equipos finalizados de este técnico en {{ periodo_filtro.etiqueta }}.</p>
+            {% endif %}
+        </div>
+    </section>
+
+    {% include 'includes/ranking_admin_cuadre.html' %}
+</div>
+<script>
+{% include 'includes/ranking_guia_js.html' %}</script>

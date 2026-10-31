@@ -1,0 +1,223 @@
+{% load econotec_extras %}
+{# Caja fuerte del Registro Administrativo: lo recaudado del año, guardado mes a mes. Recibe: caja, caja_etiqueta, year y month. #}
+<section class="rank-card caja" id="caja" aria-labelledby="titulo-caja">
+    <h3 id="titulo-caja">🔐 Caja</h3>
+
+    <div class="caja-principal">
+        <div class="caja-escena" aria-hidden="true">
+            <div class="caja-fuerte">
+                <div class="caja-interior">
+                    <div class="caja-monedas" data-caja-monedas>
+                        {% for mes in caja.meses %}{% if mes.neto > 0 %}<span class="caja-moneda">$</span>{% endif %}{% endfor %}
+                    </div>
+                </div>
+                <div class="caja-puerta" data-caja-puerta>
+                    <div class="caja-dial"></div>
+                    <span class="caja-luz"></span>
+                </div>
+            </div>
+            <div class="caja-patas"><span></span><span></span></div>
+        </div>
+
+        <div class="caja-resumen">
+            <div class="caja-saldo-etiqueta">Guardado en caja</div>
+            <div class="caja-saldo{% if caja.saldo_final < 0 %} negativo{% endif %}" data-caja-contador data-final="{{ caja.saldo_final|stringformat:'.2f' }}" data-inicial="{{ caja.saldo_inicial|stringformat:'.2f' }}">{{ caja.saldo_final|dinero_signo }}</div>
+            <div class="caja-saldo-nota">Hasta el final de {{ caja_etiqueta }}</div>
+            <dl class="caja-cuentas">
+                <div><dt>Guardado de años anteriores</dt><dd>{{ caja.saldo_inicial|dinero_signo }}</dd></div>
+                <div><dt>Entró en {{ year }}</dt><dd class="entra">+ {{ caja.entro|dinero_signo }}</dd></div>
+                <div><dt>Egresos de {{ year }}</dt><dd class="sale">− {{ caja.egresos|dinero_signo }}</dd></div>
+                <div><dt>Queda de {{ year }}</dt><dd>{{ caja.neto|dinero_signo }}</dd></div>
+            </dl>
+            <ul class="caja-metodos" aria-label="Cómo entró el dinero">
+                {% for metodo in caja.metodos %}<li>{{ metodo.nombre }}: <b>{{ metodo.monto|dinero_signo }}</b></li>{% endfor %}
+            </ul>
+            <button type="button" class="caja-repetir" data-caja-repetir hidden>▶ Ver guardar de nuevo</button>
+        </div>
+    </div>
+
+    {% if caja.meses %}
+    <ol class="caja-meses" data-caja-lista>
+        {% for mes in caja.meses %}
+        <li class="caja-mes{% if mes.mes.year == year and mes.mes.month == month %} actual{% endif %}" data-caja-mes data-guardado="{{ mes.guardado|stringformat:'.2f' }}" data-neto="{{ mes.neto|stringformat:'.2f' }}">
+            <span class="caja-mes-sello" aria-hidden="true">✓</span>
+            <span class="caja-mes-nombre">{{ mes.etiqueta|capfirst }}{% if mes.parcial %} (parte){% endif %}</span>
+            <span class="caja-mes-neto{% if mes.neto < 0 %} negativo{% elif not mes.neto %} cero{% endif %}">{% if mes.neto > 0 %}+ {% endif %}{{ mes.neto|dinero_signo }}</span>
+            <span class="caja-mes-guardado">Guardado: {{ mes.guardado|dinero_signo }}</span>
+        </li>
+        {% endfor %}
+    </ol>
+
+    <div class="caja-detalle tabla-scroll" tabindex="0" role="region" aria-label="Detalle de la Caja por mes">
+        <table class="tabla-admin">
+            <thead>
+                <tr>
+                    <th class="texto" scope="col">Mes</th>
+                    <th scope="col">Reparaciones</th>
+                    <th scope="col">Bodegaje cobrado</th>
+                    <th scope="col">Diagnóstico</th>
+                    <th scope="col">Ventas</th>
+                    <th scope="col">Entró</th>
+                    <th scope="col">Egresos</th>
+                    <th scope="col">Queda</th>
+                    <th scope="col">Guardado</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for mes in caja.meses %}
+                <tr>
+                    <td class="texto">{{ mes.etiqueta|capfirst }}{% if mes.parcial %} (parte){% endif %}</td>
+                    <td>{{ mes.reparaciones|dinero_signo }}</td>
+                    <td class="plus">{{ mes.bodegaje|dinero_signo:"—" }}</td>
+                    <td>{{ mes.diagnostico|dinero_signo:"—" }}</td>
+                    <td>{{ mes.ventas|dinero_signo:"—" }}</td>
+                    <td class="positivo">{{ mes.entro|dinero_signo }}</td>
+                    <td class="negativo">{{ mes.egresos|dinero_signo:"—" }}</td>
+                    <td>{{ mes.neto|dinero_signo }}</td>
+                    <td><b>{{ mes.guardado|dinero_signo }}</b></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+            <tfoot>
+                <tr>
+                    <td class="texto">Total de {{ year }}</td>
+                    <td>{{ caja.reparaciones|dinero_signo }}</td>
+                    <td>{{ caja.bodegaje|dinero_signo }}</td>
+                    <td>{{ caja.diagnostico|dinero_signo }}</td>
+                    <td>{{ caja.ventas|dinero_signo }}</td>
+                    <td>{{ caja.entro|dinero_signo }}</td>
+                    <td>{{ caja.egresos|dinero_signo }}</td>
+                    <td>{{ caja.neto|dinero_signo }}</td>
+                    <td>{{ caja.saldo_final|dinero_signo }}</td>
+                </tr>
+            </tfoot>
+        </table>
+    </div>
+    {% endif %}
+
+    <p class="caja-aclaracion">
+        Cada pago cuenta en el mes de su fecha. La Caja se calcula de los pagos reales y los egresos: si se corrige un pago, el mes se corrige solo.
+        El bodegaje cobrado viene dentro de los abonos y aquí se muestra aparte; el que no se cobró no entra.
+    </p>
+</section>
+<script>
+(function () {
+    var caja = document.getElementById('caja');
+    if (!caja) return;
+    var contador = caja.querySelector('[data-caja-contador]');
+    var monedas = caja.querySelector('[data-caja-monedas]');
+    var repetir = caja.querySelector('[data-caja-repetir]');
+    var meses = Array.prototype.slice.call(caja.querySelectorAll('[data-caja-mes]'));
+    var inicial = parseFloat(contador.dataset.inicial);
+    var final = parseFloat(contador.dataset.final);
+    var monedasFinales = monedas.innerHTML;
+    var corrida = 0;
+    var MAX_MONEDAS = 30;
+
+    function formato(valor) {
+        var partes = Math.abs(valor).toFixed(2).split('.');
+        var enteros = partes[0].replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+        return '$' + (valor < 0 ? '-' : '') + enteros + ',' + partes[1];
+    }
+    function esperar(ms) {
+        return new Promise(function (resolver) { setTimeout(resolver, ms); });
+    }
+    function contar(desde, hasta, ms) {
+        var inicio = performance.now();
+        return new Promise(function (resolver) {
+            function paso(ahora) {
+                var avance = Math.min((ahora - inicio) / ms, 1);
+                contador.textContent = formato(desde + (hasta - desde) * (1 - Math.pow(1 - avance, 3)));
+                if (avance < 1) requestAnimationFrame(paso); else resolver();
+            }
+            requestAnimationFrame(paso);
+        });
+    }
+    function volar(desde, hacia, ms) {
+        var a = desde.getBoundingClientRect();
+        var b = hacia.getBoundingClientRect();
+        var moneda = document.createElement('span');
+        moneda.className = 'caja-moneda caja-moneda-vuelo';
+        moneda.textContent = '$';
+        document.body.appendChild(moneda);
+        var x1 = a.left + a.width / 2 - 13;
+        var y1 = a.top + a.height / 2 - 13;
+        var x2 = b.left + b.width / 2 - 13;
+        var y2 = b.top + b.height / 2 - 13;
+        var animacion = moneda.animate([
+            { transform: 'translate(' + x1 + 'px,' + y1 + 'px) scale(.8)', opacity: 0 },
+            { transform: 'translate(' + x1 + 'px,' + (y1 - 18) + 'px) scale(1.15) rotate(90deg)', opacity: 1, offset: .2 },
+            { transform: 'translate(' + (x1 + x2) / 2 + 'px,' + (Math.min(y1, y2) - 34) + 'px) scale(1.2) rotate(360deg)', opacity: 1, offset: .6 },
+            { transform: 'translate(' + x2 + 'px,' + y2 + 'px) scale(.75) rotate(720deg)', opacity: 1 }
+        ], { duration: ms, easing: 'ease-in-out' });
+        return animacion.finished.catch(function () {}).then(function () { moneda.remove(); });
+    }
+    function terminar() {
+        caja.classList.remove('animando', 'abierta', 'cerrando');
+        monedas.innerHTML = monedasFinales;
+        contador.textContent = formato(final);
+        meses.forEach(function (mes) { mes.classList.remove('activo', 'guardado'); });
+        if (repetir) repetir.hidden = false;
+    }
+    function animar() {
+        var esta = ++corrida;
+        // Con muchos meses cada moneda va más rápido; la animación dura lo mismo.
+        var vuelo = Math.max(240, Math.min(620, 4200 / Math.max(meses.length, 1)));
+        var cadena = Promise.resolve();
+        caja.classList.remove('cerrando');
+        caja.classList.add('animando');
+        meses.forEach(function (mes) { mes.classList.remove('activo', 'guardado'); });
+        monedas.innerHTML = '';
+        contador.textContent = formato(inicial);
+        var saldo = inicial;
+        var contadas = 0;
+        cadena = cadena.then(function () {
+            caja.classList.add('abierta');
+            return esperar(640);
+        });
+        meses.forEach(function (mes) {
+            cadena = cadena.then(function () {
+                if (esta !== corrida) return;
+                var neto = parseFloat(mes.dataset.neto);
+                var guardado = parseFloat(mes.dataset.guardado);
+                mes.classList.add('activo');
+                var llegada = neto > 0 ? volar(mes, monedas, vuelo) : esperar(vuelo / 2);
+                return llegada.then(function () {
+                    if (esta !== corrida) return;
+                    if (neto > 0 && contadas < MAX_MONEDAS) {
+                        var moneda = document.createElement('span');
+                        moneda.className = 'caja-moneda nueva';
+                        moneda.textContent = '$';
+                        monedas.appendChild(moneda);
+                        contadas += 1;
+                    }
+                    var anterior = saldo;
+                    saldo = guardado;
+                    mes.classList.remove('activo');
+                    mes.classList.add('guardado');
+                    return contar(anterior, guardado, vuelo * 0.6);
+                });
+            });
+        });
+        cadena.then(function () {
+            if (esta !== corrida) return;
+            caja.classList.remove('abierta');
+            caja.classList.add('cerrando');
+            return esperar(1050);
+        }).then(function () {
+            if (esta === corrida) terminar();
+        });
+    }
+
+    if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches && meses.length && 'IntersectionObserver' in window && Element.prototype.animate) {
+        var observador = new IntersectionObserver(function (entradas) {
+            if (entradas[0].isIntersecting) {
+                observador.disconnect();
+                animar();
+            }
+        }, { threshold: 0.25 });
+        observador.observe(caja);
+        if (repetir) repetir.addEventListener('click', animar);
+    }
+})();
+</script>
