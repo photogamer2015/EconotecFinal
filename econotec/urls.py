@@ -215,6 +215,11 @@ urlpatterns = [
     # ── Control de Registro / Auditoría (solo admin) ───────
     path('admin-panel/control-registro/', views_admin.control_registro, name='control_registro'),
 
+    # ── Cambios de técnicos y asesoras (solo admin) ────────
+    path('admin-panel/cambios/', views_admin.cambios_equipo, name='cambios_equipo'),
+    path('admin-panel/cambios/<int:pk>/ver/', views_admin.notificacion_cambio_admin_ver, name='notificacion_cambio_admin_ver'),
+    path('admin-panel/cambios/vistos/', views_admin.notificaciones_cambio_admin_vistas, name='notificaciones_cambio_admin_vistas'),
+
     # ── Avisos del panel principal (solo admin) ────────────
     path('admin-panel/avisos/', views_admin.avisos_lista, name='avisos_lista'),
     path('admin-panel/avisos/nuevo/', views_admin.aviso_crear, name='aviso_crear'),

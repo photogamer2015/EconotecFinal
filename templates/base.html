@@ -1850,6 +1850,42 @@
                             </div>
                         </div>
                     {% endif %}
+                    <div class="noti-bell-wrap">
+                        <button type="button" class="noti-bell-btn" id="cambios-admin-bell-btn" aria-expanded="false" aria-controls="cambios-admin-bell-menu" title="Cambios de técnicos y asesoras" aria-label="Cambios de técnicos y asesoras">
+                            🔔
+                            {% if notificaciones_cambio_admin_count > 0 %}<span class="noti-bell-count">{{ notificaciones_cambio_admin_count }}</span>{% endif %}
+                        </button>
+                        <div class="noti-menu" id="cambios-admin-bell-menu">
+                            <div class="noti-menu-head">
+                                <strong>Cambios del equipo</strong>
+                                <span>{{ notificaciones_cambio_admin_count }} sin ver</span>
+                            </div>
+                            <div class="noti-menu-list">
+                                {% for aviso in notificaciones_cambio_admin_preview %}
+                                    <a href="{% url 'econotec:notificacion_cambio_admin_ver' pk=aviso.pk %}" class="noti-item">
+                                        <div class="noti-item-title">
+                                            <span>{{ aviso.usuario_nombre }}</span>
+                                            {% if aviso.codigo %}<span class="noti-item-value">{{ aviso.codigo }}</span>{% endif %}
+                                        </div>
+                                        <div class="noti-item-meta">
+                                            {{ aviso.mensaje|truncatechars:110 }}
+                                            <br>{{ aviso.creado|date:"d/m/Y H:i" }}
+                                        </div>
+                                    </a>
+                                {% empty %}
+                                    <div class="noti-item"><div class="noti-item-meta">No hay cambios sin ver.</div></div>
+                                {% endfor %}
+                            </div>
+                            <a href="{% url 'econotec:cambios_equipo' %}" class="noti-menu-foot">Ver todos los cambios</a>
+                            {% if notificaciones_cambio_admin_count > 0 %}
+                            <form method="post" action="{% url 'econotec:notificaciones_cambio_admin_vistas' %}" class="noti-menu-form">
+                                {% csrf_token %}
+                                <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                                <button type="submit" class="noti-menu-foot">Marcar todos como vistos</button>
+                            </form>
+                            {% endif %}
+                        </div>
+                    </div>
                     <a href="{% url 'econotec:notificaciones_asesora' %}" class="admin-noti-link" title="Ver todas las notificaciones de asesoras">
                         Asesoras
                         {% if notificaciones_asesora_admin_count > 0 %}
@@ -2069,6 +2105,7 @@
         activarMenuNotificaciones('noti-bell-btn', 'noti-bell-menu');
         activarMenuNotificaciones('inventario-admin-bell-btn', 'inventario-admin-bell-menu');
         activarMenuNotificaciones('revision-admin-bell-btn', 'revision-admin-bell-menu');
+        activarMenuNotificaciones('cambios-admin-bell-btn', 'cambios-admin-bell-menu');
 
         (function activarNavegacionMovil() {
             const header = document.querySelector('header.top');

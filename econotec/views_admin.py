@@ -18,6 +18,7 @@ from django.db.models.functions import Coalesce
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
+from django.utils.http import url_has_allowed_host_and_scheme
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
@@ -30,7 +31,7 @@ from .emails import enviar_correo_bodegaje_seguro
 from .models import (
     IngresoEquipo, SalidaEquipo, Abono, Egreso, CategoriaEgreso, Cliente,
     AvisoPanel, BitacoraTecnico, HorarioTecnico, InventarioItem,
-    SEDES_EQUIPOS, VentaInventarioItem,
+    NotificacionCambioAdmin, SEDES_EQUIPOS, VentaInventarioItem,
 )
 from .pagination import paginar_resultados
 from .permisos import GRUPOS_TECNICO, admin_requerido, es_admin, puede_ver_valores_ranking, tecnico_requerido
@@ -2489,6 +2490,48 @@ def aviso_eliminar(request, pk):
 # ═════════════════════════════════════════════════════════════════
 # Control de Registro (Auditoría) — solo administrador
 # ═════════════════════════════════════════════════════════════════
+
+@admin_requerido
+def cambios_equipo(request):
+    """Todo lo que han hecho técnicos y asesoras, del más reciente al más antiguo."""
+    page_obj, querystring = paginar_resultados(
+        request,
+        NotificacionCambioAdmin.objects.all(),
+        per_page=30,
+    )
+    return render(request, 'admin_panel/cambios_equipo.html', {
+        'page_obj': page_obj,
+        'querystring': querystring,
+        'sin_ver': NotificacionCambioAdmin.objects.filter(leida=False).count(),
+    })
+
+
+@admin_requerido
+def notificacion_cambio_admin_ver(request, pk):
+    """Abre lo que cambió y marca el aviso como visto."""
+    aviso = get_object_or_404(NotificacionCambioAdmin, pk=pk)
+    aviso.marcar_vista()
+    if aviso.url:
+        return redirect(aviso.url)
+    if aviso.ingreso_id:
+        return redirect('econotec:ingreso_detalle', pk=aviso.ingreso_id)
+    return redirect('econotec:cambios_equipo')
+
+
+@admin_requerido
+@require_POST
+def notificaciones_cambio_admin_vistas(request):
+    """Marca como vistos todos los avisos de cambios."""
+    NotificacionCambioAdmin.objects.filter(leida=False).update(
+        leida=True,
+        leida_en=timezone.now(),
+    )
+    messages.success(request, 'Cambios marcados como vistos.')
+    destino = request.POST.get('next') or ''
+    if not url_has_allowed_host_and_scheme(destino, allowed_hosts={request.get_host()}):
+        destino = reverse('econotec:bienvenida')
+    return redirect(destino)
+
 
 @admin_requerido
 def control_registro(request):

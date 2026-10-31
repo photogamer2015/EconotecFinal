@@ -165,7 +165,8 @@ class PerfilesTests(TestCase):
             for target, expected in [('https://evil.example/phishing', reverse('econotec:bienvenida')),
                                      ('//evil.example/', reverse('econotec:bienvenida')),
                                      ('/mi-perfil/', '/mi-perfil/')]:
-                with patch('econotec.views.get_object_or_404', return_value=MagicMock()):
+                with patch('econotec.views.get_object_or_404', return_value=MagicMock()), \
+                        patch('econotec.views.avisar_cambio'):
                     response = self.client.post(reverse('econotec:' + name, args=[123]), {'next': target})
                     self.assertEqual(response.url, expected)
 

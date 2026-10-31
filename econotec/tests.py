@@ -27,12 +27,13 @@ from .alertas import (
     whatsapp_link_equipo_listo,
     whatsapp_link_venta_producto,
 )
+from .bitacora import registrar_bitacora
 from .econobot import conocimiento
 from .emails import enviar_correo_bodegaje_seguro, enviar_correo_finalizacion_seguro
 from .horarios import registrar_entrada_laboral
 from .models import (
     Abono, BitacoraTecnico, Cliente, Egreso, HorarioTecnico, IngresoEquipo, InventarioItem,
-    NotificacionAsesora, NotificacionInventarioAdmin, NotificacionRevisionAdmin,
+    NotificacionAsesora, NotificacionCambioAdmin, NotificacionInventarioAdmin, NotificacionRevisionAdmin,
     ObservacionEquipo, SalidaEquipo, VentanaObservacionVista,
     UsuarioActividad, VentaInventarioItem,
 )
@@ -5554,7 +5555,11 @@ class VentasTests(TestCase):
         self.assertEqual(response.context['reparacion_admin_total'], 2)
         self.assertContains(response, 'Esperando cabezal, llega el viernes.')
         self.assertContains(response, f'— {con_reporte.reporte_por_nombre}')
-        self.assertContains(response, 'Sin observación en la hoja todavía.', count=1)
+        self.assertNotContains(response, 'Sin observación en la hoja todavía.')
+        self.assertContains(
+            response,
+            reverse('econotec:ingreso_observaciones', kwargs={'pk': sin_reporte.pk}),
+        )
 
     def test_fecha_alerta_reparacion_se_limpia_al_volver_a_diagnostico(self):
         ingreso = self.crear_ingreso_reparacion(subestado_reparacion='espera_cliente')
@@ -6673,6 +6678,8 @@ class VentasTests(TestCase):
         salida.refresh_from_db()
         self.assertIsNone(salida.fecha_retiro_real)
         self.assertContains(self.client.get(reverse('econotec:salida_lista')), ingreso.codigo_equipo)
+        # La campanita del admin también muestra el código mientras no esté visto.
+        NotificacionCambioAdmin.objects.update(leida=True)
         self.assertNotContains(
             self.client.get(reverse('econotec:salida_retiros_lista')),
             ingreso.codigo_equipo,
@@ -9056,6 +9063,93 @@ class VentasTests(TestCase):
         detalle = self.client.get(reverse('econotec:ingreso_detalle', kwargs={'pk': ingreso.pk}))
         self.assertContains(detalle, '<span class="adic-val">$12,00 adicional</span>', html=True)
         self.assertContains(detalle, 'Valor acordado total')
+
+    def test_acciones_de_tecnico_y_asesora_avisan_al_admin(self):
+        ingreso = self.crear_ingreso_reparacion()
+        IngresoEquipo.objects.filter(pk=ingreso.pk).update(estado='ingresado')
+        self.client.force_login(self.usuario)
+
+        self.client.post(
+            reverse('econotec:ingreso_observacion_agregar', kwargs={'pk': ingreso.pk}),
+            {'texto': 'Falta repuesto'},
+        )
+        self.client.post(
+            reverse('econotec:ingreso_diagnostico_silenciar', kwargs={'pk': ingreso.pk}),
+            {'accion': 'silenciar'},
+        )
+        registrar_bitacora(self.usuario, 'abono', 'Registro de abono $5.', ingreso=ingreso)
+        registrar_bitacora(self.vendedor, 'estado', 'Cambio de estado.', ingreso=ingreso)
+
+        avisos = {aviso.mensaje: aviso for aviso in NotificacionCambioAdmin.objects.all()}
+        self.assertEqual(set(avisos), {
+            'Agregó una observación: Falta repuesto',
+            'Silenció la alerta de diagnóstico.',
+            'Registro de abono $5.',
+            'Cambio de estado.',
+        })
+        self.assertEqual(avisos['Cambio de estado.'].creado_por, self.vendedor)
+        self.assertEqual(avisos['Registro de abono $5.'].codigo, ingreso.codigo_equipo)
+
+    def test_no_avisa_lo_del_admin_ni_las_sesiones_ni_los_reintentos(self):
+        ingreso = self.crear_ingreso_reparacion()
+
+        registrar_bitacora(self.admin, 'estado', 'Cambio del admin.', ingreso=ingreso)
+        registrar_bitacora(self.usuario, 'login', 'Inicio de sesión.')
+        registrar_bitacora(self.usuario, 'logout', 'Cierre de sesión.')
+        self.assertFalse(NotificacionCambioAdmin.objects.exists())
+
+        for _intento in range(2):
+            registrar_bitacora(self.usuario, 'salida', 'Salida.', ingreso=ingreso, dedupe_key='prueba:aviso')
+        self.assertEqual(NotificacionCambioAdmin.objects.count(), 1)
+
+    def test_admin_ve_y_marca_los_cambios_y_otros_no_entran(self):
+        ingreso = self.crear_ingreso_reparacion()
+        registrar_bitacora(self.usuario, 'estado', 'Cambio uno.', ingreso=ingreso)
+        registrar_bitacora(self.usuario, 'estado', 'Cambio dos.', ingreso=ingreso)
+        primero, segundo = NotificacionCambioAdmin.objects.order_by('pk')
+
+        self.client.force_login(self.usuario)
+        self.assertNotContains(self.client.get(reverse('econotec:bienvenida')), 'id="cambios-admin-bell-btn"')
+        self.assertEqual(self.client.get(reverse('econotec:cambios_equipo')).status_code, 302)
+        self.assertEqual(
+            self.client.post(reverse('econotec:notificaciones_cambio_admin_vistas')).status_code, 302,
+        )
+        self.assertFalse(NotificacionCambioAdmin.objects.filter(leida=True).exists())
+
+        self.client.force_login(self.admin)
+        inicio = self.client.get(reverse('econotec:bienvenida'))
+        self.assertEqual(inicio.context['notificaciones_cambio_admin_count'], 2)
+        self.assertContains(inicio, 'Cambio uno.')
+        self.assertContains(self.client.get(reverse('econotec:cambios_equipo')), 'Cambio dos.')
+
+        abrir = self.client.get(reverse('econotec:notificacion_cambio_admin_ver', kwargs={'pk': primero.pk}))
+        self.assertRedirects(
+            abrir, reverse('econotec:ingreso_detalle', kwargs={'pk': ingreso.pk}), fetch_redirect_response=False,
+        )
+        primero.refresh_from_db()
+        segundo.refresh_from_db()
+        self.assertTrue(primero.leida)
+        self.assertFalse(segundo.leida)
+
+        self.client.post(reverse('econotec:notificaciones_cambio_admin_vistas'))
+        self.assertFalse(NotificacionCambioAdmin.objects.filter(leida=False).exists())
+
+    def test_inventario_avisa_al_admin(self):
+        item = InventarioItem.objects.create(
+            sede='guayaquil', categoria='impresora', tipo='impresora-laser', producto='Mando PS4',
+            marca='Sony', modelo='PS4', cantidad=5, estado='disponible',
+            ubicacion='guayaquil_norte', registrado_por=self.usuario,
+        )
+        self.client.force_login(self.usuario)
+
+        self.client.post(
+            reverse('econotec:inventario_actualizar_cantidad', kwargs={'codigo': item.codigo}),
+            {'accion': 'restar'},
+        )
+
+        aviso = NotificacionCambioAdmin.objects.get()
+        self.assertIn('Cambió la cantidad de Mando PS4 a 4.', aviso.mensaje)
+        self.assertEqual(aviso.codigo, item.codigo)
 
     def _salida_retirada_con_pago_de(self, monto, **datos_salida):
         ingreso = self.crear_ingreso_reparacion(valor_acordado=Decimal('30.00'))

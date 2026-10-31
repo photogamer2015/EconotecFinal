@@ -34,6 +34,7 @@ def registrar_bitacora(
     if not texto:
         return None
 
+    from .avisos_cambios import avisar_cambio
     from .models import BitacoraTecnico
 
     if not codigo:
@@ -58,13 +59,22 @@ def registrar_bitacora(
     }
 
     if dedupe_key:
-        evento, _ = BitacoraTecnico.objects.get_or_create(
+        evento, creado = BitacoraTecnico.objects.get_or_create(
             dedupe_key=dedupe_key,
             defaults=defaults,
         )
-        return evento
+    else:
+        evento = BitacoraTecnico.objects.create(**defaults)
+        creado = True
 
-    return BitacoraTecnico.objects.create(**defaults)
+    if creado:
+        ingreso_aviso = ingreso
+        if ingreso_aviso is None and salida is not None:
+            ingreso_aviso = salida.ingreso
+        if ingreso_aviso is None and abono is not None:
+            ingreso_aviso = abono.ingreso
+        avisar_cambio(user, tipo, texto, ingreso=ingreso_aviso, codigo=codigo)
+    return evento
 
 
 def _hora_bitacora(dt):

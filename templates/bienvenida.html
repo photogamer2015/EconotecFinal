@@ -2984,8 +2984,6 @@
         <span class="obs-autor">— {{ item.ingreso.reporte_por_nombre }}{% if item.ingreso.reporte_actualizado %} · {{ item.ingreso.reporte_actualizado|date:"d/m/Y H:i" }}{% endif %}</span>
         {% endif %}
       </div>
-      {% else %}
-      <div class="obs obs-vacia">Sin observación en la hoja todavía.</div>
       {% endif %}
     </div>
     <span class="pill">{{ item.dias }} día{{ item.dias|pluralize }}</span>

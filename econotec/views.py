@@ -44,6 +44,7 @@ from .models import (
     NotificacionRevisionAdmin, ObservacionEquipo, VentanaObservacionVista, SalidaEquipo, SEDE_PREFIJOS, SEDES_EQUIPOS, TIPOS_EQUIPO,
     UsuarioActividad, VentaInventarioItem,
 )
+from .avisos_cambios import avisar_cambio
 from .bitacora import registrar_bitacora, nombre_corto_usuario, construir_bitacora_usuario
 from . import avisos_revision
 from .date_filters import aplicar_rango_fecha, contexto_rango_fecha, obtener_rango_fecha
@@ -1400,6 +1401,10 @@ def inventario_registrar(request, sede, categoria, tipo):
             item.tipo = tipo_slug
             item.registrado_por = request.user
             item.save()
+            avisar_cambio(
+                request.user, 'inventario', f'Registró en inventario: {item.producto} ({item.cantidad} und.).',
+                codigo=item.codigo, url=reverse('econotec:inventario_detalle_item', args=[item.codigo]),
+            )
             messages.success(request, f'Inventario registrado con código {item.codigo}.')
             return redirect(
                 'econotec:inventario_tabla',
@@ -1456,6 +1461,10 @@ def inventario_editar(request, codigo):
         )
         if form.is_valid():
             form.save()
+            avisar_cambio(
+                request.user, 'inventario', f'Editó en inventario: {item.producto}.',
+                codigo=item.codigo, url=reverse('econotec:inventario_detalle_item', args=[item.codigo]),
+            )
             messages.success(request, 'Producto de inventario actualizado.')
             return redirect('econotec:inventario_detalle_item', codigo=item.codigo)
     else:
@@ -1516,6 +1525,10 @@ def inventario_actualizar_cantidad(request, codigo):
             elif accion == 'sumar':
                 item.cantidad += 1
         item.save(update_fields=['cantidad', 'actualizado'])
+        avisar_cambio(
+            request.user, 'inventario', f'Cambió la cantidad de {item.producto} a {item.cantidad}.',
+            codigo=item.codigo, url=reverse('econotec:inventario_detalle_item', args=[item.codigo]),
+        )
 
     messages.success(request, f'Cantidad actualizada a {item.cantidad}.')
     return redirect('econotec:inventario_detalle_item', codigo=item.codigo)
@@ -1545,6 +1558,7 @@ def inventario_eliminar(request, codigo):
             'Primero revierte o elimina el producto desde la venta.',
         )
         return redirect('econotec:inventario_detalle_item', codigo=codigo_item)
+    avisar_cambio(request.user, 'eliminacion', f'Eliminó del inventario: {producto}.', codigo=codigo_item)
     messages.success(request, f'Producto eliminado: {producto} ({codigo_item}).')
     return redirect('econotec:inventario_tabla', **tabla_kwargs)
 
@@ -2680,6 +2694,7 @@ def _guardar_observacion_formulario(ing_form, ingreso, user):
         estado_texto=_estado_texto_observacion(ingreso),
     )
     avisos_revision.avisar_observacion(observacion)
+    avisar_cambio(user, 'observacion', f'Agregó una observación: {texto}', ingreso=ingreso)
     return observacion
 
 
@@ -2727,6 +2742,7 @@ def ingreso_observacion_agregar(request, pk):
         estado_texto=_estado_texto_observacion(ingreso),
     )
     avisos_revision.avisar_observacion(observacion)
+    avisar_cambio(request.user, 'observacion', f'Agregó una observación: {texto}', ingreso=ingreso)
     momento = timezone.localtime(observacion.creado)
     messages.success(
         request,
@@ -3060,6 +3076,7 @@ def venta_inventario_agregar(request, pk):
         relacion.save(update_fields=update_fields)
     item.cantidad -= cantidad
     item.save(update_fields=['cantidad', 'actualizado'])
+    avisar_cambio(request.user, 'venta_editada', f'Agregó a la venta: {item.producto} ({cantidad} und.).', ingreso=venta)
     return JsonResponse({
         'ok': True,
         'producto': _venta_inventario_item_json(relacion),
@@ -3103,6 +3120,11 @@ def venta_inventario_actualizar_cantidad(request, pk, relacion_pk):
         item.save(update_fields=['cantidad', 'actualizado'])
         relacion.cantidad = nueva_cantidad
         relacion.save(update_fields=['cantidad', 'actualizado'])
+        avisar_cambio(
+            request.user, 'venta_editada',
+            f'Cambió en la venta la cantidad de {item.producto} de {cantidad_actual} a {nueva_cantidad}.',
+            ingreso=venta,
+        )
 
     return JsonResponse({
         'ok': True,
@@ -3129,6 +3151,11 @@ def venta_inventario_actualizar_observacion(request, pk, relacion_pk):
 
     relacion.observacion = observacion
     relacion.save(update_fields=['observacion', 'actualizado'])
+    avisar_cambio(
+        request.user, 'venta_editada',
+        f'Cambió en la venta la observación de {relacion.inventario_item.producto}.',
+        ingreso=venta,
+    )
     return JsonResponse({
         'ok': True,
         'producto': _venta_inventario_item_json(relacion),
@@ -3151,6 +3178,11 @@ def venta_inventario_quitar(request, pk, relacion_pk):
     item.cantidad += cantidad_devuelta
     item.save(update_fields=['cantidad', 'actualizado'])
     relacion.delete()
+    avisar_cambio(
+        request.user, 'venta_editada',
+        f'Quitó de la venta: {item.producto} ({cantidad_devuelta} und.).',
+        ingreso=venta,
+    )
     return JsonResponse({'ok': True, 'cantidad_devuelta': cantidad_devuelta})
 
 @tecnico_requerido
@@ -5539,6 +5571,8 @@ def salida_marcar_retirada(request, pk):
         'bodegaje_aplicado_al_pago',
     ])
 
+    avisar_cambio(request.user, 'salida_fisica', 'Confirmó la salida de la oficina.', ingreso=salida.ingreso)
+
     abonos_bodegaje = []
     if pago_bodegaje is not None:
         abonos_bodegaje = _crear_abonos_bodegaje(
@@ -5653,6 +5687,11 @@ def salida_bodegaje_silenciar(request, pk):
         salida.bodegaje_silenciado = not salida.bodegaje_silenciado
 
     salida.save(update_fields=['bodegaje_silenciado', 'actualizado'])
+    avisar_cambio(
+        request.user, 'alerta',
+        f'{"Silenció" if salida.bodegaje_silenciado else "Reactivó"} la alerta de bodegaje.',
+        ingreso=salida.ingreso,
+    )
 
     codigo = salida.ingreso.codigo_equipo
     if salida.bodegaje_silenciado:
@@ -5700,6 +5739,11 @@ def ingreso_diagnostico_silenciar(request, pk):
         ingreso.diagnostico_silenciado = not ingreso.diagnostico_silenciado
 
     ingreso.save(update_fields=['diagnostico_silenciado', 'actualizado'])
+    avisar_cambio(
+        request.user, 'alerta',
+        f'{"Silenció" if ingreso.diagnostico_silenciado else "Reactivó"} la alerta de diagnóstico.',
+        ingreso=ingreso,
+    )
 
     codigo = ingreso.codigo_equipo
     if ingreso.diagnostico_silenciado:

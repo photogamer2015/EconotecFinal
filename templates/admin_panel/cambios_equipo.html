@@ -1,0 +1,48 @@
+{% extends 'base.html' %}
+
+{% block title %}Cambios del equipo — Econotec{% endblock %}
+
+{% block content %}
+<div class="crumb">
+    <a href="{% url 'econotec:bienvenida' %}">Inicio</a> /
+    Cambios del equipo
+</div>
+
+<h2 class="page-title">🔔 Cambios <span class="accent">del equipo</span></h2>
+<p class="page-subtitle">
+    Lo que hacen técnicos y asesoras en el sistema, del más reciente al más antiguo.
+    {{ sin_ver }} sin ver.
+</p>
+
+<hr style="margin: 16px 0 22px; border: none; border-top: 1px solid var(--border);">
+
+{% if page_obj %}
+<div class="table-wrap">
+    <table>
+        <thead>
+            <tr>
+                <th>Fecha</th>
+                <th>Quién</th>
+                <th>Equipo</th>
+                <th>Qué hizo</th>
+                <th>Estado</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for aviso in page_obj %}
+            <tr>
+                <td>{{ aviso.creado|date:"d/m/Y H:i" }}</td>
+                <td>{{ aviso.usuario_nombre }}</td>
+                <td>{{ aviso.codigo|default:"—" }}</td>
+                <td><a href="{% url 'econotec:notificacion_cambio_admin_ver' pk=aviso.pk %}" style="color: var(--primary);">{{ aviso.mensaje }}</a></td>
+                <td>{% if aviso.leida %}Visto{% else %}<strong>Sin ver</strong>{% endif %}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% include 'includes/paginacion.html' with page_obj=page_obj querystring=querystring per_page=30 %}
+{% else %}
+<p class="page-subtitle">Todavía no hay cambios registrados.</p>
+{% endif %}
+{% endblock %}

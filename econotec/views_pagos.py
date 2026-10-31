@@ -16,6 +16,7 @@ from django.utils import timezone
 from django.views.decorators.http import require_POST
 
 from .busqueda import filtrar_objetos_normalizado, texto_ingreso_busqueda
+from .avisos_cambios import avisar_cambio
 from .bitacora import registrar_bitacora
 from .emails import enviar_correo_abono_seguro
 from .forms import AbonoForm, ValorAcordadoPagoForm
@@ -117,6 +118,7 @@ def _confirmar_salida_desde_abono(request, ingreso):
         update_fields.extend(['bodegaje_dias_congelado', 'bodegaje_monto_congelado'])
 
     salida.save(update_fields=update_fields)
+    avisar_cambio(request.user, 'salida_fisica', 'Confirmó la salida de la oficina.', ingreso=ingreso)
     messages.success(
         request,
         f'Salida de la oficina confirmada para el equipo {ingreso.codigo_equipo}.',
