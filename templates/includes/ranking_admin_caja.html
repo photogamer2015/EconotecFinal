@@ -1,7 +1,7 @@
 {% load econotec_extras %}
-{# Caja fuerte del Registro Administrativo: lo recaudado del año, guardado mes a mes. Recibe: caja, caja_etiqueta, year y month. #}
-<section class="rank-card caja" id="caja" aria-labelledby="titulo-caja">
-    <h3 id="titulo-caja">🔐 Caja</h3>
+{# Caja fuerte del Histórico mensual: lo recaudado, guardado mes a mes. Recibe: caja, caja_etiqueta, caja_elegida, year y month. #}
+<section class="rank-card caja{% if caja_estrenada %} estrenada{% endif %}" id="caja" aria-labelledby="titulo-caja">
+    <h3 id="titulo-caja">🔐 Caja {{ caja_elegida.anio }}{% if caja_elegida.mezclada %} · años mezclados{% endif %}</h3>
 
     <div class="caja-principal">
         <div class="caja-escena" aria-hidden="true">
@@ -22,12 +22,12 @@
         <div class="caja-resumen">
             <div class="caja-saldo-etiqueta">Guardado en caja</div>
             <div class="caja-saldo{% if caja.saldo_final < 0 %} negativo{% endif %}" data-caja-contador data-final="{{ caja.saldo_final|stringformat:'.2f' }}" data-inicial="{{ caja.saldo_inicial|stringformat:'.2f' }}">{{ caja.saldo_final|dinero_signo }}</div>
-            <div class="caja-saldo-nota">Hasta el final de {{ caja_etiqueta }}</div>
+            <div class="caja-saldo-nota">{% if caja.por_estrenar %}Caja nueva: empieza a guardar en enero {{ caja_elegida.anio }}{% else %}Hasta el final de {{ caja_etiqueta }}{% endif %}</div>
             <dl class="caja-cuentas">
-                <div><dt>Guardado de años anteriores</dt><dd>{{ caja.saldo_inicial|dinero_signo }}</dd></div>
-                <div><dt>Entró en {{ year }}</dt><dd class="entra">+ {{ caja.entro|dinero_signo }}</dd></div>
-                <div><dt>Egresos de {{ year }}</dt><dd class="sale">− {{ caja.egresos|dinero_signo }}</dd></div>
-                <div><dt>Queda de {{ year }}</dt><dd>{{ caja.neto|dinero_signo }}</dd></div>
+                {% if caja.saldo_inicial or not caja_elegida.comprada %}<div><dt>Guardado de años anteriores</dt><dd>{{ caja.saldo_inicial|dinero_signo }}</dd></div>{% endif %}
+                <div><dt>Entró en {{ caja.periodo }}</dt><dd class="entra">+ {{ caja.entro|dinero_signo }}</dd></div>
+                <div><dt>Egresos de {{ caja.periodo }}</dt><dd class="sale">− {{ caja.egresos|dinero_signo }}</dd></div>
+                <div><dt>Queda de {{ caja.periodo }}</dt><dd>{{ caja.neto|dinero_signo }}</dd></div>
             </dl>
             <ul class="caja-metodos" aria-label="Cómo entró el dinero">
                 {% for metodo in caja.metodos %}<li>{{ metodo.nombre }}: <b>{{ metodo.monto|dinero_signo }}</b></li>{% endfor %}
@@ -80,7 +80,7 @@
             </tbody>
             <tfoot>
                 <tr>
-                    <td class="texto">Total de {{ year }}</td>
+                    <td class="texto">Total de {{ caja.periodo }}</td>
                     <td>{{ caja.reparaciones|dinero_signo }}</td>
                     <td>{{ caja.bodegaje|dinero_signo }}</td>
                     <td>{{ caja.diagnostico|dinero_signo }}</td>

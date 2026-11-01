@@ -171,6 +171,14 @@ urlpatterns = [
     # ── Registro Administrativo ────────────────────────────
     path('admin-panel/',
          views_admin.admin_dashboard, name='admin_dashboard'),
+    path('admin-panel/caja/abrir/',
+         views_admin.admin_caja_abrir, name='admin_caja_abrir'),
+    path('admin-panel/caja/cerrar/',
+         views_admin.admin_caja_cerrar, name='admin_caja_cerrar'),
+    path('admin-panel/caja/comprar/',
+         views_admin.admin_caja_comprar, name='admin_caja_comprar'),
+    path('admin-panel/caja/editar/',
+         views_admin.admin_caja_editar, name='admin_caja_editar'),
     path('admin-panel/bitacoras-tecnicos/',
          views_admin.admin_bitacoras_tecnicos, name='admin_bitacoras_tecnicos'),
     path('admin-panel/ventas-inventario/',
@@ -214,6 +222,11 @@ urlpatterns = [
 
     # ── Control de Registro / Auditoría (solo admin) ───────
     path('admin-panel/control-registro/', views_admin.control_registro, name='control_registro'),
+
+    # ── Cambios de técnicos y asesoras (solo admin) ────────
+    path('admin-panel/cambios/', views_admin.cambios_equipo, name='cambios_equipo'),
+    path('admin-panel/cambios/<int:pk>/ver/', views_admin.notificacion_cambio_admin_ver, name='notificacion_cambio_admin_ver'),
+    path('admin-panel/cambios/vistos/', views_admin.notificaciones_cambio_admin_vistas, name='notificaciones_cambio_admin_vistas'),
 
     # ── Avisos del panel principal (solo admin) ────────────
     path('admin-panel/avisos/', views_admin.avisos_lista, name='avisos_lista'),

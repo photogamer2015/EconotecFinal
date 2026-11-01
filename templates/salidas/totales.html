@@ -117,7 +117,12 @@
             {% if todo_cuadra %}✓ Todo cuadra{% else %}⚠ Hay cuentas que no cuadran{% endif %}
         </button>
         <button type="button" class="btn-guia" id="btn-guia-totales" data-guia="guia-totales" data-titulo="📖 Guía de los totales" aria-controls="guia-totales">📖 Guía de los totales</button>{% if mostrar_valores_monetarios %}
-        <a class="chip-enlace caja-enlace" href="{% url 'econotec:admin_dashboard' %}?ano={{ mes_caja.year }}&mes={{ mes_caja.month }}#caja">🔐 Ver Caja</a>{% endif %}
+        <a class="chip-enlace caja-enlace" id="ver-caja" href="{% url 'econotec:admin_dashboard' %}?ano={{ mes_caja.year }}&mes={{ mes_caja.month }}#historico-mensual">🔐 Ver Caja</a>
+        <form method="post" action="{% url 'econotec:admin_caja_abrir' %}" id="ver-caja-form" hidden>
+            {% csrf_token %}
+            <input type="hidden" name="filtros" value="ano={{ mes_caja.year }}&mes={{ mes_caja.month }}">
+            <input type="hidden" name="password">
+        </form>{% endif %}
     </div>
 </div>
 
@@ -294,7 +299,7 @@
             <ul>
                 <li><span class="efecto-icono suma" aria-hidden="true">✓</span><span><b>Suman:</b> Finalizado y reparado (esté pendiente de retiro o ya haya salido de la oficina) y Cliente no quiso reparar, también cuando es la subcategoría de una Revisión.</span></li>
                 <li><span class="efecto-icono resta" aria-hidden="true">−</span><span><b>Restan:</b> Garantía finalizada, Garantía + fallos adicionales y No se pudo reparar, también cuando es la subcategoría de una Revisión.</span></li>
-                <li><span class="efecto-icono neutro" aria-hidden="true">○</span><span><b>No afectan:</b> Revisión — Equipo en prueba (test), Cortesía y Chatarrerización.</span></li>
+                <li><span class="efecto-icono neutro" aria-hidden="true">○</span><span><b>No afectan:</b> Revisión — Equipo en prueba (test), Cortesía y Chatarrización.</span></li>
             </ul>
         </section>
         <section>
@@ -308,7 +313,7 @@
                     <tr><td>Garantía finalizada / Garantía + fallos adicionales</td><td>−4</td></tr>
                     <tr><td>Revisión — Cliente no quiso reparar</td><td>+1</td></tr>
                     <tr><td>Revisión — No se pudo reparar</td><td>−1</td></tr>
-                    <tr><td>Revisión — Equipo en prueba (test), Cortesía y Chatarrerización</td><td>0</td></tr>
+                    <tr><td>Revisión — Equipo en prueba (test), Cortesía y Chatarrización</td><td>0</td></tr>
                 </tbody>
             </table>
             <p>Cada tarjeta muestra los <b>puntos del período</b> elegido y el <b>nivel del técnico</b>, que es el mismo de Mi perfil y cuenta todo su historial: Novato (0), Intermedio (50), Avanzado (100), Experto (500), Maestro (1.000) y God Tec Econotec (4.000).</p>
@@ -316,7 +321,7 @@
         <section>
             <h4>Cómo se calcula la efectividad</h4>
             <p>De los equipos que suman o restan, qué porcentaje salió bien: <b>Suman ÷ (Suman + Restan)</b>.</p>
-            <p>Ejemplo: 14 reparados, 2 que el cliente no quiso reparar, 1 garantía y 1 que no se pudo reparar dan (14 + 2) ÷ 18 = <b>88,9 %</b>. Revisión, cortesía y chatarrerización no cambian el porcentaje.</p>
+            <p>Ejemplo: 14 reparados, 2 que el cliente no quiso reparar, 1 garantía y 1 que no se pudo reparar dan (14 + 2) ÷ 18 = <b>88,9 %</b>. Revisión, cortesía y chatarrización no cambian el porcentaje.</p>
         </section>
         <section>
             <h4>Tabla de posiciones</h4>
@@ -342,7 +347,17 @@
         <section>
             <h4>Acordado, recaudado y por cobrar</h4>
             <p><b>Acordado</b> es lo que se le cobra al cliente por el servicio: incluye el valor adicional y el valor de revisión, sin domicilio ni bodegaje.</p>
-            <p><b>Recaudado</b> es el valor acordado de los equipos que ya quedaron en saldo cero; <b>Por cobrar</b>, el de los que todavía tienen saldo pendiente.</p>
+            <p><b>Recaudado</b> es lo que esos clientes ya pagaron, en cualquier fecha, sin contar el bodegaje, aunque el equipo todavía tenga saldo pendiente; <b>Por cobrar</b>, el saldo que todavía deben, el mismo de Pagos.</p>
+        </section>
+        <section>
+            <h4>A favor del cliente</h4>
+            <p>Es el dinero que un cliente <b>pagó de más</b> en un equipo finalizado. Ejemplo: si el equipo cuesta $50 y pagó $55, quedan <b>$5 a favor</b>. Ese dinero sí entró a la caja.</p>
+            <ul>
+                <li><span><b>Cuándo pasa:</b> se registró un pago mayor al valor, o el valor bajó después del pago; por ejemplo, el cliente dejó un anticipo y el equipo salió como garantía o cortesía.</span></li>
+                <li><span><b>Cómo se cuenta:</b> equipo por equipo. Lo que un cliente tiene a favor no descuenta lo que deben otros, por eso va separado de <b>Por cobrar</b>.</span></li>
+                <li><span><b>Dónde verlo:</b> en la tarjeta del técnico solo aparece si hay saldo. Para saber qué equipo es, abre <b>Ver los equipos</b>: en la columna <b>Por cobrar</b> dice «A favor» con el monto.</span></li>
+                <li><span><b>Qué hacer:</b> el sistema no lo devuelve solo. Hay que devolvérselo al cliente o, si fue un error de registro, corregir el pago.</span></li>
+            </ul>
         </section>
         {% endif %}
         <section>
@@ -506,6 +521,34 @@
 {% endblock %}
 
 {% block extra_js %}
+{% if mostrar_valores_monetarios %}<script>
+document.addEventListener('DOMContentLoaded', function () {
+    var enlace = document.getElementById('ver-caja');
+    var formulario = document.getElementById('ver-caja-form');
+    if (!enlace || !formulario || typeof Swal === 'undefined') return;
+    enlace.addEventListener('click', function (evento) {
+        evento.preventDefault();
+        Swal.fire({
+            title: '🔐 Ver Caja',
+            text: 'Ingrese su contraseña de administrador',
+            input: 'password',
+            inputPlaceholder: 'Contraseña',
+            inputAttributes: { autocomplete: 'current-password' },
+            showCancelButton: true,
+            confirmButtonText: 'Ver Caja',
+            cancelButtonText: 'Cancelar',
+            preConfirm: function (clave) {
+                if (!clave) Swal.showValidationMessage('Debes ingresar tu contraseña');
+                return clave;
+            }
+        }).then(function (resultado) {
+            if (!resultado.isConfirmed) return;
+            formulario.elements.password.value = resultado.value;
+            formulario.submit();
+        });
+    });
+});
+</script>{% endif %}
 <script>
 // Filtro del período: muestra solo los campos del modo elegido y envía solo esos.
 (function () {

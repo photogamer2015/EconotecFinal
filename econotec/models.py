@@ -1348,6 +1348,11 @@ class IngresoEquipo(RetencionFactura):
         return _q2(self.valor_total_con_bodegaje - self.total_abonado)
 
     @property
+    def saldo_a_favor(self):
+        """Lo que el cliente pagó de más sobre lo que se le cobra."""
+        return max(-self.diferencia, Decimal('0.00'))
+
+    @property
     def bodegaje_pendiente(self):
         """
         Bodegaje acumulado del equipo que aún NO tiene una decisión tomada.
@@ -1845,7 +1850,7 @@ class SalidaEquipo(RetencionFactura):
         ('garantia_fallos_adicionales', '🛡 Garantía finalizada + fallos adicionales'),
         ('cortesia', 'Equipo de cortesía finalizado'),
         ('retirado', '✅ Salió de la oficina'),
-        ('chatarrerizacion', '♻️ Chatarrerización'),
+        ('chatarrerizacion', '♻️ Chatarrización'),
     ]
 
     # Subcategoría obligatoria cuando el resultado es Revisión. El cobro sigue
@@ -2186,6 +2191,12 @@ class SalidaEquipo(RetencionFactura):
         return self.fecha_retiro_real is not None
 
     @property
+    def sin_reparar_por_retirar(self):
+        """¿Quedó sin reparar (también como subcategoría de Revisión) y sigue en la oficina?"""
+        estado = self.subestado_revision if self.estado_reparacion == 'revision' else self.estado_reparacion
+        return estado in ('no_reparable', 'cliente_no_acepta') and not self.cliente_ya_retiro
+
+    @property
     def en_equipo_prueba(self):
         """¿Está en Revisión — Equipo en prueba (test)? No acumula bodegaje."""
         return self.estado_reparacion == 'revision' and self.subestado_revision == 'equipo_prueba'
@@ -2197,6 +2208,15 @@ class SalidaEquipo(RetencionFactura):
         if self.fecha_fin_prueba and self.fecha_salida:
             return max(self.fecha_salida, self.fecha_fin_prueba)
         return self.fecha_salida
+
+    @property
+    def inicio_gracia_texto(self):
+        """Desde cuándo corren los días de gracia, en palabras para el cliente."""
+        if self.en_equipo_prueba:
+            return 'el día en que el equipo salga de prueba'
+        if self.fecha_inicio_bodegaje != self.fecha_salida:
+            return f'el día en que el equipo salió de prueba ({self.fecha_inicio_bodegaje:%d/%m/%Y})'
+        return 'la fecha de finalización'
 
     @property
     def estado_operativo_key(self):
@@ -2838,6 +2858,48 @@ class HorarioTecnico(models.Model):
         return ', '.join(activos) if activos else 'Sin días asignados'
 
 
+class NotificacionCambioAdmin(models.Model):
+    """Aviso para el admin (campanita 🔔): algo que hizo un técnico o una asesora."""
+    creado_por = models.ForeignKey(
+        'auth.User',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='notificaciones_cambio_creadas',
+        verbose_name='Hecho por',
+    )
+    usuario_nombre = models.CharField(max_length=150, blank=True, verbose_name='Nombre de quien lo hizo')
+    tipo = models.CharField(max_length=40, verbose_name='Tipo')
+    mensaje = models.TextField(verbose_name='Qué hizo')
+    codigo = models.CharField(max_length=30, blank=True, verbose_name='Código')
+    ingreso = models.ForeignKey(
+        IngresoEquipo,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='notificaciones_cambio',
+        verbose_name='Equipo',
+    )
+    url = models.CharField(max_length=300, blank=True, verbose_name='Enlace')
+    leida = models.BooleanField(default=False, verbose_name='Vista por administración')
+    leida_en = models.DateTimeField(null=True, blank=True, verbose_name='Vista el')
+    creado = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        verbose_name = 'Aviso de cambio para admin'
+        verbose_name_plural = 'Avisos de cambios para admin'
+        ordering = ['-creado', '-pk']
+
+    def __str__(self):
+        return f'{self.usuario_nombre}: {self.mensaje[:60]}'
+
+    def marcar_vista(self):
+        if not self.leida:
+            self.leida = True
+            self.leida_en = timezone.now()
+            self.save(update_fields=['leida', 'leida_en'])
+
+
 class BitacoraTecnico(models.Model):
     """
     Registro permanente de acciones hechas por cada usuario en el sistema.
@@ -3124,3 +3186,25 @@ class LimiteAcceso(models.Model):
     clave = models.CharField(max_length=64, primary_key=True)
     intentos = models.PositiveIntegerField(default=0)
     expira = models.DateTimeField(db_index=True)
+
+
+class CajaGrande(models.Model):
+    """
+    Caja grande comprada para un año. Solo decide cómo se ve el dinero: no guarda
+    montos ni descuenta nada; la Caja se sigue calculando de los pagos reales.
+    """
+    anio = models.PositiveIntegerField('Año', unique=True)
+    mezclada = models.BooleanField('Mezclada con años anteriores', default=False)
+    comprada_por = models.ForeignKey(
+        'auth.User', on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='+',
+    )
+    comprada_en = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'Caja grande'
+        verbose_name_plural = 'Cajas grandes'
+        ordering = ['anio']
+
+    def __str__(self):
+        return f'Caja {self.anio}'

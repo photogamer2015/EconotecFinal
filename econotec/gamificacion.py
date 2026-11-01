@@ -14,7 +14,7 @@ SALIDA_GARANTIA_ESTADOS = ()
 # ── Puntos del técnico (perfil, nivel y ranking) ─────────────────────────
 # Puntos por cada equipo finalizado según el resultado de la salida. Se le
 # acreditan al técnico que reparó. Los resultados que no aparecen valen 0
-# (chatarrerización, revisión y cortesía).
+# (chatarrización, revisión y cortesía).
 PUNTOS_POR_ESTADO_SALIDA = {
     'pendiente_retiro': 3,              # Reparado, en espera de retiro
     'retirado': 3,                      # Reparado y retirado por el cliente

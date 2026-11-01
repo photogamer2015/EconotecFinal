@@ -112,6 +112,8 @@ def roles(request):
     notificaciones_inventario_admin_preview = []
     notificaciones_revision_admin_count = 0
     notificaciones_revision_admin_preview = []
+    notificaciones_cambio_admin_count = 0
+    notificaciones_cambio_admin_preview = []
     mi_perfil_social = None
     try:
         from .models import PerfilSocial
@@ -160,6 +162,15 @@ def roles(request):
         except Exception:
             pass
 
+        # Cambios de técnicos y asesoras (campanita 🔔).
+        try:
+            from .models import NotificacionCambioAdmin
+            qs_notificaciones_cambio = NotificacionCambioAdmin.objects.filter(leida=False)
+            notificaciones_cambio_admin_count = qs_notificaciones_cambio.count()
+            notificaciones_cambio_admin_preview = list(qs_notificaciones_cambio[:8])
+        except Exception:
+            pass
+
     return {
         'es_admin': es_a,
         'es_tecnico': es_t,
@@ -186,5 +197,7 @@ def roles(request):
         'notificaciones_inventario_admin_preview': notificaciones_inventario_admin_preview,
         'notificaciones_revision_admin_count': notificaciones_revision_admin_count,
         'notificaciones_revision_admin_preview': notificaciones_revision_admin_preview,
+        'notificaciones_cambio_admin_count': notificaciones_cambio_admin_count,
+        'notificaciones_cambio_admin_preview': notificaciones_cambio_admin_preview,
         'mi_perfil_social': mi_perfil_social,
     }

@@ -144,7 +144,7 @@
                                 <tr>
                                     <td style="padding:17px; color:#6d4c00; font-size:13px; line-height:1.6;">
                                         <strong style="font-size:14px;">Regla de bodegaje</strong><br>
-                                        Dispones de {{ bodegaje.dias_gracia }} días de gracia desde la fecha de finalización. Al cumplirse ese plazo, se cobra {{ bodegaje.costo_dia|dinero_signo }} por cada día de bodegaje hasta el retiro del equipo.<br>
+                                        Dispones de {{ bodegaje.dias_gracia }} días de gracia desde {{ bodegaje.inicio_gracia }}. Al cumplirse ese plazo, se cobra {{ bodegaje.costo_dia|dinero_signo }} por cada día de bodegaje hasta el retiro del equipo.<br>
                                         <strong>Situación actual:</strong> {{ bodegaje.estado }}{% if bodegaje.detalle_actual %} · {{ bodegaje.detalle_actual }}{% endif %}.
                                     </td>
                                 </tr>

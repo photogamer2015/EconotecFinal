@@ -145,7 +145,7 @@ RESULTADOS_SALIDA = {
     'no_reparable': ('No se pudo reparar', 'malo'),
     'cliente_no_acepta': ('Cliente no quiso reparar', 'aviso'),
     'revision': ('Revisión', 'aviso'),
-    'chatarrerizacion': ('Chatarrerización', 'malo'),
+    'chatarrerizacion': ('Chatarrización', 'malo'),
     'garantia': ('Garantía finalizada', 'bueno'),
     'garantia_fallos_adicionales': ('Garantía + fallos adicionales', 'bueno'),
     'cortesia': ('Cortesía finalizada', 'bueno'),

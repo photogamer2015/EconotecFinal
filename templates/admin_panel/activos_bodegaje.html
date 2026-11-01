@@ -1,12 +1,12 @@
 {% extends 'base.html' %}
 {% load econotec_extras %}
 
-{% block title %}Bodegaje / Chatarrerización | Econotec{% endblock %}
+{% block title %}Bodegaje / Chatarrización | Econotec{% endblock %}
 
 {% block content %}
 <div class="header-actions">
     <div>
-        <h2 class="page-title">Bodegaje / Chatarrerización</h2>
+        <h2 class="page-title">Bodegaje / Chatarrización</h2>
         <p class="page-subtitle">Seguimiento de equipos pendientes de retiro y comunicación con el cliente.</p>
     </div>
     <a href="{% url 'econotec:bienvenida' %}" class="btn btn-secondary">← Volver al inicio</a>
@@ -18,7 +18,7 @@
     <p class="text-sm text-muted" style="margin:0; line-height:1.6;">
         Desde cada equipo puedes enviar un mensaje por WhatsApp o correo con los días en bodega,
         el saldo del servicio, el bodegaje acumulado, el total actualizado y la advertencia de
-        chatarrerización. El correo incluye el acta actualizada en PDF.
+        chatarrización. El correo incluye el acta actualizada en PDF.
     </p>
 </div>
 
@@ -97,7 +97,7 @@
 
                                 {% if es_admin %}
                                 <button type="button" class="btn btn-danger btn-sm" onclick="cambiarEstado({{ item.salida.pk }}, 'chatarrerizacion')">
-                                    ♻️ Chatarrerización
+                                    ♻️ Chatarrización
                                 </button>
                                 {% endif %}
                             </div>
@@ -118,7 +118,7 @@
 
 <div class="card">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-        <h3 style="margin: 0;">♻️ Equipos en Chatarrerización</h3>
+        <h3 style="margin: 0;">♻️ Equipos en Chatarrización</h3>
         <div class="status-badge status-pagado">Total: {{ count_chatarrerizacion }}</div>
     </div>
 
@@ -128,7 +128,7 @@
                 <tr>
                     <th>Código</th>
                     <th>Fecha Ingreso</th>
-                    <th>Fecha Retiro (Chatarrerización)</th>
+                    <th>Fecha Retiro (Chatarrización)</th>
                     <th>Cliente</th>
                     <th>Equipo</th>
                 </tr>
@@ -145,7 +145,7 @@
                 {% empty %}
                 <tr>
                     <td colspan="5" class="text-center text-muted" style="padding: 20px;">
-                        No hay equipos en chatarrerización.
+                        No hay equipos en chatarrización.
                     </td>
                 </tr>
                 {% endfor %}
@@ -163,7 +163,7 @@ function enviarCorreoBodegaje(salidaId, correo) {
         icon: 'question',
         title: '¿Enviar aviso por correo?',
         html:
-            '<p style="line-height:1.55;">Se enviará a <b>' + correo + '</b> el aviso de retiro, los valores actualizados, la regla de bodegaje y la advertencia de chatarrerización.</p>' +
+            '<p style="line-height:1.55;">Se enviará a <b>' + correo + '</b> el aviso de retiro, los valores actualizados, la regla de bodegaje y la advertencia de chatarrización.</p>' +
             '<p style="font-size:13px;color:#6b7280;">También se adjuntará el acta actualizada del equipo en PDF.</p>',
         showCancelButton: true,
         confirmButtonText: 'Sí, enviar correo',
@@ -205,10 +205,10 @@ function enviarCorreoBodegaje(salidaId, correo) {
 }
 
 function cambiarEstado(salidaId, estado) {
-    let titulo = estado === 'retirado' ? '¿Marcar como RETIRADO?' : '¿Enviar a CHATARRERIZACIÓN?';
+    let titulo = estado === 'retirado' ? '¿Marcar como RETIRADO?' : '¿Enviar a CHATARRIZACIÓN?';
     let mensaje = estado === 'retirado' 
         ? '¿Está seguro de marcar este equipo como retirado por el cliente? Esto cerrará el bodegaje y detendrá el contador de días.' 
-        : '¿Está seguro de enviar este equipo a chatarrerización? Esto cerrará el bodegaje de forma definitiva.';
+        : '¿Está seguro de enviar este equipo a chatarrización? Esto cerrará el bodegaje de forma definitiva.';
     let colorBtn = estado === 'retirado' ? '#4caf50' : '#d33';
         
     Swal.fire({

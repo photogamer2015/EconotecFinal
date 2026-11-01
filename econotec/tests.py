@@ -4,6 +4,7 @@ from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 from io import BytesIO
 from unittest.mock import ANY, patch
+from types import SimpleNamespace
 from urllib.parse import parse_qs, urlparse
 from zoneinfo import ZoneInfo
 
@@ -26,10 +27,13 @@ from .alertas import (
     whatsapp_link_equipo_listo,
     whatsapp_link_venta_producto,
 )
+from .bitacora import registrar_bitacora
+from .econobot import conocimiento
+from .emails import enviar_correo_bodegaje_seguro, enviar_correo_finalizacion_seguro
 from .horarios import registrar_entrada_laboral
 from .models import (
     Abono, BitacoraTecnico, Cliente, Egreso, HorarioTecnico, IngresoEquipo, InventarioItem,
-    NotificacionAsesora, NotificacionInventarioAdmin, NotificacionRevisionAdmin,
+    NotificacionAsesora, NotificacionCambioAdmin, NotificacionInventarioAdmin, NotificacionRevisionAdmin,
     ObservacionEquipo, SalidaEquipo, VentanaObservacionVista,
     UsuarioActividad, VentaInventarioItem,
 )
@@ -3247,7 +3251,7 @@ class VentasTests(TestCase):
                 response = self.client.get(reverse('econotec:bienvenida'))
 
                 self.assertEqual(response.status_code, 200)
-                self.assertContains(response, 'Bodegaje / Chatarrerización')
+                self.assertContains(response, 'Bodegaje / Chatarrización')
                 self.assertContains(response, f'href="{ruta}"')
 
     def test_panel_bodegaje_permite_avisos_a_todos_y_reserva_chatarrerizacion_al_admin(self):
@@ -3313,7 +3317,7 @@ class VentasTests(TestCase):
         self.assertIn('Bodegaje acumulado (6 día(s)): *$6,00*', mensaje)
         self.assertIn('Total a regularizar al día de hoy: *$26,00*', mensaje)
         self.assertIn('5 días de gracia', mensaje)
-        self.assertIn('chatarrerización', mensaje)
+        self.assertIn('chatarrización', mensaje)
 
     @override_settings(
         EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend',
@@ -3366,7 +3370,7 @@ class VentasTests(TestCase):
         self.assertIn('$26,00', html)
         self.assertIn('5 días de gracia', html)
         self.assertIn('Pago anterior en efectivo.', html)
-        self.assertIn('Advertencia de chatarrerización', html)
+        self.assertIn('Advertencia de chatarrización', html)
         self.assertIn('https://econotec-ec.com/', html)
         self.assertNotIn('econotec.ec.com', html)
         self.assertNotIn('{{', html)
@@ -3771,7 +3775,7 @@ class VentasTests(TestCase):
         self.crear_salida_ranking(tecnico, fecha, 'no_reparable')
         self.crear_salida_ranking(tecnico, fecha, 'no_reparable')
         # Cliente no quiso reparar suma (+1). Ni suman ni restan: revisión,
-        # cortesía y chatarrerización.
+        # cortesía y chatarrización.
         self.crear_salida_ranking(tecnico, fecha, 'cliente_no_acepta')
         self.crear_salida_ranking(tecnico, fecha, 'revision')
         self.crear_salida_ranking(tecnico, fecha, 'cortesia')
@@ -3841,7 +3845,7 @@ class VentasTests(TestCase):
             'Garantía + fallos adicionales',
             'Cliente no quiso reparar',
             'No se pudo reparar',
-            'Chatarrerización',
+            'Chatarrización',
         ):
             self.assertContains(response, f'<span>{etiqueta}</span><span class="parte-valor"><span class="parte-puntos')
         self.assertNotContains(response, 'Salidas +')
@@ -4175,7 +4179,7 @@ class VentasTests(TestCase):
             'Cuenta exclusivamente al <b>técnico que reparó registrado en la salida</b>',
             'Las garantías se cuentan al técnico registrado en la salida de la garantía.',
             '<b>Restan:</b> Garantía finalizada, Garantía + fallos adicionales y No se pudo reparar, también cuando es la subcategoría de una Revisión.',
-            '<b>No afectan:</b> Revisión — Equipo en prueba (test), Cortesía y Chatarrerización.',
+            '<b>No afectan:</b> Revisión — Equipo en prueba (test), Cortesía y Chatarrización.',
             '14 reparados, 2 que el cliente no quiso reparar, 1 garantía y 1 que no se pudo reparar dan (14 + 2) ÷ 18 = <b>88,9 %</b>',
             'Puntos y niveles',
             '<td>Finalizado y reparado (en espera de retiro o retirado)</td><td>+3</td>',
@@ -4183,6 +4187,8 @@ class VentasTests(TestCase):
             '<b>1.</b> Gana quien más puntos tiene en el período.',
             '<b>Suman ÷ (Suman + Restan)</b>',
             'Acordado, recaudado y por cobrar',
+            '<h4>A favor del cliente</h4>',
+            'Es el dinero que un cliente <b>pagó de más</b> en un equipo finalizado.',
             '<b>Ver detalle</b> muestra los equipos que ya están fuera de la oficina',
             'Cómo elegir el período',
             '<b>Mes:</b> solo ese mes. No se compara con ningún otro.',
@@ -5549,7 +5555,11 @@ class VentasTests(TestCase):
         self.assertEqual(response.context['reparacion_admin_total'], 2)
         self.assertContains(response, 'Esperando cabezal, llega el viernes.')
         self.assertContains(response, f'— {con_reporte.reporte_por_nombre}')
-        self.assertContains(response, 'Sin observación en la hoja todavía.', count=1)
+        self.assertNotContains(response, 'Sin observación en la hoja todavía.')
+        self.assertContains(
+            response,
+            reverse('econotec:ingreso_observaciones', kwargs={'pk': sin_reporte.pk}),
+        )
 
     def test_fecha_alerta_reparacion_se_limpia_al_volver_a_diagnostico(self):
         ingreso = self.crear_ingreso_reparacion(subestado_reparacion='espera_cliente')
@@ -6668,6 +6678,8 @@ class VentasTests(TestCase):
         salida.refresh_from_db()
         self.assertIsNone(salida.fecha_retiro_real)
         self.assertContains(self.client.get(reverse('econotec:salida_lista')), ingreso.codigo_equipo)
+        # La campanita del admin también muestra el código mientras no esté visto.
+        NotificacionCambioAdmin.objects.update(leida=True)
         self.assertNotContains(
             self.client.get(reverse('econotec:salida_retiros_lista')),
             ingreso.codigo_equipo,
@@ -9052,6 +9064,242 @@ class VentasTests(TestCase):
         self.assertContains(detalle, '<span class="adic-val">$12,00 adicional</span>', html=True)
         self.assertContains(detalle, 'Valor acordado total')
 
+    def test_acciones_de_tecnico_y_asesora_avisan_al_admin(self):
+        ingreso = self.crear_ingreso_reparacion()
+        IngresoEquipo.objects.filter(pk=ingreso.pk).update(estado='ingresado')
+        self.client.force_login(self.usuario)
+
+        self.client.post(
+            reverse('econotec:ingreso_observacion_agregar', kwargs={'pk': ingreso.pk}),
+            {'texto': 'Falta repuesto'},
+        )
+        self.client.post(
+            reverse('econotec:ingreso_diagnostico_silenciar', kwargs={'pk': ingreso.pk}),
+            {'accion': 'silenciar'},
+        )
+        registrar_bitacora(self.usuario, 'abono', 'Registro de abono $5.', ingreso=ingreso)
+        registrar_bitacora(self.vendedor, 'estado', 'Cambio de estado.', ingreso=ingreso)
+
+        avisos = {aviso.mensaje: aviso for aviso in NotificacionCambioAdmin.objects.all()}
+        self.assertEqual(set(avisos), {
+            'Agregó una observación: Falta repuesto',
+            'Silenció la alerta de diagnóstico.',
+            'Registro de abono $5.',
+            'Cambio de estado.',
+        })
+        self.assertEqual(avisos['Cambio de estado.'].creado_por, self.vendedor)
+        self.assertEqual(avisos['Registro de abono $5.'].codigo, ingreso.codigo_equipo)
+
+    def test_no_avisa_lo_del_admin_ni_las_sesiones_ni_los_reintentos(self):
+        ingreso = self.crear_ingreso_reparacion()
+
+        registrar_bitacora(self.admin, 'estado', 'Cambio del admin.', ingreso=ingreso)
+        registrar_bitacora(self.usuario, 'login', 'Inicio de sesión.')
+        registrar_bitacora(self.usuario, 'logout', 'Cierre de sesión.')
+        self.assertFalse(NotificacionCambioAdmin.objects.exists())
+
+        for _intento in range(2):
+            registrar_bitacora(self.usuario, 'salida', 'Salida.', ingreso=ingreso, dedupe_key='prueba:aviso')
+        self.assertEqual(NotificacionCambioAdmin.objects.count(), 1)
+
+    def test_admin_ve_y_marca_los_cambios_y_otros_no_entran(self):
+        ingreso = self.crear_ingreso_reparacion()
+        registrar_bitacora(self.usuario, 'estado', 'Cambio uno.', ingreso=ingreso)
+        registrar_bitacora(self.usuario, 'estado', 'Cambio dos.', ingreso=ingreso)
+        primero, segundo = NotificacionCambioAdmin.objects.order_by('pk')
+
+        self.client.force_login(self.usuario)
+        self.assertNotContains(self.client.get(reverse('econotec:bienvenida')), 'id="cambios-admin-bell-btn"')
+        self.assertEqual(self.client.get(reverse('econotec:cambios_equipo')).status_code, 302)
+        self.assertEqual(
+            self.client.post(reverse('econotec:notificaciones_cambio_admin_vistas')).status_code, 302,
+        )
+        self.assertFalse(NotificacionCambioAdmin.objects.filter(leida=True).exists())
+
+        self.client.force_login(self.admin)
+        inicio = self.client.get(reverse('econotec:bienvenida'))
+        self.assertEqual(inicio.context['notificaciones_cambio_admin_count'], 2)
+        self.assertContains(inicio, 'Cambio uno.')
+        self.assertContains(self.client.get(reverse('econotec:cambios_equipo')), 'Cambio dos.')
+
+        abrir = self.client.get(reverse('econotec:notificacion_cambio_admin_ver', kwargs={'pk': primero.pk}))
+        self.assertRedirects(
+            abrir, reverse('econotec:ingreso_detalle', kwargs={'pk': ingreso.pk}), fetch_redirect_response=False,
+        )
+        primero.refresh_from_db()
+        segundo.refresh_from_db()
+        self.assertTrue(primero.leida)
+        self.assertFalse(segundo.leida)
+
+        self.client.post(reverse('econotec:notificaciones_cambio_admin_vistas'))
+        self.assertFalse(NotificacionCambioAdmin.objects.filter(leida=False).exists())
+
+    def test_inventario_avisa_al_admin(self):
+        item = InventarioItem.objects.create(
+            sede='guayaquil', categoria='impresora', tipo='impresora-laser', producto='Mando PS4',
+            marca='Sony', modelo='PS4', cantidad=5, estado='disponible',
+            ubicacion='guayaquil_norte', registrado_por=self.usuario,
+        )
+        self.client.force_login(self.usuario)
+
+        self.client.post(
+            reverse('econotec:inventario_actualizar_cantidad', kwargs={'codigo': item.codigo}),
+            {'accion': 'restar'},
+        )
+
+        aviso = NotificacionCambioAdmin.objects.get()
+        self.assertIn('Cambió la cantidad de Mando PS4 a 4.', aviso.mensaje)
+        self.assertEqual(aviso.codigo, item.codigo)
+
+    def _salida_retirada_con_pago_de(self, monto, **datos_salida):
+        ingreso = self.crear_ingreso_reparacion(valor_acordado=Decimal('30.00'))
+        salida = SalidaEquipo.objects.create(
+            ingreso=ingreso,
+            fecha_salida=date.today(),
+            estado_reparacion='pendiente_retiro',
+            tecnico_reparo=self.usuario,
+            valor_final_cobrado=Decimal('0.00'),
+            metodo_pago_final='sin_pago',
+            registrado_por=self.usuario,
+            **datos_salida,
+        )
+        Abono.objects.create(
+            ingreso=ingreso,
+            fecha=date.today(),
+            monto=Decimal(monto),
+            metodo='efectivo',
+            registrado_por=self.usuario,
+        )
+        salida.fecha_retiro_real = date.today()
+        salida.save()
+        return ingreso
+
+    def test_adicional_registrado_sube_el_total_y_no_deja_saldo_a_favor(self):
+        ingreso = self._salida_retirada_con_pago_de(
+            '37.00',
+            aplica_valor_acordado_adicional='si',
+            valor_acordado_adicional=Decimal('7.00'),
+            motivo_valor_acordado_adicional='Cambio de pupito',
+        )
+
+        self.assertEqual(ingreso.diferencia, Decimal('0.00'))
+        self.assertEqual(ingreso.saldo_a_favor, Decimal('0.00'))
+        self.client.force_login(self.usuario)
+        detalle = self.client.get(reverse('econotec:ingreso_detalle', kwargs={'pk': ingreso.pk}))
+        self.assertContains(detalle, '<span class="adic-val">$7,00 adicional</span>', html=True)
+        self.assertContains(detalle, 'Cambio de pupito')
+        self.assertNotContains(detalle, 'queda a su favor')
+
+    def test_pago_de_mas_sin_adicional_avisa_el_saldo_a_favor(self):
+        ingreso = self._salida_retirada_con_pago_de('37.00')
+
+        self.assertEqual(ingreso.diferencia, Decimal('-7.00'))
+        self.assertEqual(ingreso.saldo_a_favor, Decimal('7.00'))
+        self.client.force_login(self.usuario)
+        detalle = self.client.get(reverse('econotec:ingreso_detalle', kwargs={'pk': ingreso.pk}))
+        self.assertContains(detalle, 'El cliente pagó $7,00 más de lo registrado: queda a su favor.')
+        hoja = self.client.get(
+            reverse('econotec:tecnico_hoja', kwargs={'token': token_para_ingreso(ingreso.pk)}),
+        )
+        self.assertContains(hoja, 'El cliente pagó $7,00 más de lo registrado: queda a su favor.')
+
+    def _editar_adicional_tras_salida(self, ingreso, **datos):
+        self.client.force_login(self.admin)
+        return self.client.post(
+            reverse('econotec:salida_editar', kwargs={'pk': ingreso.salida.pk}),
+            self.salida_post_data(estado_reparacion='retirado', **datos),
+        )
+
+    def test_adicional_tras_la_salida_sube_el_total_y_deja_saldo_cero(self):
+        ingreso = self._salida_retirada_con_pago_de('37.00')
+
+        respuesta = self._editar_adicional_tras_salida(
+            ingreso,
+            aplica_valor_acordado_adicional='si',
+            valor_acordado_adicional='7.00',
+            motivo_valor_acordado_adicional='Cambio de pupito',
+        )
+
+        self.assertEqual(respuesta.status_code, 302)
+        ingreso = IngresoEquipo.objects.get(pk=ingreso.pk)
+        self.assertEqual(ingreso.salida.valor_acordado_adicional, Decimal('7.00'))
+        self.assertEqual(ingreso.valor_efectivo_a_cobrar, Decimal('37.00'))
+        self.assertEqual(ingreso.total_abonado, Decimal('37.00'))
+        self.assertEqual(ingreso.diferencia, Decimal('0.00'))
+        self.assertEqual(ingreso.salida.estado_reparacion, 'retirado')
+        self.assertIsNotNone(ingreso.salida.fecha_retiro_real)
+        detalle = self.client.get(reverse('econotec:ingreso_detalle', kwargs={'pk': ingreso.pk}))
+        self.assertContains(detalle, '<span class="adic-val">$7,00 adicional</span>', html=True)
+        self.assertNotContains(detalle, 'queda a su favor')
+
+    def test_adicional_tras_la_salida_no_puede_crear_deuda(self):
+        ingreso = self._salida_retirada_con_pago_de('37.00')
+
+        respuesta = self._editar_adicional_tras_salida(
+            ingreso,
+            aplica_valor_acordado_adicional='si',
+            valor_acordado_adicional='7.01',
+            motivo_valor_acordado_adicional='Más de lo pagado',
+        )
+
+        self.assertEqual(respuesta.status_code, 200)
+        self.assertContains(respuesta, 'no puede pasar de $7.00')
+        ingreso = IngresoEquipo.objects.get(pk=ingreso.pk)
+        self.assertFalse(ingreso.salida.tiene_valor_acordado_adicional)
+        self.assertEqual(ingreso.diferencia, Decimal('-7.00'))
+
+    def test_adicional_tras_la_salida_se_puede_ajustar_o_quitar(self):
+        ingreso = self._salida_retirada_con_pago_de(
+            '37.00',
+            aplica_valor_acordado_adicional='si',
+            valor_acordado_adicional=Decimal('5.00'),
+            motivo_valor_acordado_adicional='Primero',
+        )
+
+        self._editar_adicional_tras_salida(
+            ingreso,
+            aplica_valor_acordado_adicional='si',
+            valor_acordado_adicional='7.00',
+            motivo_valor_acordado_adicional='Corregido',
+        )
+        ingreso = IngresoEquipo.objects.get(pk=ingreso.pk)
+        self.assertEqual(ingreso.diferencia, Decimal('0.00'))
+
+        self._editar_adicional_tras_salida(ingreso, aplica_valor_acordado_adicional='no')
+        ingreso = IngresoEquipo.objects.get(pk=ingreso.pk)
+        self.assertFalse(ingreso.salida.tiene_valor_acordado_adicional)
+        self.assertEqual(ingreso.diferencia, Decimal('-7.00'))
+
+    def test_editar_equipo_que_ya_salio_conserva_el_pago_final(self):
+        ingreso = self._salida_retirada_con_pago_de('20.00')
+        SalidaEquipo.objects.filter(ingreso=ingreso).update(
+            valor_final_cobrado=Decimal('17.00'),
+            metodo_pago_final='efectivo',
+            numero_recibo='REC-PRUEBA',
+        )
+
+        self._editar_adicional_tras_salida(
+            IngresoEquipo.objects.get(pk=ingreso.pk),
+            aplica_valor_acordado_adicional='si',
+            valor_acordado_adicional='7.00',
+            motivo_valor_acordado_adicional='Cambio de pupito',
+        )
+
+        ingreso = IngresoEquipo.objects.get(pk=ingreso.pk)
+        self.assertEqual(ingreso.salida.valor_final_cobrado, Decimal('17.00'))
+        self.assertEqual(ingreso.salida.metodo_pago_final, 'efectivo')
+        self.assertEqual(ingreso.salida.numero_recibo, 'REC-PRUEBA')
+        self.assertEqual(ingreso.total_abonado, Decimal('37.00'))
+        self.assertEqual(ingreso.diferencia, Decimal('0.00'))
+
+    def test_pago_exacto_no_muestra_saldo_a_favor(self):
+        ingreso = self._salida_retirada_con_pago_de('30.00')
+
+        self.assertEqual(ingreso.saldo_a_favor, Decimal('0.00'))
+        self.client.force_login(self.usuario)
+        detalle = self.client.get(reverse('econotec:ingreso_detalle', kwargs={'pk': ingreso.pk}))
+        self.assertNotContains(detalle, 'queda a su favor')
+
     def test_revision_equipo_en_prueba_sin_adicional_cobra_el_valor_acordado(self):
         ingreso = self.crear_ingreso_reparacion(valor_acordado=Decimal('40.00'))
 
@@ -9671,6 +9919,160 @@ class VentasTests(TestCase):
         self.assertNotIn('listo para retiro', texto)
         self.assertNotIn('coordine con nosotros', texto)
         self.assertNotIn('Política de bodegaje', texto)
+
+    def test_sin_reparar_pide_venir_a_retirar_por_whatsapp_y_correo(self):
+        self.cliente_existente.whatsapp = '0986168066'
+        self.cliente_existente.correo = 'cliente@example.com'
+        self.cliente_existente.save()
+        casos = (
+            ('no_reparable', '', None, True),
+            ('cliente_no_acepta', '', None, True),
+            ('revision', 'no_reparable', None, True),
+            ('revision', 'cliente_no_acepta', None, True),
+            ('pendiente_retiro', '', None, False),
+            ('garantia', '', None, False),
+            ('cortesia', '', None, False),
+            # Ya lo retiró: no se le pide venir.
+            ('no_reparable', '', date(2026, 7, 18), False),
+        )
+        for estado, subestado, retiro, pide_venir in casos:
+            with self.subTest(estado=estado, subestado=subestado, retiro=retiro):
+                mail.outbox.clear()
+                salida = SalidaEquipo.objects.create(
+                    ingreso=self.crear_ingreso_reparacion(),
+                    fecha_salida=date(2026, 7, 17),
+                    fecha_retiro_real=retiro,
+                    estado_reparacion=estado,
+                    subestado_revision=subestado,
+                    tecnico_reparo=self.usuario,
+                    valor_final_cobrado=Decimal('0.00'),
+                    metodo_pago_final='sin_pago',
+                    registrado_por=self.usuario,
+                )
+
+                link = whatsapp_link_equipo_listo(salida)
+                texto = parse_qs(urlparse(link).query)['text'][0]
+                self.assertEqual('venga a retirar su equipo' in texto, pide_venir)
+                self.assertTrue(enviar_correo_finalizacion_seguro(salida.pk))
+                correo = mail.outbox[0]
+                self.assertEqual('ven a retirar tu equipo' in correo.body, pide_venir)
+                self.assertEqual('Tu equipo está listo' in correo.body, not pide_venir)
+                self.assertEqual(len(correo.attachments), 1)
+                acta = views_print._mensaje_estado_salida(salida)
+                self.assertEqual('venga a retirar su equipo' in acta, pide_venir)
+                self.assertEqual('listo' in acta, not pide_venir and not retiro)
+
+                if pide_venir:
+                    # Solo cambia la frase: el resto de la información sigue.
+                    self.assertNotIn('listo para retiro', texto)
+                    self.assertIn('Código de equipo', texto)
+                    self.assertIn('Técnico que reparó', texto)
+                    self.assertIn('Política de bodegaje', texto)
+                    self.assertIn('RESUMEN ECONÓMICO', correo.body)
+                elif not retiro:
+                    self.assertIn('listo para retiro', texto)
+
+    def _salida_bodegaje(self, **datos):
+        return SalidaEquipo.objects.create(
+            ingreso=self.crear_ingreso_reparacion(),
+            tecnico_reparo=self.usuario,
+            valor_final_cobrado=Decimal('0.00'),
+            metodo_pago_final='sin_pago',
+            registrado_por=self.usuario,
+            **datos,
+        )
+
+    def test_tras_salir_de_prueba_dias_y_fechas_cuentan_desde_ese_dia(self):
+        self.cliente_existente.whatsapp = '0986168066'
+        self.cliente_existente.correo = 'cliente@example.com'
+        self.cliente_existente.save()
+        hoy = date.today()
+        salida = self._salida_bodegaje(
+            fecha_salida=hoy - timedelta(days=60),
+            fecha_fin_prueba=hoy - timedelta(days=6),
+            estado_reparacion='pendiente_retiro',
+        )
+        inicio = (hoy - timedelta(days=6)).strftime('%d/%m/%Y')
+
+        texto = parse_qs(urlparse(whatsapp_link_bodegaje(salida)).query)['text'][0]
+        self.assertIn(f'listo desde el {inicio}', texto)
+        self.assertIn('desde hace *6 día(s)*', texto)
+        self.assertIn('Bodegaje acumulado (2 día(s))', texto)
+
+        self.client.force_login(self.admin)
+        panel = self.client.get(reverse('econotec:admin_activos_bodegaje'))
+        fila = next(item for item in panel.context['activos'] if item['salida'].pk == salida.pk)
+        self.assertEqual(fila['dias_totales'], 6)
+        self.assertEqual(fila['dias_bodegaje'], 2)
+
+        self.assertTrue(enviar_correo_bodegaje_seguro(salida.pk))
+        correo = mail.outbox[-1]
+        self.assertIn(f'finalizado desde el {inicio}', correo.body)
+        self.assertIn('hace 6 días', correo.body)
+        self.assertIn(f'el día en que el equipo salió de prueba ({inicio})', correo.body)
+
+        self.assertTrue(enviar_correo_finalizacion_seguro(salida.pk))
+        self.assertIn(f'el día en que el equipo salió de prueba ({inicio})', mail.outbox[-1].body)
+
+    def test_equipo_en_prueba_no_recibe_aviso_de_listo_ni_de_bodegaje(self):
+        self.cliente_existente.whatsapp = '0986168066'
+        self.cliente_existente.correo = 'cliente@example.com'
+        self.cliente_existente.save()
+        salida = self._salida_bodegaje(
+            fecha_salida=date.today() - timedelta(days=20),
+            estado_reparacion='revision',
+            subestado_revision='equipo_prueba',
+        )
+
+        texto = parse_qs(urlparse(whatsapp_link_equipo_listo(salida)).query)['text'][0]
+        self.assertIn('se encuentra *en prueba*', texto)
+        self.assertNotIn('listo para retiro', texto)
+        self.assertNotIn('Política de bodegaje', texto)
+        self.assertIn('Código de equipo', texto)
+        self.assertIn('Quedamos atentos', texto)
+
+        self.assertTrue(enviar_correo_finalizacion_seguro(salida.pk))
+        correo = mail.outbox[-1]
+        self.assertIn('Tu equipo está en prueba', correo.body)
+        self.assertNotIn('Tu equipo está listo', correo.body)
+        self.assertIn('el día en que el equipo salga de prueba', correo.body)
+        self.assertIn('En prueba: todavía no corre el bodegaje', correo.body)
+        self.assertNotIn('listo', views_print._mensaje_estado_salida(salida))
+
+    def test_recordatorio_de_bodegaje_sin_reparar_pide_venir_a_retirar(self):
+        self.cliente_existente.whatsapp = '0986168066'
+        self.cliente_existente.save()
+        hoy = date.today()
+        casos = (
+            ('no_reparable', ''),
+            ('cliente_no_acepta', ''),
+            ('revision', 'no_reparable'),
+            ('revision', 'cliente_no_acepta'),
+        )
+        for estado, subestado in casos:
+            with self.subTest(estado=estado, subestado=subestado):
+                salida = self._salida_bodegaje(
+                    fecha_salida=hoy - timedelta(days=10),
+                    estado_reparacion=estado,
+                    subestado_revision=subestado,
+                )
+                texto = parse_qs(urlparse(whatsapp_link_bodegaje(salida)).query)['text'][0]
+                self.assertIn('venga a retirarlo', texto)
+                self.assertNotIn('listo', texto)
+                self.assertIn('hace *10 día(s)*', texto)
+                self.assertIn('Bodegaje acumulado', texto)
+
+    def test_ayuda_y_econobot_explican_los_puntos_reales(self):
+        self.client.force_login(self.usuario)
+        pagina = self.client.get(reverse('econotec:bienvenida'))
+        self.assertContains(pagina, '<b>equipo reparado suma 3 puntos</b>')
+        self.assertContains(pagina, '<b>garantía resta 4</b>')
+        self.assertNotContains(pagina, 'salida buena suma 4 puntos')
+
+        texto = str(conocimiento._ranking(SimpleNamespace(user=self.admin)))
+        self.assertIn('suma 3 puntos por equipo reparado', texto)
+        self.assertIn('1 si el cliente no quiso reparar', texto)
+        self.assertIn('resta 1 si no se pudo reparar y 4 por garantía', texto)
 
     def test_notificacion_asesora_se_puede_marcar_como_vista(self):
         ingreso = self.crear_ingreso_reparacion(
@@ -11988,7 +12390,7 @@ class VentasTests(TestCase):
 
         data = self.client.get(reverse('econotec:api_perfil')).json()
 
-        # 3 × 3 + 1 − 1 + venta 1 = 10; chatarrerización, revisión y cortesía valen 0.
+        # 3 × 3 + 1 − 1 + venta 1 = 10; chatarrización, revisión y cortesía valen 0.
         self.assertEqual(data['total'], 10)
         self.assertEqual(data['salidas_buenas'], 4)
         self.assertEqual(data['salidas_malas'], 1)

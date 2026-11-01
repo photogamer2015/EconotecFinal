@@ -1,0 +1,311 @@
+{% load econotec_extras %}
+{# Renglón del Registro Administrativo. Cerrado no lleva ningún valor: la Caja y el gráfico solo se generan después de la contraseña. #}
+<style>
+    .historico-renglon { margin-top: 22px; padding: 0; scroll-margin-top: 90px; border: 1px solid var(--border-color); }
+    .historico-renglon > summary {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        min-height: 60px;
+        padding: 12px 22px;
+        font-size: 16px;
+        font-weight: 900;
+        color: var(--text-main);
+        cursor: pointer;
+        list-style: none;
+    }
+    .historico-renglon > summary::-webkit-details-marker { display: none; }
+    .historico-renglon > summary small { display: block; font-size: 12px; font-weight: 700; color: var(--text-muted); }
+    .historico-renglon > summary::after { content: '▸'; margin-left: auto; font-size: 18px; color: var(--text-muted); }
+    .historico-renglon[open] > summary::after { content: '▾'; }
+    .historico-cuerpo { padding: 4px 22px 22px; }
+    .historico-clave { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px; max-width: 560px; }
+    .historico-clave > div { flex: 1 1 240px; }
+    .historico-barra { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 18px; }
+    .historico-barra form { margin-left: auto; }
+    .historico-pestana {
+        min-height: 40px;
+        padding: 8px 16px;
+        border: 1px solid var(--border-color);
+        border-radius: 999px;
+        font-size: 13px;
+        font-weight: 800;
+        color: var(--text-main);
+        background: transparent;
+        cursor: pointer;
+    }
+    .historico-pestana[aria-selected="true"] { color: #fff; background: #d97706; border-color: #d97706; }
+    .historico-por-mes { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr); gap: 22px; align-items: start; }
+    .cajitas { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; margin: 0; padding: 0; list-style: none; }
+    .cajita { padding: 12px; border: 1px solid var(--border-color); border-radius: 12px; background: rgba(245, 158, 11, .1); }
+    .cajita.actual { border: 2px solid #f59e0b; }
+    .cajita.vacia { background: transparent; }
+    .cajita-cabeza { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 800; color: var(--text-main); }
+    .cajita-fuerte {
+        position: relative;
+        flex: none;
+        width: 30px;
+        height: 30px;
+        border: 1px solid #252b33;
+        border-radius: 6px;
+        background: linear-gradient(145deg, #707d8c 0%, #4a5462 60%, #38414d 100%);
+    }
+    .cajita-fuerte::after {
+        content: '';
+        position: absolute;
+        inset: 7px;
+        border-radius: 50%;
+        background: radial-gradient(circle at 40% 35%, #e2e8f0, #94a3b8 60%, #475569 100%);
+    }
+    .cajita-valor { display: block; margin-top: 8px; font-size: 17px; font-weight: 900; color: var(--text-main); font-variant-numeric: tabular-nums; }
+    .cajita-nota { display: block; margin-top: 2px; font-size: 11px; font-weight: 700; color: var(--text-muted); }
+    .historico-grafico { padding: 14px; border: 1px solid var(--border-color); border-radius: 12px; }
+    .historico-grafico h4 { margin: 0 0 10px; font-size: 13px; font-weight: 800; color: var(--text-main); }
+    .historico-lienzo { position: relative; height: 340px; }
+    .caja-oferta {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 14px;
+        margin-bottom: 18px;
+        padding: 14px 16px;
+        border: 1px dashed #d97706;
+        border-radius: 12px;
+    }
+    .caja-oferta[hidden] { display: none; }
+    .caja-oferta > div { flex: 1 1 280px; }
+    .caja-oferta strong { display: block; font-size: 15px; color: var(--text-main); }
+    .caja-oferta p, .caja-oferta-no { margin: 2px 0 0; font-size: 12px; font-weight: 700; color: var(--text-muted); }
+    .caja-oferta-botones { display: flex; flex-wrap: wrap; gap: 8px; }
+    .caja-editar { margin-bottom: 18px; padding: 12px 16px; border: 1px solid var(--border-color); border-radius: 12px; }
+    .caja-editar summary { font-size: 14px; font-weight: 800; color: var(--text-main); cursor: pointer; }
+    .caja-editar label { display: flex; gap: 8px; margin-top: 10px; font-size: 13px; font-weight: 700; color: var(--text-main); }
+    .caja-editar .btn { margin-top: 12px; }
+    #caja.estrenada { animation: caja-estreno .7s cubic-bezier(.3, 1.4, .5, 1); }
+    @keyframes caja-estreno {
+        from { opacity: 0; transform: translateY(-26px) scale(.94); }
+        to { opacity: 1; transform: none; }
+    }
+    @media (max-width: 900px) {
+        .historico-por-mes { grid-template-columns: minmax(0, 1fr); }
+        .historico-lienzo { height: 280px; }
+    }
+    @media (max-width: 720px) {
+        .historico-renglon > summary { padding: 12px 16px; }
+        .historico-cuerpo { padding: 4px 16px 16px; }
+        .cajitas { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+        #caja.estrenada { animation: none; }
+    }
+</style>
+
+<details class="rank-card historico-renglon" id="historico-mensual"{% if caja_abierta %} open{% endif %}>
+    <summary>
+        <span aria-hidden="true">🔐</span>
+        <span>Histórico mensual<small>Caja, mes a mes y año por año</small></span>
+    </summary>
+    <div class="historico-cuerpo">
+    {% if not caja_abierta %}
+        <form method="post" action="{% url 'econotec:admin_caja_abrir' %}" class="historico-clave">
+            {% csrf_token %}
+            <input type="hidden" name="filtros" value="{{ request.GET.urlencode }}">
+            <div>
+                <label for="historico-clave" class="form-label">Ingrese su contraseña de administrador</label>
+                <input type="password" name="password" id="historico-clave" class="form-input" autocomplete="current-password" required>
+            </div>
+            <button type="submit" class="btn btn-primary">Ver Caja</button>
+        </form>
+    {% else %}
+        <div class="historico-barra">
+            <div role="tablist" aria-label="Cómo ver la Caja" style="display: contents;">
+                <button type="button" class="historico-pestana" role="tab" id="pestana-por-mes" aria-controls="panel-por-mes" aria-selected="{% if historico_vista == 'mes' %}true{% else %}false{% endif %}" data-historico-pestana="por-mes">📅 Por mes</button>
+                <button type="button" class="historico-pestana" role="tab" id="pestana-por-anio" aria-controls="panel-por-anio" aria-selected="{% if historico_vista == 'anio' %}true{% else %}false{% endif %}" data-historico-pestana="por-anio">🔐 Por año</button>
+            </div>
+            <form method="post" action="{% url 'econotec:admin_caja_cerrar' %}">
+                {% csrf_token %}
+                <input type="hidden" name="filtros" value="{{ historico_filtros }}">
+                <button type="submit" class="btn btn-secondary">🔒 Cerrar Caja</button>
+            </form>
+        </div>
+
+        <div id="panel-por-mes" role="tabpanel" aria-labelledby="pestana-por-mes"{% if historico_vista != 'mes' %} hidden{% endif %}>
+            <div class="historico-por-mes">
+                <ol class="cajitas" aria-label="Cajitas por mes">
+                    {% for mes in historico_meses %}
+                    <li class="cajita{% if mes.mes.year == year and mes.mes.month == month %} actual{% endif %}{% if not mes.entro and not mes.egresos %} vacia{% endif %}">
+                        <span class="cajita-cabeza"><span class="cajita-fuerte" aria-hidden="true"></span>{{ mes.etiqueta|capfirst }}</span>
+                        <span class="cajita-valor">{{ mes.entro|dinero_signo }}</span>
+                        <span class="cajita-nota">Recaudado</span>
+                        {% if mes.egresos %}<span class="cajita-nota">Egresos: {{ mes.egresos|dinero_signo }}</span>{% endif %}
+                        <span class="cajita-nota">Queda: {{ mes.neto|dinero_signo }}</span>
+                    </li>
+                    {% endfor %}
+                </ol>
+                <figure class="historico-grafico" style="margin: 0;">
+                    <h4 id="titulo-grafico-historico">Dinero recaudado por mes</h4>
+                    <div class="historico-lienzo">
+                        <canvas id="historico-barras" role="img" aria-labelledby="titulo-grafico-historico"></canvas>
+                    </div>
+                </figure>
+            </div>
+            {{ historico_grafico|json_script:"historico-grafico-datos" }}
+        </div>
+
+        <div id="panel-por-anio" role="tabpanel" aria-labelledby="pestana-por-anio"{% if historico_vista != 'anio' %} hidden{% endif %}>
+            {% if cajas_grandes|length > 1 %}
+            <div class="ra-opciones" aria-label="Elegir caja grande">
+                {% for opcion in cajas_grandes %}
+                <a class="ra-opcion{% if opcion.anio == caja_elegida.anio %} activa{% endif %}"{% if opcion.anio == caja_elegida.anio %} aria-current="true"{% endif %} href="?{{ historico_filtros }}&vista=anio&caja={{ opcion.anio }}#historico-mensual">Caja {{ opcion.anio }}</a>
+                {% endfor %}
+            </div>
+            {% endif %}
+
+            {% if caja_por_comprar %}
+            <div class="caja-oferta" data-caja-oferta>
+                <span class="cajita-fuerte" aria-hidden="true"></span>
+                <div>
+                    <strong>🛒 ¿Quieres comprar una caja grande nueva para {{ caja_por_comprar }}?</strong>
+                    <p>Es solo para divertirse: no se descuenta dinero. Empieza en $0,00 y tus cajas anteriores se quedan como están.</p>
+                </div>
+                <div class="caja-oferta-botones">
+                    <form method="post" action="{% url 'econotec:admin_caja_comprar' %}">
+                        {% csrf_token %}
+                        <input type="hidden" name="filtros" value="{{ historico_filtros }}">
+                        <button type="submit" class="btn btn-primary">Sí, comprar</button>
+                    </form>
+                    <button type="button" class="btn btn-secondary" data-caja-oferta-no>No, por ahora</button>
+                </div>
+            </div>
+            <p class="caja-oferta-no" data-caja-oferta-respuesta hidden style="margin-bottom: 18px;">Listo, sigues con tu caja actual: el dinero de {{ caja_por_comprar }} también se guardará ahí.</p>
+            {% endif %}
+
+            {% if caja_elegida.comprada %}
+            <details class="caja-editar">
+                <summary>✏️ Quiero editar mi caja grande</summary>
+                <form method="post" action="{% url 'econotec:admin_caja_editar' %}">
+                    {% csrf_token %}
+                    <input type="hidden" name="filtros" value="{{ historico_filtros }}">
+                    <input type="hidden" name="anio" value="{{ caja_elegida.anio }}">
+                    <label><input type="radio" name="mezcla" value="no"{% if not caja_elegida.mezclada %} checked{% endif %}> Solo {{ caja_elegida.anio }}: la caja empieza en $0,00</label>
+                    <label><input type="radio" name="mezcla" value="si"{% if caja_elegida.mezclada %} checked{% endif %}> Mezclar todo: juntar los valores de los años anteriores con {{ caja_elegida.anio }}</label>
+                    <button type="submit" class="btn btn-primary">Guardar</button>
+                </form>
+            </details>
+            {% endif %}
+
+            {% include 'includes/ranking_admin_caja.html' %}
+        </div>
+    {% endif %}
+    </div>
+</details>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    var renglon = document.getElementById('historico-mensual');
+    if (!renglon) return;
+
+    // Los enlaces «🔐 Caja» y «Ver Caja» llegan aquí y dejan lista la contraseña.
+    function abrirSiLoPiden() {
+        if (window.location.hash !== '#historico-mensual') return;
+        renglon.open = true;
+        var clave = document.getElementById('historico-clave');
+        if (clave) clave.focus();
+    }
+    window.addEventListener('hashchange', abrirSiLoPiden);
+    abrirSiLoPiden();
+
+    var lienzo = document.getElementById('historico-barras');
+    if (!lienzo) return;
+
+    var pestanas = Array.prototype.slice.call(renglon.querySelectorAll('[data-historico-pestana]'));
+    var grafico = null;
+
+    function color(nombre) {
+        return getComputedStyle(document.documentElement).getPropertyValue(nombre).trim();
+    }
+    function colorBarra() {
+        return document.documentElement.dataset.theme === 'dark' ? '#f59e0b' : '#b45309';
+    }
+    function dinero(valor) {
+        var partes = Math.abs(valor).toFixed(2).split('.');
+        return '$' + (valor < 0 ? '-' : '') + partes[0].replace(/\B(?=(\d{3})+(?!\d))/g, '.') + ',' + partes[1];
+    }
+    function aplicarTema() {
+        var texto = color('--text-muted');
+        var ejes = grafico.options.scales;
+        grafico.data.datasets[0].backgroundColor = colorBarra();
+        ejes.x.ticks.color = ejes.y.ticks.color = ejes.x.title.color = ejes.y.title.color = texto;
+        ejes.x.border.color = ejes.y.grid.color = color('--border-color');
+        grafico.update();
+    }
+    function dibujarGrafico() {
+        // El lienzo necesita estar visible para medirse.
+        if (grafico || typeof Chart === 'undefined' || !lienzo.offsetParent) return;
+        var datos = JSON.parse(document.getElementById('historico-grafico-datos').textContent);
+        grafico = new Chart(lienzo, {
+            type: 'bar',
+            data: {
+                labels: datos.etiquetas,
+                datasets: [{
+                    label: 'Recaudado',
+                    data: datos.valores,
+                    backgroundColor: colorBarra(),
+                    borderRadius: { topLeft: 4, topRight: 4 },
+                    borderSkipped: 'bottom',
+                    maxBarThickness: 44
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        displayColors: false,
+                        callbacks: { label: function (punto) { return 'Recaudado: ' + dinero(punto.parsed.y); } }
+                    }
+                },
+                scales: {
+                    x: {
+                        grid: { display: false },
+                        border: {},
+                        ticks: {},
+                        title: { display: true, text: 'Meses' }
+                    },
+                    y: {
+                        beginAtZero: true,
+                        border: { display: false },
+                        grid: {},
+                        ticks: { callback: function (valor) { return dinero(valor).replace(',00', ''); } },
+                        title: { display: true, text: 'Dinero recaudado' }
+                    }
+                }
+            }
+        });
+        aplicarTema();
+    }
+    pestanas.forEach(function (pestana) {
+        pestana.addEventListener('click', function () {
+            pestanas.forEach(function (otra) {
+                var activa = otra === pestana;
+                otra.setAttribute('aria-selected', activa ? 'true' : 'false');
+                document.getElementById('panel-' + otra.dataset.historicoPestana).hidden = !activa;
+            });
+            dibujarGrafico();
+        });
+    });
+    renglon.addEventListener('toggle', dibujarGrafico);
+    new MutationObserver(function () {
+        if (grafico) aplicarTema();
+    }).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+    dibujarGrafico();
+
+    var oferta = renglon.querySelector('[data-caja-oferta]');
+    if (oferta) {
+        oferta.querySelector('[data-caja-oferta-no]').addEventListener('click', function () {
+            oferta.hidden = true;
+            renglon.querySelector('[data-caja-oferta-respuesta]').hidden = false;
+        });
+    }
+});
+</script>
