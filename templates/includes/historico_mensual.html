@@ -1,28 +1,309 @@
 {% load econotec_extras %}
-{# Renglón del Registro Administrativo. Cerrado no lleva ningún valor: la Caja y el gráfico solo se generan después de la contraseña. #}
+{# Caja fuerte del Registro Administrativo. Cerrada no lleva ningún valor: los montos, la Caja y el gráfico solo se generan después de la contraseña. #}
 <style>
-    .historico-renglon { margin-top: 22px; padding: 0; scroll-margin-top: 90px; border: 1px solid var(--border-color); }
-    .historico-renglon > summary {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        min-height: 60px;
-        padding: 12px 22px;
-        font-size: 16px;
-        font-weight: 900;
-        color: var(--text-main);
-        cursor: pointer;
-        list-style: none;
+    .bf {
+        --bf-boveda: #f6f5f2;
+        --bf-boveda-borde: #e7e4dd;
+        --bf-monto: #b45309;
+        --bf-etiqueta: #6b6b66;
+        --bf-rango: #57534e;
+        --bf-chip: #f3e8d7;
+        --bf-chip-texto: #57452d;
+        --bf-nav: rgba(255, 255, 255, .78);
+        --bf-nav-hover: #fff;
+        --bf-dia-fondo: #f1f8e9; --bf-dia-borde: #c5e1a5; --bf-dia-texto: #33691e;
+        --bf-semana-fondo: #e0f2f1; --bf-semana-borde: #80cbc4; --bf-semana-texto: #00695c;
+        --bf-mes-fondo: #e3f2fd; --bf-mes-borde: #90caf9; --bf-mes-texto: #0d47a1;
+        --bf-abierta-fondo: #e8f5e9; --bf-abierta-texto: #2e7d32;
+        margin: 0 0 22px;
+        padding: 0;
+        overflow: hidden;
+        scroll-margin-top: 90px;
+        border: 1px solid var(--border-color);
+        border-top: 4px solid var(--primary);
+        border-radius: 14px;
+        background: var(--card-bg);
+        box-shadow: var(--shadow-md);
     }
-    .historico-renglon > summary::-webkit-details-marker { display: none; }
-    .historico-renglon > summary small { display: block; font-size: 12px; font-weight: 700; color: var(--text-muted); }
-    .historico-renglon > summary::after { content: '▸'; margin-left: auto; font-size: 18px; color: var(--text-muted); }
-    .historico-renglon[open] > summary::after { content: '▾'; }
-    .historico-cuerpo { padding: 4px 22px 22px; }
-    .historico-clave { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px; max-width: 560px; }
-    .historico-clave > div { flex: 1 1 240px; }
+    [data-theme="dark"] .bf {
+        --bf-boveda: #1f2c2d;
+        --bf-boveda-borde: var(--border-color);
+        --bf-monto: #fbbf24;
+        --bf-etiqueta: var(--text-muted);
+        --bf-rango: var(--text-soft);
+        --bf-chip: rgba(245, 158, 11, .16);
+        --bf-chip-texto: #fcd34d;
+        --bf-nav: rgba(255, 255, 255, .06);
+        --bf-nav-hover: rgba(255, 255, 255, .14);
+        --bf-dia-fondo: rgba(132, 204, 22, .1); --bf-dia-borde: rgba(132, 204, 22, .45); --bf-dia-texto: #bef264;
+        --bf-semana-fondo: rgba(45, 212, 191, .1); --bf-semana-borde: rgba(45, 212, 191, .45); --bf-semana-texto: #5eead4;
+        --bf-mes-fondo: rgba(96, 165, 250, .1); --bf-mes-borde: rgba(96, 165, 250, .5); --bf-mes-texto: #93c5fd;
+        --bf-abierta-fondo: rgba(34, 197, 94, .16); --bf-abierta-texto: #86efac;
+    }
+    .bf [hidden] { display: none !important; }
+
+    /* Cabecera */
+    .bf-cabecera { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; padding: 18px 22px 14px; }
+    .bf-sello {
+        flex: none;
+        display: grid;
+        place-items: center;
+        width: 52px;
+        height: 52px;
+        border-radius: 14px;
+        font-size: 25px;
+        background: linear-gradient(145deg, #586273, #262c36);
+        box-shadow: inset 0 0 0 2px var(--primary), 0 4px 10px rgba(38, 44, 54, .25);
+    }
+    .bf-titulos { flex: 1 1 240px; min-width: 0; }
+    .bf-titulos h3 { margin: 0; font-size: 17px; font-weight: 900; color: var(--text-main); }
+    .bf-titulos p { margin: 2px 0 0; font-size: 13px; font-weight: 600; color: var(--text-muted); }
+    .bf-lado { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .bf-lado form { margin: 0; }
+    .bf-estado {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        min-height: 36px;
+        padding: 6px 14px;
+        border-radius: 999px;
+        font-size: 13px;
+        font-weight: 800;
+        white-space: nowrap;
+        color: var(--text-soft);
+        background: var(--surface-muted);
+        font-variant-numeric: tabular-nums;
+    }
+    .bf-estado.abierta { color: var(--bf-abierta-texto); background: var(--bf-abierta-fondo); }
+    .bf-cerrar {
+        min-height: 36px;
+        padding: 6px 14px;
+        border: 0;
+        border-radius: 999px;
+        font: inherit;
+        font-size: 13px;
+        font-weight: 800;
+        color: var(--text-main);
+        background: var(--surface-muted);
+        cursor: pointer;
+    }
+    .bf-cerrar:hover, .bf-cerrar:focus-visible { background: var(--border-color); }
+
+    /* Bóveda: la caja fuerte a la izquierda y lo que guarda a la derecha */
+    .bf-boveda {
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr);
+        align-items: center;
+        gap: 28px 48px;
+        margin: 0 22px 22px;
+        padding: 32px 34px 30px 56px;
+        border: 1px solid var(--bf-boveda-borde);
+        border-radius: 16px;
+        background: var(--bf-boveda);
+    }
+    .bf-lado-derecho { min-width: 0; }
+
+    /* La caja fuerte dibujada */
+    .bf-safe { --led: #ef4444; --led-luz: rgba(239, 68, 68, .6); position: relative; flex: none; width: clamp(160px, 19vw, 240px); aspect-ratio: 25 / 27; margin: 0 auto; }
+    .bf-safe::before {
+        content: '';
+        position: absolute;
+        inset: -18%;
+        z-index: 0;
+        border-radius: 50%;
+        opacity: 0;
+        background: radial-gradient(circle, rgba(251, 191, 36, .45) 0%, rgba(251, 191, 36, 0) 62%);
+        transition: opacity .8s ease .9s;
+    }
+    .bf-safe-cuerpo {
+        position: absolute;
+        inset: 0 0 6% 0;
+        z-index: 1;
+        border-radius: 9% / 8.5%;
+        background: linear-gradient(160deg, #5b6577 0%, #3b4351 55%, #262c36 100%);
+        perspective: 1300px;
+        box-shadow: 0 22px 34px -12px rgba(15, 23, 42, .5), inset 0 2px 0 rgba(255, 255, 255, .18), inset 0 -4px 0 rgba(0, 0, 0, .35);
+    }
+    .bf-safe-hueco, .bf-safe-puerta { position: absolute; inset: 6.5%; border-radius: 7%; }
+    .bf-safe-hueco {
+        overflow: hidden;
+        background: radial-gradient(ellipse 85% 75% at 50% 78%, #fff4c7 0%, #fbbf24 30%, #b45309 64%, #2b1a0a 100%);
+        box-shadow: inset 0 0 0 3px rgba(0, 0, 0, .4), inset 0 12px 26px rgba(0, 0, 0, .55);
+    }
+    .bf-safe-repisa { position: absolute; left: 0; right: 0; top: 47%; height: 4%; background: #5b3a14; box-shadow: 0 3px 6px rgba(0, 0, 0, .35); }
+    .bf-safe-lingotes { position: absolute; left: 18%; top: 31%; display: flex; align-items: flex-end; gap: 6%; width: 46%; height: 16%; }
+    .bf-safe-lingotes i { flex: 1; height: 100%; background: linear-gradient(180deg, #fde68a, #f59e0b 60%, #b45309); clip-path: polygon(16% 0, 84% 0, 100% 100%, 0 100%); }
+    .bf-safe-billetes {
+        position: absolute;
+        left: 12%;
+        bottom: 10%;
+        width: 42%;
+        height: 24%;
+        border-radius: 4px;
+        background: repeating-linear-gradient(0deg, #166534 0 9%, #22c55e 9% 15%, #15803d 15% 20%);
+        box-shadow: 0 4px 8px rgba(0, 0, 0, .35);
+    }
+    .bf-safe-billetes::after { content: ''; position: absolute; top: 0; bottom: 0; left: 42%; width: 16%; background: #fef3c7; opacity: .9; }
+    .bf-safe-monedas { position: absolute; right: 12%; bottom: 10%; display: flex; align-items: flex-end; gap: 8%; width: 30%; height: 40%; }
+    .bf-safe-monedas i {
+        flex: 1;
+        border-radius: 5px / 3px;
+        background: repeating-linear-gradient(0deg, #d97706 0 6%, #fcd34d 6% 12%, #f59e0b 12% 16%);
+        box-shadow: 0 3px 6px rgba(0, 0, 0, .35);
+    }
+    .bf-safe-monedas i:nth-child(1) { height: 58%; }
+    .bf-safe-monedas i:nth-child(2) { height: 100%; }
+    .bf-safe-monedas i:nth-child(3) { height: 78%; }
+    .bf-safe-puerta {
+        z-index: 2;
+        transform-origin: 0 50%;
+        background: linear-gradient(155deg, #737e8f 0%, #566070 48%, #3e4654 100%);
+        box-shadow: inset 0 0 0 2px rgba(255, 255, 255, .08), inset 0 0 0 5px rgba(0, 0, 0, .28);
+        transition: transform .9s cubic-bezier(.3, .85, .3, 1), box-shadow .6s;
+    }
+    .bf-safe-puerta::before { content: ''; position: absolute; inset: 5.5%; border: 2px solid rgba(0, 0, 0, .22); border-radius: 6%; box-shadow: inset 0 1px 0 rgba(255, 255, 255, .1); }
+    .bf-safe-led {
+        position: absolute;
+        top: 8%;
+        right: 8%;
+        width: 8.5%;
+        aspect-ratio: 1;
+        border-radius: 50%;
+        background: var(--led);
+        box-shadow: 0 0 0 2px rgba(0, 0, 0, .25), 0 0 12px 2px var(--led-luz);
+        transition: background .3s, box-shadow .3s;
+    }
+    .bf-safe-rueda {
+        position: absolute;
+        left: 50%;
+        top: 55%;
+        width: 44%;
+        aspect-ratio: 1;
+        border-radius: 50%;
+        transform: translate(-50%, -50%);
+        background: radial-gradient(circle at 34% 28%, #fff 0%, #dfe5ee 22%, #aab4c3 58%, #7c8798 100%);
+        box-shadow: 0 8px 14px rgba(0, 0, 0, .35), inset 0 -4px 8px rgba(0, 0, 0, .22), inset 0 3px 4px rgba(255, 255, 255, .7);
+    }
+    .bf-safe-rueda span { position: absolute; inset: 0; transition: transform .7s cubic-bezier(.5, 0, .3, 1); }
+    .bf-safe-rueda span::before, .bf-safe-rueda span::after {
+        content: '';
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        border-radius: 999px;
+        background: #334155;
+        transform: translate(-50%, -50%);
+        box-shadow: inset 0 2px 2px rgba(0, 0, 0, .4);
+    }
+    .bf-safe-rueda span::before { width: 68%; height: 11%; }
+    .bf-safe-rueda span::after { width: 11%; height: 68%; }
+    .bf-safe-bisagra { position: absolute; z-index: 3; left: 2.6%; width: 5.5%; height: 17%; border-radius: 999px; background: linear-gradient(90deg, #1b2029, #3b4351); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .12); }
+    .bf-safe-bisagra.arriba { top: 17%; }
+    .bf-safe-bisagra.abajo { bottom: 17%; }
+    .bf-safe-pata { position: absolute; bottom: 0; width: 16%; height: 8%; border-radius: 0 0 6px 6px; background: #1f2530; }
+    .bf-safe-pata.izq { left: 12%; }
+    .bf-safe-pata.der { right: 12%; }
+    /* Estados: cerrada (luz roja), revisando (la rueda gira), abierta (luz verde y la puerta se abre) */
+    .bf-safe.revisando { --led: #f59e0b; --led-luz: rgba(245, 158, 11, .7); }
+    .bf-safe.revisando .bf-safe-led { animation: bf-parpadeo .5s steps(2, jump-none) infinite; }
+    .bf-safe.revisando .bf-safe-rueda span { animation: bf-girar 1.1s linear infinite; }
+    .bf-safe.abierta { --led: #22c55e; --led-luz: rgba(34, 197, 94, .75); }
+    .bf-safe.abierta::before { opacity: 1; }
+    .bf-safe.abierta .bf-safe-rueda span { transform: rotate(270deg); }
+    .bf-safe.abierta .bf-safe-puerta { transform: rotateY(-100deg); transition-delay: .45s; box-shadow: inset 0 0 0 5px rgba(0, 0, 0, .28), -8px 0 22px rgba(0, 0, 0, .35); }
+    .bf-safe.abierta .bf-safe-hueco { animation: bf-brillo 2.6s ease-in-out 1.4s infinite alternate; }
+    .bf-safe.sin-animar, .bf-safe.sin-animar *, .bf-safe.sin-animar::before { transition: none !important; }
+    @keyframes bf-girar { to { transform: rotate(360deg); } }
+    @keyframes bf-parpadeo { 50% { opacity: .25; } }
+    @keyframes bf-brillo { to { filter: brightness(1.12) saturate(1.1); } }
+
+    /* Caja cerrada: contraseña */
+    .bf-form { display: flex; flex-direction: column; gap: 10px; max-width: 600px; min-width: 0; margin: 0; }
+    .bf-form-titulo, .bf-etiqueta { font-size: 13px; font-weight: 800; letter-spacing: .8px; text-transform: uppercase; color: var(--bf-etiqueta); }
+    .bf-form-grande { margin: 0; font-size: clamp(22px, 2.6vw, 28px); font-weight: 900; color: var(--text-main); }
+    .bf-form-texto { margin: 0; font-size: 15px; color: var(--text-soft); }
+    .bf-form label { font-size: 13px; font-weight: 700; color: var(--text-muted); }
+    .bf-fila { display: flex; flex-wrap: wrap; gap: 10px; }
+    .bf-fila input { flex: 1 1 220px; min-width: 0; min-height: 46px; }
+    .bf-abrir { min-height: 46px; padding: 10px 22px; border: 0; border-radius: 10px; font: inherit; font-size: 15px; font-weight: 800; color: #fff; background: #b45309; cursor: pointer; }
+    .bf-abrir:hover, .bf-abrir:focus-visible { background: #92400e; }
+    .bf-abrir:disabled { opacity: .65; cursor: wait; }
+    .bf-form small { font-size: 12px; color: var(--text-muted); }
+
+    /* Caja abierta: lo que entró */
+    .bf-resumen { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+    .bf-resumen-cab { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px 16px; }
+    .bf-resumen-cab .bf-nav { width: 240px; max-width: 100%; color: #9a3412; }
+    [data-theme="dark"] .bf-resumen-cab .bf-nav { color: #fdba74; }
+    .bf-monto {
+        font-size: clamp(38px, 5.6vw, 68px);
+        font-weight: 900;
+        line-height: 1.05;
+        letter-spacing: -1px;
+        color: var(--bf-monto);
+        font-variant-numeric: tabular-nums;
+        overflow-wrap: anywhere;
+    }
+    .bf-rango { font-size: 15px; font-weight: 700; color: var(--bf-rango); }
+    .bf-chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0 14px; padding: 0; list-style: none; }
+    .bf-chips li { padding: 7px 14px; border-radius: 999px; font-size: 13px; font-weight: 800; color: var(--bf-chip-texto); background: var(--bf-chip); font-variant-numeric: tabular-nums; }
+
+    .bf-cajas { display: grid; grid-template-columns: 1fr 1.15fr 1.35fr; align-items: end; gap: 12px; }
+    .bf-caja { display: flex; flex-direction: column; gap: 6px; min-width: 0; padding: 14px; border: 2px solid; border-radius: 14px; }
+    .bf-caja.dia { min-height: 200px; color: var(--bf-dia-texto); border-color: var(--bf-dia-borde); background: var(--bf-dia-fondo); }
+    .bf-caja.semana { min-height: 220px; color: var(--bf-semana-texto); border-color: var(--bf-semana-borde); background: var(--bf-semana-fondo); }
+    .bf-caja.mes { min-height: 240px; color: var(--bf-mes-texto); border-color: var(--bf-mes-borde); background: var(--bf-mes-fondo); }
+    .bf-caja-cab { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 900; letter-spacing: .6px; text-transform: uppercase; }
+    .bf-caja-cab span[aria-hidden] { font-size: 20px; line-height: 1; letter-spacing: 0; }
+    .bf-caja-monto { margin-top: auto; font-size: 24px; font-weight: 900; line-height: 1.15; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+    .bf-caja.semana .bf-caja-monto { font-size: 27px; }
+    .bf-caja.mes .bf-caja-monto { font-size: 31px; }
+    .bf-caja-rango { font-size: 12.5px; font-weight: 600; opacity: .9; }
+    .bf-caja-pagos, .bf-caja-parte { font-size: 12.5px; font-weight: 800; }
+    .bf-barra { height: 7px; overflow: hidden; border-radius: 999px; background: rgba(0, 0, 0, .08); }
+    [data-theme="dark"] .bf-barra { background: rgba(255, 255, 255, .1); }
+    .bf-barra span { display: block; width: 0; height: 100%; border-radius: inherit; background: currentColor; transition: width .9s cubic-bezier(.2, .8, .2, 1); }
+
+    /* ‹ periodo › en cada caja y en el año */
+    .bf-filtro { display: flex; flex-direction: column; align-items: stretch; gap: 2px; min-width: 0; }
+    .bf-nav { display: flex; align-items: center; gap: 4px; padding: 3px; border: 1px solid rgba(0, 0, 0, .08); border-radius: 10px; background: var(--bf-nav); }
+    [data-theme="dark"] .bf-nav { border-color: rgba(255, 255, 255, .1); }
+    .bf-nav-btn {
+        flex: none;
+        display: grid;
+        place-items: center;
+        width: 34px;
+        height: 32px;
+        padding: 0;
+        border: 0;
+        border-radius: 8px;
+        font: inherit;
+        font-size: 21px;
+        font-weight: 900;
+        line-height: 1;
+        color: inherit;
+        background: transparent;
+        cursor: pointer;
+    }
+    .bf-nav-btn:hover:not(:disabled), .bf-nav-btn:focus-visible { background: var(--bf-nav-hover); box-shadow: 0 1px 4px rgba(0, 0, 0, .16); outline: none; }
+    .bf-nav-btn:disabled { opacity: .28; cursor: default; }
+    .bf-nav-texto { flex: 1; min-width: 0; overflow: hidden; font-size: 13px; font-weight: 900; text-align: center; white-space: nowrap; text-overflow: ellipsis; }
+    .bf-volver { align-self: center; padding: 2px 8px; border: 0; border-radius: 6px; font: inherit; font-size: 11.5px; font-weight: 800; color: inherit; text-decoration: underline; background: none; cursor: pointer; }
+    .bf-volver:hover, .bf-volver:focus-visible { background: rgba(0, 0, 0, .06); outline: none; }
+
+    /* Entrada al abrir y al cambiar de periodo */
+    .bf.animando .bf-resumen > *, .bf.animando .bf-caja { animation: bf-entrar .5s ease-out both; }
+    .bf.animando .bf-caja.dia { animation-delay: 1.1s; }
+    .bf.animando .bf-caja.semana { animation-delay: 1.2s; }
+    .bf.animando .bf-caja.mes { animation-delay: 1.3s; }
+    .bf-cambio { animation: bf-cambio .35s ease-out; }
+    @keyframes bf-entrar { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+    @keyframes bf-cambio { from { opacity: .35; transform: translateY(6px); } }
+
+    /* Histórico mensual: debajo de la bóveda, como estaba */
+    .historico-cuerpo { padding: 0 22px 22px; }
+    .historico-cuerpo > h4 { margin: 0 0 12px; font-size: 15px; font-weight: 900; color: var(--text-main); }
     .historico-barra { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 18px; }
-    .historico-barra form { margin-left: auto; }
     .historico-pestana {
         min-height: 40px;
         padding: 8px 16px;
@@ -86,47 +367,177 @@
         from { opacity: 0; transform: translateY(-26px) scale(.94); }
         to { opacity: 1; transform: none; }
     }
+
+    @media (max-width: 1100px) {
+        .bf-cajas { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+        .bf-caja.dia, .bf-caja.semana, .bf-caja.mes { min-height: 0; }
+        .bf-caja .bf-caja-monto, .bf-caja.semana .bf-caja-monto, .bf-caja.mes .bf-caja-monto { font-size: 22px; }
+    }
     @media (max-width: 900px) {
+        .bf-boveda { grid-template-columns: minmax(0, 1fr); gap: 24px; padding: 28px 20px 22px; }
+        .bf-safe { width: 170px; }
         .historico-por-mes { grid-template-columns: minmax(0, 1fr); }
         .historico-lienzo { height: 280px; }
     }
     @media (max-width: 720px) {
-        .historico-renglon > summary { padding: 12px 16px; }
-        .historico-cuerpo { padding: 4px 16px 16px; }
+        .bf-cabecera { padding: 16px 16px 12px; }
+        .bf-lado { width: 100%; }
+        .bf-boveda { margin: 0 12px 16px; padding: 22px 14px 16px; }
+        .bf-resumen-cab .bf-filtro { flex: 1 1 100%; }
+        .bf-resumen-cab .bf-nav { width: 100%; }
+        .bf-cajas { grid-template-columns: minmax(0, 1fr); }
+        .bf-caja .bf-caja-monto, .bf-caja.semana .bf-caja-monto, .bf-caja.mes .bf-caja-monto { font-size: 26px; }
+        .bf-abrir { flex: 1 1 100%; }
+        .historico-cuerpo { padding: 0 12px 16px; }
         .cajitas { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     }
     @media (prefers-reduced-motion: reduce) {
+        .bf *, .bf *::before, .bf *::after { animation: none !important; transition: none !important; }
         #caja.estrenada { animation: none; }
     }
 </style>
 
-<details class="rank-card historico-renglon" id="historico-mensual"{% if caja_abierta %} open{% endif %}>
-    <summary>
-        <span aria-hidden="true">🔐</span>
-        <span>Histórico mensual<small>Caja, mes a mes y año por año</small></span>
-    </summary>
-    <div class="historico-cuerpo">
-    {% if not caja_abierta %}
-        <form method="post" action="{% url 'econotec:admin_caja_abrir' %}" class="historico-clave">
-            {% csrf_token %}
-            <input type="hidden" name="filtros" value="{{ request.GET.urlencode }}">
-            <div>
-                <label for="historico-clave" class="form-label">Ingrese su contraseña de administrador</label>
-                <input type="password" name="password" id="historico-clave" class="form-input" autocomplete="current-password" required>
+<section class="bf" id="historico-mensual" aria-labelledby="bf-titulo">
+    <header class="bf-cabecera">
+        <span class="bf-sello" aria-hidden="true">🔐</span>
+        <div class="bf-titulos">
+            <h3 id="bf-titulo">Caja fuerte</h3>
+            <p>Histórico mensual: lo que entró en el día, la semana, el mes y el año.</p>
+        </div>
+        <div class="bf-lado">
+        {% if caja_abierta %}
+            <span class="bf-estado abierta" role="status">🔓 Abierta · se cierra en <span data-bf-reloj>{{ caja_minutos }}:00</span></span>
+            <form method="post" action="{% url 'econotec:admin_caja_cerrar' %}">
+                {% csrf_token %}
+                <input type="hidden" name="filtros" value="{{ historico_filtros }}">
+                <button type="submit" class="bf-cerrar">🔒 Cerrar Caja</button>
+            </form>
+        {% else %}
+            <span class="bf-estado">🔒 Cerrada</span>
+        {% endif %}
+        </div>
+    </header>
+
+    <div class="bf-boveda">
+        <div class="bf-safe{% if caja_abierta %} abierta sin-animar{% endif %}" data-bf-safe aria-hidden="true">
+            <div class="bf-safe-cuerpo">
+                <div class="bf-safe-hueco">
+                    <span class="bf-safe-repisa"></span>
+                    <span class="bf-safe-lingotes"><i></i><i></i></span>
+                    <span class="bf-safe-billetes"></span>
+                    <span class="bf-safe-monedas"><i></i><i></i><i></i></span>
+                </div>
+                <div class="bf-safe-puerta">
+                    <span class="bf-safe-led"></span>
+                    <span class="bf-safe-rueda"><span></span></span>
+                </div>
+                <span class="bf-safe-bisagra arriba"></span>
+                <span class="bf-safe-bisagra abajo"></span>
             </div>
-            <button type="submit" class="btn btn-primary">Ver Caja</button>
-        </form>
-    {% else %}
+            <span class="bf-safe-pata izq"></span>
+            <span class="bf-safe-pata der"></span>
+        </div>
+
+        <div class="bf-lado-derecho">
+        {% if not caja_abierta %}
+            <form method="post" action="{% url 'econotec:admin_caja_abrir' %}" class="bf-form" data-bf-form>
+                {% csrf_token %}
+                <input type="hidden" name="filtros" value="{{ request.GET.urlencode }}">
+                <span class="bf-form-titulo">Caja {{ hoy.year }}</span>
+                <p class="bf-form-grande">La caja está cerrada</p>
+                <p class="bf-form-texto">Escribe la contraseña con la que entras al sistema para ver los montos.</p>
+                <label for="historico-clave">Ingrese su contraseña de administrador</label>
+                <div class="bf-fila">
+                    <input type="password" name="password" id="historico-clave" class="form-input" autocomplete="current-password" required>
+                    <button type="submit" class="bf-abrir">🔓 Abrir caja</button>
+                </div>
+                <small>Por seguridad se cierra sola a los {{ caja_minutos }} minutos, y se bloquea un rato después de {{ caja_intentos }} intentos fallidos.</small>
+            </form>
+        {% else %}
+            <div class="bf-resumen" data-bf-resumen>
+                <div class="bf-resumen-cab">
+                    <span class="bf-etiqueta">🏦 Entró a la caja · <span data-bf-anio-titulo>{{ hoy.year }}</span></span>
+                    <div class="bf-filtro" data-bf-filtro="anio">
+                        <div class="bf-nav">
+                            <button type="button" class="bf-nav-btn" data-bf-paso="-1" aria-label="Año anterior">‹</button>
+                            <span class="bf-nav-texto" data-bf-nombre>Este año</span>
+                            <button type="button" class="bf-nav-btn" data-bf-paso="1" aria-label="Año siguiente">›</button>
+                        </div>
+                        <button type="button" class="bf-volver" data-bf-volver hidden>Volver a este año</button>
+                    </div>
+                </div>
+                <div class="bf-monto" data-bf-monto="anio" aria-live="polite">$0,00</div>
+                <div class="bf-rango" data-bf-rango="anio"></div>
+                <ul class="bf-chips">
+                    <li>🧾 <span data-bf-pagos="anio">0 pagos registrados</span></li>
+                    <li>📅 Promedio por mes: <span data-bf-promedio>$0,00</span></li>
+                    <li>🕒 Contado a las {{ caja_fuerte_contado|time:"H:i" }}</li>
+                </ul>
+
+                <div class="bf-cajas">
+                    <article class="bf-caja dia" data-bf-caja="dia">
+                        <div class="bf-caja-cab"><span aria-hidden="true">🪙</span> Mini caja</div>
+                        <div class="bf-filtro" data-bf-filtro="dia">
+                            <div class="bf-nav">
+                                <button type="button" class="bf-nav-btn" data-bf-paso="-1" aria-label="Día anterior">‹</button>
+                                <span class="bf-nav-texto" data-bf-nombre>Hoy</span>
+                                <button type="button" class="bf-nav-btn" data-bf-paso="1" aria-label="Día siguiente">›</button>
+                            </div>
+                            <button type="button" class="bf-volver" data-bf-volver hidden>Volver a hoy</button>
+                        </div>
+                        <div class="bf-caja-monto" data-bf-monto="dia" aria-live="polite">$0,00</div>
+                        <div class="bf-caja-rango" data-bf-rango="dia"></div>
+                        <div class="bf-caja-pagos" data-bf-pagos="dia">0 pagos registrados</div>
+                        <div class="bf-barra"><span data-bf-barra="dia"></span></div>
+                        <div class="bf-caja-parte" data-bf-parte="dia">0% de la semana</div>
+                    </article>
+                    <article class="bf-caja semana" data-bf-caja="semana">
+                        <div class="bf-caja-cab"><span aria-hidden="true">💵</span> Caja mediana</div>
+                        <div class="bf-filtro" data-bf-filtro="semana">
+                            <div class="bf-nav">
+                                <button type="button" class="bf-nav-btn" data-bf-paso="-1" aria-label="Semana anterior">‹</button>
+                                <span class="bf-nav-texto" data-bf-nombre>Esta semana</span>
+                                <button type="button" class="bf-nav-btn" data-bf-paso="1" aria-label="Semana siguiente">›</button>
+                            </div>
+                            <button type="button" class="bf-volver" data-bf-volver hidden>Volver a esta semana</button>
+                        </div>
+                        <div class="bf-caja-monto" data-bf-monto="semana" aria-live="polite">$0,00</div>
+                        <div class="bf-caja-rango" data-bf-rango="semana"></div>
+                        <div class="bf-caja-pagos" data-bf-pagos="semana">0 pagos registrados</div>
+                        <div class="bf-barra"><span data-bf-barra="semana"></span></div>
+                        <div class="bf-caja-parte" data-bf-parte="semana">0% del mes</div>
+                    </article>
+                    <article class="bf-caja mes" data-bf-caja="mes">
+                        <div class="bf-caja-cab"><span aria-hidden="true">💰</span> Caja grande</div>
+                        <div class="bf-filtro" data-bf-filtro="mes">
+                            <div class="bf-nav">
+                                <button type="button" class="bf-nav-btn" data-bf-paso="-1" aria-label="Mes anterior">‹</button>
+                                <span class="bf-nav-texto" data-bf-nombre>Este mes</span>
+                                <button type="button" class="bf-nav-btn" data-bf-paso="1" aria-label="Mes siguiente">›</button>
+                            </div>
+                            <button type="button" class="bf-volver" data-bf-volver hidden>Volver a este mes</button>
+                        </div>
+                        <div class="bf-caja-monto" data-bf-monto="mes" aria-live="polite">$0,00</div>
+                        <div class="bf-caja-rango" data-bf-rango="mes"></div>
+                        <div class="bf-caja-pagos" data-bf-pagos="mes">0 pagos registrados</div>
+                        <div class="bf-barra"><span data-bf-barra="mes"></span></div>
+                        <div class="bf-caja-parte" data-bf-parte="mes">0% del año</div>
+                    </article>
+                </div>
+            </div>
+            {{ caja_fuerte_datos|json_script:"caja-fuerte-datos" }}
+        {% endif %}
+        </div>
+    </div>
+
+    {% if caja_abierta %}
+    <div class="historico-cuerpo">
+        <h4>📅 Histórico mensual</h4>
         <div class="historico-barra">
             <div role="tablist" aria-label="Cómo ver la Caja" style="display: contents;">
                 <button type="button" class="historico-pestana" role="tab" id="pestana-por-mes" aria-controls="panel-por-mes" aria-selected="{% if historico_vista == 'mes' %}true{% else %}false{% endif %}" data-historico-pestana="por-mes">📅 Por mes</button>
                 <button type="button" class="historico-pestana" role="tab" id="pestana-por-anio" aria-controls="panel-por-anio" aria-selected="{% if historico_vista == 'anio' %}true{% else %}false{% endif %}" data-historico-pestana="por-anio">🔐 Por año</button>
             </div>
-            <form method="post" action="{% url 'econotec:admin_caja_cerrar' %}">
-                {% csrf_token %}
-                <input type="hidden" name="filtros" value="{{ historico_filtros }}">
-                <button type="submit" class="btn btn-secondary">🔒 Cerrar Caja</button>
-            </form>
         </div>
 
         <div id="panel-por-mes" role="tabpanel" aria-labelledby="pestana-por-mes"{% if historico_vista != 'mes' %} hidden{% endif %}>
@@ -196,23 +607,264 @@
 
             {% include 'includes/ranking_admin_caja.html' %}
         </div>
-    {% endif %}
     </div>
-</details>
+    {% endif %}
+</section>
 <script>
 document.addEventListener('DOMContentLoaded', function () {
     var renglon = document.getElementById('historico-mensual');
     if (!renglon) return;
+    var safe = renglon.querySelector('[data-bf-safe]');
+    var sinMovimiento = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
     // Los enlaces «🔐 Caja» y «Ver Caja» llegan aquí y dejan lista la contraseña.
     function abrirSiLoPiden() {
         if (window.location.hash !== '#historico-mensual') return;
-        renglon.open = true;
         var clave = document.getElementById('historico-clave');
-        if (clave) clave.focus();
+        if (clave) clave.focus({ preventScroll: true });
     }
     window.addEventListener('hashchange', abrirSiLoPiden);
     abrirSiLoPiden();
+
+    // Cerrada: mientras se revisa la contraseña la rueda gira y la luz parpadea.
+    var formulario = renglon.querySelector('[data-bf-form]');
+    if (formulario) {
+        formulario.addEventListener('submit', function () {
+            safe.classList.add('revisando');
+            formulario.querySelector('.bf-abrir').disabled = true;
+        });
+    }
+
+    var datosCaja = document.getElementById('caja-fuerte-datos');
+    if (datosCaja) iniciarCajaFuerte(JSON.parse(datosCaja.textContent));
+
+    function iniciarCajaFuerte(datos) {
+        var MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+        var DIAS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
+        var DIA = 86400000;
+        var dias = datos.dias;
+        var hoy = fecha(datos.hoy);
+        var claves = Object.keys(dias);
+        var primero = claves.length ? fecha(claves[0]) : hoy;
+        if (primero > hoy) primero = hoy;
+
+        function fecha(iso) {
+            var p = iso.split('-');
+            return new Date(+p[0], +p[1] - 1, +p[2]);
+        }
+        function iso(d) {
+            return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2);
+        }
+        function sumarDias(d, n) { return new Date(d.getFullYear(), d.getMonth(), d.getDate() + n); }
+        function lunes(d) { return sumarDias(d, -((d.getDay() + 6) % 7)); }
+        function dd(d) { return ('0' + d.getDate()).slice(-2) + '/' + ('0' + (d.getMonth() + 1)).slice(-2); }
+        function dinero(centavos) {
+            var valor = centavos / 100;
+            var partes = Math.abs(valor).toFixed(2).split('.');
+            return '$' + (valor < 0 ? '-' : '') + partes[0].replace(/\B(?=(\d{3})+(?!\d))/g, '.') + ',' + partes[1];
+        }
+        function pagos(n) { return n + (n === 1 ? ' pago registrado' : ' pagos registrados'); }
+        function sumar(desde, hasta) {
+            var total = 0, cuenta = 0;
+            for (var d = desde; d <= hasta; d = sumarDias(d, 1)) {
+                var fila = dias[iso(d)];
+                if (fila) { total += fila[0]; cuenta += fila[1]; }
+            }
+            return { total: total, pagos: cuenta };
+        }
+        function porcentaje(parte, todo) {
+            if (todo <= 0 || parte <= 0) return 0;
+            return Math.min(100, Math.round(parte * 100 / todo));
+        }
+
+        // Cada caja sabe su periodo, cómo moverse y contra qué se compara.
+        var periodos = {
+            dia: {
+                inicio: function (d) { return d; },
+                fin: function (d) { return d; },
+                mover: function (d, n) { return sumarDias(d, n); },
+                nombre: function (d) {
+                    var atras = Math.round((hoy - d) / DIA);
+                    if (atras === 0) return 'Hoy';
+                    if (atras === 1) return 'Ayer';
+                    return DIAS[d.getDay()].slice(0, 3) + ' ' + dd(d);
+                },
+                rango: function (d) { return DIAS[d.getDay()] + ' ' + dd(d) + '/' + d.getFullYear(); },
+                parte: function (d, suma) {
+                    var semana = sumar(lunes(d), sumarDias(lunes(d), 6));
+                    return { valor: porcentaje(suma.total, semana.total), texto: 'de la semana' };
+                }
+            },
+            semana: {
+                inicio: function (d) { return lunes(d); },
+                fin: function (d) { return sumarDias(lunes(d), 6); },
+                mover: function (d, n) { return sumarDias(lunes(d), 7 * n); },
+                nombre: function (d) {
+                    var atras = Math.round((lunes(hoy) - lunes(d)) / (7 * DIA));
+                    if (atras === 0) return 'Esta semana';
+                    if (atras === 1) return 'Semana pasada';
+                    return 'Semana del ' + dd(lunes(d));
+                },
+                rango: function (d) {
+                    var fin = sumarDias(lunes(d), 6);
+                    return 'del lunes ' + dd(lunes(d)) + ' al domingo ' + dd(fin) + '/' + fin.getFullYear();
+                },
+                parte: function (d) {
+                    // La semana cuenta en el mes donde cae su jueves, solo con sus días de ese mes.
+                    var jueves = sumarDias(lunes(d), 3);
+                    var mesInicio = new Date(jueves.getFullYear(), jueves.getMonth(), 1);
+                    var mesFin = new Date(jueves.getFullYear(), jueves.getMonth() + 1, 0);
+                    var desde = lunes(d) < mesInicio ? mesInicio : lunes(d);
+                    var hasta = sumarDias(lunes(d), 6) > mesFin ? mesFin : sumarDias(lunes(d), 6);
+                    return {
+                        valor: porcentaje(sumar(desde, hasta).total, sumar(mesInicio, mesFin).total),
+                        texto: 'de ' + MESES[jueves.getMonth()]
+                    };
+                }
+            },
+            mes: {
+                inicio: function (d) { return new Date(d.getFullYear(), d.getMonth(), 1); },
+                fin: function (d) { return new Date(d.getFullYear(), d.getMonth() + 1, 0); },
+                mover: function (d, n) { return new Date(d.getFullYear(), d.getMonth() + n, 1); },
+                nombre: function (d) {
+                    var atras = (hoy.getFullYear() - d.getFullYear()) * 12 + hoy.getMonth() - d.getMonth();
+                    if (atras === 0) return 'Este mes';
+                    if (atras === 1) return 'Mes pasado';
+                    return MESES[d.getMonth()] + ' ' + d.getFullYear();
+                },
+                rango: function (d) { return MESES[d.getMonth()] + ' ' + d.getFullYear(); },
+                parte: function (d, suma) {
+                    var anio = sumar(new Date(d.getFullYear(), 0, 1), new Date(d.getFullYear(), 11, 31));
+                    return { valor: porcentaje(suma.total, anio.total), texto: 'del año' };
+                }
+            },
+            anio: {
+                inicio: function (d) { return new Date(d.getFullYear(), 0, 1); },
+                fin: function (d) { return new Date(d.getFullYear(), 11, 31); },
+                mover: function (d, n) { return new Date(d.getFullYear() + n, 0, 1); },
+                nombre: function (d) {
+                    var atras = hoy.getFullYear() - d.getFullYear();
+                    if (atras === 0) return 'Este año';
+                    if (atras === 1) return 'Año pasado';
+                    return String(d.getFullYear());
+                },
+                rango: function (d) { return 'Del 1 de enero al 31 de diciembre de ' + d.getFullYear(); },
+                parte: null
+            }
+        };
+        var elegido = { dia: hoy, semana: hoy, mes: hoy, anio: hoy };
+
+        function campo(nombre, clave) { return renglon.querySelector('[data-bf-' + nombre + '="' + clave + '"]'); }
+
+        function contarHasta(elemento, centavos, ms) {
+            var inicio = null;
+            function paso(ahora) {
+                if (inicio === null) inicio = ahora;
+                var avance = Math.min((ahora - inicio) / ms, 1);
+                elemento.textContent = dinero(Math.round(centavos * (1 - Math.pow(1 - avance, 3))));
+                if (avance < 1) requestAnimationFrame(paso);
+            }
+            requestAnimationFrame(paso);
+        }
+
+        function pintar(clave, opciones) {
+            opciones = opciones || {};
+            var periodo = periodos[clave];
+            var d = elegido[clave];
+            var suma = sumar(periodo.inicio(d), periodo.fin(d));
+            var filtro = renglon.querySelector('[data-bf-filtro="' + clave + '"]');
+            var botones = filtro.querySelectorAll('[data-bf-paso]');
+            filtro.querySelector('[data-bf-nombre]').textContent = periodo.nombre(d);
+            botones[0].disabled = periodo.fin(periodo.mover(d, -1)) < primero;
+            botones[1].disabled = periodo.inicio(periodo.mover(d, 1)) > hoy;
+            filtro.querySelector('[data-bf-volver]').hidden = periodo.inicio(d) <= hoy && periodo.fin(d) >= hoy;
+
+            var monto = campo('monto', clave);
+            if (opciones.contar) contarHasta(monto, suma.total, opciones.contar);
+            else monto.textContent = dinero(suma.total);
+            campo('rango', clave).textContent = periodo.rango(d);
+            campo('pagos', clave).textContent = pagos(suma.pagos);
+
+            if (periodo.parte) {
+                var parte = periodo.parte(d, suma);
+                var barra = campo('barra', clave);
+                if (opciones.barraDespues) {
+                    setTimeout(function () { barra.style.width = parte.valor + '%'; }, opciones.barraDespues);
+                } else {
+                    barra.style.width = parte.valor + '%';
+                }
+                campo('parte', clave).textContent = parte.valor + '% ' + parte.texto;
+            } else {
+                // Año: el promedio por mes cuenta hasta el mes de hoy si es el año en curso.
+                var meses = d.getFullYear() === hoy.getFullYear() ? hoy.getMonth() + 1 : 12;
+                renglon.querySelector('[data-bf-promedio]').textContent = dinero(Math.round(suma.total / meses));
+                renglon.querySelector('[data-bf-anio-titulo]').textContent = d.getFullYear();
+            }
+
+            if (opciones.marcar) {
+                var caja = clave === 'anio' ? renglon.querySelector('[data-bf-resumen]') : renglon.querySelector('[data-bf-caja="' + clave + '"]');
+                var objetivos = clave === 'anio' ? [monto, campo('rango', clave)] : [caja];
+                objetivos.forEach(function (el) {
+                    el.classList.remove('bf-cambio');
+                    void el.offsetWidth;
+                    el.classList.add('bf-cambio');
+                });
+            }
+        }
+
+        Object.keys(periodos).forEach(function (clave) {
+            var filtro = renglon.querySelector('[data-bf-filtro="' + clave + '"]');
+            filtro.querySelectorAll('[data-bf-paso]').forEach(function (boton) {
+                boton.addEventListener('click', function () {
+                    elegido[clave] = periodos[clave].mover(elegido[clave], +boton.dataset.bfPaso);
+                    pintar(clave, { marcar: true });
+                });
+            });
+            filtro.querySelector('[data-bf-volver]').addEventListener('click', function () {
+                elegido[clave] = hoy;
+                pintar(clave, { marcar: true });
+            });
+        });
+
+        // La puerta se abre una vez por cada vez que se pone la contraseña; al cambiar de mes en el filtro ya queda abierta.
+        var llave = 'econotec-caja-fuerte-' + datos.abierta_hasta;
+        var yaVista = false;
+        try { yaVista = sessionStorage.getItem(llave) === '1'; sessionStorage.setItem(llave, '1'); } catch (e) {}
+
+        if (sinMovimiento || yaVista) {
+            Object.keys(periodos).forEach(function (clave) { pintar(clave); });
+            requestAnimationFrame(function () { safe.classList.remove('sin-animar'); });
+        } else {
+            safe.classList.remove('abierta');
+            renglon.classList.add('animando');
+            Object.keys(periodos).forEach(function (clave) { pintar(clave, { barraDespues: 1500 }); });
+            campo('monto', 'anio').textContent = dinero(0);
+            requestAnimationFrame(function () {
+                safe.classList.remove('sin-animar');
+                safe.classList.add('revisando');
+                setTimeout(function () {
+                    safe.classList.remove('revisando');
+                    safe.classList.add('abierta');
+                    pintar('anio', { contar: 1500 });
+                }, 650);
+            });
+            setTimeout(function () { renglon.classList.remove('animando'); }, 2400);
+        }
+
+        // Reloj: a los minutos se cierra sola y la página vuelve a pedir la contraseña.
+        var reloj = renglon.querySelector('[data-bf-reloj]');
+        var cierre = Date.now() + datos.cierra_en * 1000;
+        function tic() {
+            var quedan = Math.max(0, Math.round((cierre - Date.now()) / 1000));
+            reloj.textContent = Math.floor(quedan / 60) + ':' + ('0' + quedan % 60).slice(-2);
+            if (quedan <= 0) {
+                window.location.reload();
+                return;
+            }
+            setTimeout(tic, 1000);
+        }
+        tic();
+    }
 
     var lienzo = document.getElementById('historico-barras');
     if (!lienzo) return;
@@ -294,7 +946,6 @@ document.addEventListener('DOMContentLoaded', function () {
             dibujarGrafico();
         });
     });
-    renglon.addEventListener('toggle', dibujarGrafico);
     new MutationObserver(function () {
         if (grafico) aplicarTema();
     }).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });

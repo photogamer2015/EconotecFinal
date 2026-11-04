@@ -982,6 +982,9 @@
     <a href="{% url 'econotec:admin_export_reporte' %}?ano={{ year }}&mes={{ month }}" class="btn btn-success">📊 Reporte mes</a>
 </form>
 
+<!-- Caja fuerte: al inicio, debajo del filtro del mes -->
+{% if mostrar_valores_monetarios %}{% include 'includes/historico_mensual.html' %}{% endif %}
+
 <!-- Productividad de salidas y perfiles -->
 <div class="productivity-panel">
     <div>
@@ -1490,7 +1493,6 @@
     </div>
 </div>
 
-{% if mostrar_valores_monetarios %}{% include 'includes/historico_mensual.html' %}{% endif %}
 
 <!-- USUARIOS EN LÍNEA -->
 <div class="breakdown-grid" style="margin-top: 22px;">

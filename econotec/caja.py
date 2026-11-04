@@ -322,6 +322,22 @@ def historico_mensual(movimientos=None, hoy=None):
     )['meses']
 
 
+def dinero_por_dia(movimientos):
+    """
+    Lo que entró cada día, en centavos, y cuántos pagos fueron: la caja fuerte
+    del Registro suma con esto el día, la semana, el mes y el año que se elija.
+    """
+    dias = {}
+    for movimiento in movimientos:
+        clave = movimiento['fecha'].isoformat()
+        centavos, pagos = dias.get(clave, (0, 0))
+        dias[clave] = (
+            centavos + int(movimiento['monto'] * 100),
+            pagos + (1 if movimiento['monto'] > 0 else 0),
+        )
+    return {clave: list(valor) for clave, valor in sorted(dias.items())}
+
+
 def cajas_grandes():
     """
     Las cajas en orden. Cada una guarda desde su año hasta que empiece la

@@ -28,7 +28,7 @@ from .forms import EgresoForm
 from .busqueda import filtrar_objetos_normalizado, texto_salida_busqueda, total_resultados
 from .bitacora import construir_bitacora_usuario
 from .caja import (
-    caja_del_periodo, caja_grande, caja_por_comprar, cajas_grandes, cuadres_del_periodo,
+    caja_del_periodo, caja_grande, caja_por_comprar, cajas_grandes, cuadres_del_periodo, dinero_por_dia,
     historico_mensual, movimientos_de_dinero, ocultar_guardado,
 )
 from .date_filters import aplicar_rango_fecha, contexto_rango_fecha, obtener_rango_fecha
@@ -419,6 +419,8 @@ def _ranking_admin_registro(alcance, year, month, tecnico_filtro):
 
 # La contraseña abre la Caja por este tiempo; luego se vuelve a pedir.
 CAJA_ABIERTA_SEGUNDOS = 10 * 60
+# Intentos de contraseña cada 15 minutos antes de bloquear la Caja un rato.
+CAJA_INTENTOS = 10
 
 
 def _caja_abierta(request):
@@ -473,6 +475,14 @@ def _historico_registro(request, year, month):
         },
         'historico_vista': 'anio' if request.GET.get('vista') == 'anio' else 'mes',
         'historico_filtros': filtros.urlencode(),
+        # La caja fuerte de arriba suma en el navegador el día, la semana, el mes y el año.
+        'caja_fuerte_datos': {
+            'dias': dinero_por_dia(movimientos),
+            'hoy': hoy.isoformat(),
+            'cierra_en': max(0, int(request.session.get('caja_abierta_hasta', 0) - timezone.now().timestamp())),
+            'abierta_hasta': int(request.session.get('caja_abierta_hasta', 0)),
+        },
+        'caja_fuerte_contado': timezone.localtime(),
     }
 
 
@@ -715,6 +725,8 @@ def admin_dashboard(request):
         **contexto_ranking,
         **(_historico_registro(request, year, month) if caja_abierta else {}),
         'caja_abierta': caja_abierta,
+        'caja_minutos': CAJA_ABIERTA_SEGUNDOS // 60,
+        'caja_intentos': CAJA_INTENTOS,
         'mostrar_valores_monetarios': mostrar_valores_monetarios,
         'year': year,
         'month': month,
@@ -778,7 +790,7 @@ def admin_caja_abrir(request):
     if not puede_ver_valores_ranking(request.user):
         messages.error(request, 'La Caja es solo del administrador.')
         return redirect('econotec:admin_dashboard')
-    if not consumir_intento(f'caja:{request.user.pk}', 10):
+    if not consumir_intento(f'caja:{request.user.pk}', CAJA_INTENTOS):
         messages.error(request, 'Demasiados intentos. Espera unos minutos y vuelve a probar.')
     elif request.user.check_password(request.POST.get('password', '')):
         request.session['caja_abierta_hasta'] = timezone.now().timestamp() + CAJA_ABIERTA_SEGUNDOS
