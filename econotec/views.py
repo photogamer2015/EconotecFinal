@@ -55,7 +55,7 @@ from .emails import (
 )
 from .pagination import paginar_resultados
 from .sonidos import programar_sonido
-from .permisos import admin_requerido, tecnico_requerido, es_admin, es_asesor, es_tecnico
+from .permisos import admin_requerido, tecnico_requerido, es_admin, es_asesor, es_tecnico, puede_gestionar_inventario
 from .gamificacion import (
     PUNTOS_POR_ESTADO_SALIDA,
     PUNTOS_VENTA_PRODUCTO,
@@ -1030,7 +1030,7 @@ def _texto_inventario_item_busqueda(item):
 
 
 def _puede_gestionar_inventario(user):
-    return es_admin(user) or es_tecnico(user)
+    return puede_gestionar_inventario(user)
 
 
 def _puede_notificar_admin_inventario(user):
@@ -1438,7 +1438,7 @@ def inventario_registrar(request, sede, categoria, tipo):
 @login_required
 def inventario_editar(request, codigo):
     if not _puede_gestionar_inventario(request.user):
-        messages.error(request, 'Solo admin y técnicos pueden editar inventario.')
+        messages.error(request, 'Solo admin, técnicos y la asistente de caja pueden editar inventario.')
         return redirect('econotec:inventario_detalle_item', codigo=codigo)
 
     item = get_object_or_404(InventarioItem, codigo=codigo)
@@ -1498,7 +1498,7 @@ def inventario_detalle_item(request, codigo):
 @require_POST
 def inventario_actualizar_cantidad(request, codigo):
     if not _puede_gestionar_inventario(request.user):
-        messages.error(request, 'Solo admin y técnicos pueden actualizar inventario.')
+        messages.error(request, 'Solo admin, técnicos y la asistente de caja pueden actualizar inventario.')
         return redirect('econotec:inventario_detalle_item', codigo=codigo)
 
     accion = (request.POST.get('accion') or '').strip().lower()
@@ -1538,7 +1538,7 @@ def inventario_actualizar_cantidad(request, codigo):
 @require_POST
 def inventario_eliminar(request, codigo):
     if not _puede_gestionar_inventario(request.user):
-        messages.error(request, 'Solo admin y técnicos pueden eliminar inventario.')
+        messages.error(request, 'Solo admin, técnicos y la asistente de caja pueden eliminar inventario.')
         return redirect('econotec:inventario_detalle_item', codigo=codigo)
 
     item = get_object_or_404(InventarioItem, codigo=codigo)

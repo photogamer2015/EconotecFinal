@@ -338,6 +338,18 @@ def dinero_por_dia(movimientos):
     return {clave: list(valor) for clave, valor in sorted(dias.items())}
 
 
+def egresos_por_dia():
+    """
+    Egresos de cada día, en centavos: la caja fuerte los resta de lo que entró
+    en el día, la semana, el mes y el año que se elija.
+    """
+    dias = {}
+    for fecha, monto in _egresos():
+        clave = fecha.isoformat()
+        dias[clave] = dias.get(clave, 0) + int(monto * 100)
+    return dict(sorted(dias.items()))
+
+
 def cajas_grandes():
     """
     Las cajas en orden. Cada una guarda desde su año hasta que empiece la

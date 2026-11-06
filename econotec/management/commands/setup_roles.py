@@ -4,6 +4,8 @@ Crea los grupos de permisos del sistema Econotec:
 - Administradores: acceso TOTAL al sistema (incluye Reg. Administrativo)
 - Tecnicos: ingresos, salidas, clientes e historial
 - Asesores: solo gestión de pagos
+- Asesora - Asistente de caja: todo lo de la asesora + Seguimiento de pago,
+  egresos e inventario
 
 También crea las categorías de egreso por defecto.
 
@@ -14,11 +16,11 @@ from django.contrib.auth import get_user_model
 from django.core.management.base import BaseCommand
 
 
-GRUPOS = ['Administradores', 'Tecnicos', 'Asesores']
+GRUPOS = ['Administradores', 'Tecnicos', 'Asesores', 'Asesora - Asistente de caja']
 
 
 class Command(BaseCommand):
-    help = 'Crea los grupos Administradores, Tecnicos y Asesores en Econotec.'
+    help = 'Crea los grupos Administradores, Tecnicos, Asesores y Asesora - Asistente de caja en Econotec.'
 
     def handle(self, *args, **kwargs):
         for nombre in GRUPOS:
@@ -67,6 +69,8 @@ class Command(BaseCommand):
         self.stdout.write('  • Administradores → acceso TOTAL al sistema')
         self.stdout.write('  • Tecnicos        → ingresos, salidas, clientes, historial')
         self.stdout.write('  • Asesores        → solo módulo de pagos')
+        self.stdout.write('  • Asesora - Asistente de caja → lo de la asesora + Seguimiento de pago,')
+        self.stdout.write('                                  egresos e inventario')
         self.stdout.write('═══════════════════════════════════════════════════════════════')
         self.stdout.write('')
         self.stdout.write(

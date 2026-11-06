@@ -29,6 +29,7 @@ from .busqueda import filtrar_objetos_normalizado, texto_salida_busqueda, total_
 from .bitacora import construir_bitacora_usuario
 from .caja import (
     caja_del_periodo, caja_grande, caja_por_comprar, cajas_grandes, cuadres_del_periodo, dinero_por_dia,
+    egresos_por_dia,
     historico_mensual, movimientos_de_dinero, ocultar_guardado,
 )
 from .date_filters import aplicar_rango_fecha, contexto_rango_fecha, obtener_rango_fecha
@@ -39,7 +40,10 @@ from .models import (
     NotificacionCambioAdmin, SEDES_EQUIPOS, VentaInventarioItem,
 )
 from .pagination import paginar_resultados
-from .permisos import GRUPOS_TECNICO, admin_requerido, es_admin, puede_ver_valores_ranking, tecnico_requerido
+from .permisos import (
+    GRUPO_ASISTENTE_CAJA, GRUPOS_TECNICO, admin_requerido, es_admin, puede_ver_valores_ranking,
+    tecnico_requerido,
+)
 from .seguridad import consumir_intento
 
 
@@ -478,6 +482,8 @@ def _historico_registro(request, year, month):
         # La caja fuerte de arriba suma en el navegador el día, la semana, el mes y el año.
         'caja_fuerte_datos': {
             'dias': dinero_por_dia(movimientos),
+            # Los egresos se restan de lo que entró: «− Egresos · Queda» en cada caja.
+            'egresos': egresos_por_dia(),
             'hoy': hoy.isoformat(),
             'cierra_en': max(0, int(request.session.get('caja_abierta_hasta', 0) - timezone.now().timestamp())),
             'abierta_hasta': int(request.session.get('caja_abierta_hasta', 0)),
@@ -2430,7 +2436,9 @@ def _obtener_estadisticas_gamificacion():
     from .views import puntaje_tecnico
 
     stats = []
-    usuarios = User.objects.filter(is_active=True, groups__name__in=['Tecnicos', 'Asesores']).distinct()
+    usuarios = User.objects.filter(
+        is_active=True, groups__name__in=['Tecnicos', 'Asesores', GRUPO_ASISTENTE_CAJA],
+    ).distinct()
     
     for u in usuarios:
         # Mismos puntos y nivel que Mi perfil (gamificacion.PUNTOS_POR_ESTADO_SALIDA).
@@ -2472,7 +2480,7 @@ def admin_perfiles_reiniciar(request):
         return redirect('econotec:admin_dashboard')
         
     ahora = timezone.now()
-    usuarios = User.objects.filter(groups__name__in=['Tecnicos', 'Asesores']).distinct()
+    usuarios = User.objects.filter(groups__name__in=['Tecnicos', 'Asesores', GRUPO_ASISTENTE_CAJA]).distinct()
     for u in usuarios:
         act, created = UsuarioActividad.objects.get_or_create(user=u)
         act.fecha_reinicio_perfil = ahora

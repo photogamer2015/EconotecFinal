@@ -24,7 +24,9 @@ from .emails import enviar_correo_abono_seguro
 from .forms import AbonoForm, EgresoSeguimientoForm, ValorAcordadoPagoForm
 from .models import SEDES_EQUIPOS, Abono, IngresoEquipo
 from .pagination import paginar_resultados
-from .permisos import admin_requerido, tecnico_requerido, asesor_requerido
+from .permisos import (
+    admin_requerido, asesor_requerido, es_asesor, seguimiento_pago_requerido, tecnico_requerido,
+)
 from .seguimiento_pago import (
     EQUIPO, PRODUCTO, TOTAL, TIPOS, etiqueta_semana, fecha_larga, fin_semana, hoja_semana,
     inicio_semana, pestanas_semanas, saldo_semana, texto_cantidades, titulo_semana,
@@ -340,7 +342,7 @@ def pagos_export(request):
 # Seguimiento de pago (hoja semanal, solo admin)
 # ═════════════════════════════════════════════════════════════════
 
-@admin_requerido
+@seguimiento_pago_requerido
 def seguimiento_pago(request):
     """
     Pagos de una semana (?semana=AAAA-MM-DD, cualquier día de ella; la actual
@@ -400,9 +402,11 @@ def seguimiento_pago(request):
     caja['disponible_texto'] = _dinero(caja['disponible'])
     if form_egreso is None:
         # Fecha sugerida: hoy si cae en la semana abierta; si no, el día más cercano de ella.
-        form_egreso = EgresoSeguimientoForm(
-            initial={'fecha': min(max(hoy, lunes), fin_semana(lunes))}, semana=lunes,
-        )
+        inicial = {'fecha': min(max(hoy, lunes), fin_semana(lunes))}
+        if es_asesor(request.user):
+            # La asistente de caja aplica sus propios egresos: se propone ella.
+            inicial['asesora'] = request.user.pk
+        form_egreso = EgresoSeguimientoForm(initial=inicial, semana=lunes)
 
     return render(request, 'pagos/seguimiento.html', {
         **hoja,
@@ -438,7 +442,7 @@ def _dinero(valor):
     return f'−{dinero_signo(-valor)}' if valor < 0 else dinero_signo(valor)
 
 
-@admin_requerido
+@seguimiento_pago_requerido
 def seguimiento_pago_equipo(request):
     """Equipo de ?sede=guayaquil|quito&numero=N, para confirmar el de un repuesto."""
     sede = (request.GET.get('sede') or '').strip()
@@ -459,7 +463,7 @@ def seguimiento_pago_equipo(request):
     })
 
 
-@admin_requerido
+@seguimiento_pago_requerido
 def seguimiento_pago_saldo(request):
     """Saldo disponible de la semana de ?fecha=AAAA-MM-DD, para el formulario de egreso."""
     try:
