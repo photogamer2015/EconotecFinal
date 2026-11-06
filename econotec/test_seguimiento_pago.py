@@ -984,3 +984,89 @@ class EgresoSeguimientoTests(TestCase):
         self.assertContains(response, '<th>Forma de pago</th>', html=True)
         self.assertContains(response, 'Transferencia · Banco Pichincha')
         self.assertContains(response, f'Repuesto para {self.equipo.codigo_equipo} · María Loor')
+
+    def test_resta_en_todo_el_registro_administrativo_y_la_caja(self):
+        """Un egreso de aquí resta lo mismo en el Registro, la Caja, el Histórico y el reporte."""
+        import json
+        from io import BytesIO
+
+        import openpyxl
+
+        from .caja import caja_del_periodo
+
+        def foto():
+            self.client.force_login(self.admin)
+            registro = self.client.get(reverse('econotec:admin_dashboard'), {'ano': '2026', 'mes': '10'})
+            self.client.post(reverse('econotec:admin_caja_abrir'), {'password': 'adminpass123'})
+            abierta = self.client.get(reverse('econotec:admin_dashboard'), {'ano': '2026', 'mes': '10'})
+            self.assertTrue(abierta.context['caja_abierta'])
+            octubre = next(m for m in abierta.context['historico_meses'] if m['mes'] == date(2026, 10, 1))
+            reporte = self.client.get(reverse('econotec:admin_export_reporte'), {'ano': '2026', 'mes': '10'})
+            hoja = openpyxl.load_workbook(BytesIO(reporte.content)).active
+            filas = {fila[0]: fila[1] for fila in hoja.iter_rows(values_only=True) if fila[0]}
+            caja_mes = caja_del_periodo('2026-10-01', '2026-10-31')
+            # Caja fuerte: lo que entró y los egresos de la semana del 12 al 18 de octubre.
+            fuerte = abierta.context['caja_fuerte_datos']
+            en_semana = lambda clave: '2026-10-12' <= clave <= '2026-10-18'
+            fuerte_entro = sum(v[0] for k, v in fuerte['dias'].items() if en_semana(k))
+            fuerte_egresos = sum(v for k, v in fuerte['egresos'].items() if en_semana(k))
+            return {
+                'caja_fuerte_semana_entro': Decimal(fuerte_entro) / 100,
+                'caja_fuerte_semana_egresos': Decimal(fuerte_egresos) / 100,
+                'caja_fuerte_semana_queda': Decimal(fuerte_entro - fuerte_egresos) / 100,
+                'caja_fuerte_html': abierta.content.decode(),
+                'egresos_mes': registro.context['egresos_total'],
+                'utilidad_mes': registro.context['utilidad'],
+                'grafico_octubre': json.loads(registro.context['chart_tendencia_egresos'])[9],
+                'caja_mes_egresos': caja_mes['egresos'],
+                'caja_mes_guardado': caja_mes['saldo_final'],
+                'caja_grande_egresos': abierta.context['caja']['egresos'],
+                'caja_grande_guardado': abierta.context['caja']['saldo_final'],
+                'historico_egresos': octubre['egresos'],
+                'historico_neto': octubre['neto'],
+                'reporte_egresos': Decimal(str(filas['TOTAL EGRESOS'])),
+                'reporte_utilidad': Decimal(str(filas['UTILIDAD DEL MES'])),
+                'cuadres': [c['titulo'] for c in abierta.context['cuadres'] if c['estado'] == 'diferencia'],
+            }
+
+        antes = foto()
+        response = self.registrar(
+            monto='40.00', categoria=self.repuestos.pk, repuesto_alcance='equipo',
+            repuesto_sede='guayaquil', repuesto_numero=self.equipo.numero_equipo,
+            metodo='mixto', monto_1='25.00', metodo_1='efectivo', monto_2='15.00', metodo_2='transferencia',
+            banco_2='pichincha',
+        )
+        self.assertEqual(response.status_code, 302)
+        despues = foto()
+
+        cuarenta = Decimal('40.00')
+        for clave in ('egresos_mes', 'caja_mes_egresos', 'caja_grande_egresos', 'historico_egresos', 'reporte_egresos',
+                      'caja_fuerte_semana_egresos'):
+            with self.subTest(suma=clave):
+                self.assertEqual(despues[clave] - antes[clave], cuarenta)
+        self.assertEqual(despues['grafico_octubre'] - antes['grafico_octubre'], 40.0)
+        for clave in ('utilidad_mes', 'caja_mes_guardado', 'caja_grande_guardado', 'historico_neto', 'reporte_utilidad',
+                      'caja_fuerte_semana_queda'):
+            with self.subTest(resta=clave):
+                self.assertEqual(antes[clave] - despues[clave], cuarenta)
+        # Todo sigue cuadrando: ningún cuadre queda con diferencia.
+        self.assertEqual(antes['cuadres'], [])
+        self.assertEqual(despues['cuadres'], [])
+        # Lo que entró a la caja fuerte no cambia: el egreso se ve aparte.
+        self.assertEqual(antes['caja_fuerte_semana_entro'], despues['caja_fuerte_semana_entro'])
+        for clave in ('dia', 'semana', 'mes', 'anio'):
+            self.assertIn(f'data-bf-queda="{clave}"', despues['caja_fuerte_html'])
+        # La hoja de la semana y la caja mediana de la caja fuerte quedan iguales.
+        saldo = saldo_semana(MIERCOLES)
+        self.assertEqual(saldo['disponible'], Decimal('110.00'))
+        self.assertEqual(despues['caja_fuerte_semana_entro'], saldo['recaudado'])
+        self.assertEqual(despues['caja_fuerte_semana_queda'], saldo['disponible'])
+
+    def test_egresos_por_dia_de_la_caja_fuerte(self):
+        from .caja import egresos_por_dia
+
+        Egreso.objects.create(fecha=LUNES, categoria=self.categoria, concepto='A', monto=Decimal('10.50'))
+        Egreso.objects.create(fecha=LUNES, categoria=self.categoria, concepto='B', monto=Decimal('0.25'))
+        Egreso.objects.create(fecha=DOMINGO, categoria=self.categoria, concepto='C', monto=Decimal('3.00'))
+
+        self.assertEqual(egresos_por_dia(), {'2026-10-12': 1075, '2026-10-18': 300})

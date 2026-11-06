@@ -260,6 +260,12 @@
     .bf-caja.mes .bf-caja-monto { font-size: 31px; }
     .bf-caja-rango { font-size: 12.5px; font-weight: 600; opacity: .9; }
     .bf-caja-pagos, .bf-caja-parte { font-size: 12.5px; font-weight: 800; }
+    /* − Egresos · Queda: lo que salió del periodo y lo que queda de lo que entró. */
+    .bf-caja-egresos { font-size: 12.5px; font-weight: 700; font-variant-numeric: tabular-nums; }
+    .bf-queda { font-size: 14.5px; font-weight: 700; color: var(--bf-rango); font-variant-numeric: tabular-nums; }
+    .bf-caja-egresos b, .bf-queda b { font-weight: 900; }
+    .bf-caja-egresos [data-bf-egresos-monto], .bf-queda [data-bf-egresos-monto],
+    .bf-caja-egresos b.negativo, .bf-queda b.negativo { color: var(--danger); }
     .bf-barra { height: 7px; overflow: hidden; border-radius: 999px; background: rgba(0, 0, 0, .08); }
     [data-theme="dark"] .bf-barra { background: rgba(255, 255, 255, .1); }
     .bf-barra span { display: block; width: 0; height: 100%; border-radius: inherit; background: currentColor; transition: width .9s cubic-bezier(.2, .8, .2, 1); }
@@ -468,6 +474,7 @@
                 </div>
                 <div class="bf-monto" data-bf-monto="anio" aria-live="polite">$0,00</div>
                 <div class="bf-rango" data-bf-rango="anio"></div>
+                <div class="bf-queda">💸 − Egresos <b data-bf-egresos-monto="anio">$0,00</b> · Queda <b data-bf-queda="anio">$0,00</b></div>
                 <ul class="bf-chips">
                     <li>🧾 <span data-bf-pagos="anio">0 pagos registrados</span></li>
                     <li>📅 Promedio por mes: <span data-bf-promedio>$0,00</span></li>
@@ -488,6 +495,7 @@
                         <div class="bf-caja-monto" data-bf-monto="dia" aria-live="polite">$0,00</div>
                         <div class="bf-caja-rango" data-bf-rango="dia"></div>
                         <div class="bf-caja-pagos" data-bf-pagos="dia">0 pagos registrados</div>
+                        <div class="bf-caja-egresos">− Egresos <b data-bf-egresos-monto="dia">$0,00</b> · Queda <b data-bf-queda="dia">$0,00</b></div>
                         <div class="bf-barra"><span data-bf-barra="dia"></span></div>
                         <div class="bf-caja-parte" data-bf-parte="dia">0% de la semana</div>
                     </article>
@@ -504,6 +512,7 @@
                         <div class="bf-caja-monto" data-bf-monto="semana" aria-live="polite">$0,00</div>
                         <div class="bf-caja-rango" data-bf-rango="semana"></div>
                         <div class="bf-caja-pagos" data-bf-pagos="semana">0 pagos registrados</div>
+                        <div class="bf-caja-egresos">− Egresos <b data-bf-egresos-monto="semana">$0,00</b> · Queda <b data-bf-queda="semana">$0,00</b></div>
                         <div class="bf-barra"><span data-bf-barra="semana"></span></div>
                         <div class="bf-caja-parte" data-bf-parte="semana">0% del mes</div>
                     </article>
@@ -520,6 +529,7 @@
                         <div class="bf-caja-monto" data-bf-monto="mes" aria-live="polite">$0,00</div>
                         <div class="bf-caja-rango" data-bf-rango="mes"></div>
                         <div class="bf-caja-pagos" data-bf-pagos="mes">0 pagos registrados</div>
+                        <div class="bf-caja-egresos">− Egresos <b data-bf-egresos-monto="mes">$0,00</b> · Queda <b data-bf-queda="mes">$0,00</b></div>
                         <div class="bf-barra"><span data-bf-barra="mes"></span></div>
                         <div class="bf-caja-parte" data-bf-parte="mes">0% del año</div>
                     </article>
@@ -643,8 +653,10 @@ document.addEventListener('DOMContentLoaded', function () {
         var DIAS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
         var DIA = 86400000;
         var dias = datos.dias;
+        // Egresos por día (centavos): se restan de lo que entró en cada caja.
+        var egresos = datos.egresos || {};
         var hoy = fecha(datos.hoy);
-        var claves = Object.keys(dias);
+        var claves = Object.keys(dias).concat(Object.keys(egresos)).sort();
         var primero = claves.length ? fecha(claves[0]) : hoy;
         if (primero > hoy) primero = hoy;
 
@@ -665,12 +677,13 @@ document.addEventListener('DOMContentLoaded', function () {
         }
         function pagos(n) { return n + (n === 1 ? ' pago registrado' : ' pagos registrados'); }
         function sumar(desde, hasta) {
-            var total = 0, cuenta = 0;
+            var total = 0, cuenta = 0, gasto = 0;
             for (var d = desde; d <= hasta; d = sumarDias(d, 1)) {
                 var fila = dias[iso(d)];
                 if (fila) { total += fila[0]; cuenta += fila[1]; }
+                if (egresos[iso(d)]) gasto += egresos[iso(d)];
             }
-            return { total: total, pagos: cuenta };
+            return { total: total, pagos: cuenta, egresos: gasto };
         }
         function porcentaje(parte, todo) {
             if (todo <= 0 || parte <= 0) return 0;
@@ -784,6 +797,10 @@ document.addEventListener('DOMContentLoaded', function () {
             else monto.textContent = dinero(suma.total);
             campo('rango', clave).textContent = periodo.rango(d);
             campo('pagos', clave).textContent = pagos(suma.pagos);
+            var queda = suma.total - suma.egresos;
+            campo('egresos-monto', clave).textContent = dinero(suma.egresos);
+            campo('queda', clave).textContent = dinero(queda);
+            campo('queda', clave).classList.toggle('negativo', queda < 0);
 
             if (periodo.parte) {
                 var parte = periodo.parte(d, suma);
