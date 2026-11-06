@@ -1,7 +1,7 @@
 {% extends 'base.html' %}
 {% load econotec_extras %}
 
-{% block title %}Seguimiento de pago · {{ etiqueta }} — Econotec{% endblock %}
+{% block title %}{{ tipo_nombre }} · {{ etiqueta }} — Econotec{% endblock %}
 
 {% block extra_head %}
 <style>
@@ -20,6 +20,39 @@
     .sp-estado.is-cerrada { background: var(--surface-muted); color: var(--text-soft); }
     .sp-estado.is-futura { background: var(--tint-amber-bg); color: var(--tint-amber-fg); }
     .sp-reinicio { margin: 0; color: var(--text-muted); font-size: 13px; font-weight: 600; }
+    /* Vistas: Total de seguimiento, Seguimiento de equipo y de producto. */
+    .sp-vistas {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px;
+        width: fit-content;
+        max-width: 100%;
+        margin-top: 16px;
+        padding: 5px;
+        border-radius: 14px;
+        background: var(--surface-muted);
+        border: 1px solid var(--border-color);
+    }
+    .sp-vistas a {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 18px;
+        border-radius: 10px;
+        color: var(--text-soft);
+        font-size: 15px;
+        font-weight: 700;
+        text-decoration: none;
+        white-space: nowrap;
+    }
+    .sp-vistas a:hover { color: var(--text-main); background: var(--hover-bg); }
+    .sp-vistas a.is-activa {
+        background: var(--card-bg);
+        color: var(--text-main);
+        font-weight: 800;
+        box-shadow: inset 0 -3px 0 var(--primary), var(--shadow);
+    }
+    .sp-vistas + .sp-tabs { margin-top: 10px; }
     .sp-tabs {
         display: flex;
         flex-wrap: wrap;
@@ -80,6 +113,17 @@
     .sp-card.is-total .num { color: var(--success); font-size: 26px; }
     .sp-card.is-saldo .num { color: var(--danger); }
     .sp-card .sub { color: var(--text-muted); font-size: 12px; font-weight: 600; line-height: 1.45; }
+    .sp-card .sp-desglose {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px 12px;
+        margin-top: 6px;
+        padding-top: 6px;
+        border-top: 1px dashed var(--border-color);
+        color: var(--text-soft);
+        font-size: 12px;
+        font-weight: 700;
+    }
 
     .sp-aviso {
         padding: 12px 16px;
@@ -106,6 +150,18 @@
     .sp-lineas > div { height: 20px; line-height: 20px; white-space: nowrap; }
     .sp-lineas > div + div { margin-top: 4px; }
     .sp-codigo { color: var(--primary); font-weight: 800; }
+    /* En el total: si la fila es de un equipo o de una venta de producto. */
+    .sp-tipo {
+        display: inline-block;
+        margin-left: 4px;
+        padding: 1px 7px;
+        border-radius: 999px;
+        font-size: 10.5px;
+        font-weight: 800;
+        vertical-align: 1px;
+    }
+    .sp-tipo.is-equipo { background: var(--tint-blue-bg); color: var(--tint-blue-fg); }
+    .sp-tipo.is-producto { background: var(--tint-orange-bg); color: var(--tint-orange-fg); }
     .sp-muted { display: block; color: var(--text-muted); font-size: 12px; margin-top: 2px; }
     .sp-tabla .sp-monto { color: var(--success); font-weight: 800; }
     /* Saldo pendiente: rojo si todavía debe; verde si ya pagó todo. */
@@ -268,8 +324,9 @@
     /* En el celular la barra queda al final de la tabla (sin fijarse abajo). */
     @media (max-width: 760px) {
         .sp-hojas { position: static; padding-right: 8px; }
-        .sp-tabs { width: auto; }
+        .sp-tabs, .sp-vistas { width: auto; }
         .sp-tabs a { flex: 1 1 auto; text-align: center; padding: 8px 10px; }
+        .sp-vistas a { flex: 1 1 auto; justify-content: center; padding: 9px 12px; font-size: 14px; }
     }
 
     [data-theme="dark"] .sp-aviso { background: rgba(59, 130, 246, .12); color: #c9d7f0; }
@@ -294,18 +351,32 @@
     <p class="sp-reinicio">🗓 Hoja abierta: el {{ proxima_hoja_texto }} a las 00:00 empieza una hoja nueva.</p>
     {% endif %}
 
-    <nav class="sp-tabs" aria-label="Sede">
-        {% for valor, nombre in sedes %}
-        <a href="?semana={{ lunes|date:'Y-m-d' }}{% if valor %}&amp;sede={{ valor }}{% endif %}"{% if valor == sede %} class="is-activa" aria-current="page"{% endif %}>{% if not valor %}📋 {% endif %}{{ nombre }}</a>
+    <nav class="sp-vistas" aria-label="Tipo de seguimiento">
+        {% for valor, nombre in tipos %}
+        <a href="?semana={{ lunes|date:'Y-m-d' }}&amp;tipo={{ valor }}"{% if valor == tipo %} class="is-activa" aria-current="page"{% endif %}>{% if valor == 'total' %}📊{% elif valor == 'equipo' %}🔧{% else %}🛒{% endif %} {{ nombre }}</a>
         {% endfor %}
     </nav>
+
+    {% if es_equipo %}
+    <nav class="sp-tabs" aria-label="Sede">
+        {% for valor, nombre in sedes %}
+        <a href="?semana={{ lunes|date:'Y-m-d' }}&amp;tipo=equipo{% if valor %}&amp;sede={{ valor }}{% endif %}"{% if valor == sede %} class="is-activa" aria-current="page"{% endif %}>{% if not valor %}📋 {% endif %}{{ nombre }}</a>
+        {% endfor %}
+    </nav>
+    {% endif %}
 </div>
 
 <div class="sp-resumen">
     <div class="sp-card is-total">
         <div class="lbl">Total de la semana</div>
         <div class="num">{{ total|dinero_signo }}</div>
-        <div class="sub">{{ cantidad }} equipo{{ cantidad|pluralize }} · {{ pagos }} pago{{ pagos|pluralize }}</div>
+        <div class="sub">{{ resumen_cantidades }}</div>
+        {% if es_total %}
+        <div class="sp-desglose" title="El total es la suma de Seguimiento de equipo y Seguimiento de producto">
+            <span>🔧 Equipos {{ total_equipos|dinero_signo }}</span>
+            <span>🛒 Productos {{ total_ventas|dinero_signo }}</span>
+        </div>
+        {% endif %}
     </div>
     {% for m in metodos %}
     <div class="sp-card is-{{ m.clave }}">
@@ -317,14 +388,25 @@
     <div class="sp-card is-saldo">
         <div class="lbl">Saldo pendiente</div>
         <div class="num">{{ saldo_total|dinero_signo }}</div>
-        <div class="sub">Lo que aún deben hoy los equipos de esta hoja</div>
+        <div class="sub">Lo que aún deben hoy {% if es_producto %}las ventas{% elif es_total %}los equipos y ventas{% else %}los equipos{% endif %} de esta hoja</div>
     </div>
 </div>
 
 <div class="sp-aviso">
+    {% if es_total %}
+    Todos los pagos de la semana en una sola hoja: equipos (anticipo, diagnóstico, abonos y pago al finalizar) y ventas de producto
+    (pago de la venta y abonos), recibidos de <strong>lunes 00:00 a domingo 23:59</strong>, según la fecha de cada pago.
+    El total es exactamente <strong>Seguimiento de equipo + Seguimiento de producto</strong>.
+    {% elif es_producto %}
+    Pagos de ventas de producto (pago de la venta y abonos) recibidos de <strong>lunes 00:00 a domingo 23:59</strong>,
+    según la fecha de cada pago.
+    {% else %}
     Pagos de equipos (anticipo, diagnóstico, abonos y pago al finalizar) recibidos de <strong>lunes 00:00 a domingo 23:59</strong>,
-    según la fecha de cada pago. Cada lunes a las 00:00 empieza una hoja nueva y las semanas anteriores quedan en las pestañas de abajo.
-    El <strong>saldo pendiente</strong> es lo que el cliente todavía debe hoy de ese equipo, con todos sus pagos. No incluye ventas de producto.
+    según la fecha de cada pago.
+    {% endif %}
+    Cada lunes a las 00:00 empieza una hoja nueva y las semanas anteriores quedan en las pestañas de abajo.
+    El <strong>saldo pendiente</strong> es lo que el cliente todavía debe hoy de {% if es_producto %}esa venta{% elif es_total %}ese equipo o venta{% else %}ese equipo{% endif %}, con todos sus pagos.
+    {% if es_equipo %}Las ventas de producto están en «Seguimiento de producto».{% endif %}
 </div>
 
 {% if filas %}
@@ -336,13 +418,13 @@
                 <th>Fecha de pago</th>
                 <th>Cliente</th>
                 <th>Cédula</th>
-                <th>Equipo</th>
+                <th>{% if es_producto %}Producto{% elif es_total %}Equipo / producto{% else %}Equipo{% endif %}</th>
                 <th>Concepto</th>
                 <th>Forma de pago</th>
                 <th>Recibo</th>
                 <th class="num">Pagado</th>
-                <th class="num" title="Lo que el cliente todavía debe hoy de este equipo, con todos sus pagos">Saldo pendiente</th>
-                <th>Fecha de ingreso</th>
+                <th class="num" title="Lo que el cliente todavía debe hoy de {% if es_producto %}esta venta{% elif es_total %}este equipo o venta{% else %}este equipo{% endif %}, con todos sus pagos">Saldo pendiente</th>
+                <th>{% if es_producto %}Fecha de venta{% elif es_total %}Fecha de ingreso / venta{% else %}Fecha de ingreso{% endif %}</th>
                 <th>Registrado por</th>
                 <th>Técnico responsable</th>
             </tr>
@@ -355,8 +437,9 @@
                 <td class="sp-cliente"><strong>{{ f.cliente }}</strong></td>
                 <td>{{ f.cedula }}</td>
                 <td>
-                    <a href="{{ f.url_pagos }}" class="sp-codigo" title="Ver los pagos de este equipo">{{ f.codigo }}</a>
-                    <span class="sp-muted">{{ f.tipo_equipo }}{% if f.equipo %} · {{ f.equipo|truncatechars:32 }}{% endif %}</span>
+                    <a href="{{ f.url_pagos }}" class="sp-codigo" title="Ver los pagos de {% if f.es_venta %}esta venta{% else %}este equipo{% endif %}">{{ f.codigo }}</a>
+                    {% if es_total %}{% if f.es_venta %}<span class="sp-tipo is-producto">Producto</span>{% else %}<span class="sp-tipo is-equipo">Equipo</span>{% endif %}{% endif %}
+                    <span class="sp-muted"{% if f.equipo %} title="{{ f.equipo }}"{% endif %}>{{ f.tipo_equipo }}{% if f.equipo %} · {{ f.equipo|truncatechars:32 }}{% endif %}</span>
                 </td>
                 <td class="sp-lineas">{% for c in f.cobros %}<div>{{ c.concepto }}</div>{% endfor %}</td>
                 <td class="sp-lineas">{% for c in f.cobros %}<div>{% for p in c.partes %}{% if not forloop.first %} + {% endif %}{{ p.etiqueta }}{% if c.partes|length > 1 or f.cobros|length > 1 %} ({{ p.monto|dinero_signo }}){% endif %}{% endfor %}</div>{% endfor %}</td>
@@ -365,7 +448,7 @@
                 {% if f.saldo_estado == 'debe' %}
                 <td class="num sp-saldo is-debe">{{ f.saldo|dinero_signo }}{% if f.bodegaje > 0 %}<span class="sp-nota is-bodegaje" title="Bodegaje acumulado pendiente: se decide al retirar">📦 +{{ f.bodegaje|dinero_signo }} bodegaje</span>{% endif %}</td>
                 {% elif f.saldo_estado == 'pagado' %}
-                <td class="num sp-saldo is-pagado" title="Equipo pagado por completo">✓ $0,00{% if f.a_favor > 0 %}<span class="sp-nota">A favor {{ f.a_favor|dinero_signo }}</span>{% endif %}{% if f.bodegaje > 0 %}<span class="sp-nota is-bodegaje" title="Bodegaje acumulado pendiente: se decide al retirar">📦 +{{ f.bodegaje|dinero_signo }} bodegaje</span>{% endif %}</td>
+                <td class="num sp-saldo is-pagado" title="{% if f.es_venta %}Venta pagada{% else %}Equipo pagado{% endif %} por completo">✓ $0,00{% if f.a_favor > 0 %}<span class="sp-nota">A favor {{ f.a_favor|dinero_signo }}</span>{% endif %}{% if f.bodegaje > 0 %}<span class="sp-nota is-bodegaje" title="Bodegaje acumulado pendiente: se decide al retirar">📦 +{{ f.bodegaje|dinero_signo }} bodegaje</span>{% endif %}</td>
                 {% elif f.saldo_estado == 'sin_valor' %}
                 <td class="num sp-saldo is-neutro" title="Todavía no tiene valor acordado">Sin valor acordado</td>
                 {% else %}
@@ -382,10 +465,10 @@
                 <td></td>
                 <td></td>
                 {# El resumen va dentro de la celda fija para que no se asome cortado al desplazar la tabla. #}
-                <td class="sp-pie-titulo">Total de la semana<span class="sp-muted">{{ cantidad }} equipo{{ cantidad|pluralize }} · {{ pagos }} pago{{ pagos|pluralize }}</span></td>
+                <td class="sp-pie-titulo">Total de la semana<span class="sp-muted">{{ resumen_cantidades }}</span></td>
                 <td colspan="5"></td>
                 <td class="num">{{ total|dinero_signo }}</td>
-                <td class="num sp-saldo-total" title="Suma de lo que todavía deben estos equipos">{{ saldo_total|dinero_signo }}</td>
+                <td class="num sp-saldo-total" title="Suma de lo que todavía deben {% if es_producto %}estas ventas{% elif es_total %}estos equipos y ventas{% else %}estos equipos{% endif %}">{{ saldo_total|dinero_signo }}</td>
                 <td colspan="3"></td>
             </tr>
         </tfoot>
@@ -393,7 +476,7 @@
 </div>
 {% else %}
 <div class="sp-vacio">
-    {% if es_semana_actual %}Todavía no hay pagos registrados esta semana.{% elif es_semana_futura %}Esta semana todavía no empieza.{% else %}No hubo pagos de equipos en esta semana.{% endif %}
+    {% if es_semana_actual %}Todavía no hay pagos registrados esta semana.{% elif es_semana_futura %}Esta semana todavía no empieza.{% elif es_producto %}No hubo pagos de ventas de producto en esta semana.{% elif es_total %}No hubo pagos en esta semana.{% else %}No hubo pagos de equipos en esta semana.{% endif %}
 </div>
 {% endif %}
 
@@ -404,7 +487,7 @@
             {% for grupo in meses_pestanas %}
             <div class="sp-hojas-menu-mes">{{ grupo.nombre }}</div>
             {% for p in grupo.pestanas %}
-            <a href="?semana={{ p.iso }}{% if sede %}&amp;sede={{ sede }}{% endif %}"{% if p.activa %} class="is-activa" aria-current="page"{% endif %}>
+            <a href="?semana={{ p.iso }}&amp;tipo={{ tipo }}{% if sede %}&amp;sede={{ sede }}{% endif %}"{% if p.activa %} class="is-activa" aria-current="page"{% endif %}>
                 <span>{{ p.etiqueta }}{% if p.actual %} · esta semana{% elif p.futura %} · próxima{% endif %}</span><span>{{ p.total|dinero_signo }}</span>
             </a>
             {% endfor %}
@@ -414,8 +497,8 @@
     <button type="button" class="sp-hojas-flecha" data-desplazar="-1" aria-label="Ver semanas más recientes">‹</button>
     <div class="sp-hojas-pestanas" id="sp-hojas-pestanas">
         {% for p in pestanas %}
-        <a class="sp-hoja{% if p.activa %} is-activa{% endif %}" href="?semana={{ p.iso }}{% if sede %}&amp;sede={{ sede }}{% endif %}"
-           title="Semana {{ p.titulo }} · {{ p.cantidad }} equipo{{ p.cantidad|pluralize }} · {{ p.total|dinero_signo }}"{% if p.activa %} aria-current="page"{% endif %}>
+        <a class="sp-hoja{% if p.activa %} is-activa{% endif %}" href="?semana={{ p.iso }}&amp;tipo={{ tipo }}{% if sede %}&amp;sede={{ sede }}{% endif %}"
+           title="Semana {{ p.titulo }} · {{ p.resumen }} · {{ p.total|dinero_signo }}"{% if p.activa %} aria-current="page"{% endif %}>
             {% if p.actual %}<span class="sp-hoja-actual">Esta semana</span>{% elif p.futura %}<span class="sp-hoja-actual is-futura">Próxima</span>{% endif %}{{ p.etiqueta }}<span class="sp-hoja-total">{{ p.total|dinero_signo }}</span>
         </a>
         {% endfor %}

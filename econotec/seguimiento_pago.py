@@ -1,15 +1,17 @@
 """
-Seguimiento de pago: hoja semanal con lo que se cobró de los equipos.
+Seguimiento de pago: hoja semanal con lo que se cobró de equipos y productos.
 
 - La hoja va de lunes 00:00 a domingo 23:59, hora de Ecuador. El lunes a las
   00:00 empieza una hoja nueva y las semanas anteriores quedan como pestañas.
 - Cada pago cuenta en la semana de su fecha, igual que en el Registro
-  Administrativo: anticipo y diagnóstico inmediato (fecha de ingreso), abonos
-  (fecha del abono) y el pago al finalizar (fecha de finalización).
-- Solo equipos del taller (Guayaquil y Quito): no incluye ventas de producto,
-  donados ni equipos a comprar, que no son cobros a clientes.
-- Una fila por equipo, con sus pagos de la semana y el saldo que el cliente
-  todavía debe hoy (el mismo de Pagos).
+  Administrativo: anticipo y diagnóstico inmediato (fecha de ingreso o de la
+  venta), abonos (fecha del abono) y el pago al finalizar (fecha de finalización).
+- Tres vistas: «equipo» (equipos del taller de Guayaquil y Quito), «producto»
+  (ventas de producto) y «total», que junta las dos en una sola hoja; así el
+  total siempre es la suma exacta de equipos + productos.
+- No incluye donados ni equipos a comprar, que no son cobros a clientes.
+- Una fila por equipo o venta, con sus pagos de la semana y el saldo que el
+  cliente todavía debe hoy (el mismo de Pagos).
 - Los pagos mixtos se separan en sus dos métodos para los totales de arriba.
 """
 from collections import defaultdict
@@ -20,9 +22,22 @@ from django.db.models import Prefetch, Q
 from django.urls import reverse
 from django.utils import timezone
 
-from .models import SEDES_EQUIPOS, Abono, IngresoEquipo, SalidaEquipo
+from .models import SEDES_EQUIPOS, Abono, IngresoEquipo, SalidaEquipo, VentaInventarioItem
 
 CERO = Decimal('0.00')
+
+# Sede con la que se registran las ventas de producto.
+SEDE_VENTAS = 'ventas'
+
+# Vistas de la hoja, en el orden en que se muestran. La primera es la de entrada.
+TOTAL = 'total'
+EQUIPO = 'equipo'
+PRODUCTO = 'producto'
+TIPOS = (
+    (TOTAL, 'Total de seguimiento'),
+    (EQUIPO, 'Seguimiento de equipo'),
+    (PRODUCTO, 'Seguimiento de producto'),
+)
 
 # Estados administrativos: no son cobros a clientes.
 ESTADOS_SIN_COBRO = ('donado', 'equipo_a_comprar')
@@ -94,9 +109,35 @@ def nombre_usuario(user):
     return user.get_full_name() or user.username
 
 
-def ingresos_de_seguimiento(sede=''):
-    """Equipos del taller que cuentan en el seguimiento, de una sede o de las dos."""
-    qs = IngresoEquipo.objects.filter(sede__in=SEDES_EQUIPOS).exclude(estado__in=ESTADOS_SIN_COBRO)
+def _plural(cantidad, palabra):
+    return f'{cantidad} {palabra}{"" if cantidad == 1 else "s"}'
+
+
+def texto_cantidades(tipo, equipos, ventas, pagos=None):
+    """«7 equipos · 3 ventas · 10 pagos», solo con lo que muestra la vista."""
+    partes = []
+    if tipo != PRODUCTO:
+        partes.append(_plural(equipos, 'equipo'))
+    if tipo != EQUIPO:
+        partes.append(_plural(ventas, 'venta'))
+    if pagos is not None:
+        partes.append(_plural(pagos, 'pago'))
+    return ' · '.join(partes)
+
+
+def ingresos_de_seguimiento(sede='', tipo=EQUIPO):
+    """Registros que cuentan en el seguimiento.
+
+    `tipo` elige equipos del taller, ventas de producto o los dos (total).
+    `sede` (Guayaquil o Quito) solo filtra equipos: las ventas no son de una sede.
+    """
+    if tipo == PRODUCTO:
+        sedes = (SEDE_VENTAS,)
+    elif tipo == TOTAL:
+        sedes = (*SEDES_EQUIPOS, SEDE_VENTAS)
+    else:
+        sedes = SEDES_EQUIPOS
+    qs = IngresoEquipo.objects.filter(sede__in=sedes).exclude(estado__in=ESTADOS_SIN_COBRO)
     if sede:
         qs = qs.filter(sede=sede)
     return qs
@@ -196,6 +237,17 @@ def _cobro(concepto, fecha, creado, monto, partes, recibo=''):
     }
 
 
+def _concepto_anticipo(ingreso):
+    """Pago inicial: «Anticipo» en equipos; en ventas, como lo llama Pagos."""
+    if ingreso.sede != SEDE_VENTAS:
+        return 'Anticipo'
+    valor = ingreso.valor_acordado or CERO
+    # Venta por abonos: nació con un pago menor al total o ya tiene abonos.
+    if ingreso.abonos.all() or (valor > 0 and ingreso.abono_anticipo < valor):
+        return 'Abono inicial'
+    return 'Pago de venta'
+
+
 def _cobros_del_equipo(ingreso, lunes, domingo):
     """Pagos del equipo con fecha dentro de la semana, del más antiguo al más nuevo."""
     cobros = []
@@ -207,7 +259,7 @@ def _cobros_del_equipo(ingreso, lunes, domingo):
             ))
         if (ingreso.abono_anticipo or CERO) > 0:
             cobros.append(_cobro(
-                'Anticipo', ingreso.fecha_ingreso, ingreso.creado, ingreso.abono_anticipo,
+                _concepto_anticipo(ingreso), ingreso.fecha_ingreso, ingreso.creado, ingreso.abono_anticipo,
                 _partes_anticipo(ingreso),
             ))
     for abono in ingreso.abonos.all():
@@ -243,7 +295,13 @@ def _saldo(ingreso):
 
 
 def _tecnicos(ingreso, salida):
-    """El técnico que reparó (si ya se finalizó) y el asignado al ingreso."""
+    """El técnico que reparó (si ya se finalizó) y el asignado al ingreso.
+
+    En una venta, el técnico que la hizo.
+    """
+    if ingreso.sede == SEDE_VENTAS:
+        vendio = ingreso.tecnico_encargado
+        return [{'nombre': nombre_usuario(vendio), 'rol': 'Vendió'}] if vendio else []
     tecnicos = []
     reparo = salida.tecnico_reparo if salida is not None else None
     if reparo:
@@ -254,14 +312,30 @@ def _tecnicos(ingreso, salida):
     return tecnicos
 
 
+def _productos_vendidos(venta):
+    """«2 x Tinta Epson, 1 x Cable USB», como en Ventas e Inventario."""
+    productos = ', '.join(
+        f'{producto.cantidad} x {producto.inventario_item.producto}'
+        for producto in venta.productos_inventario.all()
+    )
+    return productos or (venta.problema_reportado or '').strip()
+
+
 def _fila(ingreso, cobros):
     salida = getattr(ingreso, 'salida', None)
     saldo_estado, saldo = _saldo(ingreso)
-    equipo = ' '.join(filter(None, [ingreso.marca, ingreso.modelo_serie]))
+    es_venta = ingreso.sede == SEDE_VENTAS
+    if es_venta:
+        tipo_equipo = 'Venta de producto'
+        equipo = _productos_vendidos(ingreso)
+    else:
+        tipo_equipo = ingreso.tipo_equipo_display
+        equipo = ' '.join(filter(None, [ingreso.marca, ingreso.modelo_serie]))
     return {
         'pk': ingreso.pk,
+        'es_venta': es_venta,
         'codigo': ingreso.codigo_equipo,
-        'tipo_equipo': ingreso.tipo_equipo_display,
+        'tipo_equipo': tipo_equipo,
         'equipo': equipo,
         'cliente': ingreso.cliente.nombres,
         'cedula': ingreso.cliente.cedula,
@@ -306,10 +380,10 @@ def _resumen_metodos(filas):
     return resumen
 
 
-def hoja_semana(lunes, sede=''):
+def hoja_semana(lunes, sede='', tipo=EQUIPO):
     """Filas y totales por método de la semana que empieza en `lunes`."""
     domingo = fin_semana(lunes)
-    base = ingresos_de_seguimiento(sede)
+    base = ingresos_de_seguimiento(sede, tipo)
 
     ids = set(
         base.filter(fecha_ingreso__range=(lunes, domingo))
@@ -329,7 +403,13 @@ def hoja_semana(lunes, sede=''):
     ingresos = (
         IngresoEquipo.objects.filter(pk__in=ids)
         .select_related('cliente', 'registrado_por', 'tecnico_encargado', 'salida', 'salida__tecnico_reparo')
-        .prefetch_related(Prefetch('abonos', queryset=Abono.objects.order_by('fecha', 'creado', 'pk')))
+        .prefetch_related(
+            Prefetch('abonos', queryset=Abono.objects.order_by('fecha', 'creado', 'pk')),
+            Prefetch(
+                'productos_inventario',
+                queryset=VentaInventarioItem.objects.select_related('inventario_item'),
+            ),
+        )
     )
     filas = []
     for ingreso in ingresos:
@@ -339,6 +419,8 @@ def hoja_semana(lunes, sede=''):
     filas.sort(key=lambda fila: (*fila['cobros'][0]['orden'], fila['pk']))
     for numero, fila in enumerate(filas, 1):
         fila['numero'] = numero
+    filas_equipos = [fila for fila in filas if not fila['es_venta']]
+    filas_ventas = [fila for fila in filas if fila['es_venta']]
 
     return {
         'lunes': lunes,
@@ -349,6 +431,11 @@ def hoja_semana(lunes, sede=''):
         'pagos': sum(len(fila['cobros']) for fila in filas),
         'saldo_total': sum((fila['saldo'] for fila in filas if fila['saldo_estado'] == 'debe'), CERO),
         'metodos': _resumen_metodos(filas),
+        # Desglose para la vista total: equipos + productos = total.
+        'cantidad_equipos': len(filas_equipos),
+        'cantidad_ventas': len(filas_ventas),
+        'total_equipos': sum((fila['monto'] for fila in filas_equipos), CERO),
+        'total_ventas': sum((fila['monto'] for fila in filas_ventas), CERO),
     }
 
 
@@ -356,24 +443,29 @@ def hoja_semana(lunes, sede=''):
 # Pestañas: una hoja por semana
 # ─────────────────────────────────────────────────────────
 
-def totales_por_semana(sede=''):
-    """{lunes: {'cantidad': equipos con pagos, 'total': monto}} de todas las semanas.
+def totales_por_semana(sede='', tipo=EQUIPO):
+    """{lunes: {'cantidad', 'equipos', 'ventas', 'total'}} de todas las semanas.
 
-    Usa las mismas reglas que `hoja_semana`, así el total de cada pestaña es el
-    mismo que se ve al abrirla.
+    `cantidad` son los registros con pagos (equipos + ventas). Usa las mismas
+    reglas que `hoja_semana`, así el total de cada pestaña es el mismo que se
+    ve al abrirla.
     """
-    semanas = defaultdict(lambda: {'equipos': set(), 'total': CERO})
+    semanas = defaultdict(lambda: {'equipos': set(), 'ventas': set(), 'total': CERO})
+    # Se llena en el primer recorrido, antes de sumar abonos y salidas.
+    ventas = set()
 
     def sumar(ingreso_id, fecha, monto):
         if fecha and monto and monto > 0:
             semana = semanas[inicio_semana(fecha)]
-            semana['equipos'].add(ingreso_id)
+            semana['ventas' if ingreso_id in ventas else 'equipos'].add(ingreso_id)
             semana['total'] += monto
 
-    base = ingresos_de_seguimiento(sede)
-    for pk, fecha, anticipo, inmediato, diagnostico in base.values_list(
-        'pk', 'fecha_ingreso', 'abono_anticipo', 'diagnostico_inmediato', 'valor_diagnostico',
+    base = ingresos_de_seguimiento(sede, tipo)
+    for pk, sede_registro, fecha, anticipo, inmediato, diagnostico in base.values_list(
+        'pk', 'sede', 'fecha_ingreso', 'abono_anticipo', 'diagnostico_inmediato', 'valor_diagnostico',
     ):
+        if sede_registro == SEDE_VENTAS:
+            ventas.add(pk)
         sumar(pk, fecha, anticipo)
         if inmediato == 'si':
             sumar(pk, fecha, diagnostico)
@@ -387,17 +479,22 @@ def totales_por_semana(sede=''):
         sumar(ingreso_id, fecha, monto)
 
     return {
-        lunes: {'cantidad': len(datos['equipos']), 'total': datos['total']}
+        lunes: {
+            'cantidad': len(datos['equipos']) + len(datos['ventas']),
+            'equipos': len(datos['equipos']),
+            'ventas': len(datos['ventas']),
+            'total': datos['total'],
+        }
         for lunes, datos in semanas.items()
     }
 
 
-def pestanas_semanas(totales, actual, seleccionada):
+def pestanas_semanas(totales, actual, seleccionada, tipo=EQUIPO):
     """Una pestaña por semana con pagos (más la actual y la abierta), de la más
     nueva a la más antigua, y las mismas agrupadas por mes para el menú."""
     semanas = dict(totales)
     for lunes in (actual, seleccionada):
-        semanas.setdefault(lunes, {'cantidad': 0, 'total': CERO})
+        semanas.setdefault(lunes, {'cantidad': 0, 'equipos': 0, 'ventas': 0, 'total': CERO})
     pestanas = [
         {
             'lunes': lunes,
@@ -405,6 +502,7 @@ def pestanas_semanas(totales, actual, seleccionada):
             'etiqueta': etiqueta_semana(lunes),
             'titulo': titulo_semana(lunes),
             'cantidad': datos['cantidad'],
+            'resumen': texto_cantidades(tipo, datos.get('equipos', 0), datos.get('ventas', 0)),
             'total': datos['total'],
             'activa': lunes == seleccionada,
             'actual': lunes == actual,

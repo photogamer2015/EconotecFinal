@@ -1,4 +1,4 @@
-"""Pruebas del Seguimiento de pago (hoja semanal de pagos de equipos)."""
+"""Pruebas del Seguimiento de pago (hoja semanal de pagos de equipos y ventas de producto)."""
 import re
 from datetime import date, datetime, timedelta, timezone as dt_timezone
 from decimal import Decimal
@@ -9,7 +9,7 @@ from django.contrib.auth.models import Group
 from django.test import SimpleTestCase, TestCase
 from django.urls import reverse
 
-from .models import Abono, Cliente, IngresoEquipo, SalidaEquipo
+from .models import Abono, Cliente, IngresoEquipo, InventarioItem, SalidaEquipo, VentaInventarioItem
 from .seguimiento_pago import (
     etiqueta_semana, hoja_semana, ingresos_de_seguimiento, inicio_semana,
     titulo_semana, totales_por_semana,
@@ -81,9 +81,30 @@ class SeguimientoPagoTests(TestCase):
             registrado_por=extra.pop('registrado_por', self.asesora), **extra,
         )
 
-    def ver(self, **params):
+    def crear_venta(self, productos=(), **overrides):
+        datos = {
+            'sede': 'ventas', 'tipo_equipo': 'otro', 'marca': 'N/A', 'modelo_serie': 'N/A',
+            'problema_reportado': '', 'estado': 'entregado', 'subestado_reparacion': '',
+            'subestado_entregado': 'con_solucion',
+        }
+        datos.update(overrides)
+        venta = self.crear_ingreso(**datos)
+        for producto, cantidad in productos:
+            item = InventarioItem.objects.create(
+                sede='guayaquil', categoria='Accesorios', tipo='Varios', producto=producto,
+                marca='Genérica', modelo='X', ubicacion='guayaquil_norte', cantidad=10,
+            )
+            VentaInventarioItem.objects.create(venta=venta, inventario_item=item, cantidad=cantidad)
+        return venta
+
+    def abrir(self, **params):
         with patch('econotec.views_pagos.timezone.localdate', return_value=MIERCOLES):
             return self.client.get(reverse('econotec:seguimiento_pago'), params)
+
+    def ver(self, **params):
+        """Vista de equipos, la que prueban las pruebas de equipos."""
+        params.setdefault('tipo', 'equipo')
+        return self.abrir(**params)
 
     def crear_semana_completa(self):
         """Pagos de varios tipos dentro de la semana, y otros que no cuentan."""
@@ -369,3 +390,172 @@ class SeguimientoPagoTests(TestCase):
         anterior = next(p for p in response.context['pestanas'] if p['lunes'] == LUNES)
         self.assertEqual(anterior['total'], Decimal('10.00'))
         self.assertFalse(anterior['actual'])
+
+    # ── Ventas de producto y total ──────────────────────────────
+
+    def crear_ventas_de_la_semana(self):
+        # Venta pagada completa por transferencia el martes.
+        self.venta_cable = self.crear_venta(
+            productos=[('Cable USB', 2), ('Mouse', 1)], fecha_ingreso=date(2026, 10, 13),
+            valor_acordado=Decimal('30.00'), abono_anticipo=Decimal('30.00'),
+            anticipo_metodo='transferencia', anticipo_banco='pichincha', tecnico_encargado=self.tecnico_2,
+        )
+        # Venta por abonos: abono inicial en efectivo y otro el domingo con Payphone; todavía debe 20.
+        self.venta_tinta = self.crear_venta(
+            productos=[('Tinta Epson', 1)], cliente=self.cliente_2,
+            valor_acordado=Decimal('50.00'), abono_anticipo=Decimal('20.00'), anticipo_metodo='efectivo',
+        )
+        self.abonar(self.venta_tinta, DOMINGO, '10.00', 'tarjeta', tarjeta_app='payphone')
+        # Venta de la semana pasada que termina de pagarse esta semana.
+        self.venta_teclado = self.crear_venta(
+            fecha_ingreso=date(2026, 10, 8), problema_reportado='Teclado gamer',
+            valor_acordado=Decimal('40.00'), abono_anticipo=Decimal('15.00'), anticipo_metodo='efectivo',
+        )
+        self.abonar(self.venta_teclado, MIERCOLES, '25.00')
+
+    def test_entra_por_el_total_de_seguimiento(self):
+        response = self.abrir()
+
+        self.assertEqual(response.context['tipo'], 'total')
+        html = response.content.decode()
+        vistas = html[html.index('aria-label="Tipo de seguimiento"'):]
+        vistas = vistas[:vistas.index('</nav>')]
+        self.assertEqual(
+            re.findall(r'(Total de seguimiento|Seguimiento de equipo|Seguimiento de producto)', vistas),
+            ['Total de seguimiento', 'Seguimiento de equipo', 'Seguimiento de producto'],
+        )
+
+    def test_seguimiento_de_producto(self):
+        self.crear_semana_completa()
+        self.crear_ventas_de_la_semana()
+
+        response = self.ver(tipo='producto')
+
+        ctx = response.context
+        # La venta de tinta de 12 de crear_semana_completa + 30 + 30 + 25.
+        self.assertEqual(ctx['total'], Decimal('97.00'))
+        self.assertEqual(ctx['cantidad'], 4)
+        self.assertEqual(ctx['cantidad_equipos'], 0)
+        self.assertEqual(ctx['pagos'], 5)
+        self.assertTrue(all(f['es_venta'] for f in ctx['filas']))
+        metodos = {m['clave']: m['monto'] for m in ctx['metodos']}
+        self.assertEqual(metodos, {
+            'transferencia': Decimal('30.00'),
+            'efectivo': Decimal('57.00'),
+            'tarjeta': Decimal('10.00'),
+        })
+        self.assertEqual(sum(metodos.values()), ctx['total'])
+        # Solo la venta de tinta por abonos todavía debe: 50 - 30.
+        self.assertEqual(ctx['saldo_total'], Decimal('20.00'))
+
+        filas = {f['codigo']: f for f in ctx['filas']}
+        cable = filas[self.venta_cable.codigo_equipo]
+        self.assertEqual([c['concepto'] for c in cable['cobros']], ['Pago de venta'])
+        self.assertEqual(cable['equipo'], '2 x Cable USB, 1 x Mouse')
+        self.assertEqual(cable['tipo_equipo'], 'Venta de producto')
+        self.assertEqual(cable['tecnicos'], [{'nombre': 'Osmar Perez', 'rol': 'Vendió'}])
+        self.assertEqual(cable['saldo_estado'], 'pagado')
+        tinta = filas[self.venta_tinta.codigo_equipo]
+        self.assertEqual([c['concepto'] for c in tinta['cobros']], ['Abono inicial', 'Abono'])
+        self.assertEqual((tinta['saldo_estado'], tinta['saldo']), ('debe', Decimal('20.00')))
+        teclado = filas[self.venta_teclado.codigo_equipo]
+        self.assertEqual([c['concepto'] for c in teclado['cobros']], ['Abono'])
+        self.assertEqual(teclado['equipo'], 'Teclado gamer')
+
+        self.assertContains(response, '4 ventas · 5 pagos')
+        self.assertContains(response, '<th>Producto</th>', html=True)
+        self.assertContains(response, '<th>Fecha de venta</th>', html=True)
+        self.assertNotContains(response, self.laptop.codigo_equipo)
+        # Las ventas no son de una sede: sin filtro de sede.
+        self.assertNotContains(response, 'aria-label="Sede"')
+
+    def test_total_es_equipos_mas_productos(self):
+        self.crear_semana_completa()
+        self.crear_ventas_de_la_semana()
+
+        total = self.abrir().context
+        equipos = self.ver(tipo='equipo').context
+        productos = self.ver(tipo='producto').context
+
+        self.assertEqual(total['tipo'], 'total')
+        self.assertEqual(total['total'], Decimal('302.00'))
+        self.assertEqual(total['total'], equipos['total'] + productos['total'])
+        self.assertEqual(total['total_equipos'], equipos['total'])
+        self.assertEqual(total['total_ventas'], productos['total'])
+        self.assertEqual(total['cantidad'], equipos['cantidad'] + productos['cantidad'])
+        self.assertEqual(total['pagos'], equipos['pagos'] + productos['pagos'])
+        self.assertEqual(total['saldo_total'], equipos['saldo_total'] + productos['saldo_total'])
+        por_metodo = lambda ctx: {m['clave']: m['monto'] for m in ctx['metodos']}
+        for clave, monto in por_metodo(total).items():
+            with self.subTest(metodo=clave):
+                self.assertEqual(
+                    monto,
+                    por_metodo(equipos).get(clave, Decimal('0.00')) + por_metodo(productos).get(clave, Decimal('0.00')),
+                )
+        self.assertEqual(
+            sorted(f['codigo'] for f in total['filas']),
+            sorted(f['codigo'] for f in equipos['filas'] + productos['filas']),
+        )
+        # Filas en orden de pago y numeradas seguidas.
+        self.assertEqual([f['numero'] for f in total['filas']], list(range(1, 8)))
+
+        response = self.abrir()
+        self.assertContains(response, '3 equipos · 4 ventas · 10 pagos')
+        self.assertContains(response, '🔧 Equipos $205,00')
+        self.assertContains(response, '🛒 Productos $97,00')
+        self.assertContains(response, '<span class="sp-tipo is-producto">Producto</span>', html=True)
+        self.assertContains(response, '<span class="sp-tipo is-equipo">Equipo</span>', html=True)
+
+    def test_pestanas_cuadran_en_las_tres_vistas(self):
+        self.crear_semana_completa()
+        self.crear_ventas_de_la_semana()
+
+        totales = {tipo: totales_por_semana(tipo=tipo) for tipo in ('total', 'equipo', 'producto')}
+
+        for tipo, semanas in totales.items():
+            for lunes, datos in semanas.items():
+                with self.subTest(tipo=tipo, lunes=lunes):
+                    hoja = hoja_semana(lunes, tipo=tipo)
+                    self.assertEqual(hoja['total'], datos['total'])
+                    self.assertEqual(hoja['cantidad'], datos['cantidad'])
+                    self.assertEqual(hoja['cantidad_equipos'], datos['equipos'])
+                    self.assertEqual(hoja['cantidad_ventas'], datos['ventas'])
+        cero = {'total': Decimal('0.00')}
+        for lunes, datos in totales['total'].items():
+            with self.subTest(suma=lunes):
+                self.assertEqual(
+                    datos['total'],
+                    totales['equipo'].get(lunes, cero)['total'] + totales['producto'].get(lunes, cero)['total'],
+                )
+        # Entre todas las hojas de producto suman lo que se cobró de cada venta.
+        esperado = sum((v.total_abonado for v in ingresos_de_seguimiento(tipo='producto')), Decimal('0.00'))
+        self.assertEqual(sum(d['total'] for d in totales['producto'].values()), esperado)
+
+    def test_sede_solo_filtra_equipos(self):
+        self.crear_semana_completa()
+        self.crear_ventas_de_la_semana()
+
+        for tipo in ('total', 'producto'):
+            with self.subTest(tipo=tipo):
+                ctx = self.ver(tipo=tipo, sede='quito').context
+                self.assertEqual(ctx['sede'], '')
+                self.assertTrue(any(f['es_venta'] for f in ctx['filas']))
+
+        # Un enlace viejo con sede y sin tipo abre los equipos de esa sede.
+        ctx = self.abrir(sede='quito').context
+        self.assertEqual(ctx['tipo'], 'equipo')
+        self.assertEqual([f['codigo'] for f in ctx['filas']], [self.consola.codigo_equipo])
+        self.assertContains(self.ver(), 'aria-label="Sede"')
+        # Un tipo inválido abre el total.
+        self.assertEqual(self.abrir(tipo='basura').context['tipo'], 'total')
+
+    def test_pestanas_de_semanas_conservan_la_vista(self):
+        self.crear_ventas_de_la_semana()
+
+        response = self.ver(tipo='producto')
+
+        self.assertContains(response, '?semana=2026-10-05&amp;tipo=producto')
+        anterior = next(p for p in response.context['pestanas'] if p['lunes'] == date(2026, 10, 5))
+        self.assertEqual(anterior['total'], Decimal('15.00'))
+        self.assertEqual(anterior['resumen'], '1 venta')
+        self.assertContains(self.ver(tipo='equipo', sede='quito'), '?semana=2026-10-12&amp;tipo=equipo&amp;sede=quito')

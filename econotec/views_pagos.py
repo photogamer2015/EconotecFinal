@@ -24,8 +24,8 @@ from .models import SEDES_EQUIPOS, Abono, IngresoEquipo
 from .pagination import paginar_resultados
 from .permisos import admin_requerido, tecnico_requerido, asesor_requerido
 from .seguimiento_pago import (
-    etiqueta_semana, fecha_larga, hoja_semana, inicio_semana, pestanas_semanas,
-    titulo_semana, totales_por_semana,
+    EQUIPO, PRODUCTO, TOTAL, TIPOS, etiqueta_semana, fecha_larga, hoja_semana,
+    inicio_semana, pestanas_semanas, texto_cantidades, titulo_semana, totales_por_semana,
 )
 
 
@@ -339,8 +339,11 @@ def pagos_export(request):
 @admin_requerido
 def seguimiento_pago(request):
     """
-    Pagos de equipos de una semana (?semana=AAAA-MM-DD, cualquier día de ella;
-    la actual si falta). La hoja se reinicia cada lunes a las 00:00.
+    Pagos de una semana (?semana=AAAA-MM-DD, cualquier día de ella; la actual
+    si falta). La hoja se reinicia cada lunes a las 00:00.
+
+    ?tipo= elige la vista: total (equipos + productos, la de entrada), equipo
+    o producto. ?sede= (Guayaquil o Quito) solo aplica a los equipos.
     """
     hoy = timezone.localdate()
     semana_actual = inicio_semana(hoy)
@@ -353,13 +356,30 @@ def seguimiento_pago(request):
     sede = (request.GET.get('sede') or '').strip()
     if sede not in SEDES_EQUIPOS:
         sede = ''
+    tipos = dict(TIPOS)
+    tipo = (request.GET.get('tipo') or '').strip().lower()
+    if tipo not in tipos:
+        # Un enlace viejo con sede abre los equipos de esa sede.
+        tipo = EQUIPO if sede else TOTAL
+    if tipo != EQUIPO:
+        # Las ventas de producto no son de una sede.
+        sede = ''
 
-    hoja = hoja_semana(lunes, sede)
-    pestanas, meses = pestanas_semanas(totales_por_semana(sede), semana_actual, lunes)
+    hoja = hoja_semana(lunes, sede, tipo)
+    pestanas, meses = pestanas_semanas(totales_por_semana(sede, tipo), semana_actual, lunes, tipo)
     proxima_hoja = semana_actual + timedelta(days=7)
 
     return render(request, 'pagos/seguimiento.html', {
         **hoja,
+        'tipo': tipo,
+        'tipo_nombre': tipos[tipo],
+        'tipos': TIPOS,
+        'es_total': tipo == TOTAL,
+        'es_equipo': tipo == EQUIPO,
+        'es_producto': tipo == PRODUCTO,
+        'resumen_cantidades': texto_cantidades(
+            tipo, hoja['cantidad_equipos'], hoja['cantidad_ventas'], hoja['pagos'],
+        ),
         'sede': sede,
         'es_semana_actual': lunes == semana_actual,
         # Solo tiene datos si se registró un pago con fecha adelantada.
