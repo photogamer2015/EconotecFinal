@@ -563,7 +563,7 @@ def saldo_semana(dia, recaudado=None):
         recaudado = hoja_semana(lunes, tipo=TOTAL)['total']
     egresos = list(
         Egreso.objects.filter(fecha__range=(lunes, domingo))
-        .select_related('categoria', 'asesora', 'registrado_por')
+        .select_related('categoria', 'asesora', 'registrado_por', 'ingreso_repuesto__cliente')
         .order_by('fecha', 'creado', 'pk')
     )
     total_egresos = sum((egreso.monto for egreso in egresos), CERO)

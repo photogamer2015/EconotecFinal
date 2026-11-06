@@ -482,8 +482,9 @@
 
     /* Ventana para registrar el egreso */
     .sp-dialogo {
-        width: min(560px, calc(100vw - 32px));
+        width: min(620px, calc(100vw - 32px));
         max-height: calc(100vh - 32px);
+        overflow-y: auto;
         /* Centrada: los estilos generales quitan el margen automático del <dialog>. */
         margin: auto;
         padding: 0;
@@ -530,6 +531,43 @@
     .sp-egreso-campos .form-input { width: 100%; }
     .sp-egreso-campos .errorlist { margin: 4px 0 0; }
     .sp-egreso-ayuda { display: block; margin-top: 4px; color: var(--text-muted); font-size: 12px; font-weight: 600; }
+    /* Lo oculto no se ve aunque tenga su propio display (grillas). */
+    .sp-dialogo [hidden] { display: none !important; }
+    .sp-egreso-extra {
+        padding: 12px 14px;
+        border: 1px solid var(--border-color);
+        border-radius: 12px;
+        background: var(--surface-muted);
+    }
+    .sp-egreso-extra-titulo { margin-bottom: 10px; color: var(--text-main); font-size: 13.5px; font-weight: 800; }
+    .sp-egreso-opciones { display: flex; flex-wrap: wrap; gap: 8px 18px; margin: 0 0 10px; padding: 0; border: 0; }
+    .sp-egreso-opciones legend { width: 100%; margin-bottom: 6px; padding: 0; color: var(--text-soft); font-size: 13px; font-weight: 700; }
+    .sp-egreso-campos label.sp-egreso-opcion {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        margin: 0;
+        color: var(--text-main);
+        font-size: 13.5px;
+        font-weight: 600;
+        cursor: pointer;
+    }
+    .sp-egreso-equipo { margin: 0; font-size: 13px; font-weight: 700; }
+    .sp-egreso-equipo.is-ok { color: var(--tint-green-fg); }
+    .sp-egreso-equipo.is-error { color: var(--tint-red-fg); }
+    .sp-egreso-parte { margin-top: 12px; padding-top: 10px; border-top: 1px dashed var(--input-border); }
+    .sp-egreso-parte-titulo {
+        margin-bottom: 8px;
+        color: var(--text-muted);
+        font-size: 11px;
+        font-weight: 800;
+        letter-spacing: .4px;
+        text-transform: uppercase;
+    }
+    .sp-mixto-suma { margin-top: 10px; }
+    .sp-mixto-suma.is-ok { color: var(--tint-green-fg); }
+    .sp-mixto-suma.is-error { color: var(--tint-red-fg); }
+    .sp-egreso-detalle { display: block; margin-top: 2px; color: var(--text-muted); font-size: 12px; font-weight: 600; }
     .sp-egreso-aviso {
         margin: 12px 0 0;
         padding: 9px 12px;
@@ -650,6 +688,7 @@
                     <th>Producto</th>
                     <th>Asesora</th>
                     <th>Categoría</th>
+                    <th>Forma de pago</th>
                     <th>Registrado por</th>
                     <th class="num">Monto</th>
                 </tr>
@@ -658,9 +697,10 @@
                 {% for e in caja.egresos %}
                 <tr>
                     <td>{{ e.fecha|date:"d/m/Y" }}</td>
-                    <td><strong>{{ e.concepto }}</strong></td>
+                    <td><strong>{{ e.concepto }}</strong>{% with detalle=e.detalle_categoria %}{% if detalle %}<span class="sp-egreso-detalle">{{ detalle }}</span>{% endif %}{% endwith %}</td>
                     <td>{% if e.asesora %}{{ e.asesora.get_full_name|default:e.asesora.username }}{% else %}—{% endif %}</td>
                     <td>{{ e.categoria.icono }} {{ e.categoria.nombre }}</td>
+                    <td>{{ e.forma_pago_texto }}</td>
                     <td>{% if e.registrado_por %}{{ e.registrado_por.get_full_name|default:e.registrado_por.username }}{% else %}—{% endif %}</td>
                     <td class="num">−{{ e.monto|dinero_signo }}</td>
                 </tr>
@@ -721,6 +761,143 @@
                 <label for="{{ form_egreso.categoria.id_for_label }}">{{ form_egreso.categoria.label }} *</label>
                 {{ form_egreso.categoria }}
                 {{ form_egreso.categoria.errors }}
+            </div>
+
+            {# Repuestos: para un equipo (sede + número, debe existir) o general. #}
+            <div class="is-ancho sp-egreso-extra" id="sp-egreso-repuesto" data-categorias="{{ form_egreso.categorias_repuestos|join:',' }}" hidden>
+                <div class="sp-egreso-extra-titulo">🔧 Repuesto</div>
+                <fieldset class="sp-egreso-opciones">
+                    <legend>{{ form_egreso.repuesto_alcance.label }} *</legend>
+                    {% for opcion in form_egreso.repuesto_alcance %}
+                    <label class="sp-egreso-opcion" for="{{ opcion.id_for_label }}">{{ opcion.tag }} {{ opcion.choice_label }}</label>
+                    {% endfor %}
+                </fieldset>
+                {{ form_egreso.repuesto_alcance.errors }}
+                <div class="sp-egreso-campos" id="sp-egreso-repuesto-equipo">
+                    <div>
+                        <label for="{{ form_egreso.repuesto_sede.id_for_label }}">{{ form_egreso.repuesto_sede.label }} *</label>
+                        {{ form_egreso.repuesto_sede }}
+                        {{ form_egreso.repuesto_sede.errors }}
+                    </div>
+                    <div>
+                        <label for="{{ form_egreso.repuesto_numero.id_for_label }}">{{ form_egreso.repuesto_numero.label }} *</label>
+                        {{ form_egreso.repuesto_numero }}
+                        {{ form_egreso.repuesto_numero.errors }}
+                    </div>
+                    <p class="is-ancho sp-egreso-equipo" id="sp-egreso-equipo-info" data-url="{% url 'econotec:seguimiento_pago_equipo' %}" aria-live="polite" hidden></p>
+                </div>
+            </div>
+
+            {# Compra de equipo: qué equipo se compra. #}
+            <div class="is-ancho sp-egreso-extra" id="sp-egreso-compra" data-categorias="{{ form_egreso.categorias_compra|join:',' }}" hidden>
+                <div class="sp-egreso-extra-titulo">🖥️ Compra de equipo</div>
+                <div class="sp-egreso-campos">
+                    <div>
+                        <label for="{{ form_egreso.compra_tipo_equipo.id_for_label }}">{{ form_egreso.compra_tipo_equipo.label }} *</label>
+                        {{ form_egreso.compra_tipo_equipo }}
+                        {{ form_egreso.compra_tipo_equipo.errors }}
+                    </div>
+                    <div id="sp-egreso-compra-otro" hidden>
+                        <label for="{{ form_egreso.compra_tipo_equipo_otro.id_for_label }}">{{ form_egreso.compra_tipo_equipo_otro.label }} *</label>
+                        {{ form_egreso.compra_tipo_equipo_otro }}
+                        {{ form_egreso.compra_tipo_equipo_otro.errors }}
+                    </div>
+                </div>
+            </div>
+
+            {# Forma de pago, como en Egresos del admin: efectivo, transferencia, tarjeta o mixto. #}
+            <div class="is-ancho sp-egreso-extra" id="sp-egreso-pago">
+                <div class="sp-egreso-extra-titulo">💳 Forma de pago</div>
+                <div class="sp-egreso-campos">
+                    <div>
+                        <label for="{{ form_egreso.metodo.id_for_label }}">{{ form_egreso.metodo.label }} *</label>
+                        {{ form_egreso.metodo }}
+                        {{ form_egreso.metodo.errors }}
+                    </div>
+                    <div data-pago="transferencia" hidden>
+                        <label for="{{ form_egreso.banco.id_for_label }}">{{ form_egreso.banco.label }} *</label>
+                        {{ form_egreso.banco }}
+                        {{ form_egreso.banco.errors }}
+                    </div>
+                    <div data-pago="tarjeta" hidden>
+                        <label for="{{ form_egreso.tarjeta_app.id_for_label }}">{{ form_egreso.tarjeta_app.label }} *</label>
+                        {{ form_egreso.tarjeta_app }}
+                        {{ form_egreso.tarjeta_app.errors }}
+                    </div>
+                    <div data-pago="banco-otro" hidden>
+                        <label for="{{ form_egreso.banco_otro.id_for_label }}">{{ form_egreso.banco_otro.label }} *</label>
+                        {{ form_egreso.banco_otro }}
+                        {{ form_egreso.banco_otro.errors }}
+                    </div>
+                    <div class="is-ancho" data-pago="transferencia" hidden>
+                        <label for="{{ form_egreso.comprobante_url.id_for_label }}">{{ form_egreso.comprobante_url.label }}</label>
+                        {{ form_egreso.comprobante_url }}
+                        {{ form_egreso.comprobante_url.errors }}
+                    </div>
+                </div>
+                <div data-pago="mixto" hidden>
+                    <div class="sp-egreso-parte">
+                        <div class="sp-egreso-parte-titulo">Pago 1</div>
+                        <div class="sp-egreso-campos">
+                            <div>
+                                <label for="{{ form_egreso.monto_1.id_for_label }}">{{ form_egreso.monto_1.label }} *</label>
+                                {{ form_egreso.monto_1 }}
+                                {{ form_egreso.monto_1.errors }}
+                            </div>
+                            <div>
+                                <label for="{{ form_egreso.metodo_1.id_for_label }}">{{ form_egreso.metodo_1.label }} *</label>
+                                {{ form_egreso.metodo_1 }}
+                                {{ form_egreso.metodo_1.errors }}
+                            </div>
+                            <div data-parte-pago="1-transferencia" hidden>
+                                <label for="{{ form_egreso.banco_1.id_for_label }}">{{ form_egreso.banco_1.label }} *</label>
+                                {{ form_egreso.banco_1 }}
+                                {{ form_egreso.banco_1.errors }}
+                            </div>
+                            <div data-parte-pago="1-tarjeta" hidden>
+                                <label for="{{ form_egreso.tarjeta_app_1.id_for_label }}">{{ form_egreso.tarjeta_app_1.label }} *</label>
+                                {{ form_egreso.tarjeta_app_1 }}
+                                {{ form_egreso.tarjeta_app_1.errors }}
+                            </div>
+                            <div data-parte-pago="1-banco-otro" hidden>
+                                <label for="{{ form_egreso.banco_otro_1.id_for_label }}">{{ form_egreso.banco_otro_1.label }} *</label>
+                                {{ form_egreso.banco_otro_1 }}
+                                {{ form_egreso.banco_otro_1.errors }}
+                            </div>
+                        </div>
+                    </div>
+                    <div class="sp-egreso-parte">
+                        <div class="sp-egreso-parte-titulo">Pago 2</div>
+                        <div class="sp-egreso-campos">
+                            <div>
+                                <label for="{{ form_egreso.monto_2.id_for_label }}">{{ form_egreso.monto_2.label }} *</label>
+                                {{ form_egreso.monto_2 }}
+                                {{ form_egreso.monto_2.errors }}
+                            </div>
+                            <div>
+                                <label for="{{ form_egreso.metodo_2.id_for_label }}">{{ form_egreso.metodo_2.label }} *</label>
+                                {{ form_egreso.metodo_2 }}
+                                {{ form_egreso.metodo_2.errors }}
+                            </div>
+                            <div data-parte-pago="2-transferencia" hidden>
+                                <label for="{{ form_egreso.banco_2.id_for_label }}">{{ form_egreso.banco_2.label }} *</label>
+                                {{ form_egreso.banco_2 }}
+                                {{ form_egreso.banco_2.errors }}
+                            </div>
+                            <div data-parte-pago="2-tarjeta" hidden>
+                                <label for="{{ form_egreso.tarjeta_app_2.id_for_label }}">{{ form_egreso.tarjeta_app_2.label }} *</label>
+                                {{ form_egreso.tarjeta_app_2 }}
+                                {{ form_egreso.tarjeta_app_2.errors }}
+                            </div>
+                            <div data-parte-pago="2-banco-otro" hidden>
+                                <label for="{{ form_egreso.banco_otro_2.id_for_label }}">{{ form_egreso.banco_otro_2.label }} *</label>
+                                {{ form_egreso.banco_otro_2 }}
+                                {{ form_egreso.banco_otro_2.errors }}
+                            </div>
+                        </div>
+                    </div>
+                    <p class="sp-egreso-ayuda sp-mixto-suma" id="sp-mixto-suma">Pago 1 + Pago 2 debe ser igual al monto del egreso.</p>
+                </div>
             </div>
         </div>
         <p class="sp-egreso-aviso" id="sp-egreso-aviso" hidden
@@ -942,6 +1119,119 @@
     form.addEventListener('submit', () => { enviar.disabled = true; });
     // Al volver con «Atrás» el botón no debe quedar bloqueado.
     window.addEventListener('pageshow', revisar);
+
+    // Campos según la categoría: «Repuestos» y «Compra de equipo».
+    const categoria = form.querySelector('[name="categoria"]');
+    const bloqueRepuesto = document.getElementById('sp-egreso-repuesto');
+    const bloqueCompra = document.getElementById('sp-egreso-compra');
+    const repuestoEquipo = document.getElementById('sp-egreso-repuesto-equipo');
+    const tipoCompra = form.querySelector('[name="compra_tipo_equipo"]');
+    const compraOtro = document.getElementById('sp-egreso-compra-otro');
+    const idsDe = bloque => (bloque.dataset.categorias || '').split(',').filter(Boolean);
+    function porCategoria() {
+        bloqueRepuesto.hidden = !idsDe(bloqueRepuesto).includes(categoria.value);
+        bloqueCompra.hidden = !idsDe(bloqueCompra).includes(categoria.value);
+        const alcance = form.querySelector('[name="repuesto_alcance"]:checked');
+        repuestoEquipo.hidden = !alcance || alcance.value !== 'equipo';
+        compraOtro.hidden = tipoCompra.value !== 'otro';
+    }
+    categoria.addEventListener('change', porCategoria);
+    form.querySelectorAll('[name="repuesto_alcance"]').forEach(opcion => opcion.addEventListener('change', porCategoria));
+    tipoCompra.addEventListener('change', porCategoria);
+
+    // Confirma el equipo del repuesto (G/U + número) con su cliente.
+    const sedeRepuesto = form.querySelector('[name="repuesto_sede"]');
+    const numeroRepuesto = form.querySelector('[name="repuesto_numero"]');
+    const infoEquipo = document.getElementById('sp-egreso-equipo-info');
+    let consultaEquipo = 0;
+    let esperaEquipo = null;
+    async function buscarEquipo() {
+        const sede = sedeRepuesto.value;
+        const numero = (numeroRepuesto.value || '').trim();
+        const id = ++consultaEquipo;
+        infoEquipo.classList.remove('is-ok', 'is-error');
+        if (!sede || !/^[0-9]+$/.test(numero)) {
+            infoEquipo.hidden = true;
+            return;
+        }
+        const codigo = (sede === 'quito' ? 'U' : 'G') + numero;
+        try {
+            const respuesta = await fetch(infoEquipo.dataset.url + '?sede=' + encodeURIComponent(sede) + '&numero=' + numero, {
+                headers: { 'Accept': 'application/json' },
+                credentials: 'same-origin',
+            });
+            const datos = await respuesta.json();
+            if (id !== consultaEquipo) return;
+            if (datos.existe) {
+                infoEquipo.textContent = '✓ ' + datos.codigo + ' · ' + datos.cliente + ' · ' + datos.equipo;
+                infoEquipo.classList.add('is-ok');
+            } else {
+                infoEquipo.textContent = 'No existe el equipo ' + codigo + ' en el sistema.';
+                infoEquipo.classList.add('is-error');
+            }
+            infoEquipo.hidden = false;
+        } catch (error) {
+            // Sin respuesta no se muestra nada: al registrar, el servidor revisa el equipo.
+            if (id === consultaEquipo) infoEquipo.hidden = true;
+        }
+    }
+    // Al corregir el equipo, el error anterior del servidor se quita.
+    const quitarErroresEquipo = () => repuestoEquipo.querySelectorAll('.errorlist').forEach(error => { error.hidden = true; });
+    sedeRepuesto.addEventListener('change', () => {
+        quitarErroresEquipo();
+        buscarEquipo();
+    });
+    numeroRepuesto.addEventListener('input', () => {
+        quitarErroresEquipo();
+        clearTimeout(esperaEquipo);
+        esperaEquipo = setTimeout(buscarEquipo, 300);
+    });
+
+    // Forma de pago: banco, tarjeta/app o las dos partes del pago mixto.
+    const metodo = form.querySelector('[name="metodo"]');
+    const valorDe = nombre => (form.querySelector('[name="' + nombre + '"]') || {}).value || '';
+    const mostrar = (selector, visible) => form.querySelectorAll(selector).forEach(el => { el.hidden = !visible; });
+    const sumaMixto = document.getElementById('sp-mixto-suma');
+    const dinero = valor => '$' + valor.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    function revisarMixto() {
+        sumaMixto.classList.remove('is-ok', 'is-error');
+        const total = Number(valorDe('monto') || 0);
+        const suma = Number(valorDe('monto_1') || 0) + Number(valorDe('monto_2') || 0);
+        if (metodo.value !== 'mixto' || !valorDe('monto_1') || !valorDe('monto_2')) {
+            sumaMixto.textContent = 'Pago 1 + Pago 2 debe ser igual al monto del egreso.';
+            return;
+        }
+        const cuadra = centavos(suma) === centavos(total);
+        sumaMixto.textContent = cuadra
+            ? '✓ Pago 1 + Pago 2 = ' + dinero(suma) + ', igual al monto del egreso.'
+            : 'Pago 1 + Pago 2 = ' + dinero(suma) + '; el monto del egreso es ' + dinero(total) + '.';
+        sumaMixto.classList.add(cuadra ? 'is-ok' : 'is-error');
+    }
+    function porMetodo() {
+        const elegido = metodo.value;
+        mostrar('[data-pago="transferencia"]', elegido === 'transferencia');
+        mostrar('[data-pago="banco-otro"]', elegido === 'transferencia' && valorDe('banco') === 'otro');
+        mostrar('[data-pago="tarjeta"]', elegido === 'tarjeta');
+        mostrar('[data-pago="mixto"]', elegido === 'mixto');
+        [1, 2].forEach(n => {
+            const parte = valorDe('metodo_' + n);
+            mostrar('[data-parte-pago="' + n + '-transferencia"]', parte === 'transferencia');
+            mostrar('[data-parte-pago="' + n + '-banco-otro"]', parte === 'transferencia' && valorDe('banco_' + n) === 'otro');
+            mostrar('[data-parte-pago="' + n + '-tarjeta"]', parte === 'tarjeta');
+        });
+        revisarMixto();
+    }
+    ['metodo', 'banco', 'metodo_1', 'banco_1', 'metodo_2', 'banco_2'].forEach(nombre => {
+        form.querySelector('[name="' + nombre + '"]').addEventListener('change', porMetodo);
+    });
+    ['monto', 'monto_1', 'monto_2'].forEach(nombre => {
+        form.querySelector('[name="' + nombre + '"]').addEventListener('input', revisarMixto);
+    });
+
+    porCategoria();
+    porMetodo();
+    // Si el servidor ya marcó el equipo, no se repite el mismo aviso.
+    if (numeroRepuesto.value && !repuestoEquipo.querySelector('.errorlist')) buscarEquipo();
     if (dialogo.dataset.abrir === 'true') abrir();
 })();
 

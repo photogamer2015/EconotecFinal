@@ -439,6 +439,27 @@ def _dinero(valor):
 
 
 @admin_requerido
+def seguimiento_pago_equipo(request):
+    """Equipo de ?sede=guayaquil|quito&numero=N, para confirmar el de un repuesto."""
+    sede = (request.GET.get('sede') or '').strip()
+    numero = (request.GET.get('numero') or '').strip()
+    if sede not in SEDES_EQUIPOS or not numero.isdigit():
+        return JsonResponse({'existe': False}, status=400)
+    ingreso = (
+        IngresoEquipo.objects.filter(sede=sede, numero_equipo=int(numero))
+        .select_related('cliente').first()
+    )
+    if ingreso is None:
+        return JsonResponse({'existe': False})
+    return JsonResponse({
+        'existe': True,
+        'codigo': ingreso.codigo_equipo,
+        'cliente': ingreso.cliente.nombres,
+        'equipo': ' '.join(filter(None, [ingreso.tipo_equipo_display, ingreso.marca, ingreso.modelo_serie])),
+    })
+
+
+@admin_requerido
 def seguimiento_pago_saldo(request):
     """Saldo disponible de la semana de ?fecha=AAAA-MM-DD, para el formulario de egreso."""
     try:

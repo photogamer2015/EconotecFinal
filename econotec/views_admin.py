@@ -2103,7 +2103,9 @@ def egresos_lista(request):
     ano_filtro = (request.GET.get('ano') or '').strip()
     mes_filtro = (request.GET.get('mes') or '').strip()
 
-    qs = Egreso.objects.select_related('categoria', 'registrado_por', 'asesora').order_by('-fecha', '-creado')
+    qs = Egreso.objects.select_related(
+        'categoria', 'registrado_por', 'asesora', 'ingreso_repuesto__cliente',
+    ).order_by('-fecha', '-creado')
     if cat_filtro and cat_filtro.isdigit():
         qs = qs.filter(categoria_id=int(cat_filtro))
     if ano_filtro and ano_filtro.isdigit():
@@ -2266,14 +2268,17 @@ def export_egresos(request):
     ws = wb.active
     ws.title = 'Egresos Econotec'
 
-    headers = ['Fecha', 'Categoría', 'Concepto', 'Monto', 'Notas', 'Registrado por', 'Asesora']
+    headers = ['Fecha', 'Categoría', 'Concepto', 'Monto', 'Notas', 'Registrado por', 'Asesora',
+               'Detalle', 'Forma de pago']
     for col, h in enumerate(headers, start=1):
         c = ws.cell(row=1, column=col, value=h)
         c.font = Font(bold=True, color='FFFFFF')
         c.fill = PatternFill('solid', fgColor='F97618')
         c.alignment = Alignment(horizontal='center')
 
-    qs = Egreso.objects.select_related('categoria', 'registrado_por', 'asesora').order_by('-fecha')
+    qs = Egreso.objects.select_related(
+        'categoria', 'registrado_por', 'asesora', 'ingreso_repuesto__cliente',
+    ).order_by('-fecha')
     for row, e in enumerate(qs, start=2):
         ws.cell(row=row, column=1, value=e.fecha.strftime('%d/%m/%Y'))
         ws.cell(row=row, column=2, value=e.categoria.nombre)
@@ -2284,8 +2289,10 @@ def export_egresos(request):
                 value=e.registrado_por.get_full_name() if e.registrado_por else '')
         ws.cell(row=row, column=7,
                 value=(e.asesora.get_full_name() or e.asesora.username) if e.asesora else '')
+        ws.cell(row=row, column=8, value=e.detalle_categoria)
+        ws.cell(row=row, column=9, value=e.forma_pago_texto)
 
-    for col in range(1, 8):
+    for col in range(1, 10):
         ws.column_dimensions[chr(64 + col)].width = 22
 
     buf = BytesIO()

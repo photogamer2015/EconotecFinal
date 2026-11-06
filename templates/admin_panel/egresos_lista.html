@@ -62,6 +62,7 @@
                 <th>Categoría</th>
                 <th>Concepto</th>
                 <th>Asesora</th>
+                <th>Forma de pago</th>
                 <th>Monto</th>
                 <th>Notas</th>
                 <th>Por</th>
@@ -73,8 +74,9 @@
             <tr>
                 <td>{{ e.fecha|date:"d/m/Y" }}</td>
                 <td>{{ e.categoria.icono }} {{ e.categoria.nombre }}</td>
-                <td><strong>{{ e.concepto }}</strong></td>
+                <td><strong>{{ e.concepto }}</strong>{% with detalle=e.detalle_categoria %}{% if detalle %}<br><small style="color: var(--text-muted);">{{ detalle }}</small>{% endif %}{% endwith %}</td>
                 <td>{% if e.asesora %}{{ e.asesora.get_full_name|default:e.asesora.username }}{% else %}—{% endif %}</td>
+                <td>{{ e.forma_pago_texto }}</td>
                 <td style="color: var(--danger); font-weight: 700;">{{ e.monto|dinero_signo }}</td>
                 <td>{{ e.notas|truncatechars:35|default:"—" }}</td>
                 <td>{{ e.registrado_por.username|default:"—" }}</td>

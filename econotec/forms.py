@@ -11,6 +11,7 @@ from decimal import Decimal, InvalidOperation
 from .models import (
     Cliente, IngresoEquipo, Abono, SalidaEquipo,
     CategoriaEgreso, Egreso, AvisoPanel, NotificacionAsesora, InventarioItem,
+    SEDE_PREFIJOS, TIPOS_EQUIPO,
 )
 from .permisos import GRUPOS_TECNICO, GRUPOS_ADMIN, GRUPOS_ASESOR_COMERCIAL
 
@@ -2460,44 +2461,78 @@ class EgresoForm(forms.ModelForm):
 
     def clean(self):
         cleaned = super().clean()
-        metodo = cleaned.get('metodo')
         monto = cleaned.get('monto') or Decimal('0.00')
         if monto <= 0:
             self.add_error('monto', 'El monto debe ser mayor que cero.')
-        if metodo == 'transferencia':
-            banco = cleaned.get('banco') or ''
-            if not banco:
-                self.add_error('banco', 'Indica el banco usado para el egreso.')
-            if banco == 'otro' and not (cleaned.get('banco_otro') or '').strip():
-                self.add_error('banco_otro', 'Especifica el nombre del banco.')
-        elif metodo == 'tarjeta' and not cleaned.get('tarjeta_app'):
-            self.add_error('tarjeta_app', 'Selecciona la tarjeta o aplicación usada.')
-        elif metodo == 'mixto':
-            monto_1 = cleaned.get('monto_1') or Decimal('0.00')
-            monto_2 = cleaned.get('monto_2') or Decimal('0.00')
-            if monto_1 <= 0:
-                self.add_error('monto_1', 'Ingresa el primer monto.')
-            if monto_2 <= 0:
-                self.add_error('monto_2', 'Ingresa el segundo monto.')
-            if not cleaned.get('metodo_1'):
-                self.add_error('metodo_1', 'Selecciona el primer método.')
-            elif cleaned.get('metodo_1') == 'mixto':
-                self.add_error('metodo_1', 'Selecciona un método individual para el primer pago.')
-            if not cleaned.get('metodo_2'):
-                self.add_error('metodo_2', 'Selecciona el segundo método.')
-            elif cleaned.get('metodo_2') == 'mixto':
-                self.add_error('metodo_2', 'Selecciona un método individual para el segundo pago.')
-            if cleaned.get('metodo_1') == 'transferencia' and not cleaned.get('banco_1'):
-                self.add_error('banco_1', 'Indica el banco del primer pago.')
-            if cleaned.get('metodo_2') == 'transferencia' and not cleaned.get('banco_2'):
-                self.add_error('banco_2', 'Indica el banco del segundo pago.')
-            if cleaned.get('metodo_1') == 'transferencia' and cleaned.get('banco_1') == 'otro' and not cleaned.get('banco_otro_1'):
-                self.add_error('banco_otro_1', 'Especifica el banco del primer pago.')
-            if cleaned.get('metodo_2') == 'transferencia' and cleaned.get('banco_2') == 'otro' and not cleaned.get('banco_otro_2'):
-                self.add_error('banco_otro_2', 'Especifica el banco del segundo pago.')
-            if monto_1 + monto_2 != monto:
-                self.add_error('monto_2', 'La suma de los pagos mixtos debe ser igual al monto del egreso.')
+        _validar_pago_egreso(self, cleaned, monto)
         return cleaned
+
+
+def _validar_pago_egreso(form, cleaned, monto, app_en_mixto=False):
+    """Método de pago de un egreso: banco, tarjeta/app o las dos partes del mixto.
+
+    `app_en_mixto` pide además la tarjeta/app de cada parte del mixto pagada con tarjeta.
+    """
+    metodo = cleaned.get('metodo')
+    if metodo == 'transferencia':
+        banco = cleaned.get('banco') or ''
+        if not banco:
+            form.add_error('banco', 'Indica el banco usado para el egreso.')
+        if banco == 'otro' and not (cleaned.get('banco_otro') or '').strip():
+            form.add_error('banco_otro', 'Especifica el nombre del banco.')
+    elif metodo == 'tarjeta' and not cleaned.get('tarjeta_app'):
+        form.add_error('tarjeta_app', 'Selecciona la tarjeta o aplicación usada.')
+    elif metodo == 'mixto':
+        monto_1 = cleaned.get('monto_1') or Decimal('0.00')
+        monto_2 = cleaned.get('monto_2') or Decimal('0.00')
+        if monto_1 <= 0:
+            form.add_error('monto_1', 'Ingresa el primer monto.')
+        if monto_2 <= 0:
+            form.add_error('monto_2', 'Ingresa el segundo monto.')
+        if not cleaned.get('metodo_1'):
+            form.add_error('metodo_1', 'Selecciona el primer método.')
+        elif cleaned.get('metodo_1') == 'mixto':
+            form.add_error('metodo_1', 'Selecciona un método individual para el primer pago.')
+        if not cleaned.get('metodo_2'):
+            form.add_error('metodo_2', 'Selecciona el segundo método.')
+        elif cleaned.get('metodo_2') == 'mixto':
+            form.add_error('metodo_2', 'Selecciona un método individual para el segundo pago.')
+        if cleaned.get('metodo_1') == 'transferencia' and not cleaned.get('banco_1'):
+            form.add_error('banco_1', 'Indica el banco del primer pago.')
+        if cleaned.get('metodo_2') == 'transferencia' and not cleaned.get('banco_2'):
+            form.add_error('banco_2', 'Indica el banco del segundo pago.')
+        if cleaned.get('metodo_1') == 'transferencia' and cleaned.get('banco_1') == 'otro' and not cleaned.get('banco_otro_1'):
+            form.add_error('banco_otro_1', 'Especifica el banco del primer pago.')
+        if cleaned.get('metodo_2') == 'transferencia' and cleaned.get('banco_2') == 'otro' and not cleaned.get('banco_otro_2'):
+            form.add_error('banco_otro_2', 'Especifica el banco del segundo pago.')
+        if app_en_mixto:
+            if cleaned.get('metodo_1') == 'tarjeta' and not cleaned.get('tarjeta_app_1'):
+                form.add_error('tarjeta_app_1', 'Selecciona la tarjeta o aplicación del primer pago.')
+            if cleaned.get('metodo_2') == 'tarjeta' and not cleaned.get('tarjeta_app_2'):
+                form.add_error('tarjeta_app_2', 'Selecciona la tarjeta o aplicación del segundo pago.')
+        if monto_1 + monto_2 != monto:
+            form.add_error('monto_2', 'La suma de los pagos mixtos debe ser igual al monto del egreso.')
+
+
+def _limpiar_pago_egreso(egreso):
+    """Borra los datos de pago que no corresponden al método elegido."""
+    if egreso.metodo != 'transferencia':
+        egreso.banco = egreso.banco_otro = egreso.comprobante_url = ''
+    elif egreso.banco != 'otro':
+        egreso.banco_otro = ''
+    if egreso.metodo != 'tarjeta':
+        egreso.tarjeta_app = ''
+    for n in (1, 2):
+        metodo = getattr(egreso, f'metodo_{n}') if egreso.metodo == 'mixto' else ''
+        if egreso.metodo != 'mixto':
+            setattr(egreso, f'monto_{n}', None)
+            setattr(egreso, f'metodo_{n}', '')
+        if metodo != 'transferencia':
+            setattr(egreso, f'banco_{n}', '')
+        if metodo != 'transferencia' or getattr(egreso, f'banco_{n}') != 'otro':
+            setattr(egreso, f'banco_otro_{n}', '')
+        if metodo != 'tarjeta':
+            setattr(egreso, f'tarjeta_app_{n}', '')
 
 
 def _campo_asesora(campo, actual_id=None):
@@ -2507,6 +2542,11 @@ def _campo_asesora(campo, actual_id=None):
         asesoras |= Q(pk=actual_id)
     campo.queryset = User.objects.filter(asesoras).distinct().order_by('first_name', 'last_name', 'username')
     campo.label_from_instance = lambda user: user.get_full_name() or user.username
+
+
+_BANCOS_EGRESO = [('', '— Selecciona el banco —')] + list(Egreso._meta.get_field('banco').choices)
+_APPS_EGRESO = [('', '— Selecciona —')] + list(Egreso._meta.get_field('tarjeta_app').choices)
+_METODOS_PARTE = [('', '— Método —')] + [m for m in Egreso.METODOS_PAGO if m[0] != 'mixto']
 
 
 class EgresoSeguimientoForm(forms.ModelForm):
@@ -2519,17 +2559,65 @@ class EgresoSeguimientoForm(forms.ModelForm):
 
     `semana` es el lunes de la hoja abierta: la fecha debe caer en esa semana.
     Para registrar en otra semana se abre su hoja.
+
+    Según la categoría pide más datos: en «Repuestos», el equipo (sede G/U y
+    número, que debe existir) o «General»; en «Compra de equipo», el tipo de
+    equipo. El método de pago es el de cualquier egreso, mixto incluido.
     """
+
+    repuesto_alcance = forms.ChoiceField(
+        label='¿Para qué es el repuesto?',
+        choices=[('equipo', 'Para un equipo'), ('general', 'General (no aplica número de equipo)')],
+        required=False, initial='equipo', widget=forms.RadioSelect,
+    )
+    repuesto_sede = forms.ChoiceField(
+        label='Sede del equipo',
+        choices=[('', '— Selecciona la sede —'), ('guayaquil', 'Guayaquil (G)'), ('quito', 'Quito (U)')],
+        required=False, widget=forms.Select(attrs={'class': 'form-input'}),
+    )
+    repuesto_numero = forms.IntegerField(
+        label='Número de equipo', required=False, min_value=1,
+        widget=forms.NumberInput(attrs={'class': 'form-input', 'min': '1', 'placeholder': 'Ej.: 1014'}),
+    )
+    banco_1 = forms.ChoiceField(label='Banco', choices=_BANCOS_EGRESO, required=False,
+                                widget=forms.Select(attrs={'class': 'form-input'}))
+    banco_2 = forms.ChoiceField(label='Banco', choices=_BANCOS_EGRESO, required=False,
+                                widget=forms.Select(attrs={'class': 'form-input'}))
+    tarjeta_app_1 = forms.ChoiceField(label='Tarjeta / App', choices=_APPS_EGRESO, required=False,
+                                      widget=forms.Select(attrs={'class': 'form-input'}))
+    tarjeta_app_2 = forms.ChoiceField(label='Tarjeta / App', choices=_APPS_EGRESO, required=False,
+                                      widget=forms.Select(attrs={'class': 'form-input'}))
+    metodo_1 = forms.ChoiceField(label='Método', choices=_METODOS_PARTE, required=False,
+                                 widget=forms.Select(attrs={'class': 'form-input'}))
+    metodo_2 = forms.ChoiceField(label='Método', choices=_METODOS_PARTE, required=False,
+                                 widget=forms.Select(attrs={'class': 'form-input'}))
 
     class Meta:
         model = Egreso
-        fields = ['fecha', 'concepto', 'asesora', 'categoria', 'monto']
+        fields = [
+            'fecha', 'concepto', 'asesora', 'categoria', 'monto',
+            'compra_tipo_equipo', 'compra_tipo_equipo_otro',
+            'metodo', 'banco', 'banco_otro', 'tarjeta_app', 'comprobante_url',
+            'monto_1', 'metodo_1', 'banco_1', 'banco_otro_1', 'tarjeta_app_1',
+            'monto_2', 'metodo_2', 'banco_2', 'banco_otro_2', 'tarjeta_app_2',
+        ]
         labels = {
             'fecha': 'Fecha del egreso',
             'concepto': 'Nombre del producto',
             'asesora': 'Asesora que aplica el egreso',
             'categoria': 'Categoría',
             'monto': 'Monto (USD)',
+            'compra_tipo_equipo': '¿Qué equipo vas a comprar?',
+            'compra_tipo_equipo_otro': '¿Cuál?',
+            'metodo': 'Método de pago',
+            'banco': 'Banco',
+            'banco_otro': 'Nombre del banco',
+            'tarjeta_app': 'Tarjeta / App',
+            'comprobante_url': 'Link del comprobante (opcional)',
+            'monto_1': 'Monto',
+            'banco_otro_1': 'Nombre del banco',
+            'monto_2': 'Monto',
+            'banco_otro_2': 'Nombre del banco',
         }
         error_messages = {
             'fecha': {'required': 'Elige la fecha del egreso.'},
@@ -2551,6 +2639,19 @@ class EgresoSeguimientoForm(forms.ModelForm):
             'monto': forms.NumberInput(attrs={
                 'class': 'form-input', 'step': '0.01', 'min': '0.01', 'inputmode': 'decimal',
             }),
+            'compra_tipo_equipo': forms.Select(attrs={'class': 'form-input'}),
+            'compra_tipo_equipo_otro': forms.TextInput(attrs={
+                'class': 'form-input', 'placeholder': 'Ej.: Proyector', 'maxlength': 100,
+            }),
+            'metodo': forms.Select(attrs={'class': 'form-input'}),
+            'banco': forms.Select(attrs={'class': 'form-input'}),
+            'banco_otro': forms.TextInput(attrs={'class': 'form-input', 'placeholder': 'Ej.: Cooperativa JEP'}),
+            'tarjeta_app': forms.Select(attrs={'class': 'form-input'}),
+            'comprobante_url': forms.URLInput(attrs={'class': 'form-input', 'placeholder': 'https://…'}),
+            'monto_1': forms.NumberInput(attrs={'class': 'form-input', 'step': '0.01', 'min': '0.01'}),
+            'banco_otro_1': forms.TextInput(attrs={'class': 'form-input', 'placeholder': 'Nombre del banco'}),
+            'monto_2': forms.NumberInput(attrs={'class': 'form-input', 'step': '0.01', 'min': '0.01'}),
+            'banco_otro_2': forms.TextInput(attrs={'class': 'form-input', 'placeholder': 'Nombre del banco'}),
         }
 
     def __init__(self, *args, semana=None, **kwargs):
@@ -2558,6 +2659,7 @@ class EgresoSeguimientoForm(forms.ModelForm):
 
         super().__init__(*args, **kwargs)
         self.saldo = None
+        self.ingreso_repuesto = None
         self.semana = semana
         self.domingo = fin_semana(semana) if semana else None
         self.etiqueta_semana = etiqueta_semana(semana) if semana else ''
@@ -2566,11 +2668,21 @@ class EgresoSeguimientoForm(forms.ModelForm):
             self.fields['fecha'].widget.attrs.update(
                 min=semana.isoformat(), max=self.domingo.isoformat(),
             )
+        categorias = list(CategoriaEgreso.objects.filter(activo=True))
         self.fields['categoria'].queryset = CategoriaEgreso.objects.filter(activo=True)
         self.fields['categoria'].empty_label = '— Selecciona categoría —'
+        # Para mostrar los campos de cada categoría en el navegador.
+        self.categorias_repuestos = [c.pk for c in categorias if c.es_repuestos]
+        self.categorias_compra = [c.pk for c in categorias if c.es_compra_equipo]
         _campo_asesora(self.fields['asesora'])
         self.fields['asesora'].required = True
         self.fields['asesora'].empty_label = '— Selecciona la asesora —'
+        self.fields['compra_tipo_equipo'].choices = [('', '— Selecciona el tipo de equipo —')] + [
+            (valor, 'Otro' if valor == 'otro' else nombre) for valor, nombre in TIPOS_EQUIPO
+        ]
+        self.fields['banco'].choices = _BANCOS_EGRESO
+        self.fields['tarjeta_app'].choices = _APPS_EGRESO
+        self.fields['metodo'].choices = list(Egreso.METODOS_PAGO)
 
     def clean(self):
         from .seguimiento_pago import saldo_semana
@@ -2585,6 +2697,11 @@ class EgresoSeguimientoForm(forms.ModelForm):
                 'Para registrar un egreso de otra semana, abre su hoja en las pestañas de abajo.'
             ))
             fecha = None
+
+        self._clean_categoria(cleaned)
+        if monto is not None and monto > 0:
+            _validar_pago_egreso(self, cleaned, monto, app_en_mixto=True)
+
         if monto is not None and monto <= 0:
             self.add_error('monto', 'El monto debe ser mayor que cero.')
         elif fecha and monto is not None:
@@ -2595,6 +2712,50 @@ class EgresoSeguimientoForm(forms.ModelForm):
                     f'({dinero_signo(self.saldo["disponible"])}).'
                 ))
         return cleaned
+
+    def _clean_categoria(self, cleaned):
+        """Datos extra de «Repuestos» y «Compra de equipo»."""
+        categoria = cleaned.get('categoria')
+        if categoria is not None and categoria.es_repuestos:
+            alcance = cleaned.get('repuesto_alcance')
+            if alcance not in ('equipo', 'general'):
+                self.add_error('repuesto_alcance', 'Indica si el repuesto es para un equipo o general.')
+            elif alcance == 'equipo':
+                sede = cleaned.get('repuesto_sede')
+                numero = cleaned.get('repuesto_numero')
+                if not sede:
+                    self.add_error('repuesto_sede', 'Elige la sede del equipo.')
+                if not numero and 'repuesto_numero' not in self.errors:
+                    self.add_error('repuesto_numero', 'Escribe el número del equipo.')
+                if sede and numero:
+                    self.ingreso_repuesto = (
+                        IngresoEquipo.objects.filter(sede=sede, numero_equipo=numero)
+                        .select_related('cliente').first()
+                    )
+                    if self.ingreso_repuesto is None:
+                        codigo = f"{SEDE_PREFIJOS.get(sede, '')}{numero}"
+                        self.add_error('repuesto_numero', f'No existe el equipo {codigo} en el sistema.')
+
+        if categoria is not None and categoria.es_compra_equipo:
+            tipo = cleaned.get('compra_tipo_equipo')
+            if not tipo:
+                self.add_error('compra_tipo_equipo', 'Elige qué equipo vas a comprar.')
+            elif tipo == 'otro' and not (cleaned.get('compra_tipo_equipo_otro') or '').strip():
+                self.add_error('compra_tipo_equipo_otro', 'Escribe qué equipo vas a comprar.')
+            elif tipo != 'otro':
+                cleaned['compra_tipo_equipo_otro'] = ''
+        else:
+            cleaned['compra_tipo_equipo'] = ''
+            cleaned['compra_tipo_equipo_otro'] = ''
+
+    def save(self, commit=True):
+        egreso = super().save(commit=False)
+        egreso.ingreso_repuesto = self.ingreso_repuesto
+        egreso.compra_tipo_equipo_otro = (egreso.compra_tipo_equipo_otro or '').strip()
+        _limpiar_pago_egreso(egreso)
+        if commit:
+            egreso.save()
+        return egreso
 
 
 # ─────────────────────────────────────────────────────────
