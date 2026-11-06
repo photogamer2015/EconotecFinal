@@ -113,6 +113,7 @@
     .sp-card.is-total .num { color: var(--success); font-size: 26px; }
     .sp-card.is-saldo .num { color: var(--danger); }
     .sp-card .sub { color: var(--text-muted); font-size: 12px; font-weight: 600; line-height: 1.45; }
+    .sp-card .sp-desglose b { color: var(--sp-tipo-color); font-weight: 800; }
     .sp-card .sp-desglose {
         display: flex;
         flex-wrap: wrap;
@@ -150,18 +151,73 @@
     .sp-lineas > div { height: 20px; line-height: 20px; white-space: nowrap; }
     .sp-lineas > div + div { margin-top: 4px; }
     .sp-codigo { color: var(--primary); font-weight: 800; }
-    /* En el total: si la fila es de un equipo o de una venta de producto. */
+    /* ── Total de seguimiento: equipo o venta de producto en cada fila ──
+       Mismo color en la barra de la fila, el ícono, la etiqueta y la leyenda. */
+    .is-equipo { --sp-tipo-color: var(--tint-blue-fg); --sp-tipo-fondo: var(--tint-blue-bg); }
+    .is-producto { --sp-tipo-color: var(--tint-orange-fg); --sp-tipo-fondo: var(--tint-orange-bg); }
+    .sp-tabla tr.sp-fila > td:first-child { box-shadow: inset 4px 0 0 var(--sp-tipo-color); }
+    /* Al desplazar la tabla, la barra pasa a la columna fija «Cliente». */
+    .table-scroll-viewport[data-context-pinned="true"] .sp-tabla tr.sp-fila > td.table-context-cell {
+        box-shadow: inset 4px 0 0 var(--sp-tipo-color);
+    }
+    .sp-item { display: flex; align-items: flex-start; gap: 10px; }
+    .sp-item-icono {
+        flex: 0 0 auto;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 34px;
+        height: 34px;
+        border-radius: 10px;
+        background: var(--sp-tipo-fondo);
+        box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--sp-tipo-color) 22%, transparent);
+        font-size: 17px;
+        line-height: 1;
+    }
     .sp-tipo {
         display: inline-block;
         margin-left: 4px;
-        padding: 1px 7px;
+        padding: 2px 8px;
         border-radius: 999px;
-        font-size: 10.5px;
+        background: var(--sp-tipo-fondo);
+        color: var(--sp-tipo-color);
+        box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--sp-tipo-color) 28%, transparent);
+        font-size: 10px;
         font-weight: 800;
+        letter-spacing: .05em;
+        text-transform: uppercase;
         vertical-align: 1px;
     }
-    .sp-tipo.is-equipo { background: var(--tint-blue-bg); color: var(--tint-blue-fg); }
-    .sp-tipo.is-producto { background: var(--tint-orange-bg); color: var(--tint-orange-fg); }
+    .sp-leyenda {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px 10px;
+        margin-bottom: 10px;
+        color: var(--text-muted);
+        font-size: 12px;
+        font-weight: 700;
+    }
+    .sp-leyenda-item {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 12px 6px 10px;
+        border: 1px solid var(--border-color);
+        border-radius: 10px;
+        background: var(--card-bg);
+        color: var(--text-main);
+        font-size: 13px;
+    }
+    .sp-leyenda-item::before {
+        content: "";
+        width: 4px;
+        height: 18px;
+        border-radius: 2px;
+        background: var(--sp-tipo-color);
+    }
+    .sp-leyenda-item .sp-leyenda-monto { color: var(--sp-tipo-color); font-weight: 800; }
+    .sp-leyenda-item .sp-leyenda-cantidad { color: var(--text-muted); font-weight: 600; }
     .sp-muted { display: block; color: var(--text-muted); font-size: 12px; margin-top: 2px; }
     .sp-tabla .sp-monto { color: var(--success); font-weight: 800; }
     /* Saldo pendiente: rojo si todavía debe; verde si ya pagó todo. */
@@ -353,17 +409,15 @@
 
     <nav class="sp-vistas" aria-label="Tipo de seguimiento">
         {% for valor, nombre in tipos %}
-        <a href="?semana={{ lunes|date:'Y-m-d' }}&amp;tipo={{ valor }}"{% if valor == tipo %} class="is-activa" aria-current="page"{% endif %}>{% if valor == 'total' %}📊{% elif valor == 'equipo' %}🔧{% else %}🛒{% endif %} {{ nombre }}</a>
+        <a href="?semana={{ lunes|date:'Y-m-d' }}&amp;tipo={{ valor }}{% if sede %}&amp;sede={{ sede }}{% endif %}"{% if valor == tipo %} class="is-activa" aria-current="page"{% endif %}>{% if valor == 'total' %}📊{% elif valor == 'equipo' %}🔧{% else %}🛒{% endif %} {{ nombre }}</a>
         {% endfor %}
     </nav>
 
-    {% if es_equipo %}
     <nav class="sp-tabs" aria-label="Sede">
         {% for valor, nombre in sedes %}
-        <a href="?semana={{ lunes|date:'Y-m-d' }}&amp;tipo=equipo{% if valor %}&amp;sede={{ valor }}{% endif %}"{% if valor == sede %} class="is-activa" aria-current="page"{% endif %}>{% if not valor %}📋 {% endif %}{{ nombre }}</a>
+        <a href="?semana={{ lunes|date:'Y-m-d' }}&amp;tipo={{ tipo }}{% if valor %}&amp;sede={{ valor }}{% endif %}"{% if valor == sede %} class="is-activa" aria-current="page"{% endif %}>{% if not valor %}📋 {% endif %}{{ nombre }}</a>
         {% endfor %}
     </nav>
-    {% endif %}
 </div>
 
 <div class="sp-resumen">
@@ -373,8 +427,8 @@
         <div class="sub">{{ resumen_cantidades }}</div>
         {% if es_total %}
         <div class="sp-desglose" title="El total es la suma de Seguimiento de equipo y Seguimiento de producto">
-            <span>🔧 Equipos {{ total_equipos|dinero_signo }}</span>
-            <span>🛒 Productos {{ total_ventas|dinero_signo }}</span>
+            <span class="is-equipo">🔧 Equipos <b>{{ total_equipos|dinero_signo }}</b></span>
+            <span class="is-producto">🛒 Productos <b>{{ total_ventas|dinero_signo }}</b></span>
         </div>
         {% endif %}
     </div>
@@ -407,9 +461,20 @@
     Cada lunes a las 00:00 empieza una hoja nueva y las semanas anteriores quedan en las pestañas de abajo.
     El <strong>saldo pendiente</strong> es lo que el cliente todavía debe hoy de {% if es_producto %}esa venta{% elif es_total %}ese equipo o venta{% else %}ese equipo{% endif %}, con todos sus pagos.
     {% if es_equipo %}Las ventas de producto están en «Seguimiento de producto».{% endif %}
+    {% if sede and not es_equipo %}
+    <br>Con <strong>{% if sede == 'quito' %}Quito{% else %}Guayaquil{% endif %}</strong>, cada venta cuenta en la sede de la bodega de donde salieron sus productos.
+    Las ventas sin productos de inventario o con productos de las dos sedes solo se ven en «Todas».
+    {% endif %}
 </div>
 
 {% if filas %}
+{% if es_total %}
+<div class="sp-leyenda" aria-label="Cómo se distinguen las filas">
+    <span>En la tabla:</span>
+    <span class="sp-leyenda-item is-equipo">🔧 Equipo <span class="sp-leyenda-cantidad">{{ cantidad_equipos }}</span> <span class="sp-leyenda-monto">{{ total_equipos|dinero_signo }}</span></span>
+    <span class="sp-leyenda-item is-producto">🛒 Producto <span class="sp-leyenda-cantidad">{{ cantidad_ventas }}</span> <span class="sp-leyenda-monto">{{ total_ventas|dinero_signo }}</span></span>
+</div>
+{% endif %}
 <div class="table-wrap sp-tabla-wrap">
     <table class="sp-tabla" data-context-column="2" aria-label="Pagos de la semana {{ titulo_semana }}">
         <thead>
@@ -431,15 +496,20 @@
         </thead>
         <tbody>
             {% for f in filas %}
-            <tr>
+            <tr{% if es_total %} class="sp-fila {% if f.es_venta %}is-producto{% else %}is-equipo{% endif %}"{% endif %}>
                 <td>{{ f.numero }}</td>
                 <td class="sp-lineas">{% for c in f.cobros %}<div>{{ c.dia }}{% if c.hora %} · {{ c.hora|time:"H:i" }}{% endif %}</div>{% endfor %}</td>
                 <td class="sp-cliente"><strong>{{ f.cliente }}</strong></td>
                 <td>{{ f.cedula }}</td>
                 <td>
-                    <a href="{{ f.url_pagos }}" class="sp-codigo" title="Ver los pagos de {% if f.es_venta %}esta venta{% else %}este equipo{% endif %}">{{ f.codigo }}</a>
-                    {% if es_total %}{% if f.es_venta %}<span class="sp-tipo is-producto">Producto</span>{% else %}<span class="sp-tipo is-equipo">Equipo</span>{% endif %}{% endif %}
-                    <span class="sp-muted"{% if f.equipo %} title="{{ f.equipo }}"{% endif %}>{{ f.tipo_equipo }}{% if f.equipo %} · {{ f.equipo|truncatechars:32 }}{% endif %}</span>
+                    <div class="sp-item">
+                        {% if es_total %}<span class="sp-item-icono" aria-hidden="true">{% if f.es_venta %}🛒{% else %}🔧{% endif %}</span>{% endif %}
+                        <div>
+                            <a href="{{ f.url_pagos }}" class="sp-codigo" title="Ver los pagos de {% if f.es_venta %}esta venta{% else %}este equipo{% endif %}">{{ f.codigo }}</a>
+                            {% if es_total %}<span class="sp-tipo">{% if f.es_venta %}Producto{% else %}Equipo{% endif %}</span>{% endif %}
+                            <span class="sp-muted"{% if f.equipo %} title="{{ f.equipo }}"{% endif %}>{{ f.tipo_equipo }}{% if f.equipo %} · {{ f.equipo|truncatechars:32 }}{% endif %}</span>
+                        </div>
+                    </div>
                 </td>
                 <td class="sp-lineas">{% for c in f.cobros %}<div>{{ c.concepto }}</div>{% endfor %}</td>
                 <td class="sp-lineas">{% for c in f.cobros %}<div>{% for p in c.partes %}{% if not forloop.first %} + {% endif %}{{ p.etiqueta }}{% if c.partes|length > 1 or f.cobros|length > 1 %} ({{ p.monto|dinero_signo }}){% endif %}{% endfor %}</div>{% endfor %}</td>

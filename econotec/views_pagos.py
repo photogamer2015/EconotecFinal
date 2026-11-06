@@ -343,7 +343,8 @@ def seguimiento_pago(request):
     si falta). La hoja se reinicia cada lunes a las 00:00.
 
     ?tipo= elige la vista: total (equipos + productos, la de entrada), equipo
-    o producto. ?sede= (Guayaquil o Quito) solo aplica a los equipos.
+    o producto. ?sede= (Guayaquil o Quito) filtra las tres; las ventas por la
+    bodega de sus productos.
     """
     hoy = timezone.localdate()
     semana_actual = inicio_semana(hoy)
@@ -359,11 +360,8 @@ def seguimiento_pago(request):
     tipos = dict(TIPOS)
     tipo = (request.GET.get('tipo') or '').strip().lower()
     if tipo not in tipos:
-        # Un enlace viejo con sede abre los equipos de esa sede.
+        # Un enlace viejo con sede (de cuando solo había equipos) abre los equipos.
         tipo = EQUIPO if sede else TOTAL
-    if tipo != EQUIPO:
-        # Las ventas de producto no son de una sede.
-        sede = ''
 
     hoja = hoja_semana(lunes, sede, tipo)
     pestanas, meses = pestanas_semanas(totales_por_semana(sede, tipo), semana_actual, lunes, tipo)
