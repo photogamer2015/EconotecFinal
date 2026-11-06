@@ -19,7 +19,8 @@ Seguimiento de pago: hoja semanal con lo que se cobró de equipos y productos.
 - Los pagos mixtos se separan en sus dos métodos para los totales de arriba.
 - Egresos: el saldo disponible de una semana es lo recaudado (Total de
   seguimiento, todas las sedes) menos los egresos con fecha en esa semana. Un
-  egreso registrado desde aquí no puede pasar de ese saldo.
+  egreso registrado desde aquí lleva una fecha de la hoja abierta y no puede
+  pasar de ese saldo.
 """
 from collections import defaultdict
 from datetime import date, timedelta
@@ -562,7 +563,7 @@ def saldo_semana(dia, recaudado=None):
         recaudado = hoja_semana(lunes, tipo=TOTAL)['total']
     egresos = list(
         Egreso.objects.filter(fecha__range=(lunes, domingo))
-        .select_related('categoria', 'asesora', 'registrado_por')
+        .select_related('categoria', 'asesora', 'registrado_por', 'ingreso_repuesto__cliente')
         .order_by('fecha', 'creado', 'pk')
     )
     total_egresos = sum((egreso.monto for egreso in egresos), CERO)

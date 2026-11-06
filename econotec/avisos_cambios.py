@@ -38,15 +38,18 @@ def avisar_egreso(user, egreso, saldo, url=''):
     asesora = (egreso.asesora.get_full_name() or egreso.asesora.username) if egreso.asesora else '—'
     disponible = saldo['disponible']
     disponible_txt = f'−{dinero_signo(-disponible)}' if disponible < 0 else dinero_signo(disponible)
+    detalle = egreso.detalle_categoria
     return NotificacionCambioAdmin.objects.create(
         creado_por=user,
         usuario_nombre=(user.get_full_name() or user.username) if user else '',
         tipo='egreso_seguimiento',
         mensaje=(
             f'Registró un egreso de {dinero_signo(egreso.monto)}: {egreso.concepto} '
-            f'({egreso.fecha:%d/%m/%Y}), aplicado por {asesora}. Categoría: {egreso.categoria.nombre}. '
+            f'({egreso.fecha:%d/%m/%Y}), aplicado por {asesora}. Categoría: {egreso.categoria.nombre}'
+            f'{f" ({detalle})" if detalle else ""}. Pago: {egreso.forma_pago_texto}. '
             f'Saldo disponible de la semana {saldo["etiqueta"]}: {disponible_txt}.'
         ),
-        codigo='Egreso',
+        codigo=egreso.ingreso_repuesto.codigo_equipo if egreso.ingreso_repuesto else 'Egreso',
+        ingreso=egreso.ingreso_repuesto,
         url=url,
     )

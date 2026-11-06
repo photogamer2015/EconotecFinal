@@ -151,6 +151,7 @@ urlpatterns = [
     path('pagos/exportar/', views_pagos.pagos_export, name='pagos_export'),
     path('pagos/seguimiento/', views_pagos.seguimiento_pago, name='seguimiento_pago'),
     path('pagos/seguimiento/saldo/', views_pagos.seguimiento_pago_saldo, name='seguimiento_pago_saldo'),
+    path('pagos/seguimiento/equipo/', views_pagos.seguimiento_pago_equipo, name='seguimiento_pago_equipo'),
     path('ingresos/<int:pk>/abonos/',
          views_pagos.ingreso_abonos, name='ingreso_abonos'),
     path('ingresos/<int:pk>/valor-acordado/',

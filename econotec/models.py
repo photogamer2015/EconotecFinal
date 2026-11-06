@@ -2600,6 +2600,15 @@ class CategoriaEgreso(models.Model):
     def __str__(self):
         return self.nombre
 
+    # Categorías que piden datos extra al registrar el egreso desde Seguimiento de pago.
+    @property
+    def es_repuestos(self):
+        return (self.nombre or '').strip().lower() == 'repuestos'
+
+    @property
+    def es_compra_equipo(self):
+        return (self.nombre or '').strip().lower() == 'compra de equipo'
+
 
 class Egreso(models.Model):
     """Cada gasto del taller (sueldos, repuestos, alquiler, etc.)"""
@@ -2736,6 +2745,21 @@ class Egreso(models.Model):
         null=True, blank=True, related_name='egresos_aplicados',
         verbose_name='Asesora que aplicó',
     )
+    # Categoría «Repuestos»: equipo al que va el repuesto (vacío = repuesto general).
+    ingreso_repuesto = models.ForeignKey(
+        'IngresoEquipo', on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='egresos_repuesto',
+        verbose_name='Equipo del repuesto',
+    )
+    # Categoría «Compra de equipo»: qué equipo se compra.
+    compra_tipo_equipo = models.CharField(
+        max_length=20, choices=TIPOS_EQUIPO, blank=True,
+        verbose_name='Tipo de equipo comprado',
+    )
+    compra_tipo_equipo_otro = models.CharField(
+        max_length=100, blank=True,
+        verbose_name='Tipo de equipo comprado (otro)',
+    )
     creado = models.DateTimeField(auto_now_add=True)
     actualizado = models.DateTimeField(auto_now=True)
 
@@ -2766,6 +2790,56 @@ class Egreso(models.Model):
                 detalle = f'{detalle} ({tarjeta_app.title()})'
             partes.append({'numero': numero, 'monto': _q2(monto), 'detalle': detalle})
         return partes
+
+    @property
+    def compra_tipo_equipo_texto(self):
+        if self.compra_tipo_equipo == 'otro' and self.compra_tipo_equipo_otro:
+            return self.compra_tipo_equipo_otro
+        return self.get_compra_tipo_equipo_display()
+
+    @property
+    def detalle_categoria(self):
+        """«Repuesto para G1014 · Randy Rodriguez», «Repuesto general» o «Compra: Impresora»."""
+        categoria = self.categoria
+        if categoria.es_repuestos:
+            ingreso = self.ingreso_repuesto
+            if ingreso is None:
+                return 'Repuesto general'
+            return f'Repuesto para {ingreso.codigo_equipo} · {ingreso.cliente.nombres}'
+        if categoria.es_compra_equipo and self.compra_tipo_equipo:
+            return f'Compra: {self.compra_tipo_equipo_texto}'
+        return ''
+
+    @property
+    def forma_pago_texto(self):
+        """«Efectivo», «Transferencia · Banco Pichincha», «Tarjeta · Payphone» o el mixto."""
+        bancos = dict(self._meta.get_field('banco').choices)
+        apps = dict(self._meta.get_field('tarjeta_app').choices)
+
+        def una(metodo, banco, banco_otro, tarjeta_app):
+            if metodo == 'transferencia':
+                nombre = (banco_otro if banco == 'otro' else bancos.get(banco, banco)) or ''
+                return f'Transferencia · {nombre}' if nombre else 'Transferencia'
+            if metodo == 'tarjeta':
+                app = apps.get(tarjeta_app, tarjeta_app) or ''
+                return f'Tarjeta · {app}' if app else 'Tarjeta'
+            return dict(self.METODOS_PAGO).get(metodo, metodo or 'Efectivo')
+
+        if self.metodo != 'mixto':
+            return una(self.metodo, self.banco, self.banco_otro, self.tarjeta_app)
+        def dinero(monto):
+            texto = f'{_q2(monto):,.2f}'.replace(',', ' ').replace('.', ',').replace(' ', '.')
+            return f'${texto}'
+
+        partes = [
+            f'{una(metodo, banco, banco_otro, app)} ({dinero(monto)})'
+            for monto, metodo, banco, banco_otro, app in (
+                (self.monto_1, self.metodo_1, self.banco_1, self.banco_otro_1, self.tarjeta_app_1),
+                (self.monto_2, self.metodo_2, self.banco_2, self.banco_otro_2, self.tarjeta_app_2),
+            )
+            if monto
+        ]
+        return 'Mixto: ' + ' + '.join(partes) if partes else 'Pago mixto'
 
     def __str__(self):
         return f'{self.fecha.strftime("%d/%m/%Y")} — {self.concepto} (${self.monto})'

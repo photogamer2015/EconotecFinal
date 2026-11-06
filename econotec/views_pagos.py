@@ -372,7 +372,8 @@ def seguimiento_pago(request):
 
     form_egreso = None
     if request.method == 'POST':
-        form_egreso = EgresoSeguimientoForm(request.POST)
+        # La fecha debe ser de la semana de la hoja abierta (?semana=).
+        form_egreso = EgresoSeguimientoForm(request.POST, semana=lunes)
         if form_egreso.is_valid():
             with transaction.atomic():
                 egreso = form_egreso.save(commit=False)
@@ -399,7 +400,9 @@ def seguimiento_pago(request):
     caja['disponible_texto'] = _dinero(caja['disponible'])
     if form_egreso is None:
         # Fecha sugerida: hoy si cae en la semana abierta; si no, el día más cercano de ella.
-        form_egreso = EgresoSeguimientoForm(initial={'fecha': min(max(hoy, lunes), fin_semana(lunes))})
+        form_egreso = EgresoSeguimientoForm(
+            initial={'fecha': min(max(hoy, lunes), fin_semana(lunes))}, semana=lunes,
+        )
 
     return render(request, 'pagos/seguimiento.html', {
         **hoja,
@@ -433,6 +436,27 @@ def seguimiento_pago(request):
 def _dinero(valor):
     """«$12,50» o «−$12,50»."""
     return f'−{dinero_signo(-valor)}' if valor < 0 else dinero_signo(valor)
+
+
+@admin_requerido
+def seguimiento_pago_equipo(request):
+    """Equipo de ?sede=guayaquil|quito&numero=N, para confirmar el de un repuesto."""
+    sede = (request.GET.get('sede') or '').strip()
+    numero = (request.GET.get('numero') or '').strip()
+    if sede not in SEDES_EQUIPOS or not numero.isdigit():
+        return JsonResponse({'existe': False}, status=400)
+    ingreso = (
+        IngresoEquipo.objects.filter(sede=sede, numero_equipo=int(numero))
+        .select_related('cliente').first()
+    )
+    if ingreso is None:
+        return JsonResponse({'existe': False})
+    return JsonResponse({
+        'existe': True,
+        'codigo': ingreso.codigo_equipo,
+        'cliente': ingreso.cliente.nombres,
+        'equipo': ' '.join(filter(None, [ingreso.tipo_equipo_display, ingreso.marca, ingreso.modelo_serie])),
+    })
 
 
 @admin_requerido

@@ -637,10 +637,13 @@ class EgresoSeguimientoTests(TestCase):
         self.asesora.groups.add(Group.objects.create(name='Asesores'))
         self.tecnico = User.objects.create_user(username='yandri', first_name='Yandri')
         self.tecnico.groups.add(Group.objects.create(name='Tecnicos'))
-        self.categoria, _ = CategoriaEgreso.objects.get_or_create(nombre='Repuestos')
+        # Categoría sin datos extra; Repuestos y Compra de equipo piden más.
+        self.categoria, _ = CategoriaEgreso.objects.get_or_create(nombre='Otros')
+        self.repuestos, _ = CategoriaEgreso.objects.get_or_create(nombre='Repuestos')
+        self.compra, _ = CategoriaEgreso.objects.get_or_create(nombre='Compra de equipo')
         cliente = Cliente.objects.create(cedula='0912345678', nombres='María Loor')
         # Semana del 12 al 18 de octubre: 100 de un equipo + 50 de una venta = 150 recaudado.
-        equipo = IngresoEquipo.objects.create(
+        self.equipo = equipo = IngresoEquipo.objects.create(
             sede='guayaquil', fecha_ingreso=LUNES, cliente=cliente, tipo_equipo='laptop', marca='HP',
             modelo_serie='Pavilion', problema_reportado='No enciende', valor_acordado=Decimal('100.00'),
             abono_anticipo=Decimal('100.00'), anticipo_metodo='efectivo', registrado_por=self.asesora,
@@ -662,7 +665,7 @@ class EgresoSeguimientoTests(TestCase):
     def registrar(self, url=None, **datos):
         datos = {
             'fecha': MIERCOLES.isoformat(), 'concepto': 'Pasta térmica', 'asesora': self.asesora.pk,
-            'categoria': self.categoria.pk, 'monto': '40.00', **datos,
+            'categoria': self.categoria.pk, 'monto': '40.00', 'metodo': 'efectivo', **datos,
         }
         with patch('econotec.views_pagos.timezone.localdate', return_value=MIERCOLES):
             return self.client.post(url or self.url(semana=MIERCOLES.isoformat()), datos)
@@ -708,7 +711,7 @@ class EgresoSeguimientoTests(TestCase):
         self.assertEqual(self.ver(semana='2026-10-07').context['form_egreso'].initial['fecha'], date(2026, 10, 11))
 
     def test_registrar_egreso(self):
-        response = self.registrar(url=self.url(semana='2026-10-05', tipo='producto', sede='guayaquil'))
+        response = self.registrar(url=self.url(semana=LUNES.isoformat(), tipo='producto', sede='guayaquil'))
 
         egreso = Egreso.objects.get()
         self.assertEqual(egreso.concepto, 'Pasta térmica')
@@ -754,10 +757,41 @@ class EgresoSeguimientoTests(TestCase):
         # Justo el saldo disponible sí se puede.
         self.registrar(monto='50.00')
         self.assertEqual(saldo_semana(LUNES)['disponible'], Decimal('0.00'))
-        # El saldo es el de la semana de la fecha del egreso, no el de la hoja abierta.
-        self.assertEqual(self.registrar(fecha='2026-10-09', monto='30.01').status_code, 200)
-        self.registrar(fecha='2026-10-09', monto='30.00')
+        # En la hoja de otra semana manda el saldo de esa semana.
+        otra_hoja = self.url(semana='2026-10-09')
+        self.assertEqual(self.registrar(url=otra_hoja, fecha='2026-10-09', monto='30.01').status_code, 200)
+        self.registrar(url=otra_hoja, fecha='2026-10-09', monto='30.00')
         self.assertEqual(Egreso.objects.filter(fecha=date(2026, 10, 9)).count(), 1)
+
+    def test_fecha_solo_de_la_hoja_abierta(self):
+        # Hoja del 12 al 18 de octubre: el calendario solo deja esos días.
+        response = self.ver(semana=MIERCOLES.isoformat())
+        self.assertContains(response, 'min="2026-10-12"')
+        self.assertContains(response, 'max="2026-10-18"')
+        self.assertContains(response, 'Solo días de esta hoja: 12 – 18 oct')
+
+        for fecha in ('2026-10-11', '2026-10-19', '2026-07-22'):
+            with self.subTest(fecha=fecha):
+                response = self.registrar(fecha=fecha, monto='5.00')
+                self.assertEqual(response.status_code, 200)
+                self.assertTrue(response.context['abrir_egreso'])
+                self.assertEqual(response.context['form_egreso'].errors['fecha'], [
+                    'La fecha debe ser de esta semana (12 – 18 oct). '
+                    'Para registrar un egreso de otra semana, abre su hoja en las pestañas de abajo.'
+                ])
+        # Sin ?semana la hoja abierta es la de hoy.
+        self.assertEqual(self.registrar(url=reverse('econotec:seguimiento_pago'), fecha='2026-10-09').status_code, 200)
+        self.assertFalse(Egreso.objects.exists())
+        self.assertFalse(NotificacionCambioAdmin.objects.exists())
+
+        # Desde la hoja de esa semana sí se puede.
+        for url in (self.url(semana='2026-10-05'), self.url(semana='2026-10-11', tipo='equipo', sede='quito')):
+            with self.subTest(url=url):
+                self.assertEqual(self.registrar(url=url, fecha='2026-10-09', monto='5.00').status_code, 302)
+        self.assertEqual(Egreso.objects.filter(fecha=date(2026, 10, 9)).count(), 2)
+        self.registrar(fecha=DOMINGO.isoformat(), monto='5.00')
+        self.registrar(url=reverse('econotec:seguimiento_pago'), fecha=LUNES.isoformat(), monto='5.00')
+        self.assertEqual(Egreso.objects.filter(fecha__range=(LUNES, DOMINGO)).count(), 2)
 
     def test_datos_obligatorios(self):
         response = self.registrar(concepto='  ', asesora='', categoria='', monto='0')
@@ -806,3 +840,147 @@ class EgresoSeguimientoTests(TestCase):
         egreso = Egreso.objects.get()
         response = self.client.get(reverse('econotec:admin_egreso_editar', args=[egreso.pk]))
         self.assertEqual(response.context['form'].initial['asesora'], self.asesora.pk)
+
+    # ── Datos por categoría y forma de pago ─────────────────────
+
+    def errores(self, **datos):
+        response = self.registrar(**datos)
+        self.assertEqual(response.status_code, 200)
+        return response.context['form_egreso'].errors
+
+    def test_repuesto_para_un_equipo(self):
+        codigo = self.equipo.codigo_equipo
+
+        response = self.registrar(
+            categoria=self.repuestos.pk, repuesto_alcance='equipo',
+            repuesto_sede='guayaquil', repuesto_numero=self.equipo.numero_equipo,
+        )
+
+        self.assertEqual(response.status_code, 302)
+        egreso = Egreso.objects.get()
+        self.assertEqual(egreso.ingreso_repuesto, self.equipo)
+        self.assertEqual(egreso.detalle_categoria, f'Repuesto para {codigo} · María Loor')
+        aviso = NotificacionCambioAdmin.objects.get()
+        self.assertEqual(aviso.ingreso, self.equipo)
+        self.assertEqual(aviso.codigo, codigo)
+        self.assertIn(f'(Repuesto para {codigo} · María Loor)', aviso.mensaje)
+        self.assertIn('Pago: Efectivo.', aviso.mensaje)
+        response = self.ver(semana=MIERCOLES.isoformat())
+        self.assertContains(response, f'Repuesto para {codigo} · María Loor')
+
+    def test_repuesto_valida_el_equipo(self):
+        datos = {'categoria': self.repuestos.pk}
+        self.assertIn('Indica si el repuesto es para un equipo o general.', self.errores(**datos)['repuesto_alcance'])
+        errores = self.errores(repuesto_alcance='equipo', **datos)
+        self.assertIn('Elige la sede del equipo.', errores['repuesto_sede'])
+        self.assertIn('Escribe el número del equipo.', errores['repuesto_numero'])
+        errores = self.errores(repuesto_alcance='equipo', repuesto_sede='guayaquil', repuesto_numero='999999', **datos)
+        self.assertIn('No existe el equipo G999999 en el sistema.', errores['repuesto_numero'])
+        # El número es de la sede elegida: en Quito ese equipo no existe.
+        errores = self.errores(
+            repuesto_alcance='equipo', repuesto_sede='quito', repuesto_numero=self.equipo.numero_equipo, **datos,
+        )
+        self.assertIn(f'No existe el equipo U{self.equipo.numero_equipo} en el sistema.', errores['repuesto_numero'])
+        self.assertFalse(Egreso.objects.exists())
+
+    def test_repuesto_general(self):
+        self.registrar(
+            categoria=self.repuestos.pk, repuesto_alcance='general',
+            repuesto_sede='guayaquil', repuesto_numero=self.equipo.numero_equipo,
+        )
+
+        egreso = Egreso.objects.get()
+        self.assertIsNone(egreso.ingreso_repuesto)
+        self.assertEqual(egreso.detalle_categoria, 'Repuesto general')
+        self.assertEqual(NotificacionCambioAdmin.objects.get().codigo, 'Egreso')
+
+    def test_compra_de_equipo(self):
+        self.assertIn('Elige qué equipo vas a comprar.', self.errores(categoria=self.compra.pk)['compra_tipo_equipo'])
+        errores = self.errores(categoria=self.compra.pk, compra_tipo_equipo='otro', compra_tipo_equipo_otro='  ')
+        self.assertIn('Escribe qué equipo vas a comprar.', errores['compra_tipo_equipo_otro'])
+
+        self.registrar(categoria=self.compra.pk, compra_tipo_equipo='impresora', compra_tipo_equipo_otro='Sobra')
+        self.registrar(categoria=self.compra.pk, compra_tipo_equipo='otro', compra_tipo_equipo_otro=' Proyector ',
+                       monto='10.00')
+        impresora, proyector = Egreso.objects.order_by('pk')
+        self.assertEqual((impresora.compra_tipo_equipo, impresora.compra_tipo_equipo_otro), ('impresora', ''))
+        self.assertEqual(impresora.detalle_categoria, 'Compra: Impresora')
+        self.assertEqual(proyector.detalle_categoria, 'Compra: Proyector')
+        # En otras categorías no se guardan datos de repuesto ni de compra.
+        self.registrar(compra_tipo_equipo='laptop', repuesto_alcance='equipo', repuesto_sede='guayaquil',
+                       repuesto_numero=self.equipo.numero_equipo, monto='5.00')
+        otro = Egreso.objects.order_by('pk').last()
+        self.assertEqual((otro.compra_tipo_equipo, otro.ingreso_repuesto, otro.detalle_categoria), ('', None, ''))
+
+    def test_formas_de_pago(self):
+        self.assertIn('Indica el banco usado para el egreso.', self.errores(metodo='transferencia')['banco'])
+        self.assertIn('Especifica el nombre del banco.',
+                      self.errores(metodo='transferencia', banco='otro')['banco_otro'])
+        self.assertIn('Selecciona la tarjeta o aplicación usada.', self.errores(metodo='tarjeta')['tarjeta_app'])
+        self.assertIn('Este campo es obligatorio.', self.errores(metodo='')['metodo'])
+
+        # Lo que no corresponde al método elegido no se guarda.
+        self.registrar(metodo='efectivo', banco='pichincha', tarjeta_app='payphone', monto='1.00')
+        self.registrar(metodo='transferencia', banco='otro', banco_otro='Coop. JEP',
+                       comprobante_url='https://example.com/c.jpg', monto='2.00')
+        self.registrar(metodo='tarjeta', tarjeta_app='payphone', banco='pichincha', monto='3.00')
+        efectivo, transferencia, tarjeta = Egreso.objects.order_by('pk')
+        self.assertEqual((efectivo.banco, efectivo.tarjeta_app), ('', ''))
+        self.assertEqual(efectivo.forma_pago_texto, 'Efectivo')
+        self.assertEqual(transferencia.forma_pago_texto, 'Transferencia · Coop. JEP')
+        self.assertEqual(transferencia.comprobante_url, 'https://example.com/c.jpg')
+        self.assertEqual((tarjeta.banco, tarjeta.forma_pago_texto), ('', 'Tarjeta · Payphone'))
+
+    def test_pago_mixto(self):
+        errores = self.errores(metodo='mixto')
+        for campo in ('monto_1', 'monto_2', 'metodo_1', 'metodo_2'):
+            self.assertIn(campo, errores)
+        errores = self.errores(metodo='mixto', monto_1='10', metodo_1='transferencia', monto_2='20', metodo_2='tarjeta')
+        self.assertIn('Indica el banco del primer pago.', errores['banco_1'])
+        self.assertIn('Selecciona la tarjeta o aplicación del segundo pago.', errores['tarjeta_app_2'])
+        self.assertIn('La suma de los pagos mixtos debe ser igual al monto del egreso.', errores['monto_2'])
+        self.assertIn('metodo_1', self.errores(metodo='mixto', monto_1='20', metodo_1='mixto',
+                                               monto_2='20', metodo_2='efectivo'))
+
+        response = self.registrar(
+            metodo='mixto', monto='40.00', banco='produbanco',
+            monto_1='25.00', metodo_1='transferencia', banco_1='pichincha', tarjeta_app_1='deuna',
+            monto_2='15.00', metodo_2='tarjeta', tarjeta_app_2='payphone', banco_2='guayaquil',
+        )
+
+        self.assertEqual(response.status_code, 302)
+        egreso = Egreso.objects.get()
+        self.assertEqual(egreso.banco, '')
+        self.assertEqual((egreso.banco_1, egreso.tarjeta_app_1), ('pichincha', ''))
+        self.assertEqual((egreso.banco_2, egreso.tarjeta_app_2), ('', 'payphone'))
+        self.assertEqual(
+            egreso.forma_pago_texto,
+            'Mixto: Transferencia · Banco Pichincha ($25,00) + Tarjeta · Payphone ($15,00)',
+        )
+        self.assertIn('Pago: Mixto: Transferencia · Banco Pichincha ($25,00)', NotificacionCambioAdmin.objects.get().mensaje)
+
+    def test_buscar_equipo_del_repuesto(self):
+        url = reverse('econotec:seguimiento_pago_equipo')
+
+        datos = self.client.get(url, {'sede': 'guayaquil', 'numero': self.equipo.numero_equipo}).json()
+
+        self.assertEqual(datos, {
+            'existe': True, 'codigo': self.equipo.codigo_equipo, 'cliente': 'María Loor', 'equipo': 'Laptop HP Pavilion',
+        })
+        self.assertEqual(self.client.get(url, {'sede': 'quito', 'numero': '999999'}).json(), {'existe': False})
+        self.assertEqual(self.client.get(url, {'sede': 'ventas', 'numero': '1'}).status_code, 400)
+        self.assertEqual(self.client.get(url, {'sede': 'guayaquil', 'numero': 'x'}).status_code, 400)
+        self.client.force_login(self.asesora)
+        self.assertEqual(self.client.get(url, {'sede': 'guayaquil', 'numero': '1'}).status_code, 302)
+
+    def test_detalle_en_egresos_del_admin(self):
+        self.registrar(
+            categoria=self.repuestos.pk, repuesto_alcance='equipo', repuesto_sede='guayaquil',
+            repuesto_numero=self.equipo.numero_equipo, metodo='transferencia', banco='pichincha',
+        )
+
+        response = self.client.get(reverse('econotec:admin_egresos_lista'))
+
+        self.assertContains(response, '<th>Forma de pago</th>', html=True)
+        self.assertContains(response, 'Transferencia · Banco Pichincha')
+        self.assertContains(response, f'Repuesto para {self.equipo.codigo_equipo} · María Loor')
