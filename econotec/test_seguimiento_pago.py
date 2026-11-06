@@ -89,13 +89,17 @@ class SeguimientoPagoTests(TestCase):
         }
         datos.update(overrides)
         venta = self.crear_ingreso(**datos)
-        for producto, cantidad in productos:
-            item = InventarioItem.objects.create(
-                sede='guayaquil', categoria='Accesorios', tipo='Varios', producto=producto,
-                marca='Genérica', modelo='X', ubicacion='guayaquil_norte', cantidad=10,
-            )
-            VentaInventarioItem.objects.create(venta=venta, inventario_item=item, cantidad=cantidad)
+        for producto, cantidad, *bodega in productos:
+            self.vender(venta, producto, cantidad, *bodega)
         return venta
+
+    def vender(self, venta, producto, cantidad, sede='guayaquil'):
+        """Producto de la bodega de `sede` dentro de la venta."""
+        item = InventarioItem.objects.create(
+            sede=sede, categoria='Accesorios', tipo='Varios', producto=producto, marca='Genérica',
+            modelo='X', ubicacion='quito' if sede == 'quito' else 'guayaquil_norte', cantidad=10,
+        )
+        VentaInventarioItem.objects.create(venta=venta, inventario_item=item, cantidad=cantidad)
 
     def abrir(self, **params):
         with patch('econotec.views_pagos.timezone.localdate', return_value=MIERCOLES):
@@ -466,8 +470,9 @@ class SeguimientoPagoTests(TestCase):
         self.assertContains(response, '<th>Producto</th>', html=True)
         self.assertContains(response, '<th>Fecha de venta</th>', html=True)
         self.assertNotContains(response, self.laptop.codigo_equipo)
-        # Las ventas no son de una sede: sin filtro de sede.
-        self.assertNotContains(response, 'aria-label="Sede"')
+        # Filtro de sede también en productos, sin perder la vista.
+        self.assertContains(response, 'aria-label="Sede"')
+        self.assertContains(response, '?semana=2026-10-12&amp;tipo=producto&amp;sede=quito')
 
     def test_total_es_equipos_mas_productos(self):
         self.crear_semana_completa()
@@ -501,10 +506,20 @@ class SeguimientoPagoTests(TestCase):
 
         response = self.abrir()
         self.assertContains(response, '3 equipos · 4 ventas · 10 pagos')
-        self.assertContains(response, '🔧 Equipos $205,00')
-        self.assertContains(response, '🛒 Productos $97,00')
-        self.assertContains(response, '<span class="sp-tipo is-producto">Producto</span>', html=True)
-        self.assertContains(response, '<span class="sp-tipo is-equipo">Equipo</span>', html=True)
+        self.assertContains(response, '🔧 Equipos <b>$205,00</b>')
+        self.assertContains(response, '🛒 Productos <b>$97,00</b>')
+        # Mezclados: barra de color, ícono y etiqueta por fila, y la leyenda.
+        self.assertContains(response, 'class="sp-fila is-equipo"', count=3)
+        self.assertContains(response, 'class="sp-fila is-producto"', count=4)
+        self.assertContains(response, '<span class="sp-tipo">Producto</span>', html=True, count=4)
+        self.assertContains(response, '<span class="sp-tipo">Equipo</span>', html=True, count=3)
+        self.assertContains(response, 'class="sp-leyenda"')
+        # En una sola vista no hace falta distinguir.
+        for tipo in ('equipo', 'producto'):
+            with self.subTest(tipo=tipo):
+                response = self.ver(tipo=tipo)
+                self.assertNotContains(response, 'class="sp-fila')
+                self.assertNotContains(response, 'class="sp-leyenda"')
 
     def test_pestanas_cuadran_en_las_tres_vistas(self):
         self.crear_semana_completa()
@@ -531,15 +546,60 @@ class SeguimientoPagoTests(TestCase):
         esperado = sum((v.total_abonado for v in ingresos_de_seguimiento(tipo='producto')), Decimal('0.00'))
         self.assertEqual(sum(d['total'] for d in totales['producto'].values()), esperado)
 
-    def test_sede_solo_filtra_equipos(self):
+    def test_sede_filtra_las_tres_vistas(self):
         self.crear_semana_completa()
         self.crear_ventas_de_la_semana()
+        venta_quito = self.crear_venta(
+            productos=[('Control', 1, 'quito')],
+            valor_acordado=Decimal('18.00'), abono_anticipo=Decimal('18.00'), anticipo_metodo='efectivo',
+        )
+        mixta = self.crear_venta(
+            productos=[('Audífonos', 1), ('Parlante', 1, 'quito')],
+            valor_acordado=Decimal('22.00'), abono_anticipo=Decimal('22.00'), anticipo_metodo='efectivo',
+        )
 
-        for tipo in ('total', 'producto'):
-            with self.subTest(tipo=tipo):
-                ctx = self.ver(tipo=tipo, sede='quito').context
-                self.assertEqual(ctx['sede'], '')
-                self.assertTrue(any(f['es_venta'] for f in ctx['filas']))
+        def codigos(ctx):
+            return sorted(f['codigo'] for f in ctx['filas'])
+
+        # Las ventas van a la sede de la bodega de sus productos.
+        self.assertEqual(
+            codigos(self.ver(tipo='producto', sede='guayaquil').context),
+            sorted([self.venta_cable.codigo_equipo, self.venta_tinta.codigo_equipo]),
+        )
+        self.assertEqual(codigos(self.ver(tipo='producto', sede='quito').context), [venta_quito.codigo_equipo])
+
+        hojas = {}
+        for sede in ('', 'guayaquil', 'quito'):
+            hojas[sede] = {tipo: self.ver(tipo=tipo, sede=sede).context for tipo in ('total', 'equipo', 'producto')}
+            total, equipos, productos = (hojas[sede][t] for t in ('total', 'equipo', 'producto'))
+            with self.subTest(sede=sede):
+                self.assertEqual(total['sede'], sede)
+                self.assertEqual(total['total'], equipos['total'] + productos['total'])
+                self.assertEqual(total['saldo_total'], equipos['saldo_total'] + productos['saldo_total'])
+                self.assertEqual(total['pagos'], equipos['pagos'] + productos['pagos'])
+                self.assertEqual(codigos(total), sorted(codigos(equipos) + codigos(productos)))
+                self.assertEqual(sum(m['monto'] for m in total['metodos']), total['total'])
+        self.assertEqual(hojas['guayaquil']['total']['total'], Decimal('145.00'))  # 85 equipos + 60 productos
+        self.assertEqual(hojas['quito']['total']['total'], Decimal('138.00'))  # 120 equipos + 18 productos
+        # Sin sede quedan las ventas sin productos de inventario (12 + 25) y la mixta (22).
+        self.assertEqual(
+            hojas['']['total']['total'] - hojas['guayaquil']['total']['total'] - hojas['quito']['total']['total'],
+            Decimal('59.00'),
+        )
+        self.assertNotIn(mixta.codigo_equipo, codigos(hojas['guayaquil']['total']) + codigos(hojas['quito']['total']))
+
+        # Las pestañas de cada sede y vista suman lo mismo que su hoja.
+        for sede in ('guayaquil', 'quito'):
+            for tipo in ('total', 'equipo', 'producto'):
+                for lunes, datos in totales_por_semana(sede, tipo).items():
+                    with self.subTest(sede=sede, tipo=tipo, lunes=lunes):
+                        self.assertEqual(hoja_semana(lunes, sede, tipo)['total'], datos['total'])
+
+        response = self.ver(tipo='total', sede='quito')
+        self.assertContains(response, 'cada venta cuenta en la sede de la bodega')
+        # Cambiar de vista conserva la sede.
+        self.assertContains(response, '?semana=2026-10-12&amp;tipo=producto&amp;sede=quito')
+        self.assertNotContains(self.ver(tipo='equipo', sede='quito'), 'cada venta cuenta en la sede de la bodega')
 
         # Un enlace viejo con sede y sin tipo abre los equipos de esa sede.
         ctx = self.abrir(sede='quito').context

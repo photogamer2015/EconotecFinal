@@ -9,6 +9,10 @@ Seguimiento de pago: hoja semanal con lo que se cobró de equipos y productos.
 - Tres vistas: «equipo» (equipos del taller de Guayaquil y Quito), «producto»
   (ventas de producto) y «total», que junta las dos en una sola hoja; así el
   total siempre es la suma exacta de equipos + productos.
+- La sede (Guayaquil o Quito) filtra las tres vistas. Una venta no tiene sede
+  propia: es de la sede de la bodega de donde salieron sus productos. Las
+  ventas sin productos de inventario o con productos de las dos sedes solo
+  aparecen con «Todas».
 - No incluye donados ni equipos a comprar, que no son cobros a clientes.
 - Una fila por equipo o venta, con sus pagos de la semana y el saldo que el
   cliente todavía debe hoy (el mismo de Pagos).
@@ -18,7 +22,7 @@ from collections import defaultdict
 from datetime import date, timedelta
 from decimal import Decimal
 
-from django.db.models import Prefetch, Q
+from django.db.models import Exists, OuterRef, Prefetch, Q
 from django.urls import reverse
 from django.utils import timezone
 
@@ -125,22 +129,36 @@ def texto_cantidades(tipo, equipos, ventas, pagos=None):
     return ' · '.join(partes)
 
 
+def _filtro_ventas(sede=''):
+    """Ventas de producto; con `sede`, solo las que salieron de su bodega.
+
+    Una venta es de una sede cuando todos sus productos de inventario son de
+    esa sede. Sin productos, o con productos de las dos sedes, no es de ninguna.
+    """
+    filtro = Q(sede=SEDE_VENTAS)
+    if not sede:
+        return filtro
+    productos = VentaInventarioItem.objects.filter(venta=OuterRef('pk'))
+    return (
+        filtro
+        & Q(Exists(productos.filter(inventario_item__sede=sede)))
+        & ~Q(Exists(productos.exclude(inventario_item__sede=sede)))
+    )
+
+
 def ingresos_de_seguimiento(sede='', tipo=EQUIPO):
     """Registros que cuentan en el seguimiento.
 
     `tipo` elige equipos del taller, ventas de producto o los dos (total).
-    `sede` (Guayaquil o Quito) solo filtra equipos: las ventas no son de una sede.
+    `sede` (Guayaquil o Quito) filtra equipos por su sede y ventas por la bodega
+    de sus productos.
     """
-    if tipo == PRODUCTO:
-        sedes = (SEDE_VENTAS,)
-    elif tipo == TOTAL:
-        sedes = (*SEDES_EQUIPOS, SEDE_VENTAS)
-    else:
-        sedes = SEDES_EQUIPOS
-    qs = IngresoEquipo.objects.filter(sede__in=sedes).exclude(estado__in=ESTADOS_SIN_COBRO)
-    if sede:
-        qs = qs.filter(sede=sede)
-    return qs
+    filtro = Q()
+    if tipo != PRODUCTO:
+        filtro |= Q(sede=sede) if sede else Q(sede__in=SEDES_EQUIPOS)
+    if tipo != EQUIPO:
+        filtro |= _filtro_ventas(sede)
+    return IngresoEquipo.objects.filter(filtro).exclude(estado__in=ESTADOS_SIN_COBRO)
 
 
 # ─────────────────────────────────────────────────────────
