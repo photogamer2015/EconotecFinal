@@ -33,7 +33,8 @@ Sistema web para administrar el flujo de reparaciones de Econotec: ingreso de eq
 - **Clientes** → Directorio con historial de equipos por cliente.
 - **Historial** → Equipos agrupados por mes/año.
 - **Registro Administrativo** *(solo admin)* → Balance financiero del mes (ingresos vs egresos).
-- **Roles**: Administrador y Técnico.
+- **Seguimiento de pago** *(admin y asistente de caja)* → Hoja semanal de cobros de equipos y ventas, con registro de egresos que no pueden pasar del saldo de la semana.
+- **Roles**: Administrador, Técnico, Asesor(a) y Asesora - Asistente de caja.
 
 ---
 
@@ -86,7 +87,8 @@ Accede a `http://127.0.0.1:8000/` y entra con tu superusuario.
 
 1. Entra a `http://127.0.0.1:8000/admin/`
 2. Ve a **Users** → selecciona un usuario.
-3. En la sección **Groups**, agrégalo a **Administradores** o **Tecnicos**.
+3. En la sección **Groups**, agrégalo a **Administradores**, **Tecnicos**, **Asesores** o **Asesora - Asistente de caja**.
+   - **Asesora - Asistente de caja**: todo lo de la asesora, más Seguimiento de pago (con egresos) y gestionar el inventario. No hace falta agregarla también a Asesores.
 
 > Los superusuarios siempre tienen acceso total, incluso sin estar en un grupo.
 

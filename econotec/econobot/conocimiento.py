@@ -10,7 +10,7 @@ from ..alertas import (
     UMBRAL_DIAS_REPARACION_TECNICO,
 )
 from ..gamificacion import PUNTOS_POR_ESTADO_SALIDA, PUNTOS_VENTA_PRODUCTO
-from ..permisos import es_admin, puede_ver_ranking
+from ..permisos import es_admin, puede_ver_ranking, puede_ver_seguimiento_pago
 from . import texto as tx
 from .respuesta import enlace, opcion, respuesta
 
@@ -19,7 +19,7 @@ from .respuesta import enlace, opcion, respuesta
 # Secciones del sistema («abrir pagos», «¿dónde veo los clientes?»)
 # ─────────────────────────────────────────────────────────────────────
 
-# (palabras clave, etiqueta, ruta, permiso: None = todos | 'admin' | 'ranking')
+# (palabras clave, etiqueta, ruta, permiso: None = todos | 'admin' | 'ranking' | 'seguimiento')
 SECCIONES = [
     (('nueva solicitud', 'nuevo ingreso', 'formulario de ingreso', 'solicitud de ingreso'),
      'Nueva Solicitud de Ingreso', 'ingreso_registrar', None),
@@ -52,6 +52,9 @@ SECCIONES = [
     (('registro administrativo', 'panel administrativo', 'utilidad neta'), 'Registro Administrativo',
      'admin_dashboard', 'admin'),
     (('egresos', 'gastos'), 'Egresos', 'admin_egresos_lista', 'admin'),
+    (('seguimiento de pago', 'seguimiento de pagos', 'hoja semanal', 'registrar egreso',
+      'registrar egresos', 'ingresar egreso', 'ingresar egresos'),
+     'Seguimiento de pago', 'seguimiento_pago', 'seguimiento'),
     (('control de registro', 'auditoria'), 'Control de Registro', 'control_registro', 'admin'),
     (('avisos del panel', 'avisos'), 'Avisos del panel', 'avisos_lista', 'admin'),
     (('donados', 'equipos a comprar'), 'Donados / Equipos a comprar', 'admin_equipos_administrativos', 'admin'),
@@ -65,7 +68,13 @@ def _permitido(user, permiso):
         return es_admin(user)
     if permiso == 'ranking':
         return puede_ver_ranking(user)
+    if permiso == 'seguimiento':
+        return puede_ver_seguimiento_pago(user)
     return True
+
+
+def permiso_de(ruta):
+    return next((permiso for _claves, _etiqueta, r, permiso in SECCIONES if r == ruta), None)
 
 
 def _contiene(texto, frase):
@@ -95,6 +104,8 @@ def abrir_seccion(user, mensaje):
         if ruta == 'admin_equipos_administrativos':
             # El resto de roles consulta la misma información en su propia lista.
             return respuesta(f'Aquí tienes {etiqueta}:', [enlace(etiqueta, 'equipos_administrativos_general')])
+        if permiso_de(ruta) == 'seguimiento':
+            return respuesta(f'«{etiqueta}» es solo para el administrador y la asistente de caja.')
         return respuesta(f'«{etiqueta}» es una sección solo para administradores.')
     tipo = 'nueva' if ruta == 'inventario_menu' else 'nav'
     return respuesta(f'Aquí tienes {etiqueta}:', [enlace(etiqueta, ruta, tipo=tipo)])
@@ -303,6 +314,8 @@ def _roles(request):
         'chatarrización, valores del ranking).\n'
         '• Técnico y Asesora comercial: registran ingresos, finalizan equipos, registran pagos, confirman salidas '
         'y consultan clientes e historial.\n'
+        '• Asesora - Asistente de caja: todo lo de la asesora, más Seguimiento de pago (registra los egresos de la '
+        'semana) y gestionar el inventario (ingresar, editar, cantidades y eliminar).\n'
         '• Las asesoras reciben notificaciones cuando queda un saldo por cobrar.',
     )
 
