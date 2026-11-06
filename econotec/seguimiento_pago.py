@@ -17,6 +17,9 @@ Seguimiento de pago: hoja semanal con lo que se cobró de equipos y productos.
 - Una fila por equipo o venta, con sus pagos de la semana y el saldo que el
   cliente todavía debe hoy (el mismo de Pagos).
 - Los pagos mixtos se separan en sus dos métodos para los totales de arriba.
+- Egresos: el saldo disponible de una semana es lo recaudado (Total de
+  seguimiento, todas las sedes) menos los egresos con fecha en esa semana. Un
+  egreso registrado desde aquí no puede pasar de ese saldo.
 """
 from collections import defaultdict
 from datetime import date, timedelta
@@ -26,7 +29,7 @@ from django.db.models import Exists, OuterRef, Prefetch, Q
 from django.urls import reverse
 from django.utils import timezone
 
-from .models import SEDES_EQUIPOS, Abono, IngresoEquipo, SalidaEquipo, VentaInventarioItem
+from .models import SEDES_EQUIPOS, Abono, Egreso, IngresoEquipo, SalidaEquipo, VentaInventarioItem
 
 CERO = Decimal('0.00')
 
@@ -539,3 +542,37 @@ def pestanas_semanas(totales, actual, seleccionada, tipo=EQUIPO):
             })
         meses[-1]['pestanas'].append(pestana)
     return pestanas, meses
+
+
+# ─────────────────────────────────────────────────────────
+# Egresos: saldo disponible de una semana
+# ─────────────────────────────────────────────────────────
+
+def saldo_semana(dia, recaudado=None):
+    """Recaudado, egresos y saldo disponible de la semana de `dia`.
+
+    Recaudado es el Total de seguimiento de la semana (equipos y productos de
+    todas las sedes). Restan todos los egresos con fecha en esa semana, los
+    registrados aquí y los del Registro Administrativo. `recaudado` evita
+    recalcular la hoja cuando ya se tiene.
+    """
+    lunes = inicio_semana(dia)
+    domingo = fin_semana(lunes)
+    if recaudado is None:
+        recaudado = hoja_semana(lunes, tipo=TOTAL)['total']
+    egresos = list(
+        Egreso.objects.filter(fecha__range=(lunes, domingo))
+        .select_related('categoria', 'asesora', 'registrado_por')
+        .order_by('fecha', 'creado', 'pk')
+    )
+    total_egresos = sum((egreso.monto for egreso in egresos), CERO)
+    return {
+        'lunes': lunes,
+        'domingo': domingo,
+        'etiqueta': etiqueta_semana(lunes),
+        'titulo': titulo_semana(lunes),
+        'recaudado': recaudado,
+        'egresos': egresos,
+        'total_egresos': total_egresos,
+        'disponible': recaudado - total_egresos,
+    }

@@ -9,10 +9,13 @@ from django.contrib.auth.models import Group
 from django.test import SimpleTestCase, TestCase
 from django.urls import reverse
 
-from .models import Abono, Cliente, IngresoEquipo, InventarioItem, SalidaEquipo, VentaInventarioItem
+from .models import (
+    Abono, CategoriaEgreso, Cliente, Egreso, IngresoEquipo, InventarioItem, NotificacionCambioAdmin,
+    SalidaEquipo, VentaInventarioItem,
+)
 from .seguimiento_pago import (
     etiqueta_semana, hoja_semana, ingresos_de_seguimiento, inicio_semana,
-    titulo_semana, totales_por_semana,
+    saldo_semana, titulo_semana, totales_por_semana,
 )
 
 # Semana de referencia: lunes 12 a domingo 18 de octubre de 2026.
@@ -619,3 +622,187 @@ class SeguimientoPagoTests(TestCase):
         self.assertEqual(anterior['total'], Decimal('15.00'))
         self.assertEqual(anterior['resumen'], '1 venta')
         self.assertContains(self.ver(tipo='equipo', sede='quito'), '?semana=2026-10-12&amp;tipo=equipo&amp;sede=quito')
+
+
+class EgresoSeguimientoTests(TestCase):
+    """Egresos registrados desde Seguimiento de pago."""
+
+    def setUp(self):
+        User = get_user_model()
+        self.admin = User.objects.create_superuser(
+            username='RootAdmin', email='admin@example.com', password='adminpass123',
+            first_name='Rosa', last_name='Admin',
+        )
+        self.asesora = User.objects.create_user(username='kimberly', first_name='Kimberly', last_name='Maquilón')
+        self.asesora.groups.add(Group.objects.create(name='Asesores'))
+        self.tecnico = User.objects.create_user(username='yandri', first_name='Yandri')
+        self.tecnico.groups.add(Group.objects.create(name='Tecnicos'))
+        self.categoria, _ = CategoriaEgreso.objects.get_or_create(nombre='Repuestos')
+        cliente = Cliente.objects.create(cedula='0912345678', nombres='María Loor')
+        # Semana del 12 al 18 de octubre: 100 de un equipo + 50 de una venta = 150 recaudado.
+        equipo = IngresoEquipo.objects.create(
+            sede='guayaquil', fecha_ingreso=LUNES, cliente=cliente, tipo_equipo='laptop', marca='HP',
+            modelo_serie='Pavilion', problema_reportado='No enciende', valor_acordado=Decimal('100.00'),
+            abono_anticipo=Decimal('100.00'), anticipo_metodo='efectivo', registrado_por=self.asesora,
+            estado='en_reparacion', subestado_reparacion='en_reparacion',
+        )
+        IngresoEquipo.objects.create(
+            sede='ventas', fecha_ingreso=MIERCOLES, cliente=cliente, tipo_equipo='otro', marca='N/A',
+            modelo_serie='N/A', problema_reportado='Cable', valor_acordado=Decimal('50.00'),
+            abono_anticipo=Decimal('50.00'), anticipo_metodo='transferencia', anticipo_banco='pichincha',
+            estado='entregado', subestado_entregado='con_solucion',
+        )
+        # Otra semana (5 al 11 de octubre) con 30 recaudado.
+        Abono.objects.create(ingreso=equipo, fecha=date(2026, 10, 9), monto=Decimal('30.00'), metodo='efectivo')
+        self.client.force_login(self.admin)
+
+    def url(self, **params):
+        return f"{reverse('econotec:seguimiento_pago')}?{'&'.join(f'{k}={v}' for k, v in params.items())}"
+
+    def registrar(self, url=None, **datos):
+        datos = {
+            'fecha': MIERCOLES.isoformat(), 'concepto': 'Pasta térmica', 'asesora': self.asesora.pk,
+            'categoria': self.categoria.pk, 'monto': '40.00', **datos,
+        }
+        with patch('econotec.views_pagos.timezone.localdate', return_value=MIERCOLES):
+            return self.client.post(url or self.url(semana=MIERCOLES.isoformat()), datos)
+
+    def ver(self, **params):
+        with patch('econotec.views_pagos.timezone.localdate', return_value=MIERCOLES):
+            return self.client.get(reverse('econotec:seguimiento_pago'), params)
+
+    def test_saldo_de_la_semana(self):
+        saldo = saldo_semana(MIERCOLES)
+
+        self.assertEqual(saldo['lunes'], LUNES)
+        self.assertEqual(saldo['recaudado'], Decimal('150.00'))
+        self.assertEqual(saldo['disponible'], Decimal('150.00'))
+        self.assertEqual(saldo_semana(date(2026, 10, 9))['recaudado'], Decimal('30.00'))
+        # Restan todos los egresos de la semana, también los del Registro Administrativo.
+        Egreso.objects.create(fecha=DOMINGO, categoria=self.categoria, concepto='Luz', monto=Decimal('25.00'))
+        Egreso.objects.create(fecha=date(2026, 10, 19), categoria=self.categoria, concepto='Otra semana',
+                              monto=Decimal('99.00'))
+        saldo = saldo_semana(LUNES)
+        self.assertEqual(saldo['total_egresos'], Decimal('25.00'))
+        self.assertEqual(saldo['disponible'], Decimal('125.00'))
+
+    def test_panel_de_egresos_en_la_hoja(self):
+        Egreso.objects.create(fecha=LUNES, categoria=self.categoria, concepto='Cable HDMI', monto=Decimal('20.00'),
+                              asesora=self.asesora, registrado_por=self.admin)
+
+        # El saldo es de toda la semana aunque la hoja esté filtrada.
+        for params in ({}, {'tipo': 'equipo', 'sede': 'quito'}):
+            with self.subTest(**params):
+                response = self.ver(semana=MIERCOLES.isoformat(), **params)
+                caja = response.context['caja']
+                self.assertEqual(caja['recaudado'], Decimal('150.00'))
+                self.assertEqual(caja['total_egresos'], Decimal('20.00'))
+                self.assertEqual(caja['disponible'], Decimal('130.00'))
+        self.assertContains(response, 'Registrar egreso</button>')
+        self.assertContains(response, 'Cable HDMI')
+        self.assertContains(response, 'Kimberly Maquilón')
+        self.assertContains(response, '$130,00')
+        self.assertFalse(response.context['abrir_egreso'])
+        # La fecha sugerida es hoy, dentro de la semana abierta.
+        self.assertEqual(response.context['form_egreso'].initial['fecha'], MIERCOLES)
+        self.assertEqual(self.ver(semana='2026-10-07').context['form_egreso'].initial['fecha'], date(2026, 10, 11))
+
+    def test_registrar_egreso(self):
+        response = self.registrar(url=self.url(semana='2026-10-05', tipo='producto', sede='guayaquil'))
+
+        egreso = Egreso.objects.get()
+        self.assertEqual(egreso.concepto, 'Pasta térmica')
+        self.assertEqual(egreso.fecha, MIERCOLES)
+        self.assertEqual(egreso.monto, Decimal('40.00'))
+        self.assertEqual(egreso.asesora, self.asesora)
+        self.assertEqual(egreso.categoria, self.categoria)
+        self.assertEqual(egreso.registrado_por, self.admin)
+        # Abre la semana del egreso y conserva la vista.
+        self.assertRedirects(
+            response, self.url(semana=MIERCOLES.isoformat(), tipo='producto', sede='guayaquil') + '#egresos',
+            fetch_redirect_response=False,
+        )
+        self.assertEqual(saldo_semana(MIERCOLES)['disponible'], Decimal('110.00'))
+
+        # Aviso en la campanita del admin, aunque lo registre un admin.
+        aviso = NotificacionCambioAdmin.objects.get()
+        self.assertEqual(aviso.tipo, 'egreso_seguimiento')
+        self.assertEqual(aviso.creado_por, self.admin)
+        self.assertIn('$40,00', aviso.mensaje)
+        self.assertIn('Pasta térmica', aviso.mensaje)
+        self.assertIn('Kimberly Maquilón', aviso.mensaje)
+        self.assertIn('Saldo disponible de la semana 12 – 18 oct: $110,00', aviso.mensaje)
+        self.assertIn('semana=2026-10-14', aviso.url)
+
+        response = self.ver(semana=MIERCOLES.isoformat())
+        self.assertContains(response, 'Saldo disponible de la semana 12 – 18 oct: $110,00')
+        self.assertContains(response, '🔔')
+
+    def test_no_pasa_del_saldo_disponible(self):
+        Egreso.objects.create(fecha=LUNES, categoria=self.categoria, concepto='Luz', monto=Decimal('100.00'))
+
+        response = self.registrar(monto='50.01')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(Egreso.objects.count(), 1)
+        self.assertFalse(NotificacionCambioAdmin.objects.exists())
+        self.assertTrue(response.context['abrir_egreso'])
+        self.assertIn(
+            'El egreso supera el saldo disponible de la semana 12 – 18 oct ($50,00).',
+            response.context['form_egreso'].errors['monto'],
+        )
+        # Justo el saldo disponible sí se puede.
+        self.registrar(monto='50.00')
+        self.assertEqual(saldo_semana(LUNES)['disponible'], Decimal('0.00'))
+        # El saldo es el de la semana de la fecha del egreso, no el de la hoja abierta.
+        self.assertEqual(self.registrar(fecha='2026-10-09', monto='30.01').status_code, 200)
+        self.registrar(fecha='2026-10-09', monto='30.00')
+        self.assertEqual(Egreso.objects.filter(fecha=date(2026, 10, 9)).count(), 1)
+
+    def test_datos_obligatorios(self):
+        response = self.registrar(concepto='  ', asesora='', categoria='', monto='0')
+
+        errores = response.context['form_egreso'].errors
+        self.assertIn('Escribe el nombre del producto.', errores['concepto'])
+        self.assertIn('Selecciona la asesora que aplica el egreso.', errores['asesora'])
+        self.assertIn('Selecciona la categoría.', errores['categoria'])
+        self.assertIn('El monto debe ser mayor que cero.', errores['monto'])
+        # Solo se puede elegir una asesora.
+        errores = self.registrar(asesora=self.tecnico.pk).context['form_egreso'].errors
+        self.assertIn('Selecciona una asesora de la lista.', errores['asesora'])
+        self.assertFalse(Egreso.objects.exists())
+
+    def test_saldo_por_fecha(self):
+        url = reverse('econotec:seguimiento_pago_saldo')
+
+        datos = self.client.get(url, {'fecha': '2026-10-09'}).json()
+
+        self.assertEqual(datos['etiqueta'], '5 – 11 oct')
+        self.assertEqual(datos['recaudado'], '30.00')
+        self.assertEqual(datos['disponible_texto'], '$30,00')
+        self.assertEqual(self.client.get(url, {'fecha': 'basura'}).status_code, 400)
+        Egreso.objects.create(fecha=date(2026, 10, 10), categoria=self.categoria, concepto='X', monto=Decimal('45.00'))
+        self.assertEqual(self.client.get(url, {'fecha': '2026-10-09'}).json()['disponible_texto'], '−$15,00')
+
+        self.client.force_login(self.asesora)
+        self.assertEqual(self.client.get(url, {'fecha': '2026-10-09'}).status_code, 302)
+        response = self.registrar()
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(Egreso.objects.count(), 1)
+
+    def test_egreso_va_a_caja_y_registro_administrativo(self):
+        from .caja import caja_del_periodo
+        from .views_admin import _egresos_mes
+
+        self.registrar(monto='40.00')
+
+        self.assertEqual(_egresos_mes(2026, 10), Decimal('40.00'))
+        caja = caja_del_periodo('2026-10-01', '2026-10-31', hoy=MIERCOLES)
+        self.assertEqual(caja['egresos'], Decimal('40.00'))
+        response = self.client.get(reverse('econotec:admin_egresos_lista'))
+        self.assertContains(response, 'Pasta térmica')
+        self.assertContains(response, 'Kimberly Maquilón')
+        # Editarlo desde Egresos del admin conserva la asesora.
+        egreso = Egreso.objects.get()
+        response = self.client.get(reverse('econotec:admin_egreso_editar', args=[egreso.pk]))
+        self.assertEqual(response.context['form'].initial['asesora'], self.asesora.pk)

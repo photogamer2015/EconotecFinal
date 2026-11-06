@@ -2397,7 +2397,7 @@ class EgresoForm(forms.ModelForm):
     class Meta:
         model = Egreso
         fields = [
-            'fecha', 'categoria', 'concepto', 'monto', 'notas',
+            'fecha', 'categoria', 'concepto', 'asesora', 'monto', 'notas',
             'metodo', 'banco', 'banco_otro', 'tarjeta_app', 'comprobante_url', 'numero_recibo',
             'monto_1', 'metodo_1', 'banco_1', 'banco_otro_1', 'tarjeta_app_1',
             'monto_2', 'metodo_2', 'banco_2', 'banco_otro_2', 'tarjeta_app_2',
@@ -2410,6 +2410,7 @@ class EgresoForm(forms.ModelForm):
                 'class': 'form-input',
                 'placeholder': 'Ej.: Compra de repuestos PS3',
             }),
+            'asesora': forms.Select(attrs={'class': 'form-input'}),
             'monto': forms.NumberInput(attrs={
                 'class': 'form-input', 'step': '0.01', 'min': '0.01',
             }),
@@ -2454,6 +2455,8 @@ class EgresoForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         self.fields['categoria'].queryset = CategoriaEgreso.objects.filter(activo=True)
         self.fields['categoria'].empty_label = '— Selecciona categoría —'
+        _campo_asesora(self.fields['asesora'], self.instance.asesora_id)
+        self.fields['asesora'].empty_label = '— Ninguna —'
 
     def clean(self):
         cleaned = super().clean()
@@ -2494,6 +2497,84 @@ class EgresoForm(forms.ModelForm):
                 self.add_error('banco_otro_2', 'Especifica el banco del segundo pago.')
             if monto_1 + monto_2 != monto:
                 self.add_error('monto_2', 'La suma de los pagos mixtos debe ser igual al monto del egreso.')
+        return cleaned
+
+
+def _campo_asesora(campo, actual_id=None):
+    """Lista de asesoras activas (y la ya guardada, aunque ya no esté activa)."""
+    asesoras = Q(is_active=True, groups__name__in=GRUPOS_ASESOR_COMERCIAL)
+    if actual_id:
+        asesoras |= Q(pk=actual_id)
+    campo.queryset = User.objects.filter(asesoras).distinct().order_by('first_name', 'last_name', 'username')
+    campo.label_from_instance = lambda user: user.get_full_name() or user.username
+
+
+class EgresoSeguimientoForm(forms.ModelForm):
+    """
+    Egreso registrado desde Seguimiento de pago.
+
+    Se guarda como cualquier egreso (Caja, Registro Administrativo, Egresos y
+    exportación lo toman solos), pero no puede pasar del saldo disponible de la
+    semana de su fecha: lo recaudado esa semana menos sus otros egresos.
+    """
+
+    class Meta:
+        model = Egreso
+        fields = ['fecha', 'concepto', 'asesora', 'categoria', 'monto']
+        labels = {
+            'fecha': 'Fecha del egreso',
+            'concepto': 'Nombre del producto',
+            'asesora': 'Asesora que aplica el egreso',
+            'categoria': 'Categoría',
+            'monto': 'Monto (USD)',
+        }
+        error_messages = {
+            'fecha': {'required': 'Elige la fecha del egreso.'},
+            'concepto': {'required': 'Escribe el nombre del producto.'},
+            'asesora': {
+                'required': 'Selecciona la asesora que aplica el egreso.',
+                'invalid_choice': 'Selecciona una asesora de la lista.',
+            },
+            'categoria': {'required': 'Selecciona la categoría.'},
+            'monto': {'required': 'Escribe el monto del egreso.'},
+        }
+        widgets = {
+            'fecha': forms.DateInput(attrs={'class': 'form-input', 'type': 'date'}, format='%Y-%m-%d'),
+            'concepto': forms.TextInput(attrs={
+                'class': 'form-input', 'placeholder': 'Ej.: Pasta térmica, cable HDMI…', 'maxlength': 200,
+            }),
+            'asesora': forms.Select(attrs={'class': 'form-input'}),
+            'categoria': forms.Select(attrs={'class': 'form-input'}),
+            'monto': forms.NumberInput(attrs={
+                'class': 'form-input', 'step': '0.01', 'min': '0.01', 'inputmode': 'decimal',
+            }),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.saldo = None
+        self.fields['categoria'].queryset = CategoriaEgreso.objects.filter(activo=True)
+        self.fields['categoria'].empty_label = '— Selecciona categoría —'
+        _campo_asesora(self.fields['asesora'])
+        self.fields['asesora'].required = True
+        self.fields['asesora'].empty_label = '— Selecciona la asesora —'
+
+    def clean(self):
+        from .seguimiento_pago import saldo_semana
+        from .templatetags.econotec_extras import dinero_signo
+
+        cleaned = super().clean()
+        fecha = cleaned.get('fecha')
+        monto = cleaned.get('monto')
+        if monto is not None and monto <= 0:
+            self.add_error('monto', 'El monto debe ser mayor que cero.')
+        elif fecha and monto is not None:
+            self.saldo = saldo_semana(fecha)
+            if monto > self.saldo['disponible']:
+                self.add_error('monto', (
+                    f'El egreso supera el saldo disponible de la semana {self.saldo["etiqueta"]} '
+                    f'({dinero_signo(self.saldo["disponible"])}).'
+                ))
         return cleaned
 
 
