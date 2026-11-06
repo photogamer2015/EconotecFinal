@@ -19,7 +19,8 @@ Seguimiento de pago: hoja semanal con lo que se cobró de equipos y productos.
 - Los pagos mixtos se separan en sus dos métodos para los totales de arriba.
 - Egresos: el saldo disponible de una semana es lo recaudado (Total de
   seguimiento, todas las sedes) menos los egresos con fecha en esa semana. Un
-  egreso registrado desde aquí no puede pasar de ese saldo.
+  egreso registrado desde aquí lleva una fecha de la hoja abierta y no puede
+  pasar de ese saldo.
 """
 from collections import defaultdict
 from datetime import date, timedelta

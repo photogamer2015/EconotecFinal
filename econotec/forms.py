@@ -2516,6 +2516,9 @@ class EgresoSeguimientoForm(forms.ModelForm):
     Se guarda como cualquier egreso (Caja, Registro Administrativo, Egresos y
     exportación lo toman solos), pero no puede pasar del saldo disponible de la
     semana de su fecha: lo recaudado esa semana menos sus otros egresos.
+
+    `semana` es el lunes de la hoja abierta: la fecha debe caer en esa semana.
+    Para registrar en otra semana se abre su hoja.
     """
 
     class Meta:
@@ -2550,9 +2553,19 @@ class EgresoSeguimientoForm(forms.ModelForm):
             }),
         }
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, semana=None, **kwargs):
+        from .seguimiento_pago import etiqueta_semana, fin_semana
+
         super().__init__(*args, **kwargs)
         self.saldo = None
+        self.semana = semana
+        self.domingo = fin_semana(semana) if semana else None
+        self.etiqueta_semana = etiqueta_semana(semana) if semana else ''
+        if semana:
+            # El calendario solo deja elegir días de la hoja abierta.
+            self.fields['fecha'].widget.attrs.update(
+                min=semana.isoformat(), max=self.domingo.isoformat(),
+            )
         self.fields['categoria'].queryset = CategoriaEgreso.objects.filter(activo=True)
         self.fields['categoria'].empty_label = '— Selecciona categoría —'
         _campo_asesora(self.fields['asesora'])
@@ -2566,6 +2579,12 @@ class EgresoSeguimientoForm(forms.ModelForm):
         cleaned = super().clean()
         fecha = cleaned.get('fecha')
         monto = cleaned.get('monto')
+        if fecha and self.semana and not (self.semana <= fecha <= self.domingo):
+            self.add_error('fecha', (
+                f'La fecha debe ser de esta semana ({self.etiqueta_semana}). '
+                'Para registrar un egreso de otra semana, abre su hoja en las pestañas de abajo.'
+            ))
+            fecha = None
         if monto is not None and monto <= 0:
             self.add_error('monto', 'El monto debe ser mayor que cero.')
         elif fecha and monto is not None:

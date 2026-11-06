@@ -372,7 +372,8 @@ def seguimiento_pago(request):
 
     form_egreso = None
     if request.method == 'POST':
-        form_egreso = EgresoSeguimientoForm(request.POST)
+        # La fecha debe ser de la semana de la hoja abierta (?semana=).
+        form_egreso = EgresoSeguimientoForm(request.POST, semana=lunes)
         if form_egreso.is_valid():
             with transaction.atomic():
                 egreso = form_egreso.save(commit=False)
@@ -399,7 +400,9 @@ def seguimiento_pago(request):
     caja['disponible_texto'] = _dinero(caja['disponible'])
     if form_egreso is None:
         # Fecha sugerida: hoy si cae en la semana abierta; si no, el día más cercano de ella.
-        form_egreso = EgresoSeguimientoForm(initial={'fecha': min(max(hoy, lunes), fin_semana(lunes))})
+        form_egreso = EgresoSeguimientoForm(
+            initial={'fecha': min(max(hoy, lunes), fin_semana(lunes))}, semana=lunes,
+        )
 
     return render(request, 'pagos/seguimiento.html', {
         **hoja,

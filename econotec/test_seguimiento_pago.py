@@ -708,7 +708,7 @@ class EgresoSeguimientoTests(TestCase):
         self.assertEqual(self.ver(semana='2026-10-07').context['form_egreso'].initial['fecha'], date(2026, 10, 11))
 
     def test_registrar_egreso(self):
-        response = self.registrar(url=self.url(semana='2026-10-05', tipo='producto', sede='guayaquil'))
+        response = self.registrar(url=self.url(semana=LUNES.isoformat(), tipo='producto', sede='guayaquil'))
 
         egreso = Egreso.objects.get()
         self.assertEqual(egreso.concepto, 'Pasta térmica')
@@ -754,10 +754,41 @@ class EgresoSeguimientoTests(TestCase):
         # Justo el saldo disponible sí se puede.
         self.registrar(monto='50.00')
         self.assertEqual(saldo_semana(LUNES)['disponible'], Decimal('0.00'))
-        # El saldo es el de la semana de la fecha del egreso, no el de la hoja abierta.
-        self.assertEqual(self.registrar(fecha='2026-10-09', monto='30.01').status_code, 200)
-        self.registrar(fecha='2026-10-09', monto='30.00')
+        # En la hoja de otra semana manda el saldo de esa semana.
+        otra_hoja = self.url(semana='2026-10-09')
+        self.assertEqual(self.registrar(url=otra_hoja, fecha='2026-10-09', monto='30.01').status_code, 200)
+        self.registrar(url=otra_hoja, fecha='2026-10-09', monto='30.00')
         self.assertEqual(Egreso.objects.filter(fecha=date(2026, 10, 9)).count(), 1)
+
+    def test_fecha_solo_de_la_hoja_abierta(self):
+        # Hoja del 12 al 18 de octubre: el calendario solo deja esos días.
+        response = self.ver(semana=MIERCOLES.isoformat())
+        self.assertContains(response, 'min="2026-10-12"')
+        self.assertContains(response, 'max="2026-10-18"')
+        self.assertContains(response, 'Solo días de esta hoja: 12 – 18 oct')
+
+        for fecha in ('2026-10-11', '2026-10-19', '2026-07-22'):
+            with self.subTest(fecha=fecha):
+                response = self.registrar(fecha=fecha, monto='5.00')
+                self.assertEqual(response.status_code, 200)
+                self.assertTrue(response.context['abrir_egreso'])
+                self.assertEqual(response.context['form_egreso'].errors['fecha'], [
+                    'La fecha debe ser de esta semana (12 – 18 oct). '
+                    'Para registrar un egreso de otra semana, abre su hoja en las pestañas de abajo.'
+                ])
+        # Sin ?semana la hoja abierta es la de hoy.
+        self.assertEqual(self.registrar(url=reverse('econotec:seguimiento_pago'), fecha='2026-10-09').status_code, 200)
+        self.assertFalse(Egreso.objects.exists())
+        self.assertFalse(NotificacionCambioAdmin.objects.exists())
+
+        # Desde la hoja de esa semana sí se puede.
+        for url in (self.url(semana='2026-10-05'), self.url(semana='2026-10-11', tipo='equipo', sede='quito')):
+            with self.subTest(url=url):
+                self.assertEqual(self.registrar(url=url, fecha='2026-10-09', monto='5.00').status_code, 302)
+        self.assertEqual(Egreso.objects.filter(fecha=date(2026, 10, 9)).count(), 2)
+        self.registrar(fecha=DOMINGO.isoformat(), monto='5.00')
+        self.registrar(url=reverse('econotec:seguimiento_pago'), fecha=LUNES.isoformat(), monto='5.00')
+        self.assertEqual(Egreso.objects.filter(fecha__range=(LUNES, DOMINGO)).count(), 2)
 
     def test_datos_obligatorios(self):
         response = self.registrar(concepto='  ', asesora='', categoria='', monto='0')

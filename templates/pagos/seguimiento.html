@@ -529,6 +529,7 @@
     .sp-egreso-campos label { display: block; margin-bottom: 5px; color: var(--text-soft); font-size: 13px; font-weight: 700; }
     .sp-egreso-campos .form-input { width: 100%; }
     .sp-egreso-campos .errorlist { margin: 4px 0 0; }
+    .sp-egreso-ayuda { display: block; margin-top: 4px; color: var(--text-muted); font-size: 12px; font-weight: 600; }
     .sp-egreso-aviso {
         margin: 12px 0 0;
         padding: 9px 12px;
@@ -678,7 +679,7 @@
         <div class="sp-dialogo-cabecera">
             <div>
                 <h3 id="sp-egreso-titulo">💸 Registrar egreso</h3>
-                <p>Se resta del saldo de la semana de su fecha y se avisa al administrador.</p>
+                <p>Se resta del saldo de esta semana y se avisa al administrador.</p>
             </div>
             <button type="button" class="sp-dialogo-cerrar" data-cerrar-egreso aria-label="Cerrar">✕</button>
         </div>
@@ -698,6 +699,7 @@
             <div>
                 <label for="{{ form_egreso.fecha.id_for_label }}">{{ form_egreso.fecha.label }} *</label>
                 {{ form_egreso.fecha }}
+                <small class="sp-egreso-ayuda">Solo días de esta hoja: {{ caja.etiqueta }}</small>
                 {{ form_egreso.fecha.errors }}
             </div>
             <div>
@@ -721,7 +723,9 @@
                 {{ form_egreso.categoria.errors }}
             </div>
         </div>
-        <p class="sp-egreso-aviso" id="sp-egreso-aviso" hidden>El monto supera el saldo disponible de esa semana.</p>
+        <p class="sp-egreso-aviso" id="sp-egreso-aviso" hidden
+           data-aviso-monto="El monto supera el saldo disponible de esta semana."
+           data-aviso-fecha="La fecha debe ser de esta semana ({{ caja.etiqueta }}). Para otra semana, abre su hoja en las pestañas de abajo."></p>
 
         <div class="sp-dialogo-pie">
             <button type="button" class="btn btn-secondary" data-cerrar-egreso>Cancelar</button>
@@ -875,14 +879,27 @@
     let consulta = 0;
 
     const centavos = valor => Math.round(Number(valor) * 100);
+    // Solo días de la hoja abierta (min y max del calendario).
+    const fueraDeSemana = () => Boolean(fecha.value) && (
+        (fecha.min && fecha.value < fecha.min) || (fecha.max && fecha.value > fecha.max)
+    );
+    // Si el servidor ya marcó la fecha, el aviso no repite su mensaje hasta que se cambie.
+    const fechaInicial = fecha.value;
+    const errorFechaServidor = Boolean(fecha.parentElement.querySelector('.errorlist'));
     function revisar() {
         const valor = (monto.value || '').trim();
-        const excede = valor !== '' && !Number.isNaN(Number(valor)) && centavos(valor) > centavos(disponible);
-        aviso.hidden = !excede;
-        enviar.disabled = excede || cargando;
+        const fuera = fueraDeSemana();
+        const excede = !fuera && valor !== '' && !Number.isNaN(Number(valor)) && centavos(valor) > centavos(disponible);
+        const repetido = fuera && errorFechaServidor && fecha.value === fechaInicial;
+        aviso.textContent = fuera ? aviso.dataset.avisoFecha : aviso.dataset.avisoMonto;
+        aviso.hidden = !((fuera && !repetido) || excede);
+        enviar.disabled = fuera || excede || cargando;
     }
     async function actualizar() {
-        if (!fecha.value) return;
+        if (!fecha.value || fueraDeSemana()) {
+            revisar();
+            return;
+        }
         const id = ++consulta;
         cargando = true;
         caja.classList.add('is-cargando');
@@ -920,6 +937,7 @@
     // Clic fuera de la ventana la cierra.
     dialogo.addEventListener('click', e => { if (e.target === dialogo) dialogo.close(); });
     fecha.addEventListener('change', actualizar);
+    fecha.addEventListener('input', revisar);
     monto.addEventListener('input', revisar);
     form.addEventListener('submit', () => { enviar.disabled = true; });
     // Al volver con «Atrás» el botón no debe quedar bloqueado.
