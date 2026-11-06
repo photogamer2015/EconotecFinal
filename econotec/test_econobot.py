@@ -460,6 +460,28 @@ class EconoBotTests(TestCase):
         self.assertIn('solo para administradores', self.chat('abrir egresos')['reply'])
         self.assertIn('No entendí', self.chat('xyzzy qwerty uiop asdf ghjk')['reply'])
 
+    def test_seguimiento_de_pago_y_rol_asistente_de_caja(self):
+        asistente = get_user_model().objects.create_user(username='Karla', email='karla@example.com')
+        asistente.groups.add(Group.objects.get(name='Asesora - Asistente de caja'))
+        url = reverse('econotec:seguimiento_pago')
+
+        self.entrar(asistente)
+        for mensaje in ('abrir seguimiento de pago', 'registrar egreso', 'hoja semanal'):
+            with self.subTest(mensaje=mensaje):
+                self.assertEqual(self.chat(mensaje)['links'][0]['url'], url)
+        roles = self.chat('roles')['reply']
+        self.assertIn('Asesora - Asistente de caja', roles)
+        self.assertIn('Seguimiento de pago', roles)
+
+        # La asesora y el técnico no lo tienen; los egresos del admin siguen siendo solo del admin.
+        for usuario in (self.asesora, self.tecnico):
+            with self.subTest(usuario=usuario.username):
+                self.entrar(usuario)
+                datos = self.chat('abrir seguimiento de pago')
+                self.assertFalse(datos['links'])
+                self.assertIn('solo para el administrador y la asistente de caja', datos['reply'])
+        self.assertIn('solo para administradores', self.chat('abrir egresos')['reply'])
+
     def test_datos_juntos_en_un_mensaje(self):
         self.conversar('registrar equipo', '0923456789')
         datos = self.chat('nombre: Ana Ruiz; whatsapp: 0998887766; correo: ana@example.com')

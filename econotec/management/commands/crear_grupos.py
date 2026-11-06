@@ -1,5 +1,5 @@
 """
-Management command: crea los 3 grupos de roles de Econotec si no existen.
+Management command: crea los grupos de roles de Econotec si no existen.
 
 Uso:
     python manage.py crear_grupos
@@ -8,6 +8,7 @@ Grupos creados:
   - Administradores   → acceso total
   - Tecnicos          → Ingresos, Salidas, Clientes, Historial, Pagos, Ranking
   - Asesores Comerciales → Ingresos, Salidas, Clientes, Historial, Pagos (SIN Ranking)
+  - Asesora - Asistente de caja → lo de la asesora + Seguimiento de pago, egresos e inventario
 """
 from django.core.management.base import BaseCommand
 from django.contrib.auth.models import Group
@@ -17,11 +18,12 @@ GRUPOS = [
     'Administradores',
     'Tecnicos',
     'Asesores Comerciales',
+    'Asesora - Asistente de caja',
 ]
 
 
 class Command(BaseCommand):
-    help = 'Crea los 3 grupos de roles de Econotec (Administradores, Tecnicos, Asesores Comerciales)'
+    help = 'Crea los grupos de roles de Econotec (Administradores, Tecnicos, Asesores Comerciales, Asesora - Asistente de caja)'
 
     def handle(self, *args, **options):
         for nombre in GRUPOS:

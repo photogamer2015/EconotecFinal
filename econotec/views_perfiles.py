@@ -8,7 +8,7 @@ from django.views.decorators.http import require_POST, require_http_methods
 from .models import PerfilSocial
 from .gamificacion import nivel_por_puntos
 from .views import datos_perfil
-from .permisos import es_admin, es_tecnico, es_asesor
+from .permisos import es_admin, es_asesor, es_asistente_caja, es_tecnico
 
 
 class PerfilForm(forms.ModelForm):
@@ -23,6 +23,7 @@ class PerfilForm(forms.ModelForm):
 
 def rol(usuario):
     return ('Administrador' if es_admin(usuario) else 'Técnico' if es_tecnico(usuario)
+            else 'Asesora - Asistente de caja' if es_asistente_caja(usuario)
             else 'Asesor comercial' if es_asesor(usuario) else 'Miembro')
 
 

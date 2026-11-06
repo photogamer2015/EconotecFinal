@@ -87,6 +87,19 @@ class AsistenteCajaTests(TestCase):
                 params = {'fecha': MIERCOLES.isoformat()} if url.endswith('saldo') else {'sede': 'guayaquil', 'numero': '1'}
                 self.assertEqual(self.client.get(reverse(f'econotec:{url}'), params).status_code, 200)
 
+    def test_su_rol_en_el_perfil_y_la_ayuda(self):
+        self.client.force_login(self.asistente)
+
+        perfil = self.client.get(reverse('econotec:mi_perfil'))
+        ayuda = self.client.get(reverse('econotec:ayuda'))
+
+        self.assertContains(perfil, 'Asesora - Asistente de caja')
+        self.assertContains(ayuda, 'Asesora - Asistente de caja')
+        self.assertContains(ayuda, 'Seguimiento de pago')
+        # La asesora sigue con su rol de siempre.
+        self.client.force_login(self.asesora)
+        self.assertContains(self.client.get(reverse('econotec:mi_perfil')), 'Asesor comercial')
+
     def test_registra_egresos_y_avisa_al_admin(self):
         self.client.force_login(self.asistente)
 

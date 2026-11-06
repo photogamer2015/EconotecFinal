@@ -339,7 +339,7 @@ def pagos_export(request):
 
 
 # ═════════════════════════════════════════════════════════════════
-# Seguimiento de pago (hoja semanal, solo admin)
+# Seguimiento de pago (hoja semanal: admin y asistente de caja)
 # ═════════════════════════════════════════════════════════════════
 
 @seguimiento_pago_requerido
