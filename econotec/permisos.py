@@ -10,6 +10,9 @@ ROLES DEL SISTEMA:
 |                  | Ranking de Técnicos                                |
 | Asesor Comercial | Ingresos, Salidas, Clientes, Historial, Pagos,     |
 |                  | Ranking de Técnicos sin valores económicos         |
+| Asesora -        | Todo lo de la Asesora, y además: Seguimiento de    |
+| Asistente de caja| pago (con registrar egresos) y gestionar el        |
+|                  | inventario (editar, cantidades y eliminar)         |
 ─────────────────────────────────────────────────────────────────────────
 
 Los superusuarios siempre tienen acceso total, sin importar el grupo.
@@ -30,7 +33,11 @@ from django.shortcuts import redirect
 # ─────────────────────────────────────────────────────────
 GRUPOS_ADMIN            = ['Administradores', 'Admin']
 GRUPOS_TECNICO          = ['Tecnicos', 'Tecnico']
-GRUPOS_ASESOR_COMERCIAL = ['Asesores Comerciales', 'Asesor Comercial', 'Asesores', 'Asesor']
+# La asistente de caja es una asesora más (tiene todo lo de la asesora) con
+# Seguimiento de pago e inventario: por eso su grupo también cuenta como asesor.
+GRUPO_ASISTENTE_CAJA    = 'Asesora - Asistente de caja'
+GRUPOS_ASISTENTE_CAJA   = [GRUPO_ASISTENTE_CAJA, 'Asistente de caja']
+GRUPOS_ASESOR_COMERCIAL = ['Asesores Comerciales', 'Asesor Comercial', 'Asesores', 'Asesor', *GRUPOS_ASISTENTE_CAJA]
 
 
 # ─────────────────────────────────────────────────────────
@@ -67,6 +74,14 @@ def es_asesor(user):
 es_asesor_comercial = es_asesor
 
 
+def es_asistente_caja(user):
+    """¿Pertenece al grupo Asesora - Asistente de caja?
+    Además de todo lo de la asesora: Seguimiento de pago, egresos e inventario."""
+    if not user.is_authenticated:
+        return False
+    return user.groups.filter(name__in=GRUPOS_ASISTENTE_CAJA).exists()
+
+
 # ─────────────────────────────────────────────────────────
 # Funciones combinadas
 # ─────────────────────────────────────────────────────────
@@ -90,6 +105,18 @@ def puede_ver_ranking(user):
     esos valores continúan reservados exclusivamente para el admin.
     """
     return es_admin(user) or es_tecnico(user) or es_asesor(user)
+
+
+def puede_ver_seguimiento_pago(user):
+    """Puede ver Seguimiento de pago y registrar sus egresos.
+    → Admin o Asesora - Asistente de caja."""
+    return es_admin(user) or es_asistente_caja(user)
+
+
+def puede_gestionar_inventario(user):
+    """Puede editar, cambiar cantidades y eliminar productos del inventario.
+    → Admin, Técnico o Asesora - Asistente de caja."""
+    return es_admin(user) or es_tecnico(user) or es_asistente_caja(user)
 
 
 def puede_ver_valores_ranking(user):
@@ -147,6 +174,22 @@ def asesor_requerido(view_func):
                 request,
                 'No tienes permiso para gestionar pagos. '
                 'Pide a un administrador que te asigne un rol.'
+            )
+            return redirect('econotec:bienvenida')
+        return view_func(request, *args, **kwargs)
+    return _wrapped
+
+
+def seguimiento_pago_requerido(view_func):
+    """Admin o Asesora - Asistente de caja — para Seguimiento de pago y sus egresos."""
+    @wraps(view_func)
+    @login_required
+    def _wrapped(request, *args, **kwargs):
+        if not puede_ver_seguimiento_pago(request.user):
+            messages.error(
+                request,
+                'No tienes permiso para esta acción. '
+                'Solo los administradores y la asistente de caja pueden ver Seguimiento de pago.'
             )
             return redirect('econotec:bienvenida')
         return view_func(request, *args, **kwargs)

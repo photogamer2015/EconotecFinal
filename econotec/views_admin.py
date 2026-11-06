@@ -40,7 +40,10 @@ from .models import (
     NotificacionCambioAdmin, SEDES_EQUIPOS, VentaInventarioItem,
 )
 from .pagination import paginar_resultados
-from .permisos import GRUPOS_TECNICO, admin_requerido, es_admin, puede_ver_valores_ranking, tecnico_requerido
+from .permisos import (
+    GRUPO_ASISTENTE_CAJA, GRUPOS_TECNICO, admin_requerido, es_admin, puede_ver_valores_ranking,
+    tecnico_requerido,
+)
 from .seguridad import consumir_intento
 
 
@@ -2433,7 +2436,9 @@ def _obtener_estadisticas_gamificacion():
     from .views import puntaje_tecnico
 
     stats = []
-    usuarios = User.objects.filter(is_active=True, groups__name__in=['Tecnicos', 'Asesores']).distinct()
+    usuarios = User.objects.filter(
+        is_active=True, groups__name__in=['Tecnicos', 'Asesores', GRUPO_ASISTENTE_CAJA],
+    ).distinct()
     
     for u in usuarios:
         # Mismos puntos y nivel que Mi perfil (gamificacion.PUNTOS_POR_ESTADO_SALIDA).
@@ -2475,7 +2480,7 @@ def admin_perfiles_reiniciar(request):
         return redirect('econotec:admin_dashboard')
         
     ahora = timezone.now()
-    usuarios = User.objects.filter(groups__name__in=['Tecnicos', 'Asesores']).distinct()
+    usuarios = User.objects.filter(groups__name__in=['Tecnicos', 'Asesores', GRUPO_ASISTENTE_CAJA]).distinct()
     for u in usuarios:
         act, created = UsuarioActividad.objects.get_or_create(user=u)
         act.fecha_reinicio_perfil = ahora

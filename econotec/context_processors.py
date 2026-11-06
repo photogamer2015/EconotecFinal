@@ -2,7 +2,8 @@
 Context processor que expone roles y contadores de alertas en TODOS los templates.
 
 Variables disponibles:
-    {% if es_admin %}, {% if es_tecnico %}, {% if es_asesor %}, {% if es_asesor_comercial %}
+    {% if es_admin %}, {% if es_tecnico %}, {% if es_asesor %}, {% if es_asesor_comercial %},
+    {% if es_asistente_caja %}, {% if puede_ver_seguimiento_pago %}
     {{ rol_actual }}, {{ sede_actual_display }}
 
     {{ alertas_demora_count }}            # equipos demorados (diagnóstico) del usuario
@@ -16,9 +17,11 @@ from .permisos import (
     es_admin as _es_admin,
     es_tecnico as _es_tecnico,
     es_asesor as _es_asesor,
+    es_asistente_caja as _es_asistente_caja,
     puede_gestionar_equipos as _puede_gestionar_equipos,
     puede_gestionar_pagos as _puede_gestionar_pagos,
     puede_ver_ranking as _puede_ver_ranking,
+    puede_ver_seguimiento_pago as _puede_ver_seguimiento_pago,
     puede_ver_valores_ranking as _puede_ver_valores_ranking,
 )
 
@@ -41,6 +44,8 @@ def roles(request):
             'es_tecnico': False,
             'es_asesor': False,
             'es_asesor_comercial': False,
+            'es_asistente_caja': False,
+            'puede_ver_seguimiento_pago': False,
             'puede_gestionar_equipos': False,
             'puede_gestionar_pagos': False,
             'puede_ver_ranking': False,
@@ -65,11 +70,14 @@ def roles(request):
     es_a = _es_admin(user)
     es_t = _es_tecnico(user)
     es_as = _es_asesor(user)
+    es_caja = _es_asistente_caja(user)
 
     if es_a:
         rol_actual = 'Administrador'
     elif es_t:
         rol_actual = 'Técnico'
+    elif es_caja:
+        rol_actual = 'Asesora - Asistente de caja'
     elif es_as:
         rol_actual = 'Asesor Comercial'
     else:
@@ -180,6 +188,8 @@ def roles(request):
         'puede_gestionar_pagos': _puede_gestionar_pagos(user),
         'puede_ver_ranking': _puede_ver_ranking(user),
         'puede_ver_valores_ranking': _puede_ver_valores_ranking(user),
+        'es_asistente_caja': es_caja,
+        'puede_ver_seguimiento_pago': es_a or es_caja,
         'rol_actual': rol_actual,
         'sede_actual': sede_actual,
         'sede_actual_display': sede_actual_display,
