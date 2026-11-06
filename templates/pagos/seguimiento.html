@@ -377,12 +377,179 @@
         text-transform: uppercase;
     }
 
+    /* ── Egresos de la semana ── */
+    .sp-egresos {
+        margin-bottom: 14px;
+        padding: 16px 18px;
+        border: 1px solid var(--border-color);
+        border-radius: 14px;
+        background: var(--card-bg);
+        box-shadow: var(--shadow);
+        scroll-margin-top: 90px;
+    }
+    .sp-egresos-cabecera {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px 16px;
+        margin-bottom: 14px;
+    }
+    .sp-egresos-cabecera h3 { margin: 0; color: var(--text-main); font-size: 17px; font-weight: 800; }
+    .sp-egresos-cabecera p { margin: 2px 0 0; color: var(--text-muted); font-size: 13px; font-weight: 600; }
+    .sp-egreso-boton {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 18px;
+        border: 0;
+        border-radius: 10px;
+        background: var(--danger);
+        color: #fff;
+        font: inherit;
+        font-size: 14px;
+        font-weight: 800;
+        cursor: pointer;
+        box-shadow: 0 3px 10px color-mix(in srgb, var(--danger) 30%, transparent);
+    }
+    .sp-egreso-boton:hover { filter: brightness(1.08); }
+    .sp-egreso-icono {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 20px;
+        height: 20px;
+        border: 2px solid currentColor;
+        border-radius: 50%;
+        font-size: 15px;
+        line-height: 1;
+    }
+    .sp-egreso-boton:focus-visible { outline: 3px solid color-mix(in srgb, var(--danger) 45%, transparent); outline-offset: 2px; }
+    /* Recaudado − Egresos = Saldo disponible */
+    .sp-caja {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: stretch;
+        gap: 8px;
+    }
+    .sp-caja-item {
+        flex: 1 1 160px;
+        min-width: 0;
+        padding: 10px 14px;
+        border-radius: 10px;
+        background: var(--surface-muted);
+    }
+    .sp-caja-item .lbl {
+        display: block;
+        color: var(--text-muted);
+        font-size: 11px;
+        font-weight: 800;
+        letter-spacing: .4px;
+        text-transform: uppercase;
+    }
+    .sp-caja-item strong { display: block; color: var(--success); font-size: 20px; font-weight: 800; line-height: 1.3; }
+    .sp-caja-item .sub { color: var(--text-muted); font-size: 12px; font-weight: 600; }
+    .sp-caja-item.is-egresos strong { color: var(--danger); }
+    .sp-caja-item.is-disponible { background: var(--tint-green-bg); }
+    .sp-caja-item.is-disponible strong { color: var(--tint-green-fg); font-size: 22px; }
+    .sp-caja-item.is-disponible.is-negativo { background: var(--tint-red-bg); }
+    .sp-caja-item.is-disponible.is-negativo strong { color: var(--tint-red-fg); }
+    .sp-caja-op {
+        display: flex;
+        align-items: center;
+        color: var(--text-muted);
+        font-size: 22px;
+        font-weight: 800;
+    }
+    .sp-egresos-lista { margin-top: 14px; overflow-x: auto; }
+    .sp-egresos-lista table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+    .sp-egresos-lista th {
+        padding: 8px 10px;
+        border-bottom: 2px solid var(--border-color);
+        color: var(--text-muted);
+        font-size: 11px;
+        font-weight: 800;
+        letter-spacing: .4px;
+        text-align: left;
+        text-transform: uppercase;
+        white-space: nowrap;
+    }
+    .sp-egresos-lista td { padding: 9px 10px; border-bottom: 1px solid var(--border-color); color: var(--text-main); vertical-align: top; }
+    .sp-egresos-lista tr:last-child td { border-bottom: 0; }
+    .sp-egresos-lista .num { text-align: right; white-space: nowrap; }
+    .sp-egresos-lista td.num { color: var(--danger); font-weight: 800; }
+    .sp-egresos-vacio { margin: 12px 0 0; color: var(--text-muted); font-size: 13px; font-weight: 600; }
+
+    /* Ventana para registrar el egreso */
+    .sp-dialogo {
+        width: min(560px, calc(100vw - 32px));
+        max-height: calc(100vh - 32px);
+        /* Centrada: los estilos generales quitan el margen automático del <dialog>. */
+        margin: auto;
+        padding: 0;
+        border: 1px solid var(--border-color);
+        border-radius: 16px;
+        background: var(--card-bg);
+        color: var(--text-main);
+        box-shadow: var(--shadow-lg);
+    }
+    .sp-dialogo::backdrop { background: rgba(15, 23, 42, .55); backdrop-filter: blur(3px); }
+    .sp-dialogo form { padding: 20px 22px 18px; }
+    .sp-dialogo-cabecera { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+    .sp-dialogo-cabecera h3 { margin: 0; font-size: 19px; font-weight: 800; }
+    .sp-dialogo-cabecera p { margin: 3px 0 0; color: var(--text-muted); font-size: 13px; }
+    .sp-dialogo-cerrar {
+        flex: 0 0 auto;
+        width: 34px;
+        height: 34px;
+        border: 0;
+        border-radius: 8px;
+        background: transparent;
+        color: var(--text-soft);
+        font-size: 18px;
+        cursor: pointer;
+    }
+    .sp-dialogo-cerrar:hover { background: var(--hover-bg); }
+    .sp-egreso-saldo {
+        margin-bottom: 14px;
+        padding: 12px 14px;
+        border: 1px solid var(--border-color);
+        border-radius: 12px;
+        background: var(--surface-muted);
+        transition: opacity .15s;
+    }
+    .sp-egreso-saldo.is-cargando { opacity: .55; }
+    .sp-egreso-saldo-semana { color: var(--text-soft); font-size: 12.5px; font-weight: 700; }
+    .sp-egreso-saldo-cifras { display: flex; flex-wrap: wrap; gap: 4px 16px; margin-top: 6px; font-size: 13px; color: var(--text-muted); font-weight: 600; }
+    .sp-egreso-saldo-cifras b { color: var(--text-main); }
+    .sp-egreso-saldo-cifras .is-disponible b { color: var(--tint-green-fg); font-size: 16px; }
+    .sp-egreso-saldo.is-negativo .is-disponible b { color: var(--tint-red-fg); }
+    .sp-egreso-campos { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 14px; }
+    .sp-egreso-campos .is-ancho { grid-column: 1 / -1; }
+    .sp-egreso-campos label { display: block; margin-bottom: 5px; color: var(--text-soft); font-size: 13px; font-weight: 700; }
+    .sp-egreso-campos .form-input { width: 100%; }
+    .sp-egreso-campos .errorlist { margin: 4px 0 0; }
+    .sp-egreso-aviso {
+        margin: 12px 0 0;
+        padding: 9px 12px;
+        border-radius: 10px;
+        background: var(--tint-red-bg);
+        color: var(--tint-red-fg);
+        font-size: 13px;
+        font-weight: 700;
+    }
+    .sp-dialogo-pie { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }
+    .sp-dialogo-pie .sp-egreso-boton:disabled { opacity: .5; cursor: not-allowed; filter: none; }
+
     /* En el celular la barra queda al final de la tabla (sin fijarse abajo). */
     @media (max-width: 760px) {
         .sp-hojas { position: static; padding-right: 8px; }
         .sp-tabs, .sp-vistas { width: auto; }
         .sp-tabs a { flex: 1 1 auto; text-align: center; padding: 8px 10px; }
         .sp-vistas a { flex: 1 1 auto; justify-content: center; padding: 9px 12px; font-size: 14px; }
+        .sp-caja-op { display: none; }
+        .sp-egreso-boton { width: 100%; justify-content: center; }
+        .sp-egreso-campos { grid-template-columns: 1fr; }
     }
 
     [data-theme="dark"] .sp-aviso { background: rgba(59, 130, 246, .12); color: #c9d7f0; }
@@ -445,6 +612,123 @@
         <div class="sub">Lo que aún deben hoy {% if es_producto %}las ventas{% elif es_total %}los equipos y ventas{% else %}los equipos{% endif %} de esta hoja</div>
     </div>
 </div>
+
+<section class="sp-egresos" id="egresos" aria-labelledby="sp-egresos-titulo">
+    <div class="sp-egresos-cabecera">
+        <div>
+            <h3 id="sp-egresos-titulo">💸 Egresos de la semana</h3>
+            <p>El saldo es de toda la semana: equipos y productos de Guayaquil y Quito{% if not es_total or sede %}, aunque arriba veas otro filtro{% endif %}.</p>
+        </div>
+        <button type="button" class="sp-egreso-boton" data-abrir-egreso><span class="sp-egreso-icono" aria-hidden="true">−</span>Registrar egreso</button>
+    </div>
+    <div class="sp-caja">
+        <div class="sp-caja-item">
+            <span class="lbl">Recaudado</span>
+            <strong>{{ caja.recaudado|dinero_signo }}</strong>
+            <span class="sub">Total de seguimiento</span>
+        </div>
+        <span class="sp-caja-op" aria-hidden="true">−</span>
+        <div class="sp-caja-item is-egresos">
+            <span class="lbl">Egresos</span>
+            <strong>{{ caja.total_egresos|dinero_signo }}</strong>
+            <span class="sub">{{ caja.egresos|length }} egreso{{ caja.egresos|length|pluralize }}</span>
+        </div>
+        <span class="sp-caja-op" aria-hidden="true">=</span>
+        <div class="sp-caja-item is-disponible{% if caja.disponible < 0 %} is-negativo{% endif %}">
+            <span class="lbl">Saldo disponible</span>
+            <strong>{{ caja.disponible_texto }}</strong>
+            <span class="sub">Lo que queda de la semana</span>
+        </div>
+    </div>
+    {% if caja.egresos %}
+    <div class="sp-egresos-lista">
+        <table data-table-navigation="off" aria-label="Egresos de la semana {{ titulo_semana }}">
+            <thead>
+                <tr>
+                    <th>Fecha</th>
+                    <th>Producto</th>
+                    <th>Asesora</th>
+                    <th>Categoría</th>
+                    <th>Registrado por</th>
+                    <th class="num">Monto</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for e in caja.egresos %}
+                <tr>
+                    <td>{{ e.fecha|date:"d/m/Y" }}</td>
+                    <td><strong>{{ e.concepto }}</strong></td>
+                    <td>{% if e.asesora %}{{ e.asesora.get_full_name|default:e.asesora.username }}{% else %}—{% endif %}</td>
+                    <td>{{ e.categoria.icono }} {{ e.categoria.nombre }}</td>
+                    <td>{% if e.registrado_por %}{{ e.registrado_por.get_full_name|default:e.registrado_por.username }}{% else %}—{% endif %}</td>
+                    <td class="num">−{{ e.monto|dinero_signo }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <p class="sp-egresos-vacio">Sin egresos en esta semana.</p>
+    {% endif %}
+</section>
+
+<dialog class="sp-dialogo" id="sp-egreso-dialogo" aria-labelledby="sp-egreso-titulo" data-abrir="{{ abrir_egreso|yesno:'true,false' }}">
+    <form method="post" action="{{ request.get_full_path }}">
+        {% csrf_token %}
+        <div class="sp-dialogo-cabecera">
+            <div>
+                <h3 id="sp-egreso-titulo">💸 Registrar egreso</h3>
+                <p>Se resta del saldo de la semana de su fecha y se avisa al administrador.</p>
+            </div>
+            <button type="button" class="sp-dialogo-cerrar" data-cerrar-egreso aria-label="Cerrar">✕</button>
+        </div>
+
+        <div class="sp-egreso-saldo{% if caja.disponible < 0 %} is-negativo{% endif %}" id="sp-egreso-saldo"
+             data-url="{% url 'econotec:seguimiento_pago_saldo' %}" data-disponible="{{ caja.disponible|stringformat:'s' }}" aria-live="polite">
+            <div class="sp-egreso-saldo-semana" data-saldo="semana">Semana {{ caja.titulo }}</div>
+            <div class="sp-egreso-saldo-cifras">
+                <span>Recaudado <b data-saldo="recaudado">{{ caja.recaudado|dinero_signo }}</b></span>
+                <span>Egresos <b data-saldo="egresos">{{ caja.total_egresos|dinero_signo }}</b></span>
+                <span class="is-disponible">Saldo disponible <b data-saldo="disponible">{{ caja.disponible_texto }}</b></span>
+            </div>
+        </div>
+
+        {% if form_egreso.non_field_errors %}{{ form_egreso.non_field_errors }}{% endif %}
+        <div class="sp-egreso-campos">
+            <div>
+                <label for="{{ form_egreso.fecha.id_for_label }}">{{ form_egreso.fecha.label }} *</label>
+                {{ form_egreso.fecha }}
+                {{ form_egreso.fecha.errors }}
+            </div>
+            <div>
+                <label for="{{ form_egreso.monto.id_for_label }}">{{ form_egreso.monto.label }} *</label>
+                {{ form_egreso.monto }}
+                {{ form_egreso.monto.errors }}
+            </div>
+            <div class="is-ancho">
+                <label for="{{ form_egreso.concepto.id_for_label }}">{{ form_egreso.concepto.label }} *</label>
+                {{ form_egreso.concepto }}
+                {{ form_egreso.concepto.errors }}
+            </div>
+            <div>
+                <label for="{{ form_egreso.asesora.id_for_label }}">{{ form_egreso.asesora.label }} *</label>
+                {{ form_egreso.asesora }}
+                {{ form_egreso.asesora.errors }}
+            </div>
+            <div>
+                <label for="{{ form_egreso.categoria.id_for_label }}">{{ form_egreso.categoria.label }} *</label>
+                {{ form_egreso.categoria }}
+                {{ form_egreso.categoria.errors }}
+            </div>
+        </div>
+        <p class="sp-egreso-aviso" id="sp-egreso-aviso" hidden>El monto supera el saldo disponible de esa semana.</p>
+
+        <div class="sp-dialogo-pie">
+            <button type="button" class="btn btn-secondary" data-cerrar-egreso>Cancelar</button>
+            <button type="submit" class="sp-egreso-boton">Registrar egreso</button>
+        </div>
+    </form>
+</dialog>
 
 <div class="sp-aviso">
     {% if es_total %}
@@ -577,6 +861,72 @@
 </nav>
 
 <script>
+(function () {
+    // Ventana del egreso: el saldo se actualiza con la semana de la fecha elegida.
+    const dialogo = document.getElementById('sp-egreso-dialogo');
+    const form = dialogo.querySelector('form');
+    const fecha = form.querySelector('[name="fecha"]');
+    const monto = form.querySelector('[name="monto"]');
+    const caja = document.getElementById('sp-egreso-saldo');
+    const aviso = document.getElementById('sp-egreso-aviso');
+    const enviar = form.querySelector('[type="submit"]');
+    let disponible = Number(caja.dataset.disponible);
+    let cargando = false;
+    let consulta = 0;
+
+    const centavos = valor => Math.round(Number(valor) * 100);
+    function revisar() {
+        const valor = (monto.value || '').trim();
+        const excede = valor !== '' && !Number.isNaN(Number(valor)) && centavos(valor) > centavos(disponible);
+        aviso.hidden = !excede;
+        enviar.disabled = excede || cargando;
+    }
+    async function actualizar() {
+        if (!fecha.value) return;
+        const id = ++consulta;
+        cargando = true;
+        caja.classList.add('is-cargando');
+        revisar();
+        try {
+            const respuesta = await fetch(caja.dataset.url + '?fecha=' + encodeURIComponent(fecha.value), {
+                headers: { 'Accept': 'application/json' },
+                credentials: 'same-origin',
+            });
+            if (!respuesta.ok) throw new Error('saldo');
+            const datos = await respuesta.json();
+            if (id !== consulta) return;
+            disponible = Number(datos.disponible);
+            caja.querySelector('[data-saldo="semana"]').textContent = 'Semana ' + datos.semana;
+            caja.querySelector('[data-saldo="recaudado"]').textContent = datos.recaudado_texto;
+            caja.querySelector('[data-saldo="egresos"]').textContent = datos.egresos_texto;
+            caja.querySelector('[data-saldo="disponible"]').textContent = datos.disponible_texto;
+            caja.classList.toggle('is-negativo', disponible < 0);
+        } catch (error) {
+            // Si no se pudo consultar, el servidor igual revisa el saldo al registrar.
+        } finally {
+            if (id === consulta) {
+                cargando = false;
+                caja.classList.remove('is-cargando');
+                revisar();
+            }
+        }
+    }
+    function abrir() {
+        if (!dialogo.open) dialogo.showModal();
+        actualizar();
+    }
+    document.querySelectorAll('[data-abrir-egreso]').forEach(boton => boton.addEventListener('click', abrir));
+    dialogo.querySelectorAll('[data-cerrar-egreso]').forEach(boton => boton.addEventListener('click', () => dialogo.close()));
+    // Clic fuera de la ventana la cierra.
+    dialogo.addEventListener('click', e => { if (e.target === dialogo) dialogo.close(); });
+    fecha.addEventListener('change', actualizar);
+    monto.addEventListener('input', revisar);
+    form.addEventListener('submit', () => { enviar.disabled = true; });
+    // Al volver con «Atrás» el botón no debe quedar bloqueado.
+    window.addEventListener('pageshow', revisar);
+    if (dialogo.dataset.abrir === 'true') abrir();
+})();
+
 (function () {
     const pestanas = document.getElementById('sp-hojas-pestanas');
     const activa = pestanas.querySelector('.is-activa');

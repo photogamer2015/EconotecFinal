@@ -71,7 +71,7 @@ class CategoriaEgresoAdmin(admin.ModelAdmin):
 
 @admin.register(Egreso)
 class EgresoAdmin(admin.ModelAdmin):
-    list_display = ('fecha', 'categoria', 'concepto', 'monto', 'registrado_por')
+    list_display = ('fecha', 'categoria', 'concepto', 'monto', 'asesora', 'registrado_por')
     list_filter = ('categoria', 'fecha')
     search_fields = ('concepto', 'notas')
     date_hierarchy = 'fecha'

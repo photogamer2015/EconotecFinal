@@ -142,6 +142,12 @@
     </div>
 
     <div style="margin-top: 14px;">
+        <label class="form-label">Asesora que aplicó</label>
+        {{ form.asesora }}
+        {{ form.asesora.errors }}
+    </div>
+
+    <div style="margin-top: 14px;">
         <label class="form-label always-req">Monto (USD) <span class="req-star">*</span></label>
         {{ form.monto }}
         {{ form.monto.errors }}

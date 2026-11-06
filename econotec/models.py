@@ -2730,6 +2730,12 @@ class Egreso(models.Model):
         'auth.User', on_delete=models.SET_NULL,
         null=True, blank=True, related_name='egresos_registrados',
     )
+    # Asesora que aplicó el egreso (se elige al registrarlo desde Seguimiento de pago).
+    asesora = models.ForeignKey(
+        'auth.User', on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='egresos_aplicados',
+        verbose_name='Asesora que aplicó',
+    )
     creado = models.DateTimeField(auto_now_add=True)
     actualizado = models.DateTimeField(auto_now=True)
 

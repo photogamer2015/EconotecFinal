@@ -5,28 +5,32 @@ from collections import defaultdict
 from datetime import date, timedelta
 from decimal import Decimal
 from io import BytesIO
+from urllib.parse import urlencode
 
 from django.conf import settings
 from django.contrib import messages
 from django.db import transaction
 from django.db.models import Sum
-from django.http import HttpResponse
+from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
 from .busqueda import filtrar_objetos_normalizado, texto_ingreso_busqueda
-from .avisos_cambios import avisar_cambio
+from .avisos_cambios import avisar_cambio, avisar_egreso
 from .bitacora import registrar_bitacora
 from .emails import enviar_correo_abono_seguro
-from .forms import AbonoForm, ValorAcordadoPagoForm
+from .forms import AbonoForm, EgresoSeguimientoForm, ValorAcordadoPagoForm
 from .models import SEDES_EQUIPOS, Abono, IngresoEquipo
 from .pagination import paginar_resultados
 from .permisos import admin_requerido, tecnico_requerido, asesor_requerido
 from .seguimiento_pago import (
-    EQUIPO, PRODUCTO, TOTAL, TIPOS, etiqueta_semana, fecha_larga, hoja_semana,
-    inicio_semana, pestanas_semanas, texto_cantidades, titulo_semana, totales_por_semana,
+    EQUIPO, PRODUCTO, TOTAL, TIPOS, etiqueta_semana, fecha_larga, fin_semana, hoja_semana,
+    inicio_semana, pestanas_semanas, saldo_semana, texto_cantidades, titulo_semana,
+    totales_por_semana,
 )
+from .templatetags.econotec_extras import dinero_signo
 
 
 MESES_ES = [
@@ -345,6 +349,9 @@ def seguimiento_pago(request):
     ?tipo= elige la vista: total (equipos + productos, la de entrada), equipo
     o producto. ?sede= (Guayaquil o Quito) filtra las tres; las ventas por la
     bodega de sus productos.
+
+    POST registra un egreso (ver EgresoSeguimientoForm): se guarda como
+    cualquier egreso, se avisa al admin y se abre la semana del egreso.
     """
     hoy = timezone.localdate()
     semana_actual = inicio_semana(hoy)
@@ -363,9 +370,36 @@ def seguimiento_pago(request):
         # Un enlace viejo con sede (de cuando solo había equipos) abre los equipos.
         tipo = EQUIPO if sede else TOTAL
 
+    form_egreso = None
+    if request.method == 'POST':
+        form_egreso = EgresoSeguimientoForm(request.POST)
+        if form_egreso.is_valid():
+            with transaction.atomic():
+                egreso = form_egreso.save(commit=False)
+                egreso.registrado_por = request.user
+                egreso.save()
+            saldo = saldo_semana(egreso.fecha)
+            filtros = {'semana': egreso.fecha.isoformat(), 'tipo': tipo}
+            if sede:
+                filtros['sede'] = sede
+            url = f"{reverse('econotec:seguimiento_pago')}?{urlencode(filtros)}"
+            avisar_egreso(request.user, egreso, saldo, url=url)
+            messages.success(
+                request,
+                f'Egreso registrado: {egreso.concepto} por {dinero_signo(egreso.monto)}. '
+                f'Saldo disponible de la semana {saldo["etiqueta"]}: {_dinero(saldo["disponible"])}.',
+            )
+            return redirect(f'{url}#egresos')
+
     hoja = hoja_semana(lunes, sede, tipo)
     pestanas, meses = pestanas_semanas(totales_por_semana(sede, tipo), semana_actual, lunes, tipo)
     proxima_hoja = semana_actual + timedelta(days=7)
+    # El saldo es de toda la semana: si la hoja ya es la del total, se reutiliza.
+    caja = saldo_semana(lunes, recaudado=hoja['total'] if tipo == TOTAL and not sede else None)
+    caja['disponible_texto'] = _dinero(caja['disponible'])
+    if form_egreso is None:
+        # Fecha sugerida: hoy si cae en la semana abierta; si no, el día más cercano de ella.
+        form_egreso = EgresoSeguimientoForm(initial={'fecha': min(max(hoy, lunes), fin_semana(lunes))})
 
     return render(request, 'pagos/seguimiento.html', {
         **hoja,
@@ -389,6 +423,35 @@ def seguimiento_pago(request):
         'sedes': [('', 'Todas'), ('guayaquil', 'Guayaquil (G)'), ('quito', 'Quito (U)')],
         'pestanas': pestanas,
         'meses_pestanas': meses,
+        'caja': caja,
+        'form_egreso': form_egreso,
+        # Si el egreso tuvo errores, el formulario se abre solo para corregirlos.
+        'abrir_egreso': form_egreso.is_bound,
+    })
+
+
+def _dinero(valor):
+    """«$12,50» o «−$12,50»."""
+    return f'−{dinero_signo(-valor)}' if valor < 0 else dinero_signo(valor)
+
+
+@admin_requerido
+def seguimiento_pago_saldo(request):
+    """Saldo disponible de la semana de ?fecha=AAAA-MM-DD, para el formulario de egreso."""
+    try:
+        dia = date.fromisoformat((request.GET.get('fecha') or '').strip())
+    except ValueError:
+        return JsonResponse({'error': 'Fecha no válida.'}, status=400)
+    saldo = saldo_semana(dia)
+    return JsonResponse({
+        'semana': saldo['titulo'],
+        'etiqueta': saldo['etiqueta'],
+        'recaudado': str(saldo['recaudado']),
+        'egresos': str(saldo['total_egresos']),
+        'disponible': str(saldo['disponible']),
+        'recaudado_texto': _dinero(saldo['recaudado']),
+        'egresos_texto': _dinero(saldo['total_egresos']),
+        'disponible_texto': _dinero(saldo['disponible']),
     })
 
 

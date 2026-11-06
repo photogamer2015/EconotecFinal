@@ -150,6 +150,7 @@ urlpatterns = [
     path('pagos/ventas/', views_pagos.pagos_ventas_lista, name='pagos_ventas_lista'),
     path('pagos/exportar/', views_pagos.pagos_export, name='pagos_export'),
     path('pagos/seguimiento/', views_pagos.seguimiento_pago, name='seguimiento_pago'),
+    path('pagos/seguimiento/saldo/', views_pagos.seguimiento_pago_saldo, name='seguimiento_pago_saldo'),
     path('ingresos/<int:pk>/abonos/',
          views_pagos.ingreso_abonos, name='ingreso_abonos'),
     path('ingresos/<int:pk>/valor-acordado/',
