@@ -28,12 +28,13 @@ Sistema web para administrar el flujo de reparaciones de Econotec: ingreso de eq
 ## 📋 Contenido
 
 - **Ingreso de Equipo / Cliente** → Reemplaza al módulo de matrícula. Genera la Solicitud de Ingreso lista para imprimir.
-- **Salida de Equipo** → Cierre de la reparación con estado (reparado / no reparable / cliente no quiso / parcial / garantía), repuestos, garantía y cobro final.
+- **Salida de Equipo** → Cierre de la reparación con estado (reparado / no reparable / cliente no quiso / parcial / garantía), repuestos, garantía y cobro final. Con «Cliente no quiso reparar» es obligatorio elegir Sí o No en el valor adicional (con Sí se sugieren $5,00 editables).
+- **Salida de la oficina (salida de retiro)** → La confirman las asesoras y el administrador (el técnico llega hasta «equipo finalizado»). Siempre se elige **a qué asesora pertenece la salida**; cada asesora ve en su perfil la tabla y el total de sus salidas, y el administrador las ve en el **Ranking de asesoras — Salidas de retiro**. Con saldo pendiente, el aviso permite pagar ahí mismo y dar la salida, o notificar al técnico (aviso en su cuenta y correo).
 - **Pagos / Abonos** → Control de pagos parciales por equipo, con recibo imprimible.
 - **Clientes** → Directorio con historial de equipos por cliente.
 - **Historial** → Equipos agrupados por mes/año.
 - **Registro Administrativo** *(solo admin)* → Balance financiero del mes (ingresos vs egresos).
-- **Seguimiento de pago** *(admin y asistente de caja)* → Hoja semanal de cobros de equipos y ventas, con registro de egresos que no pueden pasar del saldo de la semana.
+- **Seguimiento de pago** *(admin y asistente de caja)* → Hoja semanal de cobros de equipos y ventas, con filtro por forma de pago (efectivo, transferencia, tarjeta), descarga en Excel de la semana y registro de egresos que no pueden pasar del saldo de la semana.
 - **Roles**: Administrador, Técnico, Asesor(a) y Asesora - Asistente de caja.
 
 ---
@@ -186,7 +187,8 @@ Al confirmar que un equipo fue finalizado, el sistema también puede enviar el
 acta de finalización con el saldo y la regla de bodegaje. Cada nuevo abono envía
 un comprobante actualizado con el valor recibido, el historial completo, el
 saldo restante y el PDF vigente. El botón **Registrar Abono y Dar Salida del
-Equipo** usa el mismo flujo y comunica además el cierre de la salida.
+Equipo** (solo asesoras y administrador) usa el mismo flujo, pide a qué asesora
+pertenece la salida y comunica además el cierre de la salida.
 
 Si un usuario todavía no tiene correo, el sistema se lo pedirá una sola vez
 después de validar usuario, contraseña, sede y captcha. El correo se guarda

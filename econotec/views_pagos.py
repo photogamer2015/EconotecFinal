@@ -24,11 +24,13 @@ from .emails import enviar_correo_abono_seguro
 from .forms import AbonoForm, EgresoSeguimientoForm, ValorAcordadoPagoForm
 from .models import SEDES_EQUIPOS, Abono, IngresoEquipo
 from .pagination import paginar_resultados
+from . import salida_asesora
 from .permisos import (
-    admin_requerido, asesor_requerido, es_asesor, seguimiento_pago_requerido, tecnico_requerido,
+    admin_requerido, asesor_requerido, es_asesor, puede_confirmar_salida_fisica,
+    seguimiento_pago_requerido, tecnico_requerido,
 )
 from .seguimiento_pago import (
-    EQUIPO, PRODUCTO, TOTAL, TIPOS, etiqueta_semana, fecha_larga, fin_semana, hoja_semana,
+    EQUIPO, FORMAS_PAGO, PRODUCTO, TOTAL, TIPOS, etiqueta_semana, fecha_larga, fin_semana, hoja_semana,
     inicio_semana, pestanas_semanas, saldo_semana, texto_cantidades, titulo_semana,
     totales_por_semana,
 )
@@ -82,7 +84,7 @@ def _puede_confirmar_salida_desde_abono(ingreso):
     )
 
 
-def _confirmar_salida_desde_abono(request, ingreso):
+def _confirmar_salida_desde_abono(request, ingreso, asesora=None):
     """
     Marca la salida física después de registrar un abono.
 
@@ -104,6 +106,14 @@ def _confirmar_salida_desde_abono(request, ingreso):
         )
         return True
 
+    if not puede_confirmar_salida_fisica(request.user):
+        messages.warning(
+            request,
+            'Abono registrado, pero no se confirmó la salida: la salida de la '
+            'oficina la confirma una asesora o un administrador.',
+        )
+        return False
+
     saldo_pendiente = ingreso.diferencia
     if saldo_pendiente > Decimal('0.00'):
         messages.warning(
@@ -116,7 +126,8 @@ def _confirmar_salida_desde_abono(request, ingreso):
     bod = salida.calcular_bodegaje()
     salida.fecha_retiro_real = date.today()
     salida.estado_reparacion = 'retirado'
-    update_fields = ['fecha_retiro_real', 'estado_reparacion']
+    salida.retiro_confirmado_por = asesora or request.user
+    update_fields = ['fecha_retiro_real', 'estado_reparacion', 'retiro_confirmado_por']
 
     if salida.bodegaje_dias_congelado is None:
         salida.bodegaje_dias_congelado = bod['dias'] if bod['aplica'] else 0
@@ -124,10 +135,15 @@ def _confirmar_salida_desde_abono(request, ingreso):
         update_fields.extend(['bodegaje_dias_congelado', 'bodegaje_monto_congelado'])
 
     salida.save(update_fields=update_fields)
-    avisar_cambio(request.user, 'salida_fisica', 'Confirmó la salida de la oficina.', ingreso=ingreso)
+    nombre_asesora = salida_asesora.nombre(salida.retiro_confirmado_por)
+    avisar_cambio(
+        request.user, 'salida_fisica',
+        f'Confirmó la salida de la oficina (salida de {nombre_asesora}).', ingreso=ingreso,
+    )
     messages.success(
         request,
-        f'Salida de la oficina confirmada para el equipo {ingreso.codigo_equipo}.',
+        f'Salida de la oficina confirmada para el equipo {ingreso.codigo_equipo}, '
+        f'a nombre de {nombre_asesora}.',
     )
     return True
 
@@ -342,6 +358,28 @@ def pagos_export(request):
 # Seguimiento de pago (hoja semanal: admin y asistente de caja)
 # ═════════════════════════════════════════════════════════════════
 
+def _filtros_seguimiento(request):
+    """(hoy, lunes, sede, tipo, forma_pago) de ?semana, ?sede, ?tipo y ?forma_pago."""
+    hoy = timezone.localdate()
+    try:
+        dia = date.fromisoformat((request.GET.get('semana') or '').strip())
+    except ValueError:
+        dia = hoy
+    lunes = inicio_semana(dia)
+
+    sede = (request.GET.get('sede') or '').strip()
+    if sede not in SEDES_EQUIPOS:
+        sede = ''
+    tipo = (request.GET.get('tipo') or '').strip().lower()
+    if tipo not in dict(TIPOS):
+        # Un enlace viejo con sede (de cuando solo había equipos) abre los equipos.
+        tipo = EQUIPO if sede else TOTAL
+    forma_pago = (request.GET.get('forma_pago') or '').strip().lower()
+    if forma_pago not in dict(FORMAS_PAGO):
+        forma_pago = ''
+    return hoy, lunes, sede, tipo, forma_pago
+
+
 @seguimiento_pago_requerido
 def seguimiento_pago(request):
     """
@@ -352,25 +390,15 @@ def seguimiento_pago(request):
     o producto. ?sede= (Guayaquil o Quito) filtra las tres; las ventas por la
     bodega de sus productos.
 
+    ?forma_pago= (efectivo, transferencia o tarjeta) deja solo los pagos hechos
+    con ese método.
+
     POST registra un egreso (ver EgresoSeguimientoForm): se guarda como
     cualquier egreso, se avisa al admin y se abre la semana del egreso.
     """
-    hoy = timezone.localdate()
+    hoy, lunes, sede, tipo, forma_pago = _filtros_seguimiento(request)
     semana_actual = inicio_semana(hoy)
-    try:
-        dia = date.fromisoformat((request.GET.get('semana') or '').strip())
-    except ValueError:
-        dia = hoy
-    lunes = inicio_semana(dia)
-
-    sede = (request.GET.get('sede') or '').strip()
-    if sede not in SEDES_EQUIPOS:
-        sede = ''
     tipos = dict(TIPOS)
-    tipo = (request.GET.get('tipo') or '').strip().lower()
-    if tipo not in tipos:
-        # Un enlace viejo con sede (de cuando solo había equipos) abre los equipos.
-        tipo = EQUIPO if sede else TOTAL
 
     form_egreso = None
     if request.method == 'POST':
@@ -385,6 +413,8 @@ def seguimiento_pago(request):
             filtros = {'semana': egreso.fecha.isoformat(), 'tipo': tipo}
             if sede:
                 filtros['sede'] = sede
+            if forma_pago:
+                filtros['forma_pago'] = forma_pago
             url = f"{reverse('econotec:seguimiento_pago')}?{urlencode(filtros)}"
             avisar_egreso(request.user, egreso, saldo, url=url)
             messages.success(
@@ -394,11 +424,13 @@ def seguimiento_pago(request):
             )
             return redirect(f'{url}#egresos')
 
-    hoja = hoja_semana(lunes, sede, tipo)
+    hoja = hoja_semana(lunes, sede, tipo, forma_pago)
     pestanas, meses = pestanas_semanas(totales_por_semana(sede, tipo), semana_actual, lunes, tipo)
     proxima_hoja = semana_actual + timedelta(days=7)
-    # El saldo es de toda la semana: si la hoja ya es la del total, se reutiliza.
-    caja = saldo_semana(lunes, recaudado=hoja['total'] if tipo == TOTAL and not sede else None)
+    # El saldo es de toda la semana: si la hoja ya es la del total (sin filtros), se reutiliza.
+    caja = saldo_semana(
+        lunes, recaudado=hoja['total'] if tipo == TOTAL and not sede and not forma_pago else None,
+    )
     caja['disponible_texto'] = _dinero(caja['disponible'])
     if form_egreso is None:
         # Fecha sugerida: hoy si cae en la semana abierta; si no, el día más cercano de ella.
@@ -420,6 +452,15 @@ def seguimiento_pago(request):
             tipo, hoja['cantidad_equipos'], hoja['cantidad_ventas'], hoja['pagos'],
         ),
         'sede': sede,
+        'forma_pago': forma_pago,
+        'forma_pago_nombre': dict(FORMAS_PAGO)[forma_pago],
+        'formas_pago': FORMAS_PAGO,
+        # Filtros de la hoja abierta (sin la semana), para enlaces y el Excel.
+        'filtros_qs': urlencode({
+            clave: valor for clave, valor in (
+                ('tipo', tipo), ('sede', sede), ('forma_pago', forma_pago),
+            ) if valor
+        }),
         'es_semana_actual': lunes == semana_actual,
         # Solo tiene datos si se registró un pago con fecha adelantada.
         'es_semana_futura': lunes > semana_actual,
@@ -440,6 +481,124 @@ def seguimiento_pago(request):
 def _dinero(valor):
     """«$12,50» o «−$12,50»."""
     return f'−{dinero_signo(-valor)}' if valor < 0 else dinero_signo(valor)
+
+
+@seguimiento_pago_requerido
+def seguimiento_pago_excel(request):
+    """Excel de la hoja de una semana, con los mismos filtros que la pantalla.
+
+    Una fila por pago. El saldo pendiente va solo en el primer pago de cada
+    equipo o venta, para que la columna se pueda sumar sin repetirlo.
+    """
+    from openpyxl import Workbook
+    from openpyxl.styles import Alignment, Font, PatternFill
+    from openpyxl.utils import get_column_letter
+
+    _hoy, lunes, sede, tipo, forma_pago = _filtros_seguimiento(request)
+    hoja = hoja_semana(lunes, sede, tipo, forma_pago)
+    domingo = hoja['domingo']
+    sede_txt = {'guayaquil': 'Guayaquil', 'quito': 'Quito'}.get(sede, 'Todas')
+    forma_txt = dict(FORMAS_PAGO)[forma_pago]
+    estados_saldo = {'sin_valor': 'Sin valor acordado', 'cortesia': 'Cortesía'}
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = f'Semana {lunes:%d-%m-%Y}'
+    negrita = Font(bold=True)
+    ws.append([f'Seguimiento de pago — Semana {titulo_semana(lunes)}'])
+    ws['A1'].font = Font(bold=True, size=14)
+    ws.append([f'Vista: {dict(TIPOS)[tipo]} · Sede: {sede_txt} · Forma de pago: {forma_txt}'])
+    ws.append([])
+
+    encabezados = [
+        'N.º', 'Fecha de pago', 'Hora', 'Cliente', 'Cédula', 'Código', 'Tipo',
+        'Equipo / producto', 'Concepto', 'Forma de pago', 'Recibo', 'Pagado (USD)',
+        'Saldo pendiente (USD)', 'Fecha de ingreso / venta', 'Registrado por', 'Técnico responsable',
+    ]
+    ws.append(encabezados)
+    fila_encabezado = ws.max_row
+    for celda in ws[fila_encabezado]:
+        celda.font = Font(bold=True, color='FFFFFF')
+        celda.fill = PatternFill('solid', fgColor='F97618')
+        celda.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+
+    formato_dinero = '"$"#,##0.00'
+    for fila in hoja['filas']:
+        tecnicos = ', '.join(f"{t['nombre']} ({t['rol']})" for t in fila['tecnicos'])
+        for indice, cobro in enumerate(fila['cobros']):
+            forma = ' + '.join(
+                parte['etiqueta'] + (f" (${parte['monto']:.2f})" if len(cobro['partes']) > 1 else '')
+                for parte in cobro['partes']
+            )
+            if indice:
+                saldo = None
+            elif fila['saldo_estado'] in estados_saldo:
+                saldo = estados_saldo[fila['saldo_estado']]
+            else:
+                saldo = float(max(fila['saldo'], Decimal('0.00')))
+            ws.append([
+                fila['numero'],
+                cobro['fecha'],
+                cobro['hora'].strftime('%H:%M') if cobro['hora'] else '',
+                fila['cliente'],
+                fila['cedula'],
+                fila['codigo'],
+                'Producto' if fila['es_venta'] else 'Equipo',
+                ' · '.join(filter(None, [fila['tipo_equipo'], fila['equipo']])),
+                cobro['concepto'],
+                forma,
+                cobro['recibo'],
+                float(cobro['monto']),
+                saldo,
+                fila['fecha_ingreso'],
+                fila['registra'],
+                tecnicos,
+            ])
+            actual = ws.max_row
+            ws.cell(actual, 2).number_format = 'DD/MM/YYYY'
+            ws.cell(actual, 14).number_format = 'DD/MM/YYYY'
+            ws.cell(actual, 12).number_format = formato_dinero
+            ws.cell(actual, 13).number_format = formato_dinero
+
+    ws.append([])
+    ws.append(['', '', '', 'Total de la semana', '', '', '', '', '', '', '',
+               float(hoja['total']), float(hoja['saldo_total'])])
+    total_fila = ws.max_row
+    for columna in (4, 12, 13):
+        ws.cell(total_fila, columna).font = negrita
+    ws.cell(total_fila, 12).number_format = formato_dinero
+    ws.cell(total_fila, 13).number_format = formato_dinero
+    ws.cell(total_fila, 5, texto_cantidades(
+        tipo, hoja['cantidad_equipos'], hoja['cantidad_ventas'], hoja['pagos'],
+    ))
+
+    ws.append([])
+    ws.append(['', '', '', 'Por forma de pago'])
+    ws.cell(ws.max_row, 4).font = negrita
+    for metodo in hoja['metodos']:
+        detalle = ' · '.join(f'{nombre} ${monto:.2f}' for nombre, monto in metodo['detalle'])
+        ws.append(['', '', '', metodo['nombre'], f"{metodo['pagos']} pago(s)", detalle,
+                   '', '', '', '', '', float(metodo['monto'])])
+        ws.cell(ws.max_row, 12).number_format = formato_dinero
+
+    anchos = [6, 13, 8, 28, 14, 10, 10, 34, 18, 34, 12, 14, 16, 14, 22, 30]
+    for columna, ancho in enumerate(anchos, start=1):
+        ws.column_dimensions[get_column_letter(columna)].width = ancho
+    ws.freeze_panes = ws.cell(fila_encabezado + 1, 1)
+
+    buf = BytesIO()
+    wb.save(buf)
+    partes_nombre = ['seguimiento_pago', f'{lunes:%Y-%m-%d}_al_{domingo:%Y-%m-%d}', tipo]
+    if sede:
+        partes_nombre.append(sede)
+    if forma_pago:
+        partes_nombre.append(forma_pago)
+    respuesta = HttpResponse(
+        buf.getvalue(),
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    )
+    respuesta['Content-Disposition'] = f'attachment; filename="{"_".join(partes_nombre)}.xlsx"'
+    return respuesta
 
 
 @seguimiento_pago_requerido
@@ -592,8 +751,14 @@ def abono_crear(request, ingreso_pk):
 
     if request.method == 'POST':
         form = AbonoForm(request.POST, ingreso=ingreso)
-        if form.is_valid():
-            registrar_y_salida = request.POST.get('accion_abono') == 'registrar_y_salida'
+        registrar_y_salida = request.POST.get('accion_abono') == 'registrar_y_salida'
+        asesora_salida, error_asesora = (None, None)
+        if registrar_y_salida and puede_confirmar_salida_fisica(request.user):
+            # «¿A quién pertenece esta salida?»: se valida antes de guardar el pago.
+            asesora_salida, error_asesora = salida_asesora.asesora_de_la_salida(request)
+            if error_asesora:
+                messages.error(request, f'No se registró el abono: {error_asesora}')
+        if form.is_valid() and not error_asesora:
             salida_confirmada = False
             abono = form.save(commit=False)
             
@@ -654,7 +819,7 @@ def abono_crear(request, ingreso_pk):
                     )
 
                     if registrar_y_salida:
-                        salida_confirmada = _confirmar_salida_desde_abono(request, ingreso)
+                        salida_confirmada = _confirmar_salida_desde_abono(request, ingreso, asesora_salida)
 
                     _programar_correo_abono(
                         request,
@@ -685,7 +850,7 @@ def abono_crear(request, ingreso_pk):
                         dedupe_key=f'abono:{abono.pk}:creado',
                     )
                     if registrar_y_salida:
-                        salida_confirmada = _confirmar_salida_desde_abono(request, ingreso)
+                        salida_confirmada = _confirmar_salida_desde_abono(request, ingreso, asesora_salida)
 
                     _programar_correo_abono(
                         request,
@@ -708,7 +873,10 @@ def abono_crear(request, ingreso_pk):
         'form': form,
         'ingreso': ingreso,
         'modo': 'crear',
-        'puede_confirmar_salida_desde_abono': _puede_confirmar_salida_desde_abono(ingreso),
+        'puede_confirmar_salida_desde_abono': (
+            _puede_confirmar_salida_desde_abono(ingreso)
+            and puede_confirmar_salida_fisica(request.user)
+        ),
         'titulo': (
             f'Nuevo Abono — Venta {ingreso.codigo_equipo}'
             if ingreso.sede == 'ventas'

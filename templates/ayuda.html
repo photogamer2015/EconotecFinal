@@ -67,21 +67,31 @@
                     <li><strong>🔧 En reparación</strong></li>
                     <li><strong>✅ Con solución</strong></li>
                     <li><strong>❌ Sin solución</strong></li>
-                    <li><strong>🚫 No quiso reparar</strong></li>
+                    <li><strong>🚫 No quiso reparar</strong>: abre la finalización en «Revisión — Cliente no quiso reparar».</li>
                 </ul>
             </li>
             <li>Los cambios se reflejarán inmediatamente en todo el sistema.</li>
+            <li><strong>Cliente no quiso reparar:</strong> al finalizar (también en la Nueva solicitud de ingreso) es obligatorio elegir <strong>Sí o No</strong> en el valor adicional. Con <em>Sí</em> se ponen <strong>$5,00</strong>, que puedes cambiar, y el motivo se llena solo.</li>
+            <li>El técnico llega hasta <strong>equipo finalizado</strong>: la salida de la oficina la confirma una asesora.</li>
         </ol>
     </div>
 
     <div class="help-section">
         <h3>📤 3. Salidas, Retiros y Pagos Finales</h3>
-        <p>Cuando el cliente viene a retirar su equipo:</p>
+        <p>La <strong>salida de la oficina</strong> (salida de retiro) la confirman las <strong>asesoras</strong> y el <em>Administrador</em>. Los técnicos ya no la ven. Cuando el cliente viene a retirar su equipo:</p>
         <ol>
-            <li>Ve a <strong>Equipos finalizados</strong> y haz clic en <em>Editar finalización</em>.</li>
-            <li>Registra los detalles finales (trabajo realizado, repuestos, garantía).</li>
-            <li>El sistema calculará automáticamente cuánto debe pagar el cliente descontando cualquier anticipo previo.</li>
-            <li>Una vez cobrado, haz clic en el botón verde <strong>"Cliente retiró su equipo"</strong>.</li>
+            <li>Ve a <strong>Equipos finalizados</strong> y pulsa <strong>«Confirmar salida de la oficina»</strong>.</li>
+            <li>Elige en <strong>«¿A quién pertenece esta salida?»</strong> la asesora que entregó el equipo. Es obligatorio: esa salida se le suma en su perfil y en el ranking de asesoras.</li>
+            <li>Si el equipo tiene <strong>saldo pendiente</strong>, aparece un aviso con tres botones:
+                <ul>
+                    <li><strong>💳 Pagar saldo pendiente:</strong> registra ahí mismo el pago del saldo (método, factura y asesora) y da la salida del equipo.</li>
+                    <li><strong>🔔 Notificar al técnico:</strong> le llega un aviso en su cuenta y un correo para que revise el equipo y confirme el pago.</li>
+                    <li><strong>OK:</strong> cierra el aviso.</li>
+                </ul>
+            </li>
+            <li>Si hay bodegaje, después de elegir la asesora se decide si se cobra o se perdona.</li>
+            <li>También puedes usar <em>Registrar Abono y Dar Salida del Equipo</em> en el formulario de abono: ahí también se elige la asesora.</li>
+            <li><strong>Mis salidas de retiro:</strong> cada asesora ve en <em>Mi perfil</em> el total y la tabla de sus salidas. El <em>Administrador</em> las ve en el <strong>Ranking de asesoras — Salidas de retiro</strong> del Registro Administrativo.</li>
             <li><strong>Deshacer Retiro:</strong> Si marcaste un equipo como retirado por error, el <em>Administrador</em> puede deshacer esta acción haciendo clic en la "X" roja junto a la fecha de retiro.</li>
         </ol>
     </div>
@@ -116,7 +126,7 @@
         <ul>
             <li><strong>Top 10 Clientes Recurrentes:</strong> En la pestaña <em>Clientes → Top Clientes</em> verás un ranking automático de las 10 personas que más equipos han traído a reparar, separado por sede (Guayaquil/Quito).</li>
             <li><strong>Registro Administrativo:</strong> Solo para administradores. Lleva el control de la caja, ingresa sueldos, pagos de alquiler, compra de repuestos (Egresos). El sistema calculará la Utilidad Neta real de la empresa y permite exportar reportes a Excel.</li>
-            <li><strong>Seguimiento de pago:</strong> Para el administrador y la asistente de caja. Hoja semanal (de lunes a domingo) con lo cobrado de equipos y ventas de producto, por sede y forma de pago. Desde ahí se registran los egresos de la semana: no pueden pasar del saldo disponible, se restan en la Caja y en el Registro Administrativo, y se avisa al administrador.</li>
+            <li><strong>Seguimiento de pago:</strong> Para el administrador y la asistente de caja. Hoja semanal (de lunes a domingo) con lo cobrado de equipos y ventas de producto, por sede y forma de pago. Se puede <strong>filtrar por forma de pago</strong> (efectivo, transferencia o tarjeta) y <strong>descargar en Excel</strong> la semana abierta con esos filtros. Desde ahí se registran los egresos de la semana: no pueden pasar del saldo disponible, se restan en la Caja y en el Registro Administrativo, y se avisa al administrador.</li>
         </ul>
     </div>
 
@@ -131,7 +141,8 @@
         <h3>👥 Roles del sistema</h3>
         <ul>
             <li><strong>Administrador (Gerencia):</strong> Acceso total. Puede borrar registros, deshacer retiros, perdonar multas de bodegaje, y ver el balance financiero de ingresos/egresos.</li>
-            <li><strong>Técnico / Asesor:</strong> Puede registrar ingresos, usar el escáner QR, registrar pagos y entregar equipos. No puede eliminar registros financieros ni deshacer retiros ya efectuados.</li>
+            <li><strong>Técnico:</strong> Puede registrar ingresos, usar el escáner QR, registrar pagos y finalizar equipos. Llega hasta <em>equipo finalizado</em>: no confirma la salida de la oficina. Recibe avisos cuando una asesora le pide revisar un equipo con saldo pendiente.</li>
+            <li><strong>Asesora:</strong> Registra ingresos y pagos y <strong>confirma la salida de la oficina</strong> de los equipos; sus salidas aparecen en su perfil y en el ranking de asesoras. No puede eliminar registros financieros ni deshacer retiros ya efectuados.</li>
             <li><strong>Asesora - Asistente de caja:</strong> Todo lo de la asesora y, además, Seguimiento de pago (con registrar egresos) y gestionar el inventario: ingresar, editar, cambiar cantidades y eliminar productos. No tiene el Registro Administrativo.</li>
         </ul>
     </div>

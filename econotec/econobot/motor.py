@@ -12,6 +12,7 @@ import re
 
 from .. import views as vistas
 from ..models import Cliente, IngresoEquipo
+from ..permisos import puede_confirmar_salida_fisica
 from . import consultas, conocimiento
 from . import texto as tx
 from .acciones import (
@@ -190,6 +191,10 @@ def iniciar_finalizar(request, estado, ingreso, mensaje=''):
 
 
 def iniciar_retiro(request, estado, ingreso):
+    if not puede_confirmar_salida_fisica(request.user):
+        # El técnico llega hasta «equipo finalizado»; la salida la confirma la asesora.
+        return respuesta('La salida de la oficina la confirma una asesora o un administrador. '
+                         'Tú puedes finalizar el equipo; la asesora registra su salida.')
     motivo = motivo_sin_retiro(ingreso)
     if motivo:
         opciones = []

@@ -93,3 +93,10 @@ def sonido_pendiente(context):
     request = context.get('request')
     ruta = tomar_sonido_pendiente(request) if request is not None else ''
     return static(ruta) if ruta else ''
+
+
+@register.simple_tag
+def asesoras_salida_opciones():
+    """[{'id', 'nombre'}] de las asesoras para «¿A quién pertenece esta salida?»."""
+    from econotec.salida_asesora import asesoras_para_salida, nombre
+    return [{'id': u.pk, 'nombre': nombre(u)} for u in asesoras_para_salida()]

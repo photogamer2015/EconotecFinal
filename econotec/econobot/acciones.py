@@ -14,6 +14,7 @@ from .. import views_pagos, views_tecnico
 from ..forms import CobroBodegajeForm, ValorAcordadoPagoForm
 from ..models import IngresoEquipo, SalidaEquipo, SUBESTADO_EN_REPARACION
 from ..qr_utils import token_para_ingreso
+from ..salida_asesora import asesoras_para_salida, nombre as nombre_asesora
 from . import texto as tx
 from .enviar import enviar
 from .equipos import descripcion_equipo
@@ -258,11 +259,15 @@ class FlujoRetiro(Flujo):
     titulo = 'Confirmar salida física'
     verbo_confirmar = 'Confirmar salida'
     pregunta_confirmacion = '¿Confirmas que el equipo ya salió de la oficina? Responde «sí» para guardar.'
-    alias = {'bodegaje': 'bodegaje'}
+    alias = {'bodegaje': 'bodegaje', 'asesora': 'asesora_salida'}
 
     def iniciar(self, ingreso):
         self.datos['ingreso_pk'] = ingreso.pk
         return []
+
+    @staticmethod
+    def opciones_asesoras():
+        return [(str(u.pk), nombre_asesora(u)) for u in asesoras_para_salida()]
 
     def salida(self):
         pk = self.datos.get('ingreso_pk')
@@ -290,7 +295,12 @@ class FlujoRetiro(Flujo):
         if salida is None:
             return []
         bod = self.bodegaje()
-        p = []
+        # La salida le cuenta a la asesora elegida (perfil y ranking de asesoras).
+        p = [Pregunta(
+            'asesora_salida', 'A quién pertenece la salida',
+            '¿A quién pertenece esta salida? Elige la asesora que entregó el equipo.',
+            tipo='opcion', opciones=self.opciones_asesoras(),
+        )]
         if bod['monto'] > 0:
             monto = tx.dinero_legible(bod['monto'])
             p.append(Pregunta(
@@ -307,6 +317,7 @@ class FlujoRetiro(Flujo):
         cobrar = self.datos.get('bodegaje') == 'cobrar' and self.bodegaje()['monto'] > 0
         datos = {
             'aplicar_bodegaje': 'on' if cobrar else '',
+            'asesora_salida': self.datos.get('asesora_salida') or '',
             'next': reverse('econotec:salida_retiros_lista'),
         }
         if cobrar:
@@ -327,6 +338,9 @@ class FlujoRetiro(Flujo):
         lineas = [f'📝 Salida física de {ingreso.codigo_equipo} — {descripcion_equipo(ingreso)} ({ingreso.cliente.nombres})',
                   f'• Resultado: {salida.get_estado_reparacion_display()} · Finalizado el {salida.fecha_salida:%d/%m/%Y}',
                   '• Saldo del cliente: $0,00']
+        asesora = dict(self.opciones_asesoras()).get(self.datos.get('asesora_salida') or '')
+        if asesora:
+            lineas.append(f'• Salida de: {asesora}')
         if bod['monto'] > 0:
             if self.datos.get('bodegaje') == 'cobrar':
                 lineas.append(f'• Bodegaje: se cobran {tx.dinero_legible(bod["monto"])} ({resumen_pago("bodegaje", self.datos)})')

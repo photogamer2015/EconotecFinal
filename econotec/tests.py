@@ -2888,6 +2888,8 @@ class VentasTests(TestCase):
         EQUIPO_EMAIL_ADJUNTAR_PDF=True,
     )
     def test_abono_completo_y_salida_envia_correo_de_cierre(self):
+        # La salida de la oficina la confirma la asesora, no el técnico.
+        self.client.force_login(self.vendedor)
         ingreso = self.crear_ingreso_reparacion(
             valor_acordado=Decimal('30.00'),
             abono_anticipo=Decimal('0.00'),
@@ -3190,6 +3192,8 @@ class VentasTests(TestCase):
         self.assertContains(response, 'accesorios-opciones')
 
     def test_alerta_bodegaje_usa_tecnico_de_salida_y_tiene_desplegable(self):
+        # La salida de la oficina la confirma la asesora, no el técnico.
+        self.client.force_login(self.vendedor)
         User = get_user_model()
         tecnicos = Group.objects.get(name='Tecnicos')
         tecnico_entrada = User.objects.create_user(
@@ -6605,6 +6609,8 @@ class VentasTests(TestCase):
         self.assertEqual(pdf_response['Content-Type'], 'application/pdf')
 
     def test_marcar_retirada_conserva_resultado_negativo_y_registra_fecha(self):
+        # La salida de la oficina la confirma la asesora, no el técnico.
+        self.client.force_login(self.vendedor)
         ingreso = self.crear_ingreso_reparacion(valor_acordado=Decimal('0.00'))
         salida = SalidaEquipo.objects.create(
             ingreso=ingreso,
@@ -6687,6 +6693,8 @@ class VentasTests(TestCase):
 
     @override_settings(SALIDA_EMAIL_AUTOMATICO=False)
     def test_detalle_finalizado_sin_saldo_permite_retirar_equipo(self):
+        # La salida de la oficina la confirma la asesora, no el técnico.
+        self.client.force_login(self.vendedor)
         ingreso = self.crear_ingreso_reparacion(valor_acordado=Decimal('0.00'))
         salida = SalidaEquipo.objects.create(
             ingreso=ingreso,
@@ -6725,6 +6733,8 @@ class VentasTests(TestCase):
         self.assertNotContains(detalle, '🚚 Retirar equipo')
 
     def test_detalle_finalizado_con_saldo_bloquea_retirar_equipo(self):
+        # La salida de la oficina la confirma la asesora, no el técnico.
+        self.client.force_login(self.vendedor)
         ingreso = self.crear_ingreso_reparacion(valor_acordado=Decimal('25.00'))
         salida = SalidaEquipo.objects.create(
             ingreso=ingreso,
@@ -6740,13 +6750,16 @@ class VentasTests(TestCase):
         detalle = self.client.get(reverse('econotec:ingreso_detalle', kwargs={'pk': ingreso.pk}))
 
         self.assertContains(detalle, '💳 Retirar equipo — saldo pendiente')
-        self.assertContains(detalle, 'onclick="alertaSaldoPendienteRetiro()"')
+        self.assertContains(detalle, 'onclick="alertaSaldoPendienteSalida(event, this)"')
+        self.assertContains(detalle, reverse('econotec:salida_notificar_tecnico', kwargs={'pk': salida.pk}))
         self.assertNotContains(
             detalle,
             reverse('econotec:salida_marcar_retirada', kwargs={'pk': salida.pk}),
         )
 
     def test_detalle_finalizado_pasa_bodegaje_al_retirar_equipo(self):
+        # La salida de la oficina la confirma la asesora, no el técnico.
+        self.client.force_login(self.vendedor)
         ingreso = self.crear_ingreso_reparacion(valor_acordado=Decimal('0.00'))
         SalidaEquipo.objects.create(
             ingreso=ingreso,
@@ -6775,6 +6788,8 @@ class VentasTests(TestCase):
         EQUIPO_EMAIL_ADJUNTAR_PDF=True,
     )
     def test_salida_fisica_sin_bodegaje_envia_acta_actualizada(self):
+        # La salida de la oficina la confirma la asesora, no el técnico.
+        self.client.force_login(self.vendedor)
         ingreso = self.crear_ingreso_reparacion(valor_acordado=Decimal('0.00'))
         salida = SalidaEquipo.objects.create(
             ingreso=ingreso,
@@ -6819,6 +6834,8 @@ class VentasTests(TestCase):
         EQUIPO_EMAIL_ADJUNTAR_PDF=True,
     )
     def test_salida_fisica_cobra_bodegaje_mixto_y_envia_resultado(self):
+        # La salida de la oficina la confirma la asesora, no el técnico.
+        self.client.force_login(self.vendedor)
         ingreso = self.crear_ingreso_reparacion(valor_acordado=Decimal('0.00'))
         salida = SalidaEquipo.objects.create(
             ingreso=ingreso,
@@ -6888,6 +6905,8 @@ class VentasTests(TestCase):
         SALIDA_EMAIL_AUTOMATICO=True,
     )
     def test_salida_fisica_perdona_bodegaje_y_tambien_envia_acta(self):
+        # La salida de la oficina la confirma la asesora, no el técnico.
+        self.client.force_login(self.vendedor)
         ingreso = self.crear_ingreso_reparacion(valor_acordado=Decimal('0.00'))
         salida = SalidaEquipo.objects.create(
             ingreso=ingreso,
@@ -7068,6 +7087,8 @@ class VentasTests(TestCase):
         self.assertContains(response, "addHiddenInput('bodegaje_monto_personalizado', bodegajeMontoPersonalizado);")
 
     def test_salida_fisica_cobra_valor_de_bodegaje_propio(self):
+        # La salida de la oficina la confirma la asesora, no el técnico.
+        self.client.force_login(self.vendedor)
         ingreso, salida = self.crear_salida_con_bodegaje()
         bodegaje = salida.calcular_bodegaje()
         self.assertEqual(bodegaje['monto'], Decimal('6.00'))
@@ -7095,6 +7116,8 @@ class VentasTests(TestCase):
         self.assertIn('acumulado $6.00', abono.observaciones)
 
     def test_salida_fisica_mixto_suma_el_valor_de_bodegaje_propio(self):
+        # La salida de la oficina la confirma la asesora, no el técnico.
+        self.client.force_login(self.vendedor)
         ingreso, salida = self.crear_salida_con_bodegaje()
 
         response = self.client.post(
@@ -7137,6 +7160,8 @@ class VentasTests(TestCase):
         self.assertEqual(ingreso.abonos.count(), 0)
 
     def test_salida_fisica_perdonar_ignora_valor_de_bodegaje_propio(self):
+        # La salida de la oficina la confirma la asesora, no el técnico.
+        self.client.force_login(self.vendedor)
         ingreso, salida = self.crear_salida_con_bodegaje()
 
         self.client.post(
@@ -7201,6 +7226,8 @@ class VentasTests(TestCase):
         self.assertEqual(ingreso.diferencia, Decimal('0.00'))
 
     def test_saldo_queda_en_cero_al_cobrar_bodegaje_en_salida_fisica(self):
+        # La salida de la oficina la confirma la asesora, no el técnico.
+        self.client.force_login(self.vendedor)
         ingreso, salida = self.crear_salida_con_bodegaje()
 
         self.client.post(
@@ -7258,6 +7285,8 @@ class VentasTests(TestCase):
         self.assertEqual(salida.bodegaje_dias_congelado, 0)
 
     def test_salida_fisica_respeta_bodegaje_cobrado_en_abono(self):
+        # La salida de la oficina la confirma la asesora, no el técnico.
+        self.client.force_login(self.vendedor)
         ingreso, salida = self.crear_salida_con_bodegaje(valor_acordado=Decimal('25.00'))
         self.cobrar_bodegaje_en_abono(ingreso, '31.00')
 
@@ -7275,6 +7304,8 @@ class VentasTests(TestCase):
         self.assertContains(response, 'ya se había cobrado en un abono')
 
     def test_salida_fisica_no_cobra_dos_veces_el_bodegaje_ya_cobrado(self):
+        # La salida de la oficina la confirma la asesora, no el técnico.
+        self.client.force_login(self.vendedor)
         ingreso, salida = self.crear_salida_con_bodegaje(valor_acordado=Decimal('25.00'))
         self.cobrar_bodegaje_en_abono(ingreso, '31.00')
 
@@ -7300,6 +7331,8 @@ class VentasTests(TestCase):
     @override_settings(SALIDA_EMAIL_AUTOMATICO=True)
     @patch('econotec.emails.EmailMultiAlternatives.send', side_effect=OSError('SMTP no disponible'))
     def test_fallo_correo_salida_fisica_no_revierte_el_retiro(self, _send):
+        # La salida de la oficina la confirma la asesora, no el técnico.
+        self.client.force_login(self.vendedor)
         ingreso = self.crear_ingreso_reparacion(valor_acordado=Decimal('0.00'))
         salida = SalidaEquipo.objects.create(
             ingreso=ingreso,
@@ -7482,8 +7515,9 @@ class VentasTests(TestCase):
         self.assertNotContains(response, 'Buscar facturas por fecha')
 
         inicio_tecnico = self.client.get(reverse('econotec:bienvenida'))
-        self.assertContains(inicio_tecnico, 'Salidas físicas confirmadas')
-        self.assertContains(inicio_tecnico, reverse('econotec:salida_retiros_lista'))
+        # El técnico llega hasta «equipo finalizado»: ya no ve las salidas de la oficina.
+        self.assertNotContains(inicio_tecnico, 'Salidas físicas confirmadas')
+        self.assertNotContains(inicio_tecnico, reverse('econotec:salida_retiros_lista'))
         self.assertContains(inicio_tecnico, 'Ranking de Técnicos')
         self.assertContains(inicio_tecnico, reverse('econotec:salida_totales'))
         self.assertContains(
@@ -7493,6 +7527,8 @@ class VentasTests(TestCase):
 
         self.client.force_login(self.vendedor)
         inicio_asesor = self.client.get(reverse('econotec:bienvenida'))
+        self.assertContains(inicio_asesor, 'Salidas físicas confirmadas')
+        self.assertContains(inicio_asesor, reverse('econotec:salida_retiros_lista'))
         self.assertContains(inicio_asesor, 'Ranking de Técnicos')
         self.assertContains(inicio_asesor, reverse('econotec:salida_totales'))
 
@@ -7964,6 +8000,8 @@ class VentasTests(TestCase):
         self.assertContains(response, 'resumen-pago-mixto')
 
     def test_formulario_abono_muestra_accion_de_registrar_y_dar_salida(self):
+        # La salida de la oficina la confirma la asesora, no el técnico.
+        self.client.force_login(self.vendedor)
         ingreso = self.crear_ingreso_reparacion(
             valor_acordado=Decimal('28.00'),
             abono_anticipo=Decimal('0.00'),
@@ -7987,6 +8025,8 @@ class VentasTests(TestCase):
         self.assertContains(response, 'value="registrar"')
 
     def test_abono_completo_puede_confirmar_salida_fisica(self):
+        # La salida de la oficina la confirma la asesora, no el técnico.
+        self.client.force_login(self.vendedor)
         ingreso = self.crear_ingreso_reparacion(
             valor_acordado=Decimal('28.00'),
             abono_anticipo=Decimal('0.00'),
@@ -8579,6 +8619,8 @@ class VentasTests(TestCase):
         self.assertNotIn('cliente_no_acepta', opciones)
 
     def test_aviso_post_finalizacion_muestra_confirmacion_o_tutorial_segun_saldo(self):
+        # La salida de la oficina la confirma la asesora, no el técnico.
+        self.client.force_login(self.vendedor)
         ingreso_pagado = self.crear_ingreso_reparacion(
             valor_acordado=Decimal('0.00'),
         )
@@ -8903,6 +8945,8 @@ class VentasTests(TestCase):
         self.assertEqual(notificacion.valor_acordado, Decimal('12.00'))
 
     def test_salida_no_reparable_pago_parcial_transferencia_bloquea_retiro(self):
+        # La salida de la oficina la confirma la asesora, no el técnico.
+        self.client.force_login(self.vendedor)
         response, ingreso, salida = self.registrar_ingreso_negativo(
             IngresoEquipoForm.ESTADO_NO_SE_PUDO_REPARAR,
             estado_reparacion='no_reparable',
@@ -8984,6 +9028,8 @@ class VentasTests(TestCase):
         self.assertFalse(NotificacionAsesora.objects.filter(salida=salida).exists())
 
     def test_salida_negativa_pago_mixto_completo_permite_retiro_y_conserva_resultado(self):
+        # La salida de la oficina la confirma la asesora, no el técnico.
+        self.client.force_login(self.vendedor)
         response, ingreso, salida = self.registrar_ingreso_negativo(
             IngresoEquipoForm.ESTADO_NO_QUISO_REPARAR,
             estado_reparacion='cliente_no_acepta',
@@ -11499,6 +11545,8 @@ class VentasTests(TestCase):
         self.assertFalse(NotificacionAsesora.objects.filter(salida=salida).exists())
 
     def test_nueva_solicitud_cobro_mixto_parcial_bloquea_retiro(self):
+        # La salida de la oficina la confirma la asesora, no el técnico.
+        self.client.force_login(self.vendedor)
         self.activar_sede_guayaquil()
         data = self.ingreso_registro_post_data(**{
             'ing-estado': IngresoEquipoForm.ESTADO_NO_QUISO_REPARAR,
@@ -12861,6 +12909,8 @@ class VentasTests(TestCase):
         self.assertEqual(calculo['monto'], Decimal('3.00'))
 
     def test_retirar_desde_equipo_prueba_no_cobra_bodegaje(self):
+        # La salida de la oficina la confirma la asesora, no el técnico.
+        self.client.force_login(self.vendedor)
         salida = self.crear_salida_con_bodegaje_vencido(
             'revision',
             salida_extra={'subestado_revision': 'equipo_prueba'},

@@ -2089,6 +2089,14 @@ class SalidaEquipo(RetencionFactura):
         help_text='Se llena cuando se confirma que el cliente ya vino. '
                   'Si está vacío, se sigue acumulando bodegaje día a día.',
     )
+    retiro_confirmado_por = models.ForeignKey(
+        'auth.User',
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='retiros_confirmados',
+        verbose_name='Asesora a quien pertenece la salida',
+        help_text='Asesora elegida al confirmar la salida de la oficina (salida de retiro).',
+    )
     bodegaje_dias_congelado = models.PositiveIntegerField(
         null=True, blank=True,
         verbose_name='Días de bodegaje al cerrar',
@@ -3235,6 +3243,52 @@ class NotificacionAsesora(models.Model):
 
     def __str__(self):
         return f'{self.get_tipo_display()} — {self.ingreso.codigo_equipo} — {self.asesora}'
+
+
+class NotificacionTecnico(models.Model):
+    """Aviso al técnico: una asesora le pide revisar un equipo con saldo pendiente."""
+
+    salida = models.ForeignKey(
+        SalidaEquipo,
+        on_delete=models.CASCADE,
+        related_name='notificaciones_tecnico',
+        verbose_name='Salida relacionada',
+    )
+    ingreso = models.ForeignKey(
+        IngresoEquipo,
+        on_delete=models.CASCADE,
+        related_name='notificaciones_tecnico',
+        verbose_name='Equipo',
+    )
+    tecnico = models.ForeignKey(
+        'auth.User',
+        on_delete=models.CASCADE,
+        related_name='notificaciones_tecnico',
+        verbose_name='Técnico notificado',
+    )
+    creado_por = models.ForeignKey(
+        'auth.User',
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='notificaciones_tecnico_creadas',
+        verbose_name='Notificado por',
+    )
+    saldo_pendiente = models.DecimalField(
+        max_digits=10, decimal_places=2, default=Decimal('0.00'),
+        verbose_name='Saldo pendiente al notificar',
+    )
+    mensaje = models.TextField(blank=True, verbose_name='Mensaje para el técnico')
+    leida = models.BooleanField(default=False, verbose_name='Vista por el técnico')
+    leida_en = models.DateTimeField(null=True, blank=True, verbose_name='Vista el')
+    creado = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'Notificación de técnico'
+        verbose_name_plural = 'Notificaciones de técnicos'
+        ordering = ['leida', '-creado']
+
+    def __str__(self):
+        return f'{self.ingreso.codigo_equipo} — {self.tecnico}'
 
 
 class PerfilSocial(models.Model):

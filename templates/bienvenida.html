@@ -3129,11 +3129,14 @@
           🔕 No molestar
         </button>
       </form>
+      {# La salida de la oficina la confirma la asesora o el administrador; el técnico ya no. #}
+      {% if puede_confirmar_salida_fisica %}
       <form
         method="post"
         action="{% url 'econotec:salida_marcar_retirada' pk=b.salida.pk %}"
         class="cerrar-form salida-oficina-form"
-        onsubmit="{% if b.ingreso.diferencia > 0 %}event.preventDefault(); Swal.fire({icon: 'error', title: 'Saldo Pendiente', text: 'No se puede retirar. El cliente tiene un saldo pendiente de {{ b.ingreso.diferencia|dinero_signo }}. Debe pagar todo antes de retirar el equipo.', confirmButtonColor: '#d33'}); return false;{% else %}confirmarCierre(event, this, '{{ b.ingreso.codigo_equipo }}', {% if b.bodegaje_monto > 0 %}true{% else %}false{% endif %}, {{ b.bodegaje_monto|default:0|stringformat:'.2f' }}, {{ b.bodegaje_dias|default:0 }});{% endif %}"
+        {% if b.ingreso.diferencia > 0 %}{% include 'includes/saldo_pendiente_datos.html' with ingreso=b.ingreso salida=b.salida %}{% endif %}
+        onsubmit="{% if b.ingreso.diferencia > 0 %}return alertaSaldoPendienteSalida(event, this);{% else %}confirmarCierre(event, this, '{{ b.ingreso.codigo_equipo }}', {% if b.bodegaje_monto > 0 %}true{% else %}false{% endif %}, {{ b.bodegaje_monto|default:0|stringformat:'.2f' }}, {{ b.bodegaje_dias|default:0 }});{% endif %}"
       >
         {% csrf_token %}
         <input type="hidden" name="aplicar_bodegaje" value="" />
@@ -3150,6 +3153,7 @@
           </span>
         </button>
       </form>
+      {% endif %}
     </div>
   </div>
   {% endfor %}
@@ -3294,6 +3298,8 @@
     </div>
   </a>
 
+  {# El técnico llega hasta «equipo finalizado»: no ve el apartado de salida de la oficina. #}
+  {% if puede_confirmar_salida_fisica %}
   <a href="{% url 'econotec:salida_retiros_lista' %}" class="card-box card-box-salidas-fisicas">
     <div class="card-header">
       <div class="card-title">Salidas físicas confirmadas</div>
@@ -3307,6 +3313,7 @@
       <span class="card-number">Total: {{ stats.salidas_fisicas_confirmadas }}</span>
     </div>
   </a>
+  {% endif %}
 
   <a href="{% url 'econotec:cliente_lista' %}" class="card-box">
     <div class="card-header">

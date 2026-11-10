@@ -701,6 +701,10 @@
             }
         }
 
+        // En «Cliente no quiso reparar» el Sí/No del valor adicional lo elige la
+        // persona; solo cuenta como elegido si ya se guardó así o si lo cambió aquí.
+        var adicionalElegido = {% if form.is_bound or salida.pk and salida.estado_reparacion == 'cliente_no_acepta' or salida.pk and salida.estado_reparacion == 'revision' and salida.subestado_revision == 'cliente_no_acepta' %}true{% else %}false{% endif %};
+
         function actualizar() {
             if (!selEstado) return;
             // «revision:equipo_prueba» y demás subcategorías se tratan como Revisión.
@@ -716,6 +720,20 @@
             }
             var esCierreSinReparacion = v === 'cliente_no_acepta' || v === 'no_reparable';
             var esRevision = v === 'revision';
+            // Cliente no quiso reparar (directo o en Revisión): hay que elegir Sí o No.
+            var esNoQuiso = v === 'cliente_no_acepta' || (esRevision && subRevision === 'cliente_no_acepta');
+            if (aplicaValorAdicional && !aplicaValorAdicional.disabled) {
+                if (esNoQuiso && !adicionalElegido && aplicaValorAdicional.value === 'no') {
+                    aplicaValorAdicional.value = '';
+                } else if (!esNoQuiso && aplicaValorAdicional.value === '') {
+                    aplicaValorAdicional.value = 'no';
+                }
+                if (esNoQuiso) {
+                    aplicaValorAdicional.setAttribute('required', 'required');
+                } else {
+                    aplicaValorAdicional.removeAttribute('required');
+                }
+            }
             var esReparadoYaSalio = v === 'retirado' && {% if salida.cliente_ya_retiro %}true{% else %}false{% endif %};
             var mostrarValorAdicional = v === 'pendiente_retiro' || esCierreSinReparacion || esRevision || esReparadoYaSalio;
             var aplicaAdicional = (
@@ -727,12 +745,16 @@
                 wrapValorAdicional.style.display = mostrarValorAdicional ? 'block' : 'none';
             }
             if (tituloCobroAdicional) {
-                tituloCobroAdicional.textContent = esRevision
+                tituloCobroAdicional.textContent = esNoQuiso
+                    ? '¿Cobrar un valor adicional? *'
+                    : esRevision
                     ? '¿Agregar un valor adicional por la revisión?'
                     : '¿Registrar un cobro adicional opcional?';
             }
             if (ayudaCobroAdicional) {
-                ayudaCobroAdicional.textContent = esReparadoYaSalio
+                ayudaCobroAdicional.textContent = esNoQuiso
+                    ? 'Obligatorio: elige Sí o No. Con Sí se ponen $5,00 de valor adicional; puedes cambiar el valor.'
+                    : esReparadoYaSalio
                     ? 'El equipo ya salió: el adicional solo puede cubrir lo que el cliente ya pagó de más ({{ ingreso.saldo_a_favor|dinero_signo }} a su favor ahora). Si ya tiene un adicional, escribe el valor total.'
                     : esCierreSinReparacion
                     ? 'Este resultado no tiene cobro por defecto. Actívalo solo si se acordó un valor adicional con el cliente.'
@@ -1030,7 +1052,21 @@
             inputCobrado.addEventListener('change', actualizar);
         }
         if (aplicaValorAdicional) {
-            aplicaValorAdicional.addEventListener('change', actualizar);
+            aplicaValorAdicional.addEventListener('change', function () {
+                adicionalElegido = true;
+                var estadoActual = selEstado ? selEstado.value : '';
+                var noQuiso = estadoActual === 'cliente_no_acepta' || estadoActual === 'revision:cliente_no_acepta';
+                if (noQuiso && aplicaValorAdicional.value === 'si') {
+                    // Sugerencia editable: $5,00 y el motivo.
+                    if (inputValorAdicional && !(parseFloat(inputValorAdicional.value) > 0)) {
+                        inputValorAdicional.value = '{{ form.VALOR_ADICIONAL_NO_QUISO|stringformat:".2f" }}';
+                    }
+                    if (motivoValorAdicional && !motivoValorAdicional.value.trim()) {
+                        motivoValorAdicional.value = '{{ form.MOTIVO_ADICIONAL_NO_QUISO|escapejs }}';
+                    }
+                }
+                actualizar();
+            });
         }
         if (inputValorAdicional) {
             inputValorAdicional.addEventListener('input', actualizar);

@@ -128,7 +128,7 @@
                     <div class="ubicacion-item">
                         <span class="ubi-label">Fuera de oficina</span>
                         <span class="ubi-valor">{{ r.entregados }}</span>
-                        {% if not r.sin_asignar %}
+                        {% if not r.sin_asignar and puede_confirmar_salida_fisica %}
                             <a href="{% url 'econotec:salida_retiros_lista' %}?tecnico_salida={{ r.tecnico_id }}&fecha_por=finalizacion{% if filtros.desde %}&fecha_desde={{ filtros.desde }}{% endif %}{% if filtros.hasta %}&fecha_hasta={{ filtros.hasta }}{% endif %}"
                                class="btn btn-outside"
                                title="Ver equipos de este técnico que ya salieron de la oficina">Ver detalle</a>

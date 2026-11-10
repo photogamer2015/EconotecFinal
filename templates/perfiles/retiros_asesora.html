@@ -1,0 +1,43 @@
+{# Salidas de retiro (salidas de la oficina) que pertenecen a la asesora. La ve ella y el administrador. #}
+{% if retiros_asesora %}
+<style>
+  .retiros-tabla-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:14px;margin-top:16px}
+  .retiros-tabla{width:100%;border-collapse:collapse;font-size:13px;min-width:640px}
+  .retiros-tabla th{background:#8b96ac14;color:var(--muted);text-align:left;font-size:11px;letter-spacing:1px;text-transform:uppercase;padding:10px 12px;white-space:nowrap}
+  .retiros-tabla td{padding:10px 12px;border-top:1px solid var(--line);vertical-align:top}
+  .retiros-tabla a{color:#e66c24;font-weight:800;text-decoration:none}
+  .retiros-tabla small{display:block;color:var(--muted)}
+  .retiros-total{display:flex;align-items:baseline;gap:10px;margin-top:14px}
+  .retiros-total strong{font-size:32px;color:#2e7d32}
+  .retiros-total span{color:var(--muted);font-size:14px}
+</style>
+<section class="social-friends" aria-labelledby="retiros-asesora-title">
+  <div class="social-heading">
+    <div><p class="social-eyebrow">SALIDAS DE RETIRO</p><h2 id="retiros-asesora-title">{% if propio %}Mis salidas de retiro{% else %}Salidas de retiro{% endif %} <small>({{ retiros_asesora.total }})</small></h2></div>
+    <a class="social-btn secondary" href="{% url 'econotec:salida_retiros_lista' %}?confirmo={{ persona.pk }}">🚚 Abrir en Salidas físicas confirmadas →</a>
+  </div>
+  <div class="retiros-total"><strong>{{ retiros_asesora.total }}</strong><span>salida{{ retiros_asesora.total|pluralize }} de la oficina en total a nombre de {% if propio %}mí{% else %}{{ persona.get_full_name|default:persona.username }}{% endif %}</span></div>
+  {% if retiros_asesora.salidas %}
+  <div class="retiros-tabla-wrap">
+    <table class="retiros-tabla">
+      <thead><tr><th>N.º</th><th>Fecha de salida</th><th>Equipo N°</th><th>Cliente</th><th>Equipo</th><th>Técnico responsable</th></tr></thead>
+      <tbody>
+        {% for s in retiros_asesora.salidas %}
+        <tr>
+          <td>{{ forloop.counter }}</td>
+          <td>{{ s.fecha_retiro_real|date:"d/m/Y" }}</td>
+          <td><a href="{% url 'econotec:ingreso_detalle' pk=s.ingreso.pk %}">{{ s.ingreso.codigo_equipo }}</a></td>
+          <td>{{ s.ingreso.cliente.nombres }}<small>{{ s.ingreso.cliente.cedula }}</small></td>
+          <td>{{ s.ingreso.tipo_equipo_display }}<small>{{ s.ingreso.marca|truncatechars:30 }}</small></td>
+          <td>{% if s.tecnico_reparo %}{{ s.tecnico_reparo.get_full_name|default:s.tecnico_reparo.username }}{% elif s.ingreso.tecnico_encargado %}{{ s.ingreso.tecnico_encargado.get_full_name|default:s.ingreso.tecnico_encargado.username }}{% else %}—{% endif %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% if retiros_asesora.recortada %}<p style="color:var(--muted)">Se muestran las {{ retiros_asesora.salidas|length }} más recientes. Usa «Abrir en Salidas físicas confirmadas» para ver todas.</p>{% endif %}
+  {% else %}
+  <p style="color:var(--muted)">Todavía no hay salidas de retiro a nombre de {% if propio %}ti{% else %}esta asesora{% endif %}.</p>
+  {% endif %}
+</section>
+{% endif %}

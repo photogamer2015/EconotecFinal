@@ -1779,6 +1779,35 @@
                         </div>
                     </div>
                 {% endif %}
+                {% if es_tecnico and notificaciones_tecnico_count > 0 %}
+                    <div class="noti-bell-wrap">
+                        <button type="button" class="noti-bell-btn" id="tecnico-bell-btn" aria-expanded="false" aria-controls="tecnico-bell-menu" title="Equipos que una asesora te pide revisar">
+                            🔔
+                            <span class="noti-bell-count">{{ notificaciones_tecnico_count }}</span>
+                        </button>
+                        <div class="noti-menu" id="tecnico-bell-menu">
+                            <div class="noti-menu-head">
+                                <strong>Equipos por revisar</strong>
+                                <span>{{ notificaciones_tecnico_count }} pendiente{{ notificaciones_tecnico_count|pluralize }}</span>
+                            </div>
+                            <div class="noti-menu-list">
+                                {% for notificacion in notificaciones_tecnico_preview %}
+                                    <a href="{% url 'econotec:notificaciones_tecnico' %}" class="noti-item">
+                                        <div class="noti-item-title">
+                                            <span>{{ notificacion.ingreso.codigo_equipo }} — {{ notificacion.ingreso.cliente.nombres|truncatechars:24 }}</span>
+                                            <span class="noti-item-value">${{ notificacion.saldo_pendiente|floatformat:2 }}</span>
+                                        </div>
+                                        <div class="noti-item-meta">
+                                            Notificó {{ notificacion.creado_por.get_full_name|default:notificacion.creado_por.username|default:"una asesora" }}
+                                            · {{ notificacion.creado|date:"d/m/Y H:i" }}
+                                        </div>
+                                    </a>
+                                {% endfor %}
+                            </div>
+                            <a href="{% url 'econotec:notificaciones_tecnico' %}" class="noti-menu-foot">Ver todas</a>
+                        </div>
+                    </div>
+                {% endif %}
                 {% if alertas_total_count > 0 %}
                     <a href="{% url 'econotec:bienvenida' %}" class="alert-badge-link"
                        title="Tienes alertas pendientes: ver dashboard">
@@ -2103,6 +2132,7 @@
             });
         }
         activarMenuNotificaciones('noti-bell-btn', 'noti-bell-menu');
+        activarMenuNotificaciones('tecnico-bell-btn', 'tecnico-bell-menu');
         activarMenuNotificaciones('inventario-admin-bell-btn', 'inventario-admin-bell-menu');
         activarMenuNotificaciones('revision-admin-bell-btn', 'revision-admin-bell-menu');
         activarMenuNotificaciones('cambios-admin-bell-btn', 'cambios-admin-bell-menu');
@@ -2172,6 +2202,17 @@
         function confirmarCierre(event, form, codigo, tieneBodegaje = false, montoBod = 0, diasBod = 0) {
             event.preventDefault();
 
+            // Primero «¿A quién pertenece esta salida?»; esa ventana ya confirma la salida.
+            const asesoraYaElegida = form.dataset.asesoraElegida === '1';
+            delete form.dataset.asesoraElegida;
+            if (!asesoraYaElegida && typeof window.pedirAsesoraSalida === 'function') {
+                window.pedirAsesoraSalida(form, codigo, function () {
+                    form.dataset.asesoraElegida = '1';
+                    confirmarCierre({ preventDefault: function () {} }, form, codigo, tieneBodegaje, montoBod, diasBod);
+                });
+                return;
+            }
+
             if (tieneBodegaje && tieneBodegaje !== 'false') {
                 // Texto con el monto y días reales del bodegaje acumulado
                 const montoFmt = (parseFloat(montoBod) || 0).toFixed(2);
@@ -2238,6 +2279,12 @@
                         });
                     }
                 });
+            } else if (asesoraYaElegida) {
+                // Ya se confirmó en «¿A quién pertenece esta salida?».
+                const campoBodegaje = form.querySelector('input[type=hidden][name=aplicar_bodegaje]');
+                if (campoBodegaje) campoBodegaje.value = '';
+                limpiarBodegajePersonalizado(form);
+                form.submit();
             } else {
                 Swal.fire({
                     title: '¿Confirmar que el equipo ' + codigo + ' salió de la oficina?',
@@ -2456,6 +2503,8 @@
             }
         });
     </script>
+
+    {% include 'includes/saldo_pendiente_salida.html' %}
 
     <!-- Modal Cobro de Bodegaje -->
     <style>

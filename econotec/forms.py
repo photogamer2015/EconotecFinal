@@ -1532,6 +1532,11 @@ class SalidaEquipoForm(RetencionFacturaFormMixin, forms.ModelForm):
     ESTADO_REVISION = 'revision'
     # En Revisión el valor adicional es opcional y se suma al valor acordado.
     ESTADOS_COBRO_ADICIONAL = ('pendiente_retiro', *ESTADOS_REVISION_PENDIENTE, ESTADO_REVISION)
+    # «Cliente no quiso reparar» (directo o como subcategoría de Revisión):
+    # hay que elegir Sí o No en el valor adicional; con Sí se sugieren $5.
+    ESTADO_NO_QUISO = 'cliente_no_acepta'
+    VALOR_ADICIONAL_NO_QUISO = Decimal('5.00')
+    MOTIVO_ADICIONAL_NO_QUISO = 'Cliente no quiso reparar'
 
     reporte_tecnico = forms.CharField(
         widget=forms.Textarea(attrs={
@@ -1655,6 +1660,7 @@ class SalidaEquipoForm(RetencionFacturaFormMixin, forms.ModelForm):
         self._subestado_revision_elegido = ''
         self._preparar_campos_retencion()
         self.fields['aplica_valor_acordado_adicional'].choices = [
+            ('', '— Elige Sí o No —'),
             ('no', 'No'),
             ('si', 'Sí'),
         ]
@@ -2090,12 +2096,20 @@ class SalidaEquipoForm(RetencionFacturaFormMixin, forms.ModelForm):
             if self.instance.tiene_valor_acordado_adicional:
                 valor_adicional = self.instance.valor_acordado_adicional
         elif estado_reparacion in self.ESTADOS_COBRO_ADICIONAL:
-            aplica_adicional = cleaned.get('aplica_valor_acordado_adicional') or 'no'
+            es_no_quiso = self.ESTADO_NO_QUISO in (estado_reparacion, self._subestado_revision_elegido)
+            aplica_adicional = cleaned.get('aplica_valor_acordado_adicional') or ''
+            if es_no_quiso and aplica_adicional not in ('si', 'no'):
+                self.add_error(
+                    'aplica_valor_acordado_adicional',
+                    'Cliente no quiso reparar: elige Sí o No en el valor adicional.',
+                )
             if aplica_adicional == 'si':
                 valor_adicional = cleaned.get('valor_acordado_adicional') or Decimal('0.00')
                 motivo_adicional = (
                     cleaned.get('motivo_valor_acordado_adicional') or ''
                 ).strip()
+                if es_no_quiso and not motivo_adicional:
+                    motivo_adicional = self.MOTIVO_ADICIONAL_NO_QUISO
                 if valor_adicional < Decimal('0.01'):
                     self.add_error(
                         'valor_acordado_adicional',

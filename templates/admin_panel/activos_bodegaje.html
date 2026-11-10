@@ -86,6 +86,8 @@
                                 </button>
                                 {% endif %}
 
+                                {# La salida de la oficina la confirma la asesora o el administrador; el técnico ya no. #}
+                                {% if puede_confirmar_salida_fisica %}
                                 <form method="post" action="{% url 'econotec:salida_marcar_retirada' item.salida.pk %}" style="margin:0; min-width:0;"
                                       onsubmit="{% if item.salida.ingreso.diferencia > 0 %}event.preventDefault(); Swal.fire({icon: 'error', title: 'Saldo Pendiente', text: 'No se puede retirar. El cliente tiene un saldo pendiente de {{ item.salida.ingreso.diferencia|dinero_signo }}. Debe pagar todo antes de retirar el equipo.', confirmButtonColor: '#d33'}); return false;{% else %}confirmarCierre(event, this, '{{ item.salida.ingreso.codigo_equipo }}', {% if item.monto_bodegaje > 0 %}true{% else %}false{% endif %}, {{ item.monto_bodegaje|default:0|stringformat:'.2f' }}, {{ item.dias_bodegaje|default:0 }});{% endif %}">
                                     {% csrf_token %}
@@ -94,6 +96,7 @@
                                         ✅ Cliente Retiró
                                     </button>
                                 </form>
+                                {% endif %}
 
                                 {% if es_admin %}
                                 <button type="button" class="btn btn-danger btn-sm" onclick="cambiarEstado({{ item.salida.pk }}, 'chatarrerizacion')">

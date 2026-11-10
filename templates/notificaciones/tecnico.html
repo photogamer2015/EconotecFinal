@@ -1,0 +1,98 @@
+{% extends 'base.html' %}
+{% load econotec_extras %}
+
+{% block title %}Notificaciones del técnico — Econotec{% endblock %}
+
+{% block content %}
+<style>
+    .notec-wrap { max-width: 980px; margin: 0 auto; }
+    .notec-tabs { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0 18px; }
+    .notec-tab {
+        padding: 8px 12px; border: 1px solid var(--border-color); border-radius: 999px;
+        text-decoration: none; color: var(--text-main); font-weight: 800; font-size: 13px;
+        background: var(--card-bg);
+    }
+    .notec-tab.active { border-color: var(--primary); color: var(--primary-dark); background: var(--primary-light); }
+    .notec-list { display: grid; gap: 12px; }
+    .notec-card {
+        background: var(--card-bg); border: 1px solid var(--border-color);
+        border-left: 4px solid var(--primary); border-radius: 10px; padding: 16px;
+        box-shadow: 0 3px 10px rgba(0,0,0,0.05);
+    }
+    .notec-card.leida { border-left-color: #9ca3af; opacity: 0.8; }
+    .notec-card.pagado { border-left-color: #16a34a; opacity: 1; }
+    .notec-title { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; margin-bottom: 8px; }
+    .notec-title strong { font-size: 16px; color: var(--text-main); }
+    .notec-meta { color: var(--text-muted); font-size: 13px; line-height: 1.45; }
+    .notec-valor { color: var(--danger); font-weight: 900; font-size: 18px; white-space: nowrap; text-align: right; }
+    .notec-valor.pagado { color: var(--success); }
+    .notec-valor small { display: block; font-size: 11px; font-weight: 800; }
+    .notec-msg {
+        margin: 12px 0; padding: 11px 12px; border-radius: 8px; background: #fff3cd;
+        color: #856404; font-weight: 700; line-height: 1.35;
+    }
+    .notec-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+    .notec-actions .btn { font-size: 12px; padding: 8px 12px; }
+    .notec-empty {
+        background: var(--card-bg); border: 1px dashed var(--border-color); border-radius: 10px;
+        padding: 26px; color: var(--text-muted); text-align: center; font-weight: 800;
+    }
+</style>
+
+<div class="crumb">
+    <a href="{% url 'econotec:bienvenida' %}">Inicio</a> / Notificaciones del técnico
+</div>
+
+<div class="notec-wrap">
+    <h2 class="page-title">Notificaciones <span class="accent">del técnico</span></h2>
+    <p class="page-subtitle">
+        {% if admin_notificaciones %}Avisos que las asesoras enviaron a los técnicos por equipos con saldo pendiente.
+        {% else %}Equipos que una asesora te pide revisar porque tienen saldo pendiente.{% endif %}
+    </p>
+
+    <div class="notec-tabs">
+        <a class="notec-tab {% if estado_filtro == 'pendientes' %}active{% endif %}" href="?estado=pendientes">Pendientes ({{ total_pendientes }})</a>
+        <a class="notec-tab {% if estado_filtro == 'vistas' %}active{% endif %}" href="?estado=vistas">Vistas ({{ total_vistas }})</a>
+        <a class="notec-tab {% if estado_filtro == 'todas' %}active{% endif %}" href="?estado=todas">Todas</a>
+    </div>
+
+    {% if notificaciones %}
+    <div class="notec-list">
+        {% for n in notificaciones %}
+        <div class="notec-card{% if n.leida %} leida{% endif %}{% if n.ingreso.diferencia <= 0 %} pagado{% endif %}">
+            <div class="notec-title">
+                <div>
+                    <strong>{{ n.ingreso.codigo_equipo }} — {{ n.ingreso.cliente.nombres }}</strong>
+                    <div class="notec-meta">
+                        {{ n.ingreso.tipo_equipo_display }} — {{ n.ingreso.marca }}
+                        · Notificó {{ n.creado_por.get_full_name|default:n.creado_por.username|default:"una asesora" }}
+                        {% if admin_notificaciones %}· Técnico: {{ n.tecnico.get_full_name|default:n.tecnico.username }}{% endif %}
+                        · {{ n.creado|date:"d/m/Y H:i" }}
+                    </div>
+                </div>
+                <div class="notec-valor{% if n.ingreso.diferencia <= 0 %} pagado{% endif %}">
+                    {% if n.ingreso.diferencia <= 0 %}Pagado ✔<small>Ya no tiene saldo</small>
+                    {% else %}{{ n.ingreso.diferencia|dinero_signo }}<small>Saldo pendiente hoy</small>{% endif %}
+                </div>
+            </div>
+
+            <div class="notec-msg">{{ n.mensaje }}</div>
+
+            <div class="notec-actions">
+                <a class="btn btn-secondary" href="{% url 'econotec:ingreso_detalle' pk=n.ingreso.pk %}">Ver equipo</a>
+                <a class="btn btn-primary" href="{% url 'econotec:ingreso_abonos' pk=n.ingreso.pk %}">Ver abonos / pagos</a>
+                {% if not n.leida %}
+                <form method="post" action="{% url 'econotec:notificacion_tecnico_marcar_vista' pk=n.pk %}">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-secondary">Marcar como vista</button>
+                </form>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+        <div class="notec-empty">No hay notificaciones para este filtro.</div>
+    {% endif %}
+</div>
+{% endblock %}

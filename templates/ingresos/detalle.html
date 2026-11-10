@@ -1394,9 +1394,10 @@
                 {% if ingreso.sede != 'ventas' %}
                     {% if salida %}
                         <a href="{% url 'econotec:salida_editar' pk=salida.pk %}" class="btn btn-warning">✅ Editar finalización</a>
-                        {% if salida.pendiente_de_retiro_fisico and not ingreso.retirado_por_cliente %}
+                        {# La salida de la oficina la confirma la asesora o el administrador; el técnico ya no. #}
+                        {% if puede_confirmar_salida_fisica and salida.pendiente_de_retiro_fisico and not ingreso.retirado_por_cliente %}
                             {% if ingreso.diferencia > 0 %}
-                                <button type="button" class="btn btn-salida-bloqueada" onclick="alertaSaldoPendienteRetiro()" title="Saldo pendiente: {{ ingreso.diferencia|dinero_signo }}">
+                                <button type="button" class="btn btn-salida-bloqueada" {% include 'includes/saldo_pendiente_datos.html' %} onclick="alertaSaldoPendienteSalida(event, this)" title="Saldo pendiente: {{ ingreso.diferencia|dinero_signo }}">
                                     💳 Retirar equipo — saldo pendiente
                                 </button>
                             {% else %}
