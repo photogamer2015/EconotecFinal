@@ -326,19 +326,29 @@ class EconoBotTests(TestCase):
 
     # ── Salida física ────────────────────────────────────────────────
     def test_confirma_salida_fisica_sin_saldo(self):
+        # La salida de la oficina la confirma la asesora, no el técnico.
+        self.entrar(self.asesora)
         ingreso = self.crear_ingreso(valor_acordado=Decimal('0.00'))
         salida = self.crear_salida(ingreso)
         datos = self.chat(f'confirmar salida {ingreso.codigo_equipo}')
+        self.assertIn('¿A quién pertenece esta salida?', datos['reply'])
+        datos = self.chat('Kimberly')
         self.assertIn('Salida física de', datos['reply'])
+        self.assertIn('Salida de: Kimberly', datos['reply'])
         datos = self.chat('sí')
         self.assertIn('Salida de la oficina confirmada', datos['reply'])
         salida.refresh_from_db()
         self.assertEqual(salida.fecha_retiro_real, date.today())
         self.assertEqual(salida.estado_reparacion, 'retirado')
+        self.assertEqual(salida.retiro_confirmado_por, self.asesora)
 
     def test_salida_fisica_bloqueada_con_saldo(self):
         ingreso = self.crear_ingreso(valor_acordado=Decimal('40.00'))
         salida = self.crear_salida(ingreso)
+        # El técnico ya no confirma salidas de la oficina.
+        datos = self.chat(f'confirmar salida {ingreso.codigo_equipo}')
+        self.assertIn('la confirma una asesora', datos['reply'])
+        self.entrar(self.asesora)
         datos = self.chat(f'confirmar salida {ingreso.codigo_equipo}')
         self.assertIn('saldo pendiente', datos['reply'])
         self.assertFalse(datos['pending'])
@@ -346,9 +356,12 @@ class EconoBotTests(TestCase):
         self.assertIsNone(salida.fecha_retiro_real)
 
     def test_salida_fisica_cobra_bodegaje(self):
+        # La salida de la oficina la confirma la asesora, no el técnico.
+        self.entrar(self.asesora)
         ingreso = self.crear_ingreso(valor_acordado=Decimal('0.00'))
         salida = self.crear_salida(ingreso, fecha_salida=date.today() - timedelta(days=6))
-        datos = self.chat(f'confirmar salida {ingreso.codigo_equipo}')
+        self.chat(f'confirmar salida {ingreso.codigo_equipo}')
+        datos = self.chat('Kimberly')
         self.assertIn('bodegaje', datos['reply'])
         datos = self.conversar('cobrar', 'efectivo')
         self.assertIn('se cobran $2,00', datos['reply'])
@@ -422,9 +435,12 @@ class EconoBotTests(TestCase):
         self.assertEqual(len(mail.outbox), 1)
 
     def test_request_id_evita_repetir_una_accion(self):
+        # La salida de la oficina la confirma la asesora, no el técnico.
+        self.entrar(self.asesora)
         ingreso = self.crear_ingreso(valor_acordado=Decimal('0.00'))
         self.crear_salida(ingreso)
         self.chat(f'confirmar salida {ingreso.codigo_equipo}')
+        self.chat('Kimberly')
         primero = self.chat('sí', request_id='abc-123')
         repetido = self.chat('sí', request_id='abc-123')
         self.assertEqual(primero, repetido)

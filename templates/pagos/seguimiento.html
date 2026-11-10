@@ -81,6 +81,28 @@
         font-weight: 800;
         box-shadow: var(--shadow);
     }
+    /* Forma de pago + botón de Excel. */
+    .sp-filtros-extra {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        margin-top: 10px;
+    }
+    .sp-filtros-extra .sp-tabs { margin-top: 0; align-items: center; }
+    .sp-formas-lbl { padding: 0 6px 0 8px; color: var(--text-muted); font-size: 13px; font-weight: 700; }
+    .sp-excel { white-space: nowrap; }
+    .sp-filtro-aviso {
+        margin: 10px 0 0;
+        padding: 8px 12px;
+        border-radius: 10px;
+        background: var(--tint-blue-bg);
+        color: var(--tint-blue-fg);
+        font-size: 13px;
+        font-weight: 600;
+    }
+    .sp-filtro-aviso a { color: inherit; font-weight: 800; }
 
     .sp-resumen {
         display: grid;
@@ -584,6 +606,8 @@
     @media (max-width: 760px) {
         .sp-hojas { position: static; padding-right: 8px; }
         .sp-tabs, .sp-vistas { width: auto; }
+        .sp-formas-lbl { flex-basis: 100%; padding: 4px 6px 2px; }
+        .sp-excel { width: 100%; text-align: center; }
         .sp-tabs a { flex: 1 1 auto; text-align: center; padding: 8px 10px; }
         .sp-vistas a { flex: 1 1 auto; justify-content: center; padding: 9px 12px; font-size: 14px; }
         .sp-caja-op { display: none; }
@@ -615,15 +639,29 @@
 
     <nav class="sp-vistas" aria-label="Tipo de seguimiento">
         {% for valor, nombre in tipos %}
-        <a href="?semana={{ lunes|date:'Y-m-d' }}&amp;tipo={{ valor }}{% if sede %}&amp;sede={{ sede }}{% endif %}"{% if valor == tipo %} class="is-activa" aria-current="page"{% endif %}>{% if valor == 'total' %}📊{% elif valor == 'equipo' %}🔧{% else %}🛒{% endif %} {{ nombre }}</a>
+        <a href="?semana={{ lunes|date:'Y-m-d' }}&amp;tipo={{ valor }}{% if sede %}&amp;sede={{ sede }}{% endif %}{% if forma_pago %}&amp;forma_pago={{ forma_pago }}{% endif %}"{% if valor == tipo %} class="is-activa" aria-current="page"{% endif %}>{% if valor == 'total' %}📊{% elif valor == 'equipo' %}🔧{% else %}🛒{% endif %} {{ nombre }}</a>
         {% endfor %}
     </nav>
 
     <nav class="sp-tabs" aria-label="Sede">
         {% for valor, nombre in sedes %}
-        <a href="?semana={{ lunes|date:'Y-m-d' }}&amp;tipo={{ tipo }}{% if valor %}&amp;sede={{ valor }}{% endif %}"{% if valor == sede %} class="is-activa" aria-current="page"{% endif %}>{% if not valor %}📋 {% endif %}{{ nombre }}</a>
+        <a href="?semana={{ lunes|date:'Y-m-d' }}&amp;tipo={{ tipo }}{% if valor %}&amp;sede={{ valor }}{% endif %}{% if forma_pago %}&amp;forma_pago={{ forma_pago }}{% endif %}"{% if valor == sede %} class="is-activa" aria-current="page"{% endif %}>{% if not valor %}📋 {% endif %}{{ nombre }}</a>
         {% endfor %}
     </nav>
+
+    <div class="sp-filtros-extra">
+        <nav class="sp-tabs sp-formas" aria-label="Forma de pago">
+            <span class="sp-formas-lbl">Forma de pago:</span>
+            {% for valor, nombre in formas_pago %}
+            <a href="?semana={{ lunes|date:'Y-m-d' }}&amp;tipo={{ tipo }}{% if sede %}&amp;sede={{ sede }}{% endif %}{% if valor %}&amp;forma_pago={{ valor }}{% endif %}"{% if valor == forma_pago %} class="is-activa" aria-current="page"{% endif %}>{% if valor == 'efectivo' %}💵 {% elif valor == 'transferencia' %}🏦 {% elif valor == 'tarjeta' %}💳 {% endif %}{{ nombre }}</a>
+            {% endfor %}
+        </nav>
+        <a class="btn btn-success sp-excel" href="{% url 'econotec:seguimiento_pago_excel' %}?semana={{ lunes|date:'Y-m-d' }}{% if filtros_qs %}&amp;{{ filtros_qs }}{% endif %}"
+           title="Descarga en Excel los pagos de esta semana con los filtros elegidos">📥 Descargar Excel de la semana</a>
+    </div>
+    {% if forma_pago %}
+    <p class="sp-filtro-aviso">Mostrando solo los pagos en <strong>{{ forma_pago_nombre }}</strong>. De un pago mixto se muestra solo esa parte. <a href="?semana={{ lunes|date:'Y-m-d' }}&amp;tipo={{ tipo }}{% if sede %}&amp;sede={{ sede }}{% endif %}">Ver todas las formas de pago</a></p>
+    {% endif %}
 </div>
 
 <div class="sp-resumen">
@@ -1022,7 +1060,7 @@
             {% for grupo in meses_pestanas %}
             <div class="sp-hojas-menu-mes">{{ grupo.nombre }}</div>
             {% for p in grupo.pestanas %}
-            <a href="?semana={{ p.iso }}&amp;tipo={{ tipo }}{% if sede %}&amp;sede={{ sede }}{% endif %}"{% if p.activa %} class="is-activa" aria-current="page"{% endif %}>
+            <a href="?semana={{ p.iso }}&amp;tipo={{ tipo }}{% if sede %}&amp;sede={{ sede }}{% endif %}{% if forma_pago %}&amp;forma_pago={{ forma_pago }}{% endif %}"{% if p.activa %} class="is-activa" aria-current="page"{% endif %}>
                 <span>{{ p.etiqueta }}{% if p.actual %} · esta semana{% elif p.futura %} · próxima{% endif %}</span><span>{{ p.total|dinero_signo }}</span>
             </a>
             {% endfor %}
@@ -1032,8 +1070,8 @@
     <button type="button" class="sp-hojas-flecha" data-desplazar="-1" aria-label="Ver semanas más recientes">‹</button>
     <div class="sp-hojas-pestanas" id="sp-hojas-pestanas">
         {% for p in pestanas %}
-        <a class="sp-hoja{% if p.activa %} is-activa{% endif %}" href="?semana={{ p.iso }}&amp;tipo={{ tipo }}{% if sede %}&amp;sede={{ sede }}{% endif %}"
-           title="Semana {{ p.titulo }} · {{ p.resumen }} · {{ p.total|dinero_signo }}"{% if p.activa %} aria-current="page"{% endif %}>
+        <a class="sp-hoja{% if p.activa %} is-activa{% endif %}" href="?semana={{ p.iso }}&amp;tipo={{ tipo }}{% if sede %}&amp;sede={{ sede }}{% endif %}{% if forma_pago %}&amp;forma_pago={{ forma_pago }}{% endif %}"
+           title="Semana {{ p.titulo }} · {{ p.resumen }} · {{ p.total|dinero_signo }}{% if forma_pago %} (todas las formas de pago){% endif %}"{% if p.activa %} aria-current="page"{% endif %}>
             {% if p.actual %}<span class="sp-hoja-actual">Esta semana</span>{% elif p.futura %}<span class="sp-hoja-actual is-futura">Próxima</span>{% endif %}{{ p.etiqueta }}<span class="sp-hoja-total">{{ p.total|dinero_signo }}</span>
         </a>
         {% endfor %}

@@ -384,7 +384,7 @@
 
 {% if lista_salidas_confirmadas %}
 <h2 class="page-title">Salidas físicas <span class="accent">confirmadas</span></h2>
-<p class="page-subtitle">{{ total }} equipo{{ total|pluralize }} con salida física confirmada.</p>
+<p class="page-subtitle">{{ total }} equipo{{ total|pluralize }} con salida física confirmada{% if confirmo_usuario %} por <strong>{{ confirmo_usuario.get_full_name|default:confirmo_usuario.username }}</strong> · <a href="{% url 'econotec:salida_retiros_lista' %}">Ver todas</a>{% endif %}.</p>
 {% else %}
 <h2 class="page-title">Lista de equipos <span class="accent">finalizados</span></h2>
 <p class="page-subtitle">{{ total }} equipo{{ total|pluralize }} finalizado{{ total|pluralize }} aún en la oficina.</p>
@@ -394,6 +394,10 @@
     <form method="get" class="salidas-filter-form" style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
         <input type="text" name="q" value="{{ q }}" placeholder="Buscar por N°, cliente, marca…" class="form-input">
         {% include 'includes/filtro_fecha_rango.html' %}
+        {% if confirmo_filtro %}
+            {# Viene de «Mis salidas de retiro» o del ranking de asesoras: se conserva al volver a filtrar. #}
+            <input type="hidden" name="confirmo" value="{{ confirmo_filtro }}">
+        {% endif %}
         {% if fecha_por_finalizacion %}
             {# Viene de "Ver detalle" del ranking: las fechas siguen siendo de finalización al volver a filtrar. #}
             <input type="hidden" name="fecha_por" value="finalizacion">
@@ -476,7 +480,7 @@
                 <th>Equipo</th>
                 <th>Técnico / Registró</th>
                 <th>Estado</th>
-                <th>Salida de la oficina</th>
+                {% if puede_confirmar_salida_fisica %}<th>Salida de la oficina</th>{% endif %}
                 <th>Cobrado</th>
                 <th>Saldo</th>
                 <th>Acciones</th>
@@ -501,6 +505,8 @@
                     </span>
                 </td>
                 <td data-label="Estado"><span class="badge badge-{{ s.estado_operativo_key }}">{{ s.estado_operativo_display }}</span></td>
+                {# El técnico no ve el apartado de salida de la oficina. #}
+                {% if puede_confirmar_salida_fisica %}
                 <td class="office-exit-cell" data-label="Salida de la oficina">
                     {% if s.cliente_ya_retiro %}
                         <div style="display: flex; gap: 4px; align-items: center; white-space: nowrap;">
@@ -512,6 +518,11 @@
                             </form>
                             {% endif %}
                         </div>
+                        {% if s.retiro_confirmado_por %}
+                            <span style="display:block; margin-top:4px; color: var(--text-muted); font-size: 11px;" title="Asesora a quien pertenece la salida de la oficina">
+                                🚚 Salida de: {{ s.retiro_confirmado_por.first_name|default:s.retiro_confirmado_por.username }}
+                            </span>
+                        {% endif %}
                         {% if s.bodegaje_monto_congelado and s.bodegaje_monto_congelado > 0 %}
                             <span class="bod-mini" style="display:block; margin-top:4px;">
                                 Bodegaje: {{ s.bodegaje_monto_congelado|dinero_signo }}
@@ -521,9 +532,12 @@
                     {% elif s.pendiente_de_retiro_fisico %}
                         <div class="office-exit-content">
                             <span class="pendiente-pill">⏳ Aún en la oficina</span>
+                            {# La salida de la oficina la confirma la asesora o el administrador; el técnico ya no. #}
+                            {% if puede_confirmar_salida_fisica %}
                             <form method="post" action="{% url 'econotec:salida_marcar_retirada' pk=s.pk %}"
                                   class="cerrar-form"
-                                  onsubmit="{% if s.ingreso.diferencia > 0 %}event.preventDefault(); Swal.fire({icon: 'error', title: 'Saldo Pendiente', text: 'No se puede retirar. El cliente tiene un saldo pendiente de {{ s.ingreso.diferencia|dinero_signo }}. Debe pagar todo antes de retirar el equipo.', confirmButtonColor: '#d33'}); return false;{% else %}confirmarCierre(event, this, '{{ s.ingreso.codigo_equipo }}', {% if s.ingreso.bodegaje_pendiente > 0 %}true{% else %}false{% endif %}, {{ s.ingreso.bodegaje_pendiente|default:0|stringformat:'.2f' }}, {{ s.ingreso.bodegaje_dias_pendiente|default:0 }});{% endif %}">
+                                  {% if s.ingreso.diferencia > 0 %}{% include 'includes/saldo_pendiente_datos.html' with ingreso=s.ingreso salida=s %}{% endif %}
+                                  onsubmit="{% if s.ingreso.diferencia > 0 %}return alertaSaldoPendienteSalida(event, this);{% else %}confirmarCierre(event, this, '{{ s.ingreso.codigo_equipo }}', {% if s.ingreso.bodegaje_pendiente > 0 %}true{% else %}false{% endif %}, {{ s.ingreso.bodegaje_pendiente|default:0|stringformat:'.2f' }}, {{ s.ingreso.bodegaje_dias_pendiente|default:0 }});{% endif %}">
                                 {% csrf_token %}
                                 <input type="hidden" name="aplicar_bodegaje" id="aplicar_{{ s.pk }}" value="">
                                 <button type="submit"
@@ -537,11 +551,13 @@
                                     </span>
                                 </button>
                             </form>
+                            {% endif %}
                         </div>
                     {% else %}
                         <span style="color: var(--text-muted); font-size: 11px;">N/A</span>
                     {% endif %}
                 </td>
+                {% endif %}
                 <td data-label="Cobrado">
                     {{ s.ingreso.total_abonado|dinero_signo }}
                     {% if s.ingreso.resumen_metodos_pago %}

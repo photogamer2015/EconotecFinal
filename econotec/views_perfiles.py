@@ -5,7 +5,7 @@ from django.contrib.auth.decorators import login_required
 from django.db.models import Q
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST, require_http_methods
-from .models import PerfilSocial
+from .models import PerfilSocial, SalidaEquipo
 from .gamificacion import nivel_por_puntos
 from .views import datos_perfil
 from .permisos import es_admin, es_asesor, es_asistente_caja, es_tecnico
@@ -19,6 +19,10 @@ class PerfilForm(forms.ModelForm):
                    'avatar': forms.RadioSelect, 'portada': forms.RadioSelect}
         help_texts = {'musica': 'Separa tus géneros o artistas con comas.',
                       'hobbies': 'Separa tus intereses con comas.'}
+
+
+# Filas de la tabla «Mis salidas de retiro»; el resto se ve en la lista completa.
+LIMITE_TABLA_RETIROS = 300
 
 
 def rol(usuario):
@@ -59,7 +63,20 @@ def perfil(request, usuario_id=None):
     umbral = nivel_por_puntos(operativo['total'])['desde']
     operativo['porcentaje'] = round(100 * (operativo['total'] - umbral) / (proximo - umbral)) if proximo else 100
     amigos = personal.amigos.filter(usuario__is_active=True).select_related('usuario')
+    # Salidas de retiro (salidas de la oficina) confirmadas por la asesora:
+    # las ve ella en su perfil y el administrador.
+    retiros_asesora = None
+    if es_asesor(usuario) and (propio or es_admin(request.user)):
+        qs_retiros = (
+            SalidaEquipo.objects
+            .filter(retiro_confirmado_por=usuario, fecha_retiro_real__isnull=False)
+            .select_related('ingreso', 'ingreso__cliente', 'ingreso__tecnico_encargado', 'tecnico_reparo')
+            .order_by('-fecha_retiro_real', '-pk')
+        )
+        retiros_asesora = {'total': qs_retiros.count(), 'salidas': list(qs_retiros[:LIMITE_TABLA_RETIROS])}
+        retiros_asesora['recortada'] = retiros_asesora['total'] > LIMITE_TABLA_RETIROS
     return render(request, 'perfiles/perfil.html', {
+        'retiros_asesora': retiros_asesora,
         'operativo': operativo, 'personal': personal, 'persona': usuario, 'propio': propio, 'rol_perfil': rol(usuario),
         'form': form, 'avatares': PerfilSocial.AVATARES, 'amigos': amigos,
         'editores': [('avatar', 'Cambiar avatar', formularios['avatar']),

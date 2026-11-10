@@ -2662,7 +2662,28 @@
             var esReparado = estadoFinal === 'pendiente_retiro';
 
             mostrar('fin-cobro-adicional', esNegativo);
-            if (!esNegativo && aplica) aplica.value = 'no';
+            // Cliente no quiso reparar: hay que elegir Sí o No (con Sí se sugieren $5).
+            var esNoQuiso = estadoFinal === 'cliente_no_acepta';
+            if (aplica) {
+                if (!esNegativo) {
+                    aplica.value = 'no';
+                } else if (esNoQuiso && !adicionalElegido && aplica.value === 'no') {
+                    aplica.value = '';
+                } else if (!esNoQuiso && aplica.value === '') {
+                    aplica.value = 'no';
+                }
+                requerido(aplica, esNoQuiso);
+            }
+            var tituloAdicional = document.getElementById('fin-cobro-adicional-titulo');
+            if (tituloAdicional) {
+                tituloAdicional.textContent = esNoQuiso ? 'Valor adicional (obligatorio elegir Sí o No)' : 'Cobro adicional opcional';
+            }
+            var ayudaAdicional = document.getElementById('fin-ayuda-sin-cobro');
+            if (ayudaAdicional) {
+                ayudaAdicional.textContent = esNoQuiso
+                    ? 'Elige Sí o No. Con Sí se ponen $5,00 de valor adicional; puedes cambiar el valor.'
+                    : 'Este resultado no cobra nada automáticamente.';
+            }
             var usaAdicional = esNegativo && aplica && aplica.value === 'si';
             mostrar('fin-detalle-adicional', usaAdicional);
             requerido(valorAdicional, usaAdicional);
@@ -2742,6 +2763,22 @@
             mostrar('fin-mixto-error', esMixto && !mixtoValido);
             actualizarFactura();
             if (window.__checkRequired) window.__checkRequired();
+        }
+
+        // Solo cuenta como elegido si se envió el formulario o la persona lo cambió.
+        var adicionalElegido = {% if salida_form.is_bound %}true{% else %}false{% endif %};
+        if (aplica) {
+            aplica.addEventListener('change', function () {
+                adicionalElegido = true;
+                if (estadoSalida.value === 'cliente_no_acepta' && aplica.value === 'si') {
+                    if (valorAdicional && !(numero(valorAdicional) > 0)) {
+                        valorAdicional.value = '{{ salida_form.VALOR_ADICIONAL_NO_QUISO|stringformat:".2f" }}';
+                    }
+                    if (motivoAdicional && !motivoAdicional.value.trim()) {
+                        motivoAdicional.value = '{{ salida_form.MOTIVO_ADICIONAL_NO_QUISO|escapejs }}';
+                    }
+                }
+            });
         }
 
         [

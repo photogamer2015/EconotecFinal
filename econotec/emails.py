@@ -9,7 +9,7 @@ from django.core.mail import EmailMultiAlternatives
 from django.template.loader import render_to_string
 
 from .alertas import COSTO_BODEGAJE_DIA, UMBRAL_DIAS_BODEGAJE
-from .models import Abono, IngresoEquipo, SalidaEquipo
+from .models import Abono, IngresoEquipo, NotificacionTecnico, SalidaEquipo
 from .views_print import (
     _pagos_detallados_ingreso,
     _pagos_detallados_salida,
@@ -477,5 +477,57 @@ def enviar_correo_bodegaje_seguro(salida_pk):
         logger.exception(
             'No se pudo enviar el aviso de bodegaje para salida pk=%s.',
             salida_pk,
+        )
+        return False
+
+
+def enviar_correo_notificacion_tecnico_seguro(notificacion_pk, url_equipo=''):
+    """Avisa por correo al técnico que una asesora le pide revisar un equipo.
+
+    Devuelve False (sin romper nada) si el técnico no tiene correo o falla el envío.
+    """
+    from django.utils.html import format_html
+
+    try:
+        notificacion = NotificacionTecnico.objects.select_related(
+            'ingreso', 'ingreso__cliente', 'tecnico', 'creado_por',
+        ).get(pk=notificacion_pk)
+        destino = (notificacion.tecnico.email or '').strip()
+        if not destino:
+            return False
+
+        ingreso = notificacion.ingreso
+        quien = _nombre_usuario(notificacion.creado_por) if notificacion.creado_por else 'Una asesora'
+        asunto = f'Revisar equipo {ingreso.codigo_equipo}: saldo pendiente | Econotec'
+        texto = (
+            f'Hola {_nombre_usuario(notificacion.tecnico)}:\n\n'
+            f'{quien} te pide revisar este equipo.\n\n'
+            f'{notificacion.mensaje}\n\n'
+            f'Saldo pendiente: ${_dinero_es(notificacion.saldo_pendiente)}\n'
+            + (f'Ver equipo: {url_equipo}\n' if url_equipo else '')
+            + '\nEconotec'
+        )
+        html = format_html(
+            '<p>Hola {}:</p><p><strong>{}</strong> te pide revisar este equipo.</p>'
+            '<p>{}</p><p>Saldo pendiente: <strong>${}</strong></p>{}<p>Econotec</p>',
+            _nombre_usuario(notificacion.tecnico),
+            quien,
+            notificacion.mensaje,
+            _dinero_es(notificacion.saldo_pendiente),
+            format_html('<p><a href="{}">Ver equipo {}</a></p>', url_equipo, ingreso.codigo_equipo)
+            if url_equipo else '',
+        )
+        correo = EmailMultiAlternatives(
+            subject=asunto,
+            body=texto,
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            to=[destino],
+        )
+        correo.attach_alternative(html, 'text/html')
+        return bool(correo.send(fail_silently=False))
+    except Exception:
+        logger.exception(
+            'No se pudo enviar el aviso al técnico para la notificación pk=%s.',
+            notificacion_pk,
         )
         return False

@@ -119,6 +119,12 @@ def puede_gestionar_inventario(user):
     return es_admin(user) or es_tecnico(user) or es_asistente_caja(user)
 
 
+def puede_confirmar_salida_fisica(user):
+    """Puede confirmar la salida de la oficina (salida de retiro) de un equipo.
+    → Admin o Asesora (incluida la Asistente de caja). El técnico ya no."""
+    return es_admin(user) or es_asesor(user)
+
+
 def puede_ver_valores_ranking(user):
     """Puede ver importes dentro del Ranking de Técnicos.
 

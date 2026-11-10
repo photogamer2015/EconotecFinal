@@ -22,6 +22,7 @@ from .permisos import (
     puede_gestionar_pagos as _puede_gestionar_pagos,
     puede_ver_ranking as _puede_ver_ranking,
     puede_ver_seguimiento_pago as _puede_ver_seguimiento_pago,
+    puede_confirmar_salida_fisica as _puede_confirmar_salida_fisica,
     puede_ver_valores_ranking as _puede_ver_valores_ranking,
 )
 
@@ -50,6 +51,9 @@ def roles(request):
             'puede_gestionar_pagos': False,
             'puede_ver_ranking': False,
             'puede_ver_valores_ranking': False,
+            'puede_confirmar_salida_fisica': False,
+            'notificaciones_tecnico_count': 0,
+            'notificaciones_tecnico_preview': [],
             'rol_actual': '',
             'sede_actual': sede_actual,
             'sede_actual_display': sede_actual_display,
@@ -153,6 +157,22 @@ def roles(request):
     except Exception:
         pass
 
+    # Avisos de las asesoras al técnico (equipo con saldo pendiente por revisar).
+    notificaciones_tecnico_count = 0
+    notificaciones_tecnico_preview = []
+    if es_t:
+        try:
+            from .models import NotificacionTecnico
+            qs_notificaciones_tecnico = (
+                NotificacionTecnico.objects
+                .select_related('ingreso', 'ingreso__cliente', 'creado_por')
+                .filter(tecnico=user, leida=False)
+            )
+            notificaciones_tecnico_count = qs_notificaciones_tecnico.count()
+            notificaciones_tecnico_preview = list(qs_notificaciones_tecnico[:3])
+        except Exception:
+            pass
+
     if es_a:
         # Avisos de Revisión (campanita 🔎); antes se crean los de Equipo de
         # prueba que ya cumplieron 5 días.
@@ -188,6 +208,9 @@ def roles(request):
         'puede_gestionar_pagos': _puede_gestionar_pagos(user),
         'puede_ver_ranking': _puede_ver_ranking(user),
         'puede_ver_valores_ranking': _puede_ver_valores_ranking(user),
+        'puede_confirmar_salida_fisica': _puede_confirmar_salida_fisica(user),
+        'notificaciones_tecnico_count': notificaciones_tecnico_count,
+        'notificaciones_tecnico_preview': notificaciones_tecnico_preview,
         'es_asistente_caja': es_caja,
         'puede_ver_seguimiento_pago': es_a or es_caja,
         'rol_actual': rol_actual,

@@ -13,7 +13,7 @@ from ..alertas import (
 )
 from ..busqueda import filtrar_objetos_normalizado, texto_cliente_busqueda, texto_ingreso_busqueda
 from ..models import Cliente, IngresoEquipo, SalidaEquipo, SEDES_EQUIPOS
-from ..permisos import es_admin, es_tecnico
+from ..permisos import es_admin, es_tecnico, puede_confirmar_salida_fisica
 from ..qr_utils import token_para_ingreso
 from ..views_pagos import _puede_editar_valor_acordado_en_pagos
 from . import texto as tx
@@ -135,7 +135,8 @@ def ficha_equipo(request, ingreso):
         if not salida.cliente_ya_retiro:
             enlaces.append(enlace_url('Avisar por WhatsApp que está listo', whatsapp_link_equipo_listo(salida)))
             if ingreso.diferencia <= 0:
-                opciones.append(opcion('🚚 Confirmar salida física', f'confirmar salida {ingreso.codigo_equipo}'))
+                if puede_confirmar_salida_fisica(request.user):
+                    opciones.append(opcion('🚚 Confirmar salida física', f'confirmar salida {ingreso.codigo_equipo}'))
             else:
                 enlaces.append(enlace('Registrar pago', 'abono_crear', ingreso_pk=ingreso.pk))
     opciones.append(opcion('👤 Ver cliente', f'cliente {cliente.cedula}'))
@@ -225,6 +226,9 @@ def finalizados_en_oficina(request, mensaje=''):
 
 
 def salidas_fisicas(request, mensaje=''):
+    if not puede_confirmar_salida_fisica(request.user):
+        return respuesta('Las salidas de la oficina las gestionan las asesoras y el administrador. '
+                         'Tú llegas hasta «equipo finalizado».', [enlace('Equipos finalizados', 'salida_lista')])
     sede = sede_pedida(request, mensaje)
     qs = (SalidaEquipo.objects.select_related('ingreso', 'ingreso__cliente')
           .filter(fecha_retiro_real__isnull=False, ingreso__sede__in=SEDES_EQUIPOS)

@@ -301,7 +301,11 @@ def _procesar_actualizacion(request, ingreso, token):
         ingreso.save(update_fields=['reporte_tecnico', 'reporte_por',
                                     'reporte_actualizado', 'actualizado'])
         registrar_reporte_si_cambio()
-        return redirect('econotec:salida_registrar', ingreso_pk=ingreso.pk)
+        url_salida = reverse('econotec:salida_registrar', kwargs={'ingreso_pk': ingreso.pk})
+        if estado_movil == ESTADO_ENTREGADO_NO_QUISO:
+            # Abre la finalización ya en «Cliente no quiso reparar» (valor adicional Sí/No obligatorio).
+            url_salida += '?estado=revision:cliente_no_acepta'
+        return redirect(url_salida)
 
     # 2) Aplicar el estado.
     if estado_movil == ESTADO_INGRESADO:

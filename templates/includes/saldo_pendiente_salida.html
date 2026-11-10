@@ -1,0 +1,295 @@
+{# Aviso «Saldo Pendiente» al confirmar la salida de la oficina: Pagar saldo pendiente · Notificar al técnico · OK. #}
+{# También la ventana «¿A quién pertenece esta salida?», que se pide en toda salida de la oficina. #}
+{% if puede_confirmar_salida_fisica %}{% load econotec_extras %}
+{% asesoras_salida_opciones as opciones_asesoras_salida %}
+{{ opciones_asesoras_salida|json_script:"asesoras-salida-datos" }}
+<style>
+    .saldo-swal-actions { flex-wrap: wrap; gap: 4px; }
+    .saldo-factura-datos { display: none; }
+    .saldo-ayuda { margin: 4px 0 0; font-size: 12px; }
+    .saldo-ayuda a { color: var(--primary-dark, #c2410c); font-weight: 700; }
+    [data-theme="dark"] .saldo-ayuda a { color: var(--primary, #f97618); }
+</style>
+<div id="saldo-modal" class="bodegaje-modal" role="dialog" aria-modal="true" aria-labelledby="saldo-modal-title">
+    <div class="bodegaje-dialog">
+        <h3 id="saldo-modal-title">💳 Pagar saldo pendiente</h3>
+        <div class="bodegaje-total">
+            <span>Saldo pendiente del equipo <b id="saldo_codigo"></b></span>
+            <strong id="saldo_monto_label">$0.00</strong>
+        </div>
+        <p>Registra el pago completo del saldo. Al guardar, el equipo queda con la <strong>salida de la oficina confirmada</strong>.</p>
+
+        <form id="saldo-form" method="post" action="" novalidate>
+            {% csrf_token %}
+            <input type="hidden" name="accion_abono" value="registrar_y_salida">
+            <input type="hidden" name="fecha" value="{% now 'Y-m-d' %}">
+            <input type="hidden" name="monto" id="saldo_monto" value="">
+            <input type="hidden" name="bodegaje_decision" value="na">
+
+            <div class="bod-field">
+                <label for="saldo_metodo">Método de pago *</label>
+                <select id="saldo_metodo" name="metodo" class="form-input">
+                    <option value="efectivo">Efectivo</option>
+                    <option value="transferencia">Transferencia bancaria</option>
+                    <option value="tarjeta">Tarjeta de crédito / Débito</option>
+                </select>
+            </div>
+            <div id="saldo_wrap_banco" class="bod-field" style="display:none;">
+                <label for="saldo_banco">Banco *</label>
+                <select id="saldo_banco" name="banco" class="form-input">
+                    <option value="">— Selecciona un banco —</option>
+                    <option value="pichincha">Banco Pichincha</option>
+                    <option value="guayaquil">Banco Guayaquil</option>
+                    <option value="produbanco">Produbanco</option>
+                    <option value="pacifico">Banco Pacífico</option>
+                    <option value="interbancaria">Interbancaria</option>
+                    <option value="otro">Otro banco</option>
+                </select>
+            </div>
+            <div id="saldo_wrap_banco_otro" class="bod-field" style="display:none;">
+                <label for="saldo_banco_otro">Nombre del banco *</label>
+                <input type="text" id="saldo_banco_otro" name="banco_otro" class="form-input" maxlength="100" placeholder="Escribe el nombre completo">
+            </div>
+            <div id="saldo_wrap_tarjeta" class="bod-field" style="display:none;">
+                <label for="saldo_tarjeta_app">Tarjeta / App *</label>
+                <select id="saldo_tarjeta_app" name="tarjeta_app" class="form-input">
+                    <option value="">— Selecciona una opción —</option>
+                    <option value="payphone">Payphone</option>
+                    <option value="deuna">Deuna</option>
+                </select>
+            </div>
+            <div id="saldo_wrap_comprobante" class="bod-field" style="display:none;">
+                <label for="saldo_comprobante_url">Link del comprobante (opcional)</label>
+                <input type="url" id="saldo_comprobante_url" name="comprobante_url" class="form-input" placeholder="https://...">
+            </div>
+
+            <div class="bod-field">
+                <label for="saldo_asesora">¿A quién pertenece esta salida? *</label>
+                <select id="saldo_asesora" name="asesora_salida" class="form-input">
+                    <option value="">— Selecciona la asesora —</option>
+                    {% for a in opciones_asesoras_salida %}<option value="{{ a.id }}">{{ a.nombre }}</option>{% endfor %}
+                </select>
+            </div>
+
+            <div class="bod-field">
+                <label for="saldo_factura">¿Factura con datos? *</label>
+                <select id="saldo_factura" name="factura_realizada" class="form-input">
+                    <option value="no">No</option>
+                    <option value="si">Sí</option>
+                </select>
+            </div>
+            <div id="saldo_factura_datos" class="saldo-factura-datos">
+                <div class="bod-field">
+                    <label for="saldo_factura_nombres">Nombres / Razón Social *</label>
+                    <input type="text" id="saldo_factura_nombres" name="factura_nombres" class="form-input" maxlength="100">
+                </div>
+                <div class="bod-field">
+                    <label for="saldo_factura_cedula">Número de cédula / RUC *</label>
+                    <input type="text" id="saldo_factura_cedula" name="factura_cedula" class="form-input" maxlength="20" inputmode="numeric">
+                </div>
+                <div class="bod-field">
+                    <label for="saldo_factura_correo">Correo electrónico *</label>
+                    <input type="email" id="saldo_factura_correo" name="factura_correo" class="form-input">
+                </div>
+            </div>
+
+            <p class="saldo-ayuda">
+                ¿Abono parcial, pago mixto o retención?
+                <a id="saldo_form_completo" href="#">Abrir el formulario completo de abono</a>.
+            </p>
+            <div id="saldo_error" class="bod-error" role="alert" aria-live="assertive"></div>
+            <div class="bod-actions">
+                <button type="button" class="btn btn-secondary" onclick="cerrarModalSaldoPendiente()">Cancelar</button>
+                <button type="submit" id="saldo_submit" class="btn btn-primary">Guardar pago y dar salida</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+    // «¿A quién pertenece esta salida?»: elige la asesora a la que le cuenta la
+    // salida de la oficina y la guarda en el formulario como `asesora_salida`.
+    window.pedirAsesoraSalida = function (form, codigo, continuar) {
+        let asesoras = [];
+        try { asesoras = JSON.parse(document.getElementById('asesoras-salida-datos').textContent) || []; } catch (e) { asesoras = []; }
+        const opciones = new Map(asesoras.map(function (a) { return [String(a.id), a.nombre]; }));
+        const propia = asesoras.some(function (a) { return String(a.id) === '{{ request.user.pk }}'; }) ? '{{ request.user.pk }}' : '';
+        Swal.fire({
+            icon: 'question',
+            title: '¿A quién pertenece esta salida?',
+            html: 'Equipo <b>' + codigo + '</b>. Elige la asesora que realizó la salida de la oficina: '
+                + 'la salida se le suma en su perfil y en el ranking.',
+            input: 'select',
+            inputOptions: opciones,
+            inputPlaceholder: '— Selecciona la asesora —',
+            inputValue: propia,
+            showCancelButton: true,
+            confirmButtonText: 'Confirmar salida',
+            cancelButtonText: 'Cancelar',
+            confirmButtonColor: '#2e7d32',
+            cancelButtonColor: '#888',
+            inputValidator: function (valor) {
+                return valor ? null : 'Selecciona a qué asesora pertenece la salida.';
+            }
+        }).then(function (resultado) {
+            if (!resultado.isConfirmed) return;
+            let campo = form.querySelector('input[name=asesora_salida]');
+            if (!campo) {
+                campo = document.createElement('input');
+                campo.type = 'hidden';
+                campo.name = 'asesora_salida';
+                form.appendChild(campo);
+            }
+            campo.value = resultado.value;
+            continuar();
+        });
+    };
+
+    (function () {
+        function el(id) { return document.getElementById(id); }
+        function dato(origen, nombre) { return (origen.dataset[nombre] || '').trim(); }
+
+        function toggleCamposSaldo() {
+            const metodo = el('saldo_metodo').value;
+            const banco = el('saldo_banco').value;
+            el('saldo_wrap_banco').style.display = metodo === 'transferencia' ? 'block' : 'none';
+            el('saldo_wrap_banco_otro').style.display = metodo === 'transferencia' && banco === 'otro' ? 'block' : 'none';
+            el('saldo_wrap_comprobante').style.display = metodo === 'transferencia' ? 'block' : 'none';
+            el('saldo_wrap_tarjeta').style.display = metodo === 'tarjeta' ? 'block' : 'none';
+            el('saldo_factura_datos').style.display = el('saldo_factura').value === 'si' ? 'block' : 'none';
+        }
+
+        function errorSaldo(mensaje, campo) {
+            const error = el('saldo_error');
+            error.textContent = mensaje;
+            error.style.display = mensaje ? 'block' : 'none';
+            if (mensaje && campo) campo.focus();
+            return false;
+        }
+
+        function abrirModalSaldoPendiente(origen) {
+            const form = el('saldo-form');
+            form.reset();
+            form.action = dato(origen, 'saldoPagoUrl');
+            el('saldo_monto').value = dato(origen, 'saldoMonto');
+            el('saldo_codigo').textContent = dato(origen, 'saldoCodigo');
+            el('saldo_monto_label').textContent = dato(origen, 'saldoTexto');
+            el('saldo_factura_nombres').value = dato(origen, 'saldoClienteNombres');
+            el('saldo_factura_cedula').value = dato(origen, 'saldoClienteCedula');
+            el('saldo_factura_correo').value = dato(origen, 'saldoClienteCorreo');
+            // Si quien paga es asesora, se propone ella; si no, hay que elegir.
+            const propia = el('saldo_asesora').querySelector('option[value="{{ request.user.pk }}"]');
+            el('saldo_asesora').value = propia ? '{{ request.user.pk }}' : '';
+            el('saldo_form_completo').href = dato(origen, 'saldoPagoUrl');
+            el('saldo_submit').disabled = false;
+            errorSaldo('');
+            toggleCamposSaldo();
+            el('saldo-modal').style.display = 'flex';
+            el('saldo_metodo').focus();
+        }
+
+        window.cerrarModalSaldoPendiente = function () {
+            el('saldo-modal').style.display = 'none';
+        };
+
+        function notificarTecnico(origen) {
+            const token = el('saldo-form').querySelector('[name=csrfmiddlewaretoken]').value;
+            Swal.fire({
+                title: 'Notificando al técnico…',
+                allowOutsideClick: false,
+                allowEscapeKey: false,
+                didOpen: function () {
+                    Swal.showLoading();
+                    fetch(dato(origen, 'saldoNotificarUrl'), {
+                        method: 'POST',
+                        credentials: 'same-origin',
+                        headers: { 'X-CSRFToken': token, 'X-Requested-With': 'XMLHttpRequest' }
+                    }).then(function (respuesta) {
+                        return respuesta.json();
+                    }).catch(function () {
+                        return { ok: false, mensaje: 'No fue posible notificar al técnico. Inténtalo nuevamente.' };
+                    }).then(function (resultado) {
+                        Swal.fire({
+                            icon: resultado.ok ? 'success' : 'warning',
+                            title: resultado.ok ? 'Técnico notificado' : 'No se pudo notificar',
+                            text: resultado.mensaje || '',
+                            confirmButtonText: 'OK',
+                            confirmButtonColor: resultado.ok ? '#2e7d32' : '#f97618'
+                        });
+                    });
+                }
+            });
+        }
+
+        // `origen` es el elemento con los data-saldo-* del equipo.
+        window.alertaSaldoPendienteSalida = function (evento, origen) {
+            if (evento && evento.preventDefault) evento.preventDefault();
+            const tecnico = dato(origen, 'saldoTecnico');
+            Swal.fire({
+                icon: 'error',
+                title: 'Saldo Pendiente',
+                text: 'No se puede retirar. El cliente tiene un saldo pendiente de '
+                    + dato(origen, 'saldoTexto') + '. Debe pagar todo antes de retirar el equipo.',
+                showDenyButton: true,
+                showCancelButton: true,
+                confirmButtonText: '💳 Pagar saldo pendiente',
+                denyButtonText: '🔔 Notificar al técnico',
+                footer: tecnico ? 'Técnico responsable: ' + tecnico : '',
+                width: '40em',
+                cancelButtonText: 'OK',
+                confirmButtonColor: '#2e7d32',
+                denyButtonColor: '#1565c0',
+                cancelButtonColor: '#d33',
+                customClass: { actions: 'saldo-swal-actions' }
+            }).then(function (resultado) {
+                if (resultado.isConfirmed) {
+                    if (dato(origen, 'saldoBodegaje') === '1') {
+                        // Con bodegaje acumulado hay que decidir si se cobra o se perdona:
+                        // eso se hace en el formulario completo de abono.
+                        window.location.assign(dato(origen, 'saldoPagoUrl'));
+                    } else {
+                        abrirModalSaldoPendiente(origen);
+                    }
+                } else if (resultado.isDenied) {
+                    notificarTecnico(origen);
+                }
+            });
+            return false;
+        };
+
+        document.addEventListener('DOMContentLoaded', function () {
+            ['saldo_metodo', 'saldo_banco', 'saldo_factura'].forEach(function (id) {
+                el(id).addEventListener('change', toggleCamposSaldo);
+            });
+            el('saldo-form').addEventListener('submit', function (evento) {
+                const metodo = el('saldo_metodo').value;
+                let valido = true;
+                if (!el('saldo_asesora').value) {
+                    valido = errorSaldo('Elige a qué asesora pertenece esta salida.', el('saldo_asesora'));
+                } else if (metodo === 'transferencia' && !el('saldo_banco').value) {
+                    valido = errorSaldo('Selecciona el banco de la transferencia.', el('saldo_banco'));
+                } else if (metodo === 'transferencia' && el('saldo_banco').value === 'otro' && !el('saldo_banco_otro').value.trim()) {
+                    valido = errorSaldo('Escribe el nombre del banco.', el('saldo_banco_otro'));
+                } else if (metodo === 'tarjeta' && !el('saldo_tarjeta_app').value) {
+                    valido = errorSaldo('Selecciona la tarjeta o aplicación usada.', el('saldo_tarjeta_app'));
+                } else if (el('saldo_factura').value === 'si') {
+                    const cedula = el('saldo_factura_cedula').value.trim();
+                    if (!el('saldo_factura_nombres').value.trim()) {
+                        valido = errorSaldo('Escribe los nombres para la factura.', el('saldo_factura_nombres'));
+                    } else if (!/^[0-9]+$/.test(cedula)) {
+                        valido = errorSaldo('La cédula / RUC debe tener solo números.', el('saldo_factura_cedula'));
+                    } else if (!/^\S+@\S+\.\S+$/.test(el('saldo_factura_correo').value.trim())) {
+                        valido = errorSaldo('Escribe un correo válido para la factura.', el('saldo_factura_correo'));
+                    }
+                }
+                if (!valido) {
+                    evento.preventDefault();
+                    return;
+                }
+                // Evita registrar el pago dos veces con un doble clic.
+                el('saldo_submit').disabled = true;
+            });
+        });
+    })();
+</script>
+{% endif %}

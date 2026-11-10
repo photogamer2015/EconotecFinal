@@ -41,7 +41,7 @@ from .busqueda import (
 from .models import (
     Abono, BitacoraTecnico, CategoriaEgreso, Cliente, Egreso, IngresoEquipo,
     InventarioItem, NotificacionAsesora, NotificacionInventarioAdmin,
-    NotificacionRevisionAdmin, ObservacionEquipo, VentanaObservacionVista, SalidaEquipo, SEDE_PREFIJOS, SEDES_EQUIPOS, TIPOS_EQUIPO,
+    NotificacionRevisionAdmin, NotificacionTecnico, ObservacionEquipo, VentanaObservacionVista, SalidaEquipo, SEDE_PREFIJOS, SEDES_EQUIPOS, TIPOS_EQUIPO,
     UsuarioActividad, VentaInventarioItem,
 )
 from .avisos_cambios import avisar_cambio
@@ -51,11 +51,16 @@ from .date_filters import aplicar_rango_fecha, contexto_rango_fecha, obtener_ran
 from .emails import (
     enviar_correo_finalizacion_seguro,
     enviar_correo_ingreso_seguro,
+    enviar_correo_notificacion_tecnico_seguro,
     enviar_correo_salida_fisica_seguro,
 )
 from .pagination import paginar_resultados
+from . import salida_asesora
 from .sonidos import programar_sonido
-from .permisos import admin_requerido, tecnico_requerido, es_admin, es_asesor, es_tecnico, puede_gestionar_inventario
+from .permisos import (
+    admin_requerido, tecnico_requerido, es_admin, es_asesor, es_tecnico,
+    puede_confirmar_salida_fisica, puede_gestionar_inventario,
+)
 from .gamificacion import (
     PUNTOS_POR_ESTADO_SALIDA,
     PUNTOS_VENTA_PRODUCTO,
@@ -3866,11 +3871,23 @@ def salida_menu(request):
 @tecnico_requerido
 def salida_lista(request, solo_fuera_oficina=False):
     """Lista separada de equipos en oficina o con salida física confirmada."""
+    if solo_fuera_oficina and not puede_confirmar_salida_fisica(request.user):
+        # El técnico llega hasta «equipo finalizado»; la salida es de la asesora.
+        messages.info(
+            request,
+            'Las salidas de la oficina las gestionan las asesoras y el administrador.',
+        )
+        return redirect('econotec:salida_lista')
     q = (request.GET.get('q') or '').strip()
     estado = (request.GET.get('estado') or '').strip()
     sede_filtro = (request.GET.get('sede') or '').strip().lower()
     tecnico_registro_filtro = (request.GET.get('tecnico_registro') or '').strip()
     tecnico_salida_filtro = (request.GET.get('tecnico_salida') or '').strip()
+    # «Mis salidas de retiro» (perfil de la asesora) y el ranking del admin:
+    # solo aplica a la lista de salidas físicas confirmadas.
+    confirmo_filtro = (request.GET.get('confirmo') or '').strip()
+    if not (solo_fuera_oficina and confirmo_filtro.isdigit()):
+        confirmo_filtro = ''
     fecha_desde, fecha_hasta, fecha_preset = obtener_rango_fecha(request)
     # "Ver detalle" del ranking filtra los equipos fuera de oficina por la
     # fecha de finalización, la misma con la que el ranking los cuenta.
@@ -3898,6 +3915,7 @@ def salida_lista(request, solo_fuera_oficina=False):
 
     qs = SalidaEquipo.objects.select_related(
         'ingreso', 'ingreso__cliente', 'registrado_por', 'tecnico_reparo',
+        'retiro_confirmado_por',
     )
     if solo_fuera_oficina:
         qs = qs.filter(fecha_retiro_real__isnull=False).order_by(
@@ -3924,6 +3942,8 @@ def salida_lista(request, solo_fuera_oficina=False):
         qs = qs.filter(registrado_por_id=tecnico_registro_filtro)
     if tecnico_salida_filtro:
         qs = qs.filter(tecnico_reparo_id=tecnico_salida_filtro)
+    if confirmo_filtro:
+        qs = qs.filter(retiro_confirmado_por_id=confirmo_filtro)
 
     qs = aplicar_rango_fecha(qs, campo_fecha_filtro, fecha_desde, fecha_hasta)
 
@@ -3931,6 +3951,9 @@ def salida_lista(request, solo_fuera_oficina=False):
 
     from django.contrib.auth import get_user_model
     User = get_user_model()
+    confirmo_usuario = (
+        User.objects.filter(pk=confirmo_filtro).first() if confirmo_filtro else None
+    )
     tecnicos_all = User.objects.filter(is_active=True).order_by('first_name', 'username')
     from .forms import _queryset_tecnicos
     tecnicos_solo = _queryset_tecnicos()
@@ -3947,6 +3970,8 @@ def salida_lista(request, solo_fuera_oficina=False):
         'sede_filtro': sede_filtro,
         'tecnico_registro_filtro': tecnico_registro_filtro,
         'tecnico_salida_filtro': tecnico_salida_filtro,
+        'confirmo_filtro': confirmo_filtro,
+        'confirmo_usuario': confirmo_usuario,
         'tecnicos_all': tecnicos_all,
         'tecnicos_solo': tecnicos_solo,
         'estados': estados_filtro,
@@ -4022,6 +4047,10 @@ def salida_registrar(request, ingreso_pk):
         # Saldo pendiente sugerido como valor a cobrar
         saldo = ingreso.diferencia
         estado_salida_inicial = 'cortesia' if ingreso.estado == 'cortesia' else 'pendiente_retiro'
+        # Desde la hoja del técnico con «No quiso reparar» se abre en «Revisión —
+        # Cliente no quiso reparar», para que elija Sí o No en el valor adicional.
+        if ingreso.estado != 'cortesia' and request.GET.get('estado') == 'revision:cliente_no_acepta':
+            estado_salida_inicial = 'revision:cliente_no_acepta'
         metodo_salida_inicial = 'cortesia' if ingreso.estado == 'cortesia' else 'efectivo'
         salida_inst = SalidaEquipo(ingreso=ingreso)
         form = SalidaEquipoForm(instance=salida_inst, initial={
@@ -4182,6 +4211,123 @@ def notificacion_asesora_marcar_vista(request, pk):
     ):
         return redirect(next_url)
     return redirect('econotec:notificaciones_asesora')
+
+
+@login_required
+@require_POST
+def salida_notificar_tecnico(request, pk):
+    """La asesora pide al técnico revisar un equipo con saldo pendiente.
+
+    Le deja un aviso en su cuenta (campanita) y le envía un correo.
+    """
+    if not puede_confirmar_salida_fisica(request.user):
+        return JsonResponse({'ok': False, 'mensaje': 'No tienes permiso para esta acción.'}, status=403)
+
+    salida = get_object_or_404(
+        SalidaEquipo.objects.select_related(
+            'ingreso', 'ingreso__cliente', 'tecnico_reparo', 'ingreso__tecnico_encargado',
+        ),
+        pk=pk,
+    )
+    ingreso = salida.ingreso
+    tecnico = salida.tecnico_reparo or ingreso.tecnico_encargado
+    if tecnico is None or not tecnico.is_active:
+        return JsonResponse({
+            'ok': False,
+            'mensaje': f'El equipo {ingreso.codigo_equipo} no tiene un técnico responsable activo a quien notificar.',
+        })
+
+    nombre_tecnico = tecnico.get_full_name() or tecnico.username
+    reciente = NotificacionTecnico.objects.filter(
+        salida=salida, tecnico=tecnico, leida=False,
+        creado__gte=timezone.now() - timedelta(minutes=10),
+    ).exists()
+    if reciente:
+        return JsonResponse({
+            'ok': True,
+            'mensaje': f'{nombre_tecnico} ya fue notificado hace un momento sobre el equipo {ingreso.codigo_equipo}.',
+        })
+
+    saldo = ingreso.diferencia
+    quien = request.user.get_full_name() or request.user.username
+    notificacion = NotificacionTecnico.objects.create(
+        salida=salida,
+        ingreso=ingreso,
+        tecnico=tecnico,
+        creado_por=request.user,
+        saldo_pendiente=saldo if saldo > 0 else D('0.00'),
+        mensaje=(
+            f'Por favor revisar el equipo {ingreso.codigo_equipo} '
+            f'({ingreso.tipo_equipo_display} — {ingreso.marca}) del cliente {ingreso.cliente.nombres}. '
+            f'Consta con un saldo pendiente de ${saldo:.2f} y no puede salir de la oficina. '
+            f'Confirma con {quien} si el cliente ya pagó.'
+        ),
+    )
+    correo_enviado = enviar_correo_notificacion_tecnico_seguro(
+        notificacion.pk,
+        request.build_absolute_uri(reverse('econotec:ingreso_detalle', kwargs={'pk': ingreso.pk})),
+    )
+    if correo_enviado:
+        detalle = f'Se le dejó el aviso en su cuenta y se envió un correo a {tecnico.email}.'
+    elif (tecnico.email or '').strip():
+        detalle = 'Se le dejó el aviso en su cuenta, pero no se pudo enviar el correo.'
+    else:
+        detalle = 'Se le dejó el aviso en su cuenta. No tiene correo registrado, así que no se envió correo.'
+    return JsonResponse({
+        'ok': True,
+        'correo_enviado': correo_enviado,
+        'mensaje': f'{nombre_tecnico} fue notificado sobre el equipo {ingreso.codigo_equipo}. {detalle}',
+    })
+
+
+@login_required
+def notificaciones_tecnico(request):
+    """Bandeja del técnico: avisos de las asesoras. El admin ve la de todos."""
+    admin_mode = es_admin(request.user)
+    if not (admin_mode or es_tecnico(request.user)):
+        messages.warning(request, 'No tienes acceso a las notificaciones de técnicos.')
+        return redirect('econotec:bienvenida')
+
+    qs = NotificacionTecnico.objects.select_related(
+        'ingreso', 'ingreso__cliente', 'salida', 'tecnico', 'creado_por',
+    )
+    if not admin_mode:
+        qs = qs.filter(tecnico=request.user)
+
+    total_pendientes = qs.filter(leida=False).count()
+    total_vistas = qs.filter(leida=True).count()
+    estado = (request.GET.get('estado') or 'pendientes').strip()
+    if estado == 'vistas':
+        qs = qs.filter(leida=True)
+    elif estado != 'todas':
+        estado = 'pendientes'
+        qs = qs.filter(leida=False)
+
+    return render(request, 'notificaciones/tecnico.html', {
+        'notificaciones': qs[:200],
+        'estado_filtro': estado,
+        'total_pendientes': total_pendientes,
+        'total_vistas': total_vistas,
+        'admin_notificaciones': admin_mode,
+    })
+
+
+@login_required
+@require_POST
+def notificacion_tecnico_marcar_vista(request, pk):
+    admin_mode = es_admin(request.user)
+    if not (admin_mode or es_tecnico(request.user)):
+        messages.warning(request, 'No tienes acceso a las notificaciones de técnicos.')
+        return redirect('econotec:bienvenida')
+
+    qs = NotificacionTecnico.objects.all() if admin_mode else NotificacionTecnico.objects.filter(tecnico=request.user)
+    notificacion = get_object_or_404(qs, pk=pk)
+    if not notificacion.leida:
+        notificacion.leida = True
+        notificacion.leida_en = timezone.now()
+        notificacion.save(update_fields=['leida', 'leida_en'])
+    messages.success(request, 'Notificación marcada como vista.')
+    return redirect('econotec:notificaciones_tecnico')
 
 
 @login_required
@@ -5509,6 +5655,20 @@ def salida_marcar_retirada(request, pk):
         )
         return redirect('econotec:salida_retiros_lista')
 
+    if not puede_confirmar_salida_fisica(request.user):
+        messages.error(
+            request,
+            'No tienes permiso para confirmar la salida de la oficina. '
+            'La confirma una asesora o un administrador.'
+        )
+        return redirect(_url_retorno_salida(request, 'salida_lista'))
+
+    # La salida le cuenta a la asesora elegida («¿A quién pertenece esta salida?»).
+    asesora, error_asesora = salida_asesora.asesora_de_la_salida(request)
+    if error_asesora:
+        messages.error(request, f'No se confirmó la salida: {error_asesora}')
+        return redirect(_url_retorno_salida(request, 'salida_lista'))
+
     saldo_pendiente = salida.ingreso.diferencia
     if saldo_pendiente > 0:
         messages.error(
@@ -5556,6 +5716,7 @@ def salida_marcar_retirada(request, pk):
             return redirect(_url_retorno_salida(request, 'salida_lista'))
 
     salida.fecha_retiro_real = date.today()
+    salida.retiro_confirmado_por = asesora
     # La fecha confirma la ubicación física. Los resultados negativos deben
     # conservarse para no convertir un equipo sin reparar en uno reparado.
     if salida.estado_reparacion == 'pendiente_retiro':
@@ -5565,13 +5726,19 @@ def salida_marcar_retirada(request, pk):
     salida.bodegaje_aplicado_al_pago = aplicar
     salida.save(update_fields=[
         'fecha_retiro_real',
+        'retiro_confirmado_por',
         'estado_reparacion',
         'bodegaje_dias_congelado',
         'bodegaje_monto_congelado',
         'bodegaje_aplicado_al_pago',
     ])
 
-    avisar_cambio(request.user, 'salida_fisica', 'Confirmó la salida de la oficina.', ingreso=salida.ingreso)
+    avisar_cambio(
+        request.user, 'salida_fisica',
+        f'Confirmó la salida de la oficina (salida de {salida_asesora.nombre(asesora)}).',
+        ingreso=salida.ingreso,
+    )
+    messages.info(request, f'Salida de retiro registrada a nombre de {salida_asesora.nombre(asesora)}.')
 
     abonos_bodegaje = []
     if pago_bodegaje is not None:
@@ -5645,6 +5812,7 @@ def salida_deshacer_retiro(request, pk):
         return redirect('econotec:salida_lista')
 
     salida.fecha_retiro_real = None
+    salida.retiro_confirmado_por = None
     if salida.estado_reparacion == 'retirado':
         salida.estado_reparacion = 'pendiente_retiro'
     salida.bodegaje_dias_congelado = None
@@ -5652,6 +5820,7 @@ def salida_deshacer_retiro(request, pk):
     salida.bodegaje_aplicado_al_pago = False
     salida.save(update_fields=[
         'fecha_retiro_real',
+        'retiro_confirmado_por',
         'estado_reparacion',
         'bodegaje_dias_congelado',
         'bodegaje_monto_congelado',

@@ -1,0 +1,173 @@
+{% extends 'base.html' %}
+
+{% block title %}Ranking de asesoras — Salidas de retiro — Econotec{% endblock %}
+
+{% block content %}
+<style>
+    .ras-wrap { max-width: 1080px; margin: 0 auto; }
+    .ras-summary { display: flex; gap: 8px; flex-wrap: wrap; margin: 0 0 16px; }
+    .ras-pill {
+        display: inline-flex; align-items: center; gap: 5px; border-radius: 999px; padding: 6px 12px;
+        background: var(--hover-bg); border: 1px solid var(--border-color);
+        color: var(--text-main); font-size: 12px; font-weight: 900;
+    }
+    .ras-list { display: grid; gap: 12px; }
+    .ras-card {
+        background: var(--card-bg); border: 1px solid var(--border-color);
+        border-left: 4px solid var(--primary); border-radius: 10px;
+        box-shadow: 0 3px 10px rgba(0,0,0,0.05);
+    }
+    .ras-card.sin-salidas { border-left-color: #9ca3af; }
+    .ras-card > summary {
+        display: flex; align-items: center; gap: 14px; padding: 14px 16px;
+        cursor: pointer; list-style: none;
+    }
+    .ras-card > summary::-webkit-details-marker { display: none; }
+    .ras-pos {
+        flex: 0 0 40px; width: 40px; height: 40px; border-radius: 50%;
+        display: grid; place-items: center; font-weight: 900;
+        background: var(--primary-light); color: var(--primary-dark);
+    }
+    .ras-name { flex: 1; min-width: 0; }
+    .ras-name strong { display: block; font-size: 16px; color: var(--text-main); overflow-wrap: anywhere; }
+    .ras-name small { color: var(--text-muted); font-weight: 700; }
+    .ras-total { text-align: right; white-space: nowrap; }
+    .ras-total strong { display: block; font-size: 26px; line-height: 1; color: var(--primary-dark); }
+    .ras-total small { color: var(--text-muted); font-weight: 700; font-size: 11px; }
+    .ras-body { padding: 0 16px 16px; }
+    .ras-body .table-wrap { margin-top: 4px; }
+    .ras-body td a { color: var(--primary); text-decoration: none; }
+    .ras-actions { display: flex; justify-content: flex-end; margin-top: 10px; }
+    .ras-empty { color: var(--text-muted); font-weight: 700; padding: 4px 0 0; }
+    .ras-detalle-titulo { margin: 28px 0 4px; color: var(--text-main); font-size: 19px; }
+    .ras-detalle { margin-top: 10px; }
+    .ras-detalle td a { color: var(--primary); text-decoration: none; }
+    @media (max-width: 640px) {
+        .ras-card > summary { flex-wrap: wrap; }
+        .ras-total { text-align: left; }
+    }
+</style>
+
+<div class="crumb">
+    <a href="{% url 'econotec:bienvenida' %}">Inicio</a> /
+    <a href="{% url 'econotec:admin_dashboard' %}">Registro Administrativo</a> /
+    Ranking de asesoras — Salidas de retiro
+</div>
+
+<div class="ras-wrap">
+    <h2 class="page-title">Ranking de asesoras <span class="accent">— Salidas de retiro</span></h2>
+    <p class="page-subtitle">
+        Cuántas salidas de la oficina pertenecen a cada asesora, con cada equipo y su técnico responsable.
+    </p>
+
+    <div class="toolbar">
+        <form method="get" style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
+            {% include 'includes/filtro_fecha_rango.html' %}
+            <button type="submit" class="btn btn-primary">Filtrar</button>
+            {% if fecha_rango_activo %}
+            <a href="{% url 'econotec:ranking_asesoras_salidas' %}" class="btn btn-secondary">Ver todo</a>
+            {% endif %}
+        </form>
+    </div>
+
+    <div class="ras-summary">
+        <span class="ras-pill">🚚 Salidas de retiro: {{ total_salidas }}</span>
+        <span class="ras-pill">{{ fecha_resumen }}</span>
+        {% if sin_registro %}
+        <span class="ras-pill" title="Salidas confirmadas antes de este cambio: el sistema todavía no guardaba a qué asesora pertenecían.">
+            Sin asesora asignada: {{ sin_registro }}
+        </span>
+        {% endif %}
+    </div>
+
+    {% if ranking %}
+    <div class="ras-list">
+        {% for fila in ranking %}
+        <details class="ras-card{% if not fila.total %} sin-salidas{% endif %}">
+            <summary>
+                <span class="ras-pos">{% if fila.total and fila.posicion == 1 %}🥇{% elif fila.total and fila.posicion == 2 %}🥈{% elif fila.total and fila.posicion == 3 %}🥉{% else %}{{ fila.posicion }}{% endif %}</span>
+                <span class="ras-name">
+                    <strong>{{ fila.usuario.get_full_name|default:fila.usuario.username }}</strong>
+                    <small>{% if fila.es_asesora %}Asesora{% else %}No es asesora (administración u otro rol){% endif %} · Clic para ver los equipos</small>
+                </span>
+                <span class="ras-total">
+                    <strong>{{ fila.total }}</strong>
+                    <small>salida{{ fila.total|pluralize }} de retiro</small>
+                </span>
+            </summary>
+            <div class="ras-body">
+                {% if fila.salidas %}
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Equipo N°</th>
+                                <th>Cliente</th>
+                                <th>Equipo</th>
+                                <th>Técnico responsable</th>
+                                <th>Salida de la oficina</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                        {% for s in fila.salidas %}
+                            <tr>
+                                <td data-label="Equipo N°"><a href="{% url 'econotec:ingreso_detalle' pk=s.ingreso.pk %}"><strong>{{ s.ingreso.codigo_equipo }}</strong></a></td>
+                                <td data-label="Cliente">{{ s.ingreso.cliente.nombres }}</td>
+                                <td data-label="Equipo">{{ s.ingreso.tipo_equipo_display }} — {{ s.ingreso.marca|truncatechars:25 }}</td>
+                                <td data-label="Técnico responsable">🔧 {% if s.tecnico_reparo %}{{ s.tecnico_reparo.get_full_name|default:s.tecnico_reparo.username }}{% elif s.ingreso.tecnico_encargado %}{{ s.ingreso.tecnico_encargado.get_full_name|default:s.ingreso.tecnico_encargado.username }}{% else %}—{% endif %}</td>
+                                <td data-label="Salida de la oficina">{{ s.fecha_retiro_real|date:"d/m/Y" }}</td>
+                            </tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                <div class="ras-actions">
+                    <a class="btn btn-sm btn-secondary" href="{% url 'econotec:salida_retiros_lista' %}?confirmo={{ fila.usuario.pk }}{% if fecha_desde %}&fecha_desde={{ fecha_desde }}{% endif %}{% if fecha_hasta %}&fecha_hasta={{ fecha_hasta }}{% endif %}">Abrir en Salidas físicas confirmadas →</a>
+                </div>
+                {% else %}
+                <p class="ras-empty">Sin salidas de retiro en este periodo.</p>
+                {% endif %}
+            </div>
+        </details>
+        {% endfor %}
+    </div>
+    {% else %}
+    <p class="ras-empty">No hay asesoras registradas.</p>
+    {% endif %}
+
+    <h3 class="ras-detalle-titulo">📋 Detalle de todas las salidas de retiro</h3>
+    <p class="ras-empty" style="padding-top:0;">Cada equipo con su técnico responsable y la asesora a quien pertenece la salida.</p>
+    {% if detalle_salidas %}
+    <div class="table-wrap ras-detalle">
+        <table>
+            <thead>
+                <tr>
+                    <th>N.º</th>
+                    <th>Salida de la oficina</th>
+                    <th>Equipo N°</th>
+                    <th>Cliente</th>
+                    <th>Equipo</th>
+                    <th>Técnico responsable</th>
+                    <th>Asesora (salida de)</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for s in detalle_salidas %}
+                <tr>
+                    <td data-label="N.º">{{ forloop.counter }}</td>
+                    <td data-label="Salida de la oficina">{{ s.fecha_retiro_real|date:"d/m/Y" }}</td>
+                    <td data-label="Equipo N°"><a href="{% url 'econotec:ingreso_detalle' pk=s.ingreso.pk %}"><strong>{{ s.ingreso.codigo_equipo }}</strong></a></td>
+                    <td data-label="Cliente">{{ s.ingreso.cliente.nombres }}</td>
+                    <td data-label="Equipo">{{ s.ingreso.tipo_equipo_display }} — {{ s.ingreso.marca|truncatechars:25 }}</td>
+                    <td data-label="Técnico responsable">🔧 {% if s.tecnico_reparo %}{{ s.tecnico_reparo.get_full_name|default:s.tecnico_reparo.username }}{% elif s.ingreso.tecnico_encargado %}{{ s.ingreso.tecnico_encargado.get_full_name|default:s.ingreso.tecnico_encargado.username }}{% else %}—{% endif %}</td>
+                    <td data-label="Asesora (salida de)"><strong>{{ s.retiro_confirmado_por.get_full_name|default:s.retiro_confirmado_por.username }}</strong></td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <p class="ras-empty">No hay salidas de retiro en este periodo.</p>
+    {% endif %}
+</div>
+{% endblock %}

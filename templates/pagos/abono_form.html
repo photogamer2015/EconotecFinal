@@ -405,6 +405,21 @@
         {{ form.observaciones }}
     </div>
 
+    {% if modo == 'crear' and puede_confirmar_salida_desde_abono %}
+    {# Solo se usa con «Registrar Abono y Dar Salida del Equipo». #}
+    <div class="form-block" id="block-asesora-salida">
+        <div class="form-block-title">🚚 ¿A quién pertenece esta salida?</div>
+        {% asesoras_salida_opciones as opciones_asesoras_salida %}
+        <select name="asesora_salida" id="id_asesora_salida" class="form-input">
+            <option value="">— Selecciona la asesora —</option>
+            {% for a in opciones_asesoras_salida %}
+            <option value="{{ a.id }}" {% if request.POST.asesora_salida == a.id|stringformat:'s' or not request.POST and a.id == request.user.pk %}selected{% endif %}>{{ a.nombre }}</option>
+            {% endfor %}
+        </select>
+        <div class="helper-text">Obligatorio solo si usas <strong>Registrar Abono y Dar Salida del Equipo</strong>: la salida se suma a esa asesora en su perfil y en el ranking.</div>
+    </div>
+    {% endif %}
+
     <div class="abono-actions">
         <span class="form-status" id="form-status">Completa los campos obligatorios para registrar.</span>
         <a href="{% url 'econotec:ingreso_abonos' pk=ingreso.pk %}" class="btn btn-secondary">Cancelar</a>
@@ -813,6 +828,21 @@
         form.addEventListener('submit', function(event) {
             updateSubmitState();
             const accion = event.submitter || submitBtn;
+            const asesoraSalida = document.getElementById('id_asesora_salida');
+            if (accion && accion.value === 'registrar_y_salida' && asesoraSalida && !asesoraSalida.value) {
+                event.preventDefault();
+                asesoraSalida.focus({ preventScroll: true });
+                asesoraSalida.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: 'warning',
+                        title: '¿A quién pertenece esta salida?',
+                        text: 'Selecciona la asesora antes de dar salida al equipo.',
+                        confirmButtonColor: '#f97618'
+                    });
+                }
+                return;
+            }
             if (accion && accion.disabled) {
                 event.preventDefault();
                 const firstMissing = Array.from(form.querySelectorAll('[required]'))

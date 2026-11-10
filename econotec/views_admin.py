@@ -41,8 +41,8 @@ from .models import (
 )
 from .pagination import paginar_resultados
 from .permisos import (
-    GRUPO_ASISTENTE_CAJA, GRUPOS_TECNICO, admin_requerido, es_admin, puede_ver_valores_ranking,
-    tecnico_requerido,
+    GRUPO_ASISTENTE_CAJA, GRUPOS_ASESOR_COMERCIAL, GRUPOS_TECNICO, admin_requerido, es_admin,
+    puede_ver_valores_ranking, tecnico_requerido,
 )
 from .seguridad import consumir_intento
 
@@ -2727,3 +2727,63 @@ def control_registro(request):
         'abonos_querystring': abonos_querystring,
         'limite': 10,
     })
+
+
+@admin_requerido
+def ranking_asesoras_salidas(request):
+    """Ranking de asesoras por salidas de la oficina (salidas de retiro) confirmadas.
+
+    Es un contador: cuántas salidas confirmó cada asesora, con el detalle de
+    cada equipo y su técnico responsable.
+    """
+    desde, hasta, preset = obtener_rango_fecha(request)
+    confirmadas = aplicar_rango_fecha(
+        SalidaEquipo.objects.filter(fecha_retiro_real__isnull=False),
+        'fecha_retiro_real', desde, hasta,
+    )
+    salidas = (
+        confirmadas.filter(retiro_confirmado_por__isnull=False)
+        .select_related(
+            'ingreso', 'ingreso__cliente', 'ingreso__tecnico_encargado',
+            'tecnico_reparo', 'retiro_confirmado_por',
+        )
+        .order_by('-fecha_retiro_real', '-pk')
+    )
+
+    asesoras = (
+        get_user_model().objects
+        .filter(is_active=True, groups__name__in=GRUPOS_ASESOR_COMERCIAL)
+        .distinct()
+    )
+    filas = {
+        asesora.pk: {'usuario': asesora, 'es_asesora': True, 'salidas': []}
+        for asesora in asesoras
+    }
+    salidas = list(salidas)
+    for salida in salidas:
+        usuario = salida.retiro_confirmado_por
+        fila = filas.setdefault(
+            usuario.pk, {'usuario': usuario, 'es_asesora': False, 'salidas': []},
+        )
+        fila['salidas'].append(salida)
+
+    ranking = sorted(
+        filas.values(),
+        key=lambda fila: (
+            -len(fila['salidas']),
+            (fila['usuario'].get_full_name() or fila['usuario'].username).lower(),
+        ),
+    )
+    for posicion, fila in enumerate(ranking, start=1):
+        fila['posicion'] = posicion
+        fila['total'] = len(fila['salidas'])
+
+    contexto = {
+        'ranking': ranking,
+        # Tabla de todas las salidas: equipo, técnico y a qué asesora pertenece.
+        'detalle_salidas': salidas,
+        'total_salidas': sum(fila['total'] for fila in ranking),
+        'sin_registro': confirmadas.filter(retiro_confirmado_por__isnull=True).count(),
+    }
+    contexto.update(contexto_rango_fecha(desde, hasta, preset, etiqueta='Fecha de salida física'))
+    return render(request, 'admin_panel/ranking_asesoras_salidas.html', contexto)

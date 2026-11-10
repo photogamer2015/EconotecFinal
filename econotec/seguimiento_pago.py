@@ -58,6 +58,14 @@ METODOS_RESUMEN = (
 )
 OTROS = 'otros'
 
+# Filtro «Forma de pago» de la hoja y del Excel.
+FORMAS_PAGO = (
+    ('', 'Todas'),
+    ('efectivo', 'Efectivo'),
+    ('transferencia', 'Transferencia'),
+    ('tarjeta', 'Tarjeta / Payphone'),
+)
+
 BANCOS = dict(IngresoEquipo.BANCOS)
 TARJETAS_APPS = dict(IngresoEquipo.TARJETAS_APPS)
 METODOS = {**dict(SalidaEquipo.METODOS_PAGO_FINAL), **dict(Abono.METODOS_PAGO)}
@@ -402,8 +410,28 @@ def _resumen_metodos(filas):
     return resumen
 
 
-def hoja_semana(lunes, sede='', tipo=EQUIPO):
-    """Filas y totales por método de la semana que empieza en `lunes`."""
+def _solo_forma_de_pago(cobros, forma_pago):
+    """Deja solo lo pagado con `forma_pago`; de un pago mixto, solo su parte."""
+    filtrados = []
+    for cobro in cobros:
+        partes = [parte for parte in cobro['partes'] if parte['metodo'] == forma_pago]
+        if partes:
+            filtrados.append({
+                **cobro,
+                'partes': partes,
+                'monto': sum((parte['monto'] for parte in partes), CERO),
+            })
+    return filtrados
+
+
+def hoja_semana(lunes, sede='', tipo=EQUIPO, forma_pago=''):
+    """Filas y totales por método de la semana que empieza en `lunes`.
+
+    Con `forma_pago` (efectivo, transferencia o tarjeta) solo quedan los pagos
+    hechos con ese método, y los totales son solo de esos pagos.
+    """
+    if forma_pago not in dict(FORMAS_PAGO):
+        forma_pago = ''
     domingo = fin_semana(lunes)
     base = ingresos_de_seguimiento(sede, tipo)
 
@@ -436,6 +464,8 @@ def hoja_semana(lunes, sede='', tipo=EQUIPO):
     filas = []
     for ingreso in ingresos:
         cobros = _cobros_del_equipo(ingreso, lunes, domingo)
+        if forma_pago:
+            cobros = _solo_forma_de_pago(cobros, forma_pago)
         if cobros:
             filas.append(_fila(ingreso, cobros))
     filas.sort(key=lambda fila: (*fila['cobros'][0]['orden'], fila['pk']))

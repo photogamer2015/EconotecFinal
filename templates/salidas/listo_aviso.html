@@ -251,6 +251,8 @@ document.addEventListener('DOMContentLoaded', function () {
     const urlRegistrarPago = '{% url "econotec:abono_crear" ingreso_pk=ingreso.pk %}';
     const urlEnviarCorreoFinalizacion = '{% url "econotec:salida_enviar_correo_finalizacion" pk=salida.pk %}';
     const tieneBodegaje = {% if ingreso.bodegaje_pendiente > 0 %}true{% else %}false{% endif %};
+    // La salida de la oficina la confirma la asesora o el administrador; el técnico ya no.
+    const puedeConfirmarSalida = {% if puede_confirmar_salida_fisica %}true{% else %}false{% endif %};
     const montoBodegaje = {{ ingreso.bodegaje_pendiente|default:0|stringformat:'.2f' }};
     const diasBodegaje = {{ ingreso.bodegaje_dias_pendiente|default:0 }};
     const formularioSalida = document.getElementById('confirmar-salida-oficina-form');
@@ -448,9 +450,11 @@ document.addEventListener('DOMContentLoaded', function () {
         title: 'Equipo finalizado',
         html:
             '<p style="line-height:1.55;margin-bottom:10px;">El equipo <b>' + codigoEquipo + '</b> fue finalizado correctamente.</p>' +
-            '<p style="font-size:17px;font-weight:800;">¿El equipo se encuentra aquí en la oficina?</p>',
-        showDenyButton: true,
-        confirmButtonText: 'Sí, está en la oficina',
+            (puedeConfirmarSalida
+                ? '<p style="font-size:17px;font-weight:800;">¿El equipo se encuentra aquí en la oficina?</p>'
+                : '<p style="font-size:14px;color:#6b7280;line-height:1.45;">La salida de la oficina la confirma una asesora.</p>'),
+        showDenyButton: puedeConfirmarSalida,
+        confirmButtonText: puedeConfirmarSalida ? 'Sí, está en la oficina' : 'OK',
         denyButtonText: 'No, ya salió',
         confirmButtonColor: '#2e7d32',
         denyButtonColor: '#7c3aed',
@@ -473,18 +477,15 @@ document.addEventListener('DOMContentLoaded', function () {
                 }
             });
         } else if (resultado.isDenied) {
-            if (tieneBodegaje) {
-                confirmarCierre(
-                    { preventDefault: function () {} },
-                    formularioSalida,
-                    codigoEquipo,
-                    true,
-                    montoBodegaje,
-                    diasBodegaje
-                );
-            } else {
-                formularioSalida.submit();
-            }
+            // Pregunta a quién pertenece la salida (y el bodegaje, si hay).
+            confirmarCierre(
+                { preventDefault: function () {} },
+                formularioSalida,
+                codigoEquipo,
+                tieneBodegaje,
+                montoBodegaje,
+                diasBodegaje
+            );
         }
     });
 });
