@@ -10,7 +10,7 @@ from ..alertas import (
     UMBRAL_DIAS_REPARACION_TECNICO,
 )
 from ..gamificacion import PUNTOS_POR_ESTADO_SALIDA, PUNTOS_VENTA_PRODUCTO
-from ..permisos import es_admin, puede_ver_ranking, puede_ver_seguimiento_pago
+from ..permisos import es_admin, puede_confirmar_salida_fisica, puede_ver_ranking, puede_ver_seguimiento_pago
 from . import texto as tx
 from .respuesta import enlace, opcion, respuesta
 
@@ -19,14 +19,14 @@ from .respuesta import enlace, opcion, respuesta
 # Secciones del sistema («abrir pagos», «¿dónde veo los clientes?»)
 # ─────────────────────────────────────────────────────────────────────
 
-# (palabras clave, etiqueta, ruta, permiso: None = todos | 'admin' | 'ranking' | 'seguimiento')
+# (palabras clave, etiqueta, ruta, permiso: None = todos | 'admin' | 'ranking' | 'seguimiento' | 'salida')
 SECCIONES = [
     (('nueva solicitud', 'nuevo ingreso', 'formulario de ingreso', 'solicitud de ingreso'),
      'Nueva Solicitud de Ingreso', 'ingreso_registrar', None),
     (('menu de ingresos', 'ingreso de equipo', 'ingresos'), 'Ingreso de Equipo / Cliente', 'ingreso_menu', None),
     (('lista de equipos', 'equipos ingresados', 'lista de ingresos'), 'Lista de equipos', 'ingreso_lista', None),
     (('salidas fisicas', 'salida fisica confirmada', 'retirados'), 'Salidas físicas confirmadas',
-     'salida_retiros_lista', None),
+     'salida_retiros_lista', 'salida'),
     (('equipos finalizados', 'lista de finalizados', 'equipo listo', 'finalizados'), 'Equipos finalizados',
      'salida_lista', None),
     (('menu de salidas', 'equipo listo / finalizado'), 'Equipo listo / finalizado', 'salida_menu', None),
@@ -52,6 +52,8 @@ SECCIONES = [
     (('registro administrativo', 'panel administrativo', 'utilidad neta'), 'Registro Administrativo',
      'admin_dashboard', 'admin'),
     (('egresos', 'gastos'), 'Egresos', 'admin_egresos_lista', 'admin'),
+    (('ranking de asesoras', 'salidas de retiro por asesora', 'ranking asesoras'),
+     'Ranking de asesoras — Salidas de retiro', 'ranking_asesoras_salidas', 'admin'),
     (('seguimiento de pago', 'seguimiento de pagos', 'hoja semanal', 'registrar egreso',
       'registrar egresos', 'ingresar egreso', 'ingresar egresos'),
      'Seguimiento de pago', 'seguimiento_pago', 'seguimiento'),
@@ -70,6 +72,8 @@ def _permitido(user, permiso):
         return puede_ver_ranking(user)
     if permiso == 'seguimiento':
         return puede_ver_seguimiento_pago(user)
+    if permiso == 'salida':
+        return puede_confirmar_salida_fisica(user)
     return True
 
 
@@ -106,6 +110,10 @@ def abrir_seccion(user, mensaje):
             return respuesta(f'Aquí tienes {etiqueta}:', [enlace(etiqueta, 'equipos_administrativos_general')])
         if permiso_de(ruta) == 'seguimiento':
             return respuesta(f'«{etiqueta}» es solo para el administrador y la asistente de caja.')
+        if permiso_de(ruta) == 'salida':
+            return respuesta(f'«{etiqueta}» es para las asesoras y el administrador: '
+                             'el técnico llega hasta «equipo finalizado».',
+                             [enlace('Equipos finalizados', 'salida_lista')])
         return respuesta(f'«{etiqueta}» es una sección solo para administradores.')
     tipo = 'nueva' if ruta == 'inventario_menu' else 'nav'
     return respuesta(f'Aquí tienes {etiqueta}:', [enlace(etiqueta, ruta, tipo=tipo)])
@@ -159,7 +167,10 @@ def _finalizar(request):
         'Reglas: el equipo debe tener valor acordado para finalizarse como reparado; se indica el técnico que '
         f'reparó (un equipo reparado le suma {PUNTOS_POR_ESTADO_SALIDA["pendiente_retiro"]} puntos; pregúntame '
         'por el ranking para ver el resto). Si queda saldo, se notifica a una asesora para cobrarlo.\n'
-        'Finalizar NO es la salida física: el equipo sigue en la oficina hasta que confirmes que el cliente se lo llevó.\n'
+        '• Cliente no quiso reparar: hay que elegir Sí o No en el valor adicional; con Sí se ponen $5,00 '
+        '(se pueden cambiar).\n'
+        'Finalizar NO es la salida física: el equipo sigue en la oficina hasta que una asesora confirme que el '
+        'cliente se lo llevó.\n'
         'Puedo hacerlo por ti: escribe «finalizar G1031».',
         [enlace('Equipos finalizados', 'salida_lista')],
         [opcion('✅ Finalizar un equipo', 'finalizar equipo')],
@@ -167,10 +178,20 @@ def _finalizar(request):
 
 
 def _salida_fisica(request):
+    if not puede_confirmar_salida_fisica(request.user):
+        return respuesta(
+            'La salida física (salida de la oficina) la confirman las asesoras y el administrador. '
+            'El técnico llega hasta «equipo finalizado». Si una asesora te pide revisar un equipo con saldo '
+            'pendiente, te llega un aviso 🔔 y un correo.',
+            [enlace('Equipos finalizados', 'salida_lista')],
+        )
     return respuesta(
-        'La salida física se confirma cuando el cliente ya se llevó el equipo:\n'
-        '• El saldo debe estar en $0,00 (primero registra el pago).\n'
-        f'• Si acumuló bodegaje, se decide cobrarlo o perdonarlo en ese momento.\n'
+        'La salida física (salida de retiro) se confirma cuando el cliente ya se llevó el equipo:\n'
+        '• La confirman las asesoras y el administrador; el técnico ya no.\n'
+        '• Siempre se elige a qué asesora pertenece la salida: se le suma en su perfil y en el ranking de asesoras.\n'
+        '• El saldo debe estar en $0,00. Con saldo pendiente, el aviso permite «Pagar saldo pendiente» ahí mismo '
+        '(y dar la salida) o «Notificar al técnico».\n'
+        '• Si acumuló bodegaje, se decide cobrarlo o perdonarlo en ese momento.\n'
         '• Se envía el acta de salida al correo del cliente (si tiene).\n'
         'Solo un administrador puede deshacer una salida física confirmada.\n'
         'Por chat: escribe «confirmar salida G1031».',
@@ -219,7 +240,7 @@ def _pagos(request):
         '• El anticipo del ingreso y el diagnóstico inmediato también cuentan como pagos.\n'
         '• Cada abono genera su recibo; todo queda en el Historial de pagos.\n'
         '• Si el equipo tiene bodegaje, al registrar el pago se pregunta si se cobra o se perdona.\n'
-        '• Con saldo en $0,00 ya se puede confirmar la salida física.\n'
+        '• Con saldo en $0,00 la asesora ya puede confirmar la salida física.\n'
         'Pregúntame «saldos pendientes» o «saldo G1031» para ver lo que se debe.',
         [enlace('Pagos', 'pagos_lista'), enlace('Historial de pagos', 'historial_lista')],
         [opcion('💰 Saldos pendientes', 'saldos pendientes')],
@@ -242,7 +263,8 @@ def _hoja_tecnico(request):
     return respuesta(
         'Hoja del técnico (QR): cada equipo lleva un QR. Al escanearlo con el celular se abre su hoja digital, '
         'donde el técnico escribe el reporte y cambia el estado (Ingresado, En reparación, Con solución, '
-        'Sin solución o No quiso reparar). El QR se imprime en formato ticket desde el equipo.\n'
+        'Sin solución o No quiso reparar). Con solución, Sin solución o No quiso reparar abren la finalización. '
+        'El QR se imprime en formato ticket desde el equipo.\n'
         'Desde aquí también puedo cambiar el estado o el reporte: «cambiar estado G1031» o «reporte G1031».',
         opciones=[opcion('📝 Escribir un reporte', 'reporte'), opcion('🔧 Cambiar estado', 'cambiar estado')],
     )
@@ -312,8 +334,10 @@ def _roles(request):
         'Roles del sistema:\n'
         '• Administrador: acceso total (Registro Administrativo, egresos, auditoría, avisos, deshacer salidas, '
         'chatarrización, valores del ranking).\n'
-        '• Técnico y Asesora comercial: registran ingresos, finalizan equipos, registran pagos, confirman salidas '
-        'y consultan clientes e historial.\n'
+        '• Técnico: registra ingresos, finaliza equipos, registra pagos y consulta clientes e historial. Llega '
+        'hasta «equipo finalizado»: no confirma la salida de la oficina.\n'
+        '• Asesora comercial: registra ingresos y pagos, finaliza equipos y confirma la salida de la oficina; '
+        'sus salidas de retiro aparecen en su perfil y en el ranking de asesoras.\n'
         '• Asesora - Asistente de caja: todo lo de la asesora, más Seguimiento de pago (registra los egresos de la '
         'semana) y gestionar el inventario (ingresar, editar, cantidades y eliminar).\n'
         '• Las asesoras reciben notificaciones cuando queda un saldo por cobrar.',
@@ -436,7 +460,8 @@ def capacidades(request):
         saludo + '👋 Soy EconoBot, el asistente de Econotec. Puedo hacer por ti:\n'
         '• 📥 Registrar un equipo nuevo, paso a paso (con firma del cliente).\n'
         '• ✅ Finalizar un equipo: «finalizar G1031».\n'
-        '• 🚚 Confirmar la salida física: «confirmar salida G1031».\n'
+        + ('• 🚚 Confirmar la salida física: «confirmar salida G1031».\n'
+           if puede_confirmar_salida_fisica(request.user) else '') +
         '• 🔧 Cambiar estado o reporte: «cambiar estado G1031», «reporte G1031».\n'
         '• 💲 Poner el valor acordado: «valor acordado G1031 45».\n'
         '• 🔎 Ver un equipo («G1031»), un cliente («cliente 0912345678» o su nombre) o buscar («buscar HP»).\n'
