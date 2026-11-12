@@ -1688,8 +1688,14 @@ def _ingresos_pendientes_valor_qs():
 
 
 def _sincronizar_egreso_compra(ingreso, usuario):
-    """Crea o actualiza el único egreso asociado a una compra de equipo."""
+    """Crea o actualiza el único egreso asociado a una compra de equipo.
+
+    Si el ingreso deja de ser una compra (cambió de estado o quedó sin valor),
+    se quita su egreso automático: ya no hubo ese gasto y no debe seguir
+    restando en Caja ni en el Registro Administrativo.
+    """
     if ingreso.estado != 'equipo_a_comprar' or not ingreso.valor_acordado:
+        Egreso.objects.filter(ingreso_compra=ingreso).delete()
         return None
 
     categoria, _ = CategoriaEgreso.objects.get_or_create(
