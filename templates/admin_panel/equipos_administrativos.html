@@ -97,6 +97,18 @@
     }
     .estado-admin.donado { background: #dcfce7; color: #166534; }
     .estado-admin.compra { background: #ccfbf1; color: #115e59; }
+    .estado-admin.chatarrizado { background: var(--tint-red-bg); color: var(--tint-red-fg); }
+    .estado-admin.reacondicionado { background: var(--tint-blue-bg); color: var(--tint-blue-fg); }
+    .admin-equipment-summary small a {
+        color: var(--primary);
+        font-weight: 700;
+    }
+    .cambiar-estado-btn {
+        display: inline-flex;
+        margin-top: 8px;
+        padding: 5px 10px;
+        font-size: 12px;
+    }
     .admin-equipment-details {
         border-top: 1px solid var(--border);
         background: color-mix(in srgb, var(--card-bg) 94%, #0f766e 6%);
@@ -260,8 +272,35 @@
                 <small>{{ i.cliente.correo|default:"Sin correo" }}</small>
             </div>
             <div>
+                {% with destino=i.destino_administrativo %}
+                {% if destino == 'reacondicionado' %}
+                <span class="estado-admin reacondicionado">🔧 Reacondicionado</span>
+                <small>Era: {{ i.get_estado_display }} · <a href="{% url 'econotec:inventario_detalle_item' codigo=i.inventario_reacondicionado.codigo %}">Ver en inventario</a></small>
+                {% elif destino == 'chatarrizado' %}
+                <span class="estado-admin chatarrizado">♻️ Chatarrizado</span>
+                <small>Era: {{ i.get_estado_display }} · desde {{ i.fecha_chatarrizacion|date:"d/m/Y" }}</small>
+                {% else %}
                 <span class="estado-admin {% if i.estado == 'donado' %}donado{% else %}compra{% endif %}">{{ i.get_estado_display }}</span>
+                {% endif %}
                 <small>{{ i.fecha_ingreso|date:"d/m/Y" }} · {{ i.get_sede_display }}</small>
+                {% if vista_admin and destino != 'reacondicionado' %}
+                <button type="button" class="btn btn-secondary btn-sm cambiar-estado-btn"
+                        onclick="cambiarEstadoAdministrativo(this)"
+                        data-chatarrizado="{% if destino == 'chatarrizado' %}si{% else %}no{% endif %}"
+                        data-chatarrizar-url="{% url 'econotec:equipo_administrativo_chatarrizar' pk=i.pk %}"
+                        data-rea-url="{% url 'econotec:equipo_reacondicionar' pk=i.pk %}"
+                        data-rea-codigo="{{ i.codigo_equipo }}"
+                        data-rea-descripcion="{{ i.tipo_equipo_display }} · {{ i.cliente.nombres }} · {% if destino == 'chatarrizado' %}Chatarrizado{% else %}{{ i.get_estado_display }}{% endif %}"
+                        data-rea-sede="{{ i.sede }}"
+                        data-rea-tipo-equipo="{{ i.tipo_equipo }}"
+                        data-rea-tipo-nombre="{{ i.tipo_equipo_display }}"
+                        data-rea-marca="{{ i.marca }}"
+                        data-rea-modelo="{{ i.modelo_serie }}"
+                        data-rea-serie="{{ i.serie }}">
+                    🔄 Cambiar estado
+                </button>
+                {% endif %}
+                {% endwith %}
             </div>
             <div class="admin-equipment-payment">
                 {% if i.estado == 'equipo_a_comprar' %}
@@ -400,5 +439,55 @@
     <h3>No hay equipos donados o comprados</h3>
     <p>Cuando un ingreso use uno de estos estados aparecerá aquí con toda su información.</p>
 </div>
+{% endif %}
+
+{% if vista_admin %}
+<form method="post" action="" id="form-chatarrizar-administrativo" hidden>
+    {% csrf_token %}
+    <input type="hidden" name="next" value="{{ request.get_full_path }}">
+</form>
+{% include 'includes/reacondicionar_modal.html' %}
+<script>
+    function cambiarEstadoAdministrativo(boton) {
+        var d = boton.dataset;
+        var yaChatarrizado = d.chatarrizado === 'si';
+        Swal.fire({
+            icon: 'question',
+            title: '¿Deseas cambiar el estado?',
+            text: d.reaCodigo + ' · ' + d.reaDescripcion,
+            showCancelButton: true,
+            confirmButtonText: 'Sí, cambiar estado',
+            cancelButtonText: 'Cancelar',
+            confirmButtonColor: '#f97618',
+            cancelButtonColor: '#6b7280'
+        }).then(function (respuesta) {
+            if (!respuesta.isConfirmed) return;
+            Swal.fire({
+                icon: 'question',
+                title: '¿Qué quieres hacer con el equipo?',
+                text: yaChatarrizado
+                    ? 'Este equipo ya está en chatarrización. Puedes reacondicionarlo.'
+                    : 'Chatarrizar lo pasa a «Equipos en Chatarrización». Reacondicionar lo pasa al Inventario reacondicionado.',
+                showConfirmButton: !yaChatarrizado,
+                confirmButtonText: '♻️ Chatarrizar',
+                confirmButtonColor: '#d33',
+                showDenyButton: true,
+                denyButtonText: '🔧 Reacondicionar',
+                denyButtonColor: '#2e7d32',
+                showCancelButton: true,
+                cancelButtonText: 'Cancelar',
+                cancelButtonColor: '#6b7280'
+            }).then(function (eleccion) {
+                if (eleccion.isConfirmed) {
+                    var form = document.getElementById('form-chatarrizar-administrativo');
+                    form.action = d.chatarrizarUrl;
+                    form.submit();
+                } else if (eleccion.isDenied) {
+                    window.abrirReacondicionar(boton);
+                }
+            });
+        });
+    }
+</script>
 {% endif %}
 {% endblock %}

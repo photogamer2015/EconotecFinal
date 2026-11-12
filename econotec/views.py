@@ -1001,6 +1001,51 @@ INVENTARIO_CATEGORIAS = {
 }
 
 
+# Dos inventarios con la misma estructura de sedes y categorías. El de producto
+# conserva sus direcciones de siempre (/inventario/<sede>/...); el de equipos
+# reacondicionados vive en /inventario/reacondicionado/<sede>/...
+INVENTARIO_LINEAS = {
+    'producto': {
+        'slug': 'producto',
+        'nombre': 'Inventario de producto',
+        'corto': 'Producto',
+        'icono': '📦',
+        'ruta': 'inventario',
+    },
+    'reacondicionado': {
+        'slug': 'reacondicionado',
+        'nombre': 'Inventario reacondicionado',
+        'corto': 'Reacondicionado',
+        'icono': '🔧',
+        'ruta': 'inventario_reacondicionado',
+    },
+}
+
+
+def _inventario_linea(linea):
+    return INVENTARIO_LINEAS.get(linea) or INVENTARIO_LINEAS['producto']
+
+
+def _inventario_urls(linea, sede='', categoria='', tipo=''):
+    """Enlaces del inventario de una línea (producto o reacondicionado)."""
+    info = _inventario_linea(linea)
+    urls = {
+        'inicio': reverse('econotec:inventario_menu'),
+        'menu': reverse(f'econotec:inventario_{info["slug"]}'),
+    }
+    if sede and categoria:
+        urls['categoria'] = reverse(
+            f'econotec:{info["ruta"]}_categoria',
+            kwargs={'sede': sede, 'categoria': categoria},
+        )
+        if tipo:
+            kwargs = {'sede': sede, 'categoria': categoria, 'tipo': tipo}
+            urls['tabla'] = reverse(f'econotec:{info["ruta"]}_tabla', kwargs=kwargs)
+            urls['registrar'] = reverse(f'econotec:{info["ruta"]}_registrar', kwargs=kwargs)
+            urls['exportar'] = reverse(f'econotec:{info["ruta"]}_export', kwargs=kwargs)
+    return urls
+
+
 def _inventario_tipo_por_slug(categoria_info, tipo_slug):
     for slug, nombre in categoria_info['tipos']:
         if slug == tipo_slug:
@@ -1042,7 +1087,7 @@ def _puede_notificar_admin_inventario(user):
     return es_tecnico(user) or es_asesor(user)
 
 
-def _inventario_listado_filtrado(request, sede_slug, categoria_slug, tipo_slug):
+def _inventario_listado_filtrado(request, sede_slug, categoria_slug, tipo_slug, linea='producto'):
     filtro_q = (request.GET.get('q') or '').strip()
     estado_filtro = (request.GET.get('estado') or '').strip()
     ubicacion_filtro = (request.GET.get('ubicacion') or '').strip()
@@ -1057,7 +1102,7 @@ def _inventario_listado_filtrado(request, sede_slug, categoria_slug, tipo_slug):
 
     items_qs = (
         InventarioItem.objects
-        .filter(sede=sede_slug, categoria=categoria_slug, tipo=tipo_slug)
+        .filter(linea=linea, sede=sede_slug, categoria=categoria_slug, tipo=tipo_slug)
         .select_related('registrado_por')
         .order_by('-creado')
     )
@@ -1119,6 +1164,8 @@ def _inventario_item_contexto(request, item, box_size=8):
         'item': item,
         'categoria': categoria_info,
         'tipo': tipo_info,
+        'linea': _inventario_linea(item.linea),
+        'inv_urls': _inventario_urls(item.linea, item.sede, item.categoria, item.tipo),
         'detalle_url': detalle_url,
         'detalle_url_absoluta': qr_url,
         # El logo central cubre parte de la matriz. La corrección alta permite
@@ -1136,31 +1183,59 @@ def _inventario_item_contexto(request, item, box_size=8):
 
 @login_required
 def inventario_menu(request):
-    """Pantalla inicial del inventario por sede."""
-    return render(request, 'inventario/menu.html')
+    """Pantalla inicial: elegir Inventario de producto o Inventario reacondicionado."""
+    totales = dict(
+        InventarioItem.objects
+        .values_list('linea')
+        .annotate(total=Count('pk'))
+        .values_list('linea', 'total')
+    )
+    lineas = [
+        {**info, 'url': reverse(f'econotec:inventario_{slug}'), 'total': totales.get(slug, 0)}
+        for slug, info in INVENTARIO_LINEAS.items()
+    ]
+    return render(request, 'inventario/inicio.html', {'lineas': lineas})
 
 
 @login_required
-def inventario_categoria(request, sede, categoria):
+def inventario_sedes(request, linea='producto'):
+    """Sedes y categorías de una línea de inventario (producto o reacondicionado)."""
+    info = _inventario_linea(linea)
+    categoria_urls = {
+        slug.replace('-', '_'): reverse(
+            f'econotec:{info["ruta"]}_categoria',
+            kwargs={'sede': '__sede__', 'categoria': slug},
+        )
+        for slug in INVENTARIO_CATEGORIAS
+    }
+    return render(request, 'inventario/menu.html', {
+        'linea': info,
+        'inv_urls': _inventario_urls(info['slug']),
+        'categoria_urls': categoria_urls,
+    })
+
+
+@login_required
+def inventario_categoria(request, sede, categoria, linea='producto'):
+    linea_info = _inventario_linea(linea)
     sede_slug = (sede or '').strip().lower()
     categoria_slug = (categoria or '').strip().lower()
     sede_label = INVENTARIO_SEDES.get(sede_slug)
     categoria_info = INVENTARIO_CATEGORIAS.get(categoria_slug)
     if not sede_label or not categoria_info:
         messages.error(request, 'Selecciona una sede y una categoría válida para inventario.')
-        return redirect('econotec:inventario_menu')
+        return redirect(f'econotec:inventario_{linea_info["slug"]}')
 
     tipos = [
-        {'slug': slug, 'nombre': nombre}
+        {
+            'slug': slug,
+            'nombre': nombre,
+            'url': _inventario_urls(linea_info['slug'], sede_slug, categoria_slug, slug)['tabla'],
+        }
         for slug, nombre in categoria_info['tipos']
     ]
     if len(tipos) == 1:
-        return redirect(
-            'econotec:inventario_tabla',
-            sede=sede_slug,
-            categoria=categoria_slug,
-            tipo=tipos[0]['slug'],
-        )
+        return redirect(tipos[0]['url'])
 
     return render(request, 'inventario/categoria.html', {
         'sede_slug': sede_slug,
@@ -1168,11 +1243,14 @@ def inventario_categoria(request, sede, categoria):
         'categoria_slug': categoria_slug,
         'categoria': categoria_info,
         'tipos': tipos,
+        'linea': linea_info,
+        'inv_urls': _inventario_urls(linea_info['slug'], sede_slug, categoria_slug),
     })
 
 
 @login_required
-def inventario_tabla(request, sede, categoria, tipo):
+def inventario_tabla(request, sede, categoria, tipo, linea='producto'):
+    linea_info = _inventario_linea(linea)
     sede_slug = (sede or '').strip().lower()
     categoria_slug = (categoria or '').strip().lower()
     tipo_slug = (tipo or '').strip().lower()
@@ -1180,14 +1258,16 @@ def inventario_tabla(request, sede, categoria, tipo):
     categoria_info = INVENTARIO_CATEGORIAS.get(categoria_slug)
     if not sede_label or not categoria_info:
         messages.error(request, 'Selecciona una sede y una categoría válida para inventario.')
-        return redirect('econotec:inventario_menu')
+        return redirect(f'econotec:inventario_{linea_info["slug"]}')
 
     tipo_info = _inventario_tipo_por_slug(categoria_info, tipo_slug)
     if not tipo_info:
         messages.error(request, 'Selecciona un tipo válido para inventario.')
-        return redirect('econotec:inventario_categoria', sede=sede_slug, categoria=categoria_slug)
+        return redirect(_inventario_urls(linea_info['slug'], sede_slug, categoria_slug)['categoria'])
 
-    listado = _inventario_listado_filtrado(request, sede_slug, categoria_slug, tipo_slug)
+    listado = _inventario_listado_filtrado(
+        request, sede_slug, categoria_slug, tipo_slug, linea=linea_info['slug'],
+    )
     items_filtrados = listado['items']
     page_obj, querystring = paginar_resultados(request, items_filtrados)
     items = list(page_obj.object_list)
@@ -1212,6 +1292,8 @@ def inventario_tabla(request, sede, categoria, tipo):
         item.notificacion_admin_pendiente = item.pk in notificados_ids
 
     return render(request, 'inventario/tabla.html', {
+        'linea': linea_info,
+        'inv_urls': _inventario_urls(linea_info['slug'], sede_slug, categoria_slug, tipo_slug),
         'sede_slug': sede_slug,
         'sede_label': sede_label,
         'categoria_slug': categoria_slug,
@@ -1236,7 +1318,8 @@ def inventario_tabla(request, sede, categoria, tipo):
 
 
 @login_required
-def inventario_export(request, sede, categoria, tipo):
+def inventario_export(request, sede, categoria, tipo, linea='producto'):
+    linea_info = _inventario_linea(linea)
     sede_slug = (sede or '').strip().lower()
     categoria_slug = (categoria or '').strip().lower()
     tipo_slug = (tipo or '').strip().lower()
@@ -1244,17 +1327,19 @@ def inventario_export(request, sede, categoria, tipo):
     categoria_info = INVENTARIO_CATEGORIAS.get(categoria_slug)
     if not sede_label or not categoria_info:
         messages.error(request, 'Selecciona una sede y una categoría válida para exportar inventario.')
-        return redirect('econotec:inventario_menu')
+        return redirect(f'econotec:inventario_{linea_info["slug"]}')
 
     tipo_info = _inventario_tipo_por_slug(categoria_info, tipo_slug)
     if not tipo_info:
         messages.error(request, 'Selecciona un tipo válido para exportar inventario.')
-        return redirect('econotec:inventario_categoria', sede=sede_slug, categoria=categoria_slug)
+        return redirect(_inventario_urls(linea_info['slug'], sede_slug, categoria_slug)['categoria'])
 
     from openpyxl import Workbook
     from openpyxl.styles import Alignment, Font, PatternFill
 
-    listado = _inventario_listado_filtrado(request, sede_slug, categoria_slug, tipo_slug)
+    listado = _inventario_listado_filtrado(
+        request, sede_slug, categoria_slug, tipo_slug, linea=linea_info['slug'],
+    )
     wb = Workbook()
     ws = wb.active
     ws.title = 'Inventario'
@@ -1320,7 +1405,8 @@ def inventario_export(request, sede, categoria, tipo):
     response = HttpResponse(
         content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
     )
-    filename = f'inventario_{sede_slug}_{categoria_slug}_{tipo_slug}.xlsx'
+    prefijo_archivo = 'inventario' if linea_info['slug'] == 'producto' else 'inventario_reacondicionado'
+    filename = f'{prefijo_archivo}_{sede_slug}_{categoria_slug}_{tipo_slug}.xlsx'
     response['Content-Disposition'] = f'attachment; filename="{filename}"'
     wb.save(response)
     return response
@@ -1336,11 +1422,7 @@ def inventario_notificar_admin(request, codigo):
     item = get_object_or_404(InventarioItem, codigo=codigo)
     next_url = (request.POST.get('next') or '').strip()
     if not url_has_allowed_host_and_scheme(next_url, allowed_hosts={request.get_host()}):
-        next_url = reverse('econotec:inventario_tabla', kwargs={
-            'sede': item.sede,
-            'categoria': item.categoria,
-            'tipo': item.tipo,
-        })
+        next_url = _inventario_urls(item.linea, item.sede, item.categoria, item.tipo)['tabla']
 
     if item.cantidad != 1:
         messages.warning(request, 'La notificación al admin solo se activa cuando queda exactamente 1 unidad.')
@@ -1377,7 +1459,8 @@ def notificacion_inventario_admin_ver(request, pk):
 
 
 @login_required
-def inventario_registrar(request, sede, categoria, tipo):
+def inventario_registrar(request, sede, categoria, tipo, linea='producto'):
+    linea_info = _inventario_linea(linea)
     sede_slug = (sede or '').strip().lower()
     categoria_slug = (categoria or '').strip().lower()
     tipo_slug = (tipo or '').strip().lower()
@@ -1385,12 +1468,13 @@ def inventario_registrar(request, sede, categoria, tipo):
     categoria_info = INVENTARIO_CATEGORIAS.get(categoria_slug)
     if not sede_label or not categoria_info:
         messages.error(request, 'Selecciona una sede y una categoría válida para inventario.')
-        return redirect('econotec:inventario_menu')
+        return redirect(f'econotec:inventario_{linea_info["slug"]}')
 
     tipo_info = _inventario_tipo_por_slug(categoria_info, tipo_slug)
     if not tipo_info:
         messages.error(request, 'Selecciona un tipo válido para inventario.')
-        return redirect('econotec:inventario_categoria', sede=sede_slug, categoria=categoria_slug)
+        return redirect(_inventario_urls(linea_info['slug'], sede_slug, categoria_slug)['categoria'])
+    inv_urls = _inventario_urls(linea_info['slug'], sede_slug, categoria_slug, tipo_slug)
 
     if request.method == 'POST':
         form = InventarioItemForm(
@@ -1401,6 +1485,7 @@ def inventario_registrar(request, sede, categoria, tipo):
         )
         if form.is_valid():
             item = form.save(commit=False)
+            item.linea = linea_info['slug']
             item.sede = sede_slug
             item.categoria = categoria_slug
             item.tipo = tipo_slug
@@ -1411,12 +1496,7 @@ def inventario_registrar(request, sede, categoria, tipo):
                 codigo=item.codigo, url=reverse('econotec:inventario_detalle_item', args=[item.codigo]),
             )
             messages.success(request, f'Inventario registrado con código {item.codigo}.')
-            return redirect(
-                'econotec:inventario_tabla',
-                sede=sede_slug,
-                categoria=categoria_slug,
-                tipo=tipo_slug,
-            )
+            return redirect(inv_urls['tabla'])
     else:
         form = InventarioItemForm(
             sede_slug=sede_slug,
@@ -1430,6 +1510,8 @@ def inventario_registrar(request, sede, categoria, tipo):
 
     return render(request, 'inventario/form.html', {
         'form': form,
+        'linea': linea_info,
+        'inv_urls': inv_urls,
         'sede_slug': sede_slug,
         'sede_label': sede_label,
         'categoria_slug': categoria_slug,
@@ -1483,6 +1565,8 @@ def inventario_editar(request, codigo):
     return render(request, 'inventario/form.html', {
         'form': form,
         'item': item,
+        'linea': _inventario_linea(item.linea),
+        'inv_urls': _inventario_urls(item.linea, item.sede, item.categoria, item.tipo),
         'sede_slug': item.sede,
         'sede_label': sede_label,
         'categoria_slug': item.categoria,
@@ -1547,11 +1631,7 @@ def inventario_eliminar(request, codigo):
         return redirect('econotec:inventario_detalle_item', codigo=codigo)
 
     item = get_object_or_404(InventarioItem, codigo=codigo)
-    tabla_kwargs = {
-        'sede': item.sede,
-        'categoria': item.categoria,
-        'tipo': item.tipo,
-    }
+    tabla_url = _inventario_urls(item.linea, item.sede, item.categoria, item.tipo)['tabla']
     producto = item.producto
     codigo_item = item.codigo
     try:
@@ -1565,7 +1645,7 @@ def inventario_eliminar(request, codigo):
         return redirect('econotec:inventario_detalle_item', codigo=codigo_item)
     avisar_cambio(request.user, 'eliminacion', f'Eliminó del inventario: {producto}.', codigo=codigo_item)
     messages.success(request, f'Producto eliminado: {producto} ({codigo_item}).')
-    return redirect('econotec:inventario_tabla', **tabla_kwargs)
+    return redirect(tabla_url)
 
 
 @login_required
@@ -3015,7 +3095,9 @@ def venta_inventario_catalogo(request):
     sede = (request.GET.get('sede') or '').strip()
     categoria = (request.GET.get('categoria') or '').strip()
     tipo = (request.GET.get('tipo') or '').strip()
+    # Solo el inventario de producto: los reacondicionados llevan su propio inventario.
     items = InventarioItem.objects.filter(
+        linea='producto',
         sede__in=['guayaquil', 'quito'],
     ).order_by('producto', 'marca', 'modelo')
     ubicaciones_validas = {opcion['slug'] for opcion in VENTA_INVENTARIO_UBICACIONES}

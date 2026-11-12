@@ -482,18 +482,20 @@
 
 <div class="crumb">
     <a href="{% url 'econotec:bienvenida' %}">Inicio</a> /
-    <a href="{% url 'econotec:inventario_menu' %}">Inventario</a> /
+    <a href="{{ inv_urls.inicio }}">Inventario</a> /
+    <a href="{{ inv_urls.menu }}">{{ linea.nombre }}</a> /
     {{ sede_label }} / {{ categoria.nombre }} / {{ tipo.nombre }}
 </div>
 
 <div class="inventario-tabla-wrap">
     <div class="inventario-tabla-head">
         <div>
-            <span class="inventory-eyebrow">ECONOTEC / INVENTARIO</span>
+            <span class="inventory-eyebrow">ECONOTEC / {% if linea.slug == 'reacondicionado' %}INVENTARIO REACONDICIONADO{% else %}INVENTARIO{% endif %}</span>
             <h2 class="page-title">{{ tipo.nombre }}</h2>
             <p class="page-subtitle">Control de productos, existencias y ubicación.</p>
         </div>
         <div class="inventario-tags">
+            {% if linea.slug == 'reacondicionado' %}<span class="inventario-tag">🔧 {{ linea.corto }}</span>{% endif %}
             <span class="inventario-tag">{{ sede_label }}</span>
             <span class="inventario-tag">{{ categoria.nombre }}</span>
             <span class="inventario-tag">{{ tipo.nombre }}</span>
@@ -501,18 +503,18 @@
     </div>
 
     <div class="inventario-actions">
-        <a href="{% url 'econotec:inventario_export' sede=sede_slug categoria=categoria_slug tipo=tipo.slug %}{% if request.GET.urlencode %}?{{ request.GET.urlencode }}{% endif %}" class="btn inventario-export-btn">
+        <a href="{{ inv_urls.exportar }}{% if request.GET.urlencode %}?{{ request.GET.urlencode }}{% endif %}" class="btn inventario-export-btn">
             📊 Exportar Excel
         </a>
-        <a href="{% url 'econotec:inventario_registrar' sede=sede_slug categoria=categoria_slug tipo=tipo.slug %}" class="btn btn-primary">
+        <a href="{{ inv_urls.registrar }}" class="btn btn-primary">
             + Ingresar equipo
         </a>
         {% if tiene_subtipos %}
-            <a href="{% url 'econotec:inventario_categoria' sede=sede_slug categoria=categoria_slug %}" class="btn btn-secondary">
+            <a href="{{ inv_urls.categoria }}" class="btn btn-secondary">
                 Ver tipos
             </a>
         {% else %}
-            <a href="{% url 'econotec:inventario_menu' %}" class="btn btn-secondary">
+            <a href="{{ inv_urls.menu }}" class="btn btn-secondary">
                 Cambiar sede
             </a>
         {% endif %}
@@ -604,7 +606,7 @@
                 </div>
                 <button type="submit" class="btn btn-primary">Filtrar</button>
                 {% if filtros_activos %}
-                    <a class="btn btn-secondary" href="{% url 'econotec:inventario_tabla' sede=sede_slug categoria=categoria_slug tipo=tipo.slug %}">Limpiar</a>
+                    <a class="btn btn-secondary" href="{{ inv_urls.tabla }}">Limpiar</a>
                 {% endif %}
             </form>
         </div>

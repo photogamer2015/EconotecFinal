@@ -172,6 +172,29 @@ class InventarioItem(models.Model):
         ('quito', 'Quito'),
     ]
 
+    # Dos inventarios separados con la misma estructura de sedes y categorías:
+    # el de producto (el original) y el de equipos reacondicionados.
+    LINEAS = [
+        ('producto', 'Inventario de producto'),
+        ('reacondicionado', 'Inventario reacondicionado'),
+    ]
+
+    linea = models.CharField(
+        max_length=20,
+        choices=LINEAS,
+        default='producto',
+        db_index=True,
+        verbose_name='Inventario',
+    )
+    ingreso_origen = models.OneToOneField(
+        'IngresoEquipo',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='item_reacondicionado',
+        verbose_name='Equipo de origen',
+        help_text='Equipo chatarrizado, donado o comprado del que salió este reacondicionado.',
+    )
     sede = models.CharField(max_length=20, choices=SEDES, verbose_name='Sede')
     categoria = models.CharField(max_length=40, verbose_name='Categoría')
     tipo = models.CharField(max_length=60, verbose_name='Tipo')
@@ -228,8 +251,9 @@ class InventarioItem(models.Model):
             'quito': 'UIO',
         }.get(self.sede, 'INV')
         tipo_prefijo = ''.join(ch for ch in (self.tipo or self.categoria or 'item').upper() if ch.isalnum())[:4]
+        linea_prefijo = 'REA' if self.linea == 'reacondicionado' else 'INV'
         for _ in range(20):
-            codigo = f'INV-{sede_prefijo}-{tipo_prefijo}-{uuid.uuid4().hex[:6].upper()}'
+            codigo = f'{linea_prefijo}-{sede_prefijo}-{tipo_prefijo}-{uuid.uuid4().hex[:6].upper()}'
             if not type(self).objects.filter(codigo=codigo).exists():
                 return codigo
         return f'INV-{uuid.uuid4().hex[:12].upper()}'
@@ -824,6 +848,12 @@ class IngresoEquipo(RetencionFactura):
         verbose_name='Detalle (Entregado)',
         help_text='Solo aplica cuando el estado es "Entregado al cliente".'
     )
+    fecha_chatarrizacion = models.DateField(
+        null=True, blank=True,
+        verbose_name='Chatarrizado el',
+        help_text='Solo Donados y Equipos a comprar: día en que el administrador '
+                  'lo envió a chatarrización. No cambia el estado ni el egreso.',
+    )
 
     # ── Auditoría ────────────────────────────────────────
     registrado_por = models.ForeignKey(
@@ -1018,6 +1048,24 @@ class IngresoEquipo(RetencionFactura):
         if self.serie:
             return f'{self.modelo_serie} — Serie: {self.serie}'
         return self.modelo_serie
+
+    @property
+    def inventario_reacondicionado(self):
+        """Ficha del Inventario reacondicionado creada desde este equipo, o None."""
+        from django.core.exceptions import ObjectDoesNotExist
+        try:
+            return self.item_reacondicionado
+        except ObjectDoesNotExist:
+            return None
+
+    @property
+    def destino_administrativo(self):
+        """Donados/Compras: 'reacondicionado', 'chatarrizado' o '' si sigue igual."""
+        if self.inventario_reacondicionado:
+            return 'reacondicionado'
+        if self.fecha_chatarrizacion:
+            return 'chatarrizado'
+        return ''
 
     @property
     def tecnico_encargado_nombre(self):

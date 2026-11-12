@@ -4,6 +4,27 @@
 {% block title %}Bodegaje / Chatarrización | Econotec{% endblock %}
 
 {% block content %}
+<style>
+    .rea-hecho {
+        display: inline-flex;
+        align-items: center;
+        margin-bottom: 4px;
+        padding: 4px 9px;
+        border-radius: 999px;
+        background: var(--tint-green-bg);
+        color: var(--tint-green-fg);
+        font-size: 12px;
+        font-weight: 800;
+        white-space: nowrap;
+    }
+    .rea-link {
+        color: var(--primary);
+        font-size: 12.5px;
+        font-weight: 700;
+        white-space: nowrap;
+    }
+    .rea-link:hover { text-decoration: underline; }
+</style>
 <div class="header-actions">
     <div>
         <h2 class="page-title">Bodegaje / Chatarrización</h2>
@@ -134,20 +155,49 @@
                     <th>Fecha Retiro (Chatarrización)</th>
                     <th>Cliente</th>
                     <th>Equipo</th>
+                    <th>Reacondicionado</th>
                 </tr>
             </thead>
             <tbody>
-                {% for salida in chatarrerizacion %}
+                {% for fila in chatarrerizacion %}
+                {% with ingreso=fila.ingreso %}
                 <tr>
-                    <td><strong>{{ salida.ingreso.codigo_equipo }}</strong></td>
-                    <td>{{ salida.ingreso.fecha_ingreso|date:"d/m/Y" }}</td>
-                    <td>{{ salida.fecha_retiro_real|date:"d/m/Y" }}</td>
-                    <td>{{ salida.ingreso.cliente.nombres }}</td>
-                    <td>{{ salida.ingreso.tipo_equipo_display }} — {{ salida.ingreso.modelo_serie_detalle }}</td>
+                    <td>
+                        <strong>{{ ingreso.codigo_equipo }}</strong>
+                        {% if fila.origen != 'Bodegaje' %}<br><small class="text-muted">{{ fila.origen }}</small>{% endif %}
+                    </td>
+                    <td>{{ ingreso.fecha_ingreso|date:"d/m/Y" }}</td>
+                    <td>{{ fila.fecha|date:"d/m/Y" }}</td>
+                    <td>{{ ingreso.cliente.nombres }}</td>
+                    <td>{{ ingreso.tipo_equipo_display }} — {{ ingreso.modelo_serie_detalle }}</td>
+                    <td>
+                        {% if fila.reacondicionado %}
+                            <span class="rea-hecho">✅ Reacondicionado</span><br>
+                            <a href="{% url 'econotec:inventario_detalle_item' codigo=fila.reacondicionado.codigo %}" class="rea-link">
+                                Ver en inventario ({{ fila.reacondicionado.get_ubicacion_display }})
+                            </a>
+                        {% elif es_admin %}
+                            <button type="button" class="btn btn-success btn-sm js-reacondicionar"
+                                    data-rea-url="{% url 'econotec:equipo_reacondicionar' pk=ingreso.pk %}"
+                                    data-rea-codigo="{{ ingreso.codigo_equipo }}"
+                                    data-rea-descripcion="{{ ingreso.tipo_equipo_display }} · {{ ingreso.cliente.nombres }} · Chatarrizado el {{ fila.fecha|date:'d/m/Y' }}"
+                                    data-rea-sede="{{ ingreso.sede }}"
+                                    data-rea-tipo-equipo="{{ ingreso.tipo_equipo }}"
+                                    data-rea-tipo-nombre="{{ ingreso.tipo_equipo_display }}"
+                                    data-rea-marca="{{ ingreso.marca }}"
+                                    data-rea-modelo="{{ ingreso.modelo_serie }}"
+                                    data-rea-serie="{{ ingreso.serie }}">
+                                🔧 Reacondicionar equipo
+                            </button>
+                        {% else %}
+                            <span class="text-muted">—</span>
+                        {% endif %}
+                    </td>
                 </tr>
+                {% endwith %}
                 {% empty %}
                 <tr>
-                    <td colspan="5" class="text-center text-muted" style="padding: 20px;">
+                    <td colspan="6" class="text-center text-muted" style="padding: 20px;">
                         No hay equipos en chatarrización.
                     </td>
                 </tr>
@@ -156,6 +206,8 @@
         </table>
     </div>
 </div>
+
+{% if es_admin %}{% include 'includes/reacondicionar_modal.html' %}{% endif %}
 
 <script>
 function enviarCorreoBodegaje(salidaId, correo) {
