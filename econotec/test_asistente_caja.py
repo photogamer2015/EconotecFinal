@@ -64,10 +64,11 @@ class AsistenteCajaTests(TestCase):
         self.assertTrue(puede_gestionar_inventario(self.asistente))
         # Como la asesora, no ve los valores del Ranking.
         self.assertFalse(puede_ver_valores_ranking(self.asistente))
-        # La asesora normal sigue igual.
+        # La asesora normal no tiene Seguimiento de pago; el inventario ya lo
+        # gestionan todos los roles.
         self.assertFalse(es_asistente_caja(self.asesora))
         self.assertFalse(puede_ver_seguimiento_pago(self.asesora))
-        self.assertFalse(puede_gestionar_inventario(self.asesora))
+        self.assertTrue(puede_gestionar_inventario(self.asesora))
 
     def test_ve_seguimiento_de_pago_y_su_tarjeta_en_el_inicio(self):
         self.client.force_login(self.asistente)
@@ -166,8 +167,8 @@ class AsistenteCajaTests(TestCase):
                     self.client.get(reverse('econotec:bienvenida')), f'href="{reverse("econotec:seguimiento_pago")}"',
                 )
         self.assertFalse(Egreso.objects.exists())
-        # La asesora sigue sin editar el inventario.
+        # El inventario ya lo gestionan todos los roles: la asesora también.
         self.client.force_login(self.asesora)
         self.client.post(reverse('econotec:inventario_actualizar_cantidad', args=[self.item.codigo]), {'accion': 'sumar'})
         self.item.refresh_from_db()
-        self.assertEqual(self.item.cantidad, 5)
+        self.assertEqual(self.item.cantidad, 6)

@@ -854,6 +854,20 @@ class IngresoEquipo(RetencionFactura):
         help_text='Solo Donados y Equipos a comprar: día en que el administrador '
                   'lo envió a chatarrización. No cambia el estado ni el egreso.',
     )
+    # Se llenan solo con el botón «Reacondicionar»: el técnico elegido en esa
+    # ventana recibe gamificacion.PUNTOS_EQUIPO_REACONDICIONADO.
+    tecnico_reacondicionado = models.ForeignKey(
+        'auth.User', on_delete=models.PROTECT,
+        null=True, blank=True,
+        related_name='equipos_reacondicionados',
+        verbose_name='Técnico que lo reacondicionó',
+        help_text='Técnico responsable de reparar el equipo al reacondicionarlo. '
+                  'Recibe los puntos del reacondicionado.',
+    )
+    fecha_reacondicionado = models.DateTimeField(
+        null=True, blank=True,
+        verbose_name='Reacondicionado el',
+    )
 
     # ── Auditoría ────────────────────────────────────────
     registrado_por = models.ForeignKey(
@@ -2921,6 +2935,65 @@ class UsuarioActividad(models.Model):
 
     def __str__(self):
         return f'Actividad de {self.user.username}'
+
+
+class AjustePuntaje(models.Model):
+    """Puntos que el administrador suma o resta a mano a un técnico.
+
+    Se registran en el panel de administración («Puntajes»). Cuentan en Mi
+    perfil (puntos acumulados y nivel) y en el Ranking de Técnicos del período
+    que incluye su `fecha`. Borrar el ajuste deshace sus puntos.
+    """
+
+    SUMAR = 'sumar'
+    RESTAR = 'restar'
+    TIPOS = [
+        (SUMAR, 'Sumar puntos'),
+        (RESTAR, 'Restar puntos'),
+    ]
+
+    tecnico = models.ForeignKey(
+        'auth.User', on_delete=models.CASCADE,
+        related_name='ajustes_puntaje',
+        verbose_name='Técnico',
+    )
+    tipo = models.CharField(max_length=10, choices=TIPOS, default=SUMAR, verbose_name='Acción')
+    puntos = models.PositiveIntegerField(
+        validators=[MinValueValidator(1)],
+        verbose_name='Puntos',
+        help_text='Cuántos puntos sumar o restar (número entero, 1 o más).',
+    )
+    motivo = models.TextField(
+        verbose_name='Motivo',
+        help_text='Por qué se suman o restan estos puntos.',
+    )
+    fecha = models.DateField(
+        default=timezone.localdate,
+        verbose_name='Fecha',
+        help_text='Día en que cuenta el ajuste: el Ranking lo suma en el período que incluye esta fecha.',
+    )
+    creado_por = models.ForeignKey(
+        'auth.User', on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='ajustes_puntaje_registrados',
+        verbose_name='Registrado por',
+    )
+    creado = models.DateTimeField(auto_now_add=True, verbose_name='Registrado el')
+
+    class Meta:
+        verbose_name = 'Ajuste de puntaje'
+        verbose_name_plural = 'Puntajes'
+        ordering = ['-fecha', '-creado']
+
+    @property
+    def puntos_con_signo(self):
+        """Puntos que suma (positivo) o resta (negativo)."""
+        return -self.puntos if self.tipo == self.RESTAR else self.puntos
+
+    def __str__(self):
+        signo = '+' if self.puntos_con_signo > 0 else ''
+        nombre = f'{self.tecnico.first_name} {self.tecnico.last_name}'.strip() or self.tecnico.username
+        return f'{signo}{self.puntos_con_signo} pts — {nombre}'
 
 
 class HorarioTecnico(models.Model):

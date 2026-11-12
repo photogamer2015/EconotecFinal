@@ -11,8 +11,12 @@ ROLES DEL SISTEMA:
 | Asesor Comercial | Ingresos, Salidas, Clientes, Historial, Pagos,     |
 |                  | Ranking de Técnicos sin valores económicos         |
 | Asesora -        | Todo lo de la Asesora, y además: Seguimiento de    |
-| Asistente de caja| pago (con registrar egresos) y gestionar el        |
-|                  | inventario (editar, cantidades y eliminar)         |
+| Asistente de caja| pago (con registrar egresos)                       |
+─────────────────────────────────────────────────────────────────────────
+| Todos los roles  | Bodegaje / Chatarrización (enviar a chatarrización |
+|                  | y reacondicionar), Donados / Equipos a comprar e   |
+|                  | Inventarios (ver, ingresar, editar, cantidades y   |
+|                  | eliminar)                                          |
 ─────────────────────────────────────────────────────────────────────────
 
 Los superusuarios siempre tienen acceso total, sin importar el grupo.
@@ -114,9 +118,10 @@ def puede_ver_seguimiento_pago(user):
 
 
 def puede_gestionar_inventario(user):
-    """Puede editar, cambiar cantidades y eliminar productos del inventario.
-    → Admin, Técnico o Asesora - Asistente de caja."""
-    return es_admin(user) or es_tecnico(user) or es_asistente_caja(user)
+    """Puede editar, cambiar cantidades y eliminar en los inventarios (de
+    producto y reacondicionado).
+    → Todos los roles: Admin, Técnico y Asesora (incluida la Asistente de caja)."""
+    return es_admin(user) or es_tecnico(user) or es_asesor(user)
 
 
 def puede_confirmar_salida_fisica(user):

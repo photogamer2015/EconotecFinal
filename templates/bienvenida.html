@@ -3271,11 +3271,11 @@
 
   <a href="{% url 'econotec:venta_menu' %}" class="card-box">
     <div class="card-header">
-      <div class="card-title">Venta de Producto</div>
+      <div class="card-title">Venta de Producto / Equipo</div>
       <div class="card-icon">🛒</div>
     </div>
     <div class="card-desc">
-      Registra una venta directa de productos (repuestos, tintas, etc.) y genera su comprobante.
+      Registra una venta directa de productos (repuestos, tintas, etc.) o de un equipo reacondicionado y genera su comprobante.
     </div>
     <div class="card-footer">
       <span class="status-ok">Disponible</span>
@@ -3375,6 +3375,20 @@
       <span class="card-number">Activos: {{ bodegajes_total }}</span>
     </div>
   </a>
+  {# ── DONADOS / EQUIPOS A COMPRAR: todos los roles; el resumen de dinero solo lo ve el admin ── #}
+  <a href="{% if es_admin %}{% url 'econotec:admin_equipos_administrativos' %}{% else %}{% url 'econotec:equipos_administrativos_general' %}{% endif %}" class="card-box">
+    <div class="card-header">
+      <div class="card-title">Donados / Equipos a comprar</div>
+      <div class="card-icon">🎁</div>
+    </div>
+    <div class="card-desc">
+      Revisa los ingresos marcados como Donado o Equipo a comprar y cámbialos a chatarrización o reacondicionado{% if es_admin %}, con sus egresos automáticos{% endif %}.
+    </div>
+    <div class="card-footer">
+      <span class="status-ok">Disponible</span>
+      <span>Ingresar →</span>
+    </div>
+  </a>
   {% endif %}
   {# ── RANKING: todos los roles; valores económicos solo para admin ── #}
   {% if puede_ver_ranking %}
@@ -3428,19 +3442,6 @@
     <div class="card-footer">
       <span class="status-admin">Solo Admin</span>
       <span>Ver semana →</span>
-    </div>
-  </a>
-  <a href="{% url 'econotec:admin_equipos_administrativos' %}" class="card-box">
-    <div class="card-header">
-      <div class="card-title">Donados / Equipos a comprar</div>
-      <div class="card-icon">🎁</div>
-    </div>
-    <div class="card-desc">
-      Revisa únicamente los ingresos marcados como Donado o Equipo a comprar y sus egresos automáticos.
-    </div>
-    <div class="card-footer">
-      <span class="status-admin">Solo Admin</span>
-      <span>🔒</span>
     </div>
   </a>
   <a href="{% url 'econotec:admin_ventas_inventario' %}" class="card-box">

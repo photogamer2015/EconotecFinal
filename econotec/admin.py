@@ -1,7 +1,7 @@
 from django.contrib import admin
 from .models import (
     Cliente, IngresoEquipo, Abono, SalidaEquipo,
-    CategoriaEgreso, Egreso, BitacoraTecnico, HorarioTecnico,
+    CategoriaEgreso, Egreso, BitacoraTecnico, HorarioTecnico, AjustePuntaje,
 )
 
 
@@ -106,3 +106,73 @@ class BitacoraTecnicoAdmin(admin.ModelAdmin):
 
     def has_delete_permission(self, request, obj=None):
         return False
+
+
+@admin.register(AjustePuntaje)
+class AjustePuntajeAdmin(admin.ModelAdmin):
+    """«Puntajes»: el administrador suma o resta puntos a mano a un técnico."""
+
+    list_display = (
+        'fecha', 'tecnico_nombre', 'ajuste', 'motivo', 'puntaje_actual', 'creado_por', 'creado',
+    )
+    list_filter = ('tipo', ('tecnico', admin.RelatedOnlyFieldListFilter), 'fecha')
+    search_fields = ('tecnico__username', 'tecnico__first_name', 'tecnico__last_name', 'motivo')
+    date_hierarchy = 'fecha'
+    fields = ('tecnico', 'tipo', 'puntos', 'motivo', 'fecha', 'creado_por', 'creado')
+    readonly_fields = ('creado_por', 'creado')
+    radio_fields = {'tipo': admin.HORIZONTAL}
+    list_select_related = ('tecnico', 'creado_por')
+
+    @staticmethod
+    def _nombre(usuario):
+        return f'{usuario.first_name} {usuario.last_name}'.strip() or usuario.username
+
+    @admin.display(description='Técnico', ordering='tecnico__first_name')
+    def tecnico_nombre(self, obj):
+        return self._nombre(obj.tecnico)
+
+    @admin.display(description='Ajuste')
+    def ajuste(self, obj):
+        puntos = obj.puntos_con_signo
+        return f'+{puntos} pts' if puntos > 0 else f'{puntos} pts'
+
+    @admin.display(description='Puntaje actual del técnico')
+    def puntaje_actual(self, obj):
+        from .views import puntaje_tecnico
+        puntaje = puntaje_tecnico(obj.tecnico)
+        return f"{puntaje['total']} pts · {puntaje['nivel']}"
+
+    def get_form(self, request, obj=None, **kwargs):
+        # Al editar, el técnico del ajuste sigue en la lista aunque ya no
+        # esté activo o en el grupo Técnicos.
+        request._ajuste_puntaje_tecnico_id = obj.tecnico_id if obj else None
+        form = super().get_form(request, obj, **kwargs)
+        # Aquí solo se elige el técnico; los usuarios se gestionan en «Usuarios».
+        widget = form.base_fields['tecnico'].widget
+        widget.can_add_related = widget.can_change_related = False
+        widget.can_view_related = widget.can_delete_related = False
+        return form
+
+    def formfield_for_foreignkey(self, db_field, request, **kwargs):
+        if db_field.name == 'tecnico':
+            from django.contrib.auth import get_user_model
+            from django.db.models import Q
+
+            from .forms import _queryset_tecnicos
+            User = get_user_model()
+            tecnicos = _queryset_tecnicos()
+            if not tecnicos.exists():
+                tecnicos = User.objects.filter(is_active=True)
+            actual = getattr(request, '_ajuste_puntaje_tecnico_id', None)
+            kwargs['queryset'] = User.objects.filter(
+                Q(pk__in=tecnicos.values('pk')) | Q(pk=actual),
+            ).order_by('first_name', 'username')
+            campo = super().formfield_for_foreignkey(db_field, request, **kwargs)
+            campo.label_from_instance = self._nombre
+            return campo
+        return super().formfield_for_foreignkey(db_field, request, **kwargs)
+
+    def save_model(self, request, obj, form, change):
+        if not change:
+            obj.creado_por = request.user
+        super().save_model(request, obj, form, change)

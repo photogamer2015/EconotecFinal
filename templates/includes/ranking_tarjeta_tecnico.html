@@ -87,7 +87,7 @@
                     <ul class="puntos-desglose">
                         {% for d in r.puntos_detalle %}
                         <li>
-                            <span>{{ d.cantidad }} × {{ d.etiqueta }} ({% if d.unitario > 0 %}+{% endif %}{{ d.unitario }})</span>
+                            <span>{% if d.unitario is None %}{{ d.etiqueta }} ({{ d.cantidad }}){% else %}{{ d.cantidad }} × {{ d.etiqueta }} ({% if d.unitario > 0 %}+{% endif %}{{ d.unitario }}){% endif %}</span>
                             <strong class="{% if d.subtotal > 0 %}pos{% else %}neg{% endif %}">{% if d.subtotal > 0 %}+{% endif %}{{ d.subtotal }}</strong>
                         </li>
                         {% empty %}
