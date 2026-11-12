@@ -128,6 +128,12 @@
         color: var(--text-muted);
         font-weight: 600;
     }
+    .rea-nota {
+        margin: 0;
+        color: var(--text-muted);
+        font-size: 12.5px;
+        font-weight: 600;
+    }
     .rea-pie {
         display: flex;
         justify-content: flex-end;
@@ -207,6 +213,17 @@
             </div>
 
             <div class="rea-campo">
+                <label class="form-label" for="rea-tecnico">Técnico responsable de la reparación</label>
+                <select class="form-input" name="tecnico_responsable" id="rea-tecnico" required aria-describedby="rea-tecnico-nota">
+                    <option value="">— Elige el técnico —</option>
+                    {% for tecnico in reacondicionar_config.tecnicos %}
+                    <option value="{{ tecnico.valor }}">{{ tecnico.nombre }}</option>
+                    {% endfor %}
+                </select>
+                <p class="rea-nota" id="rea-tecnico-nota">El técnico que elijas recibe +{{ reacondicionar_config.puntos }} puntos en el Ranking de Técnicos.</p>
+            </div>
+
+            <div class="rea-campo">
                 <label class="form-label" for="rea-observacion">Observación</label>
                 <textarea class="form-input" name="observacion" id="rea-observacion" rows="3"
                           placeholder="Ej.: Se cambió el cabezal, probado y funcionando."></textarea>
@@ -228,6 +245,7 @@
         var ubicacionCampo = document.getElementById('rea-ubicacion-campo');
         var ubicacion = document.getElementById('rea-ubicacion');
         var tipo = document.getElementById('rea-tipo');
+        var tecnico = document.getElementById('rea-tecnico');
         var ultimoFoco = null;
 
         function sedeElegida() {
@@ -284,6 +302,7 @@
             var primero = !sede ? form.querySelector('input[name="sede"]')
                 : (!ubicacionCampo.hidden && !ubicacion.value) ? ubicacion
                 : !tipo.value ? tipo
+                : !tecnico.value ? tecnico
                 : document.getElementById('rea-observacion');
             if (primero) primero.focus();
         };

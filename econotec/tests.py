@@ -2129,7 +2129,8 @@ class VentasTests(TestCase):
         }))
         self.assertFalse(InventarioItem.objects.filter(pk=item.pk).exists())
 
-    def test_inventario_acciones_bloquean_asesor_comercial(self):
+    def test_inventario_acciones_permitidas_a_la_asesora_comercial(self):
+        # Todos los roles gestionan el inventario: también la asesora comercial.
         item = InventarioItem.objects.create(
             sede='guayaquil',
             categoria='computadora',
@@ -2149,15 +2150,31 @@ class VentasTests(TestCase):
             'categoria': 'computadora',
             'tipo': 'pc',
         }))
-        self.assertNotContains(tabla, 'Acción')
-        self.assertNotContains(tabla, reverse('econotec:inventario_editar', kwargs={'codigo': item.codigo}))
+        self.assertContains(tabla, 'Acción')
+        self.assertContains(tabla, reverse('econotec:inventario_editar', kwargs={'codigo': item.codigo}))
 
         edit_response = self.client.get(reverse('econotec:inventario_editar', kwargs={'codigo': item.codigo}))
-        self.assertRedirects(edit_response, reverse('econotec:inventario_detalle_item', kwargs={'codigo': item.codigo}))
+        self.assertEqual(edit_response.status_code, 200)
 
-        delete_response = self.client.post(reverse('econotec:inventario_eliminar', kwargs={'codigo': item.codigo}))
-        self.assertRedirects(delete_response, reverse('econotec:inventario_detalle_item', kwargs={'codigo': item.codigo}))
-        self.assertTrue(InventarioItem.objects.filter(pk=item.pk).exists())
+        self.client.post(
+            reverse('econotec:inventario_actualizar_cantidad', kwargs={'codigo': item.codigo}),
+            {'accion': 'sumar'},
+        )
+        item.refresh_from_db()
+        self.assertEqual(item.cantidad, 3)
+
+        self.client.post(reverse('econotec:inventario_eliminar', kwargs={'codigo': item.codigo}))
+        self.assertFalse(InventarioItem.objects.filter(pk=item.pk).exists())
+
+        # Un usuario sin rol sigue sin poder editar ni eliminar.
+        sin_rol = get_user_model().objects.create_user(username='SinRol')
+        otro = InventarioItem.objects.create(
+            sede='guayaquil', categoria='computadora', tipo='pc', producto='CPU', marca='HP',
+            modelo='800', cantidad=1, ubicacion='guayaquil_norte', registrado_por=self.usuario,
+        )
+        self.client.force_login(sin_rol)
+        self.client.post(reverse('econotec:inventario_eliminar', kwargs={'codigo': otro.codigo}))
+        self.assertTrue(InventarioItem.objects.filter(pk=otro.pk).exists())
 
     def test_inventario_detalle_permite_guardar_cantidad(self):
         item = InventarioItem.objects.create(
@@ -3260,7 +3277,7 @@ class VentasTests(TestCase):
                 self.assertContains(response, 'Bodegaje / Chatarrización')
                 self.assertContains(response, f'href="{ruta}"')
 
-    def test_panel_bodegaje_permite_avisos_a_todos_y_reserva_chatarrerizacion_al_admin(self):
+    def test_panel_bodegaje_permite_avisos_y_chatarrerizacion_a_todos(self):
         ingreso = self.crear_ingreso_reparacion(
             valor_acordado=Decimal('30.00'),
             abono_anticipo=Decimal('10.00'),
@@ -3290,7 +3307,7 @@ class VentasTests(TestCase):
                 self.assertContains(response, 'Servicio:')
                 self.assertContains(response, 'Bodegaje:')
                 self.assertContains(response, 'Total hoy:')
-                self.assertNotContains(response, accion_chatarrerizacion)
+                self.assertContains(response, accion_chatarrerizacion)
 
         self.client.force_login(self.admin)
         response = self.client.get(ruta)
@@ -3413,46 +3430,45 @@ class VentasTests(TestCase):
         self.assertEqual(response.json()['codigo'], 'sin_correo')
         self.assertEqual(len(mail.outbox), 0)
 
-    def test_solo_admin_puede_confirmar_chatarrerizacion_activa(self):
-        ingreso = self.crear_ingreso_reparacion()
-        salida = SalidaEquipo.objects.create(
-            ingreso=ingreso,
-            fecha_salida=date.today() - timedelta(days=10),
-            estado_reparacion='pendiente_retiro',
-            tecnico_reparo=self.usuario,
-            valor_final_cobrado=Decimal('0.00'),
-            metodo_pago_final='sin_pago',
-            registrado_por=self.usuario,
-        )
+    def test_todos_los_roles_pueden_confirmar_chatarrerizacion_activa(self):
         ruta = reverse('econotec:admin_activos_bodegaje')
-        payload = json.dumps({
-            'accion': 'chatarrerizacion',
-            'salida_id': salida.pk,
-        })
 
-        response = self.client.post(
-            ruta,
-            data=payload,
-            content_type='application/json',
-        )
+        def salida_en_bodegaje():
+            return SalidaEquipo.objects.create(
+                ingreso=self.crear_ingreso_reparacion(),
+                fecha_salida=date.today() - timedelta(days=10),
+                estado_reparacion='pendiente_retiro',
+                tecnico_reparo=self.usuario,
+                valor_final_cobrado=Decimal('0.00'),
+                metodo_pago_final='sin_pago',
+                registrado_por=self.usuario,
+            )
 
-        self.assertEqual(response.status_code, 403)
+        def chatarrizar(salida):
+            return self.client.post(
+                ruta,
+                data=json.dumps({'accion': 'chatarrerizacion', 'salida_id': salida.pk}),
+                content_type='application/json',
+            )
+
+        # Un usuario sin rol no puede.
+        salida = salida_en_bodegaje()
+        self.client.force_login(get_user_model().objects.create_user(username='SinRol'))
+        self.assertEqual(chatarrizar(salida).status_code, 302)
         salida.refresh_from_db()
         self.assertEqual(salida.estado_reparacion, 'pendiente_retiro')
         self.assertIsNone(salida.fecha_retiro_real)
 
-        self.client.force_login(self.admin)
-        response = self.client.post(
-            ruta,
-            data=payload,
-            content_type='application/json',
-        )
-
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()['status'], 'ok')
-        salida.refresh_from_db()
-        self.assertEqual(salida.estado_reparacion, 'chatarrerizacion')
-        self.assertEqual(salida.fecha_retiro_real, date.today())
+        for usuario in (self.usuario, self.vendedor, self.admin):
+            with self.subTest(usuario=usuario.username):
+                salida = salida_en_bodegaje()
+                self.client.force_login(usuario)
+                response = chatarrizar(salida)
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(response.json()['status'], 'ok')
+                salida.refresh_from_db()
+                self.assertEqual(salida.estado_reparacion, 'chatarrerizacion')
+                self.assertEqual(salida.fecha_retiro_real, date.today())
 
     def test_salida_totales_acredita_ranking_al_tecnico_que_reparo(self):
         User = get_user_model()

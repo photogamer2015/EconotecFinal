@@ -39,7 +39,7 @@ from .busqueda import (
     total_resultados,
 )
 from .models import (
-    Abono, BitacoraTecnico, CategoriaEgreso, Cliente, Egreso, IngresoEquipo,
+    AjustePuntaje, Abono, BitacoraTecnico, CategoriaEgreso, Cliente, Egreso, IngresoEquipo,
     InventarioItem, NotificacionAsesora, NotificacionInventarioAdmin,
     NotificacionRevisionAdmin, NotificacionTecnico, ObservacionEquipo, VentanaObservacionVista, SalidaEquipo, SEDE_PREFIJOS, SEDES_EQUIPOS, TIPOS_EQUIPO,
     UsuarioActividad, VentaInventarioItem,
@@ -62,6 +62,7 @@ from .permisos import (
     puede_confirmar_salida_fisica, puede_gestionar_inventario,
 )
 from .gamificacion import (
+    PUNTOS_EQUIPO_REACONDICIONADO,
     PUNTOS_POR_ESTADO_SALIDA,
     PUNTOS_VENTA_PRODUCTO,
     SALIDA_PUNTOS_NEGATIVOS,
@@ -1539,7 +1540,7 @@ def inventario_registrar(request, sede, categoria, tipo, linea='producto'):
 @login_required
 def inventario_editar(request, codigo):
     if not _puede_gestionar_inventario(request.user):
-        messages.error(request, 'Solo admin, técnicos y la asistente de caja pueden editar inventario.')
+        messages.error(request, 'Solo admin, técnicos y asesoras pueden editar inventario.')
         return redirect('econotec:inventario_detalle_item', codigo=codigo)
 
     item = get_object_or_404(InventarioItem, codigo=codigo)
@@ -1602,7 +1603,7 @@ def inventario_detalle_item(request, codigo):
 @require_POST
 def inventario_actualizar_cantidad(request, codigo):
     if not _puede_gestionar_inventario(request.user):
-        messages.error(request, 'Solo admin, técnicos y la asistente de caja pueden actualizar inventario.')
+        messages.error(request, 'Solo admin, técnicos y asesoras pueden actualizar inventario.')
         return redirect('econotec:inventario_detalle_item', codigo=codigo)
 
     accion = (request.POST.get('accion') or '').strip().lower()
@@ -1642,7 +1643,7 @@ def inventario_actualizar_cantidad(request, codigo):
 @require_POST
 def inventario_eliminar(request, codigo):
     if not _puede_gestionar_inventario(request.user):
-        messages.error(request, 'Solo admin, técnicos y la asistente de caja pueden eliminar inventario.')
+        messages.error(request, 'Solo admin, técnicos y asesoras pueden eliminar inventario.')
         return redirect('econotec:inventario_detalle_item', codigo=codigo)
 
     item = get_object_or_404(InventarioItem, codigo=codigo)
@@ -4977,6 +4978,7 @@ def _resumir_salidas(registros, mostrar_valores_monetarios):
         })
     resumen['reparados'] = resumen['resultados']['reparado']
     resumen['ventas_producto'] = 0
+    resumen['reacondicionados'] = 0
     resumen['puntos'] = sum(
         cantidad * _PUNTOS_POR_RESULTADO[clave]
         for clave, cantidad in resumen['resultados'].items()
@@ -5098,18 +5100,64 @@ def _ventas_producto_ranking(desde, hasta):
     return resultado
 
 
-def _ranking_salidas_por_tecnico(registros, mostrar_valores_monetarios, ventas_producto=None):
+def _reacondicionados_ranking(desde, hasta):
+    """Equipos reacondicionados del rango por técnico: {tecnico_id: (cantidad, nombre)}.
+    Solo los del botón «Reacondicionar» (técnico elegido en su ventana). Cada
+    uno vale gamificacion.PUNTOS_EQUIPO_REACONDICIONADO, igual que en el perfil."""
+    equipos = IngresoEquipo.objects.filter(
+        tecnico_reacondicionado__isnull=False,
+        fecha_reacondicionado__isnull=False,
+    )
+    equipos = aplicar_rango_fecha(equipos, 'fecha_reacondicionado__date', desde, hasta)
+    resultado = {}
+    for equipo in equipos.select_related('tecnico_reacondicionado').only(
+        'tecnico_reacondicionado__first_name',
+        'tecnico_reacondicionado__last_name',
+        'tecnico_reacondicionado__username',
+    ):
+        tecnico = equipo.tecnico_reacondicionado
+        cantidad, _nombre = resultado.get(tecnico.pk, (0, ''))
+        nombre = f'{tecnico.first_name} {tecnico.last_name}'.strip() or tecnico.username
+        resultado[tecnico.pk] = (cantidad + 1, nombre)
+    return resultado
+
+
+def _ajustes_puntaje_ranking(desde, hasta):
+    """Puntos sumados o restados a mano por el administrador («Puntajes»), por
+    técnico y según su fecha: {tecnico_id: (cantidad de ajustes, puntos con signo, nombre)}."""
+    ajustes = aplicar_rango_fecha(AjustePuntaje.objects.all(), 'fecha', desde, hasta)
+    resultado = {}
+    for ajuste in ajustes.select_related('tecnico'):
+        tecnico = ajuste.tecnico
+        cantidad, puntos, _nombre = resultado.get(tecnico.pk, (0, 0, ''))
+        nombre = f'{tecnico.first_name} {tecnico.last_name}'.strip() or tecnico.username
+        resultado[tecnico.pk] = (cantidad + 1, puntos + ajuste.puntos_con_signo, nombre)
+    return resultado
+
+
+def _ranking_salidas_por_tecnico(
+    registros, mostrar_valores_monetarios, ventas_producto=None, reacondicionados=None,
+    ajustes=None,
+):
     """
     Salidas agrupadas por el técnico que reparó, ordenadas de quien más
     puntos tiene a quien menos (la efectividad desempata). Con
-    `ventas_producto` se suman los puntos de sus ventas. Las salidas sin
-    técnico que reparó van al final porque no compiten.
+    `ventas_producto` se suman los puntos de sus ventas, con
+    `reacondicionados` los de sus equipos reacondicionados y con `ajustes`
+    los que el administrador sumó o restó a mano. Las salidas sin técnico que
+    reparó van al final porque no compiten.
     """
     ventas_producto = ventas_producto or {}
+    reacondicionados = reacondicionados or {}
+    ajustes = ajustes or {}
     por_tecnico = {}
     for registro in registros:
         por_tecnico.setdefault(registro['tecnico_id'], []).append(registro)
     for tid in ventas_producto:
+        por_tecnico.setdefault(tid, [])
+    for tid in reacondicionados:
+        por_tecnico.setdefault(tid, [])
+    for tid in ajustes:
         por_tecnico.setdefault(tid, [])
 
     filas = []
@@ -5125,9 +5173,33 @@ def _ranking_salidas_por_tecnico(registros, mostrar_valores_monetarios, ventas_p
                 'unitario': PUNTOS_VENTA_PRODUCTO,
                 'subtotal': ventas * PUNTOS_VENTA_PRODUCTO,
             })
+        equipos_rea, nombre_rea = reacondicionados.get(tid, (0, ''))
+        if equipos_rea:
+            fila['reacondicionados'] = equipos_rea
+            fila['puntos'] += equipos_rea * PUNTOS_EQUIPO_REACONDICIONADO
+            fila['puntos_detalle'].append({
+                'etiqueta': 'Equipo reacondicionado',
+                'cantidad': equipos_rea,
+                'unitario': PUNTOS_EQUIPO_REACONDICIONADO,
+                'subtotal': equipos_rea * PUNTOS_EQUIPO_REACONDICIONADO,
+            })
+        num_ajustes, puntos_ajuste, nombre_ajuste = ajustes.get(tid, (0, 0, ''))
+        if num_ajustes:
+            fila['ajuste_manual'] = puntos_ajuste
+            fila['puntos'] += puntos_ajuste
+            fila['puntos_detalle'].append({
+                'etiqueta': 'Ajuste manual del administrador',
+                'cantidad': num_ajustes,
+                # Cada ajuste vale distinto: no hay valor por unidad.
+                'unitario': None,
+                'subtotal': puntos_ajuste,
+            })
         fila.update({
             'tecnico_id': tid,
-            'nombre': registros_tecnico[0]['nombre'] if registros_tecnico else nombre_ventas,
+            'nombre': (
+                registros_tecnico[0]['nombre'] if registros_tecnico
+                else nombre_ventas or nombre_rea or nombre_ajuste
+            ),
             'sin_asignar': tid is None,
         })
         if mostrar_valores_monetarios:
@@ -5273,7 +5345,12 @@ def _agregar_nivel_ranking(filas):
 def ranking_con_dinero(desde, hasta):
     """El Ranking de Técnicos con todo su dinero, para el Registro Administrativo."""
     registros = _registros_salidas_ranking(desde, hasta, True)
-    filas = _ranking_salidas_por_tecnico(registros, True, _ventas_producto_ranking(desde, hasta))
+    filas = _ranking_salidas_por_tecnico(
+        registros, True,
+        _ventas_producto_ranking(desde, hasta),
+        _reacondicionados_ranking(desde, hasta),
+        _ajustes_puntaje_ranking(desde, hasta),
+    )
     _agregar_nivel_ranking(filas)
     return registros, filas, _resumir_salidas(registros, True)
 
@@ -5372,6 +5449,8 @@ def salida_totales(request):
         registros,
         mostrar_valores_monetarios,
         _ventas_producto_ranking(desde, hasta),
+        _reacondicionados_ranking(desde, hasta),
+        _ajustes_puntaje_ranking(desde, hasta),
     )
     resumen_salidas = _resumir_salidas(registros, mostrar_valores_monetarios)
 
@@ -6692,9 +6771,11 @@ def puntaje_tecnico(user):
     el técnico reparó (campo `tecnico_reparo`) y de sus ventas de producto,
     NO de los ingresos. Valores en gamificacion.PUNTOS_POR_ESTADO_SALIDA:
     reparado +3, cliente no quiso reparar +1, no se pudo reparar −1,
-    garantía −4, venta de producto +1; el resto 0 (en Revisión decide la
-    subcategoría: gamificacion.estado_para_puntos). Si el perfil se
-    reinició, solo cuenta lo registrado desde esa fecha.
+    garantía −4, venta de producto +1, equipo reacondicionado +3 (al técnico
+    elegido en la ventana «Reacondicionar»); el resto 0 (en Revisión decide la
+    subcategoría: gamificacion.estado_para_puntos). Además, los puntos que el
+    administrador sumó o restó a mano en «Puntajes» (AjustePuntaje). Si el
+    perfil se reinició, solo cuenta lo registrado desde esa fecha.
     """
     fecha_reinicio = None
     if hasattr(user, 'actividad') and user.actividad.fecha_reinicio_perfil:
@@ -6705,20 +6786,31 @@ def puntaje_tecnico(user):
         sede='ventas',
         tecnico_encargado=user,
     )
+    reacondicionados_qs = IngresoEquipo.objects.filter(
+        tecnico_reacondicionado=user,
+        fecha_reacondicionado__isnull=False,
+    )
+    ajustes_qs = AjustePuntaje.objects.filter(tecnico=user)
     if fecha_reinicio:
         salidas_qs = salidas_qs.filter(creado__gte=fecha_reinicio)
         ventas_producto_qs = ventas_producto_qs.filter(creado__gte=fecha_reinicio)
+        reacondicionados_qs = reacondicionados_qs.filter(fecha_reacondicionado__gte=fecha_reinicio)
+        ajustes_qs = ajustes_qs.filter(creado__gte=fecha_reinicio)
 
     conteo = {}
     for fila in salidas_qs.values('estado_reparacion', 'subestado_revision').annotate(cantidad=Count('id')):
         estado = estado_para_puntos(fila['estado_reparacion'], fila['subestado_revision'])
         conteo[estado] = conteo.get(estado, 0) + fila['cantidad']
     ventas_producto = ventas_producto_qs.count()
-    total = calcular_puntaje_perfil(conteo, ventas_producto)
+    reacondicionados = reacondicionados_qs.count()
+    ajuste_manual = sum(ajuste.puntos_con_signo for ajuste in ajustes_qs.only('tipo', 'puntos'))
+    total = calcular_puntaje_perfil(conteo, ventas_producto, reacondicionados, ajuste_manual)
     return {
         'fecha_reinicio': fecha_reinicio,
         'conteo': conteo,
         'ventas_producto': ventas_producto,
+        'reacondicionados': reacondicionados,
+        'ajuste_manual': ajuste_manual,
         'salidas_buenas': sum(conteo.get(estado, 0) for estado in SALIDA_PUNTOS_POSITIVOS),
         'salidas_malas': sum(conteo.get(estado, 0) for estado in SALIDA_PUNTOS_NEGATIVOS),
         'total': total,

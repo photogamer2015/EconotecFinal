@@ -127,7 +127,9 @@ class DineroComprasYReacondicionadosTests(TestCase):
         self.client.post(reverse('econotec:equipo_reacondicionar', kwargs={'pk': compra.pk}), {
             'sede': 'guayaquil', 'ubicacion': 'guayaquil_norte',
             'categoria': 'computadora', 'marca': 'Lenovo', 'modelo': 'ThinkPad',
+            'tecnico_responsable': str(self.tecnico.pk),
         })
+        self.assertTrue(InventarioItem.objects.filter(ingreso_origen=compra).exists())
         self.assertEqual(self.caja()['saldo_final'], Decimal('-30.00'))
 
         self.vender_reacondicionado('80.00')

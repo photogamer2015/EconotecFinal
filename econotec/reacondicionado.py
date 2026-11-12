@@ -8,12 +8,16 @@ Reacondicionamiento de equipos y chatarrización de Donados / Compras.
 - Un donado o comprado también se puede chatarrizar. Eso solo guarda la fecha
   en `fecha_chatarrizacion`: el estado (Donado / Equipo a comprar), el valor
   pagado y su egreso no se tocan.
+- En la ventana «Reacondicionar» se elige el técnico responsable de repararlo.
+  Queda en `IngresoEquipo.tecnico_reacondicionado` y ese técnico recibe
+  gamificacion.PUNTOS_EQUIPO_REACONDICIONADO (Ranking y Mi perfil).
 """
 from datetime import date
 
 from django.db import IntegrityError, transaction
 from django.utils import timezone
 
+from .gamificacion import PUNTOS_EQUIPO_REACONDICIONADO
 from .models import IngresoEquipo, InventarioItem, SalidaEquipo
 
 
@@ -48,12 +52,37 @@ def _catalogo():
     return INVENTARIO_CATEGORIAS_REACONDICIONADO, INVENTARIO_SEDES, INVENTARIO_UBICACIONES_POR_SEDE
 
 
+def _tecnicos_reacondicionar():
+    """Técnicos que se pueden elegir como responsables de reparar el equipo.
+
+    La misma lista que «Técnico que reparó el equipo» en la salida: los
+    usuarios activos del grupo Técnicos (o todos los activos si aún no hay).
+    """
+    from django.contrib.auth import get_user_model
+
+    from .forms import _queryset_tecnicos
+
+    tecnicos = _queryset_tecnicos()
+    if not tecnicos.exists():
+        tecnicos = get_user_model().objects.filter(is_active=True).order_by('first_name', 'username')
+    return tecnicos
+
+
+def _nombre_usuario(usuario):
+    return f'{usuario.first_name} {usuario.last_name}'.strip() or usuario.username
+
+
 def contexto_modal_reacondicionar():
-    """Opciones de la ventana «Reacondicionar equipo» (sedes, tipos y ubicaciones)."""
+    """Opciones de la ventana «Reacondicionar equipo» (sedes, tipos, ubicaciones y técnicos)."""
     categorias, sedes, ubicaciones = _catalogo()
     sugerencias = dict(TIPO_INGRESO_A_CATEGORIA)
     return {
         'reacondicionar_config': {
+            'puntos': PUNTOS_EQUIPO_REACONDICIONADO,
+            'tecnicos': [
+                {'valor': tecnico.pk, 'nombre': _nombre_usuario(tecnico)}
+                for tecnico in _tecnicos_reacondicionar()
+            ],
             'sedes': [{'valor': slug, 'nombre': nombre} for slug, nombre in sedes.items()],
             'ubicaciones': {
                 sede: [{'valor': valor, 'nombre': nombre} for valor, nombre in opciones]
@@ -167,6 +196,14 @@ def reacondicionar_equipo(ingreso_pk, datos, user):
     modelo = _texto(datos, 'modelo', 100)
     if not marca or not modelo:
         raise ReacondicionarError('La marca y el modelo son obligatorios.')
+
+    tecnico_id = (datos.get('tecnico_responsable') or '').strip()
+    tecnico = (
+        _tecnicos_reacondicionar().filter(pk=tecnico_id).first()
+        if tecnico_id.isascii() and tecnico_id.isdigit() else None
+    )
+    if tecnico is None:
+        raise ReacondicionarError('Elige el técnico responsable de reparar el equipo.')
     serie = _texto(datos, 'serie', 120)
     observacion = (datos.get('observacion') or '').strip()
 
@@ -193,6 +230,17 @@ def reacondicionar_equipo(ingreso_pk, datos, user):
         raise ReacondicionarError(
             f'{ingreso.codigo_equipo} ya está en el Inventario reacondicionado.'
         )
+    # update() directo: no pasa por save(), así no se recalcula nada del
+    # ingreso. Si el equipo se vuelve a reacondicionar (porque se borró su
+    # ficha), se reemplaza el técnico: los puntos se cuentan una sola vez.
+    ahora = timezone.now()
+    IngresoEquipo.objects.filter(pk=ingreso.pk).update(
+        tecnico_reacondicionado=tecnico,
+        fecha_reacondicionado=ahora,
+        actualizado=ahora,
+    )
+    ingreso.tecnico_reacondicionado = tecnico
+    ingreso.fecha_reacondicionado = ahora
     return ingreso, item
 
 

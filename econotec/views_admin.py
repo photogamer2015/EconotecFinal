@@ -41,8 +41,9 @@ from .models import (
 )
 from .pagination import paginar_resultados
 from .avisos_cambios import avisar_cambio
+from .gamificacion import PUNTOS_EQUIPO_REACONDICIONADO
 from .reacondicionado import (
-    ESTADOS_ADMINISTRATIVOS, ReacondicionarError, chatarrizar_administrativo, contexto_modal_reacondicionar,
+    ReacondicionarError, chatarrizar_administrativo, contexto_modal_reacondicionar,
     equipos_en_chatarrizacion, reacondicionar_equipo,
 )
 from .permisos import (
@@ -1829,15 +1830,11 @@ def admin_bodegajes(request):
 
 @tecnico_requerido
 def admin_activos_bodegaje(request):
-    """Consulta y comunicación de bodegaje para todos los roles operativos."""
+    """Bodegaje y chatarrización para todos los roles operativos: consultar,
+    comunicar, enviar a chatarrización y reacondicionar."""
     from .alertas import salidas_bodegaje_qs
 
     if request.method == 'POST':
-        if not es_admin(request.user):
-            return JsonResponse({
-                'status': 'error',
-                'msg': 'Solo un administrador puede enviar equipos a chatarrización.',
-            }, status=403)
         try:
             data = json.loads(request.body)
             accion = data.get('accion')
@@ -1925,36 +1922,23 @@ def _avisar_cambio_estado_compra(request, ingreso, accion):
     )
 
 
-def _puede_cambiar_estado_equipo(user, pk):
-    """El admin siempre; los demás roles solo en Donados y Equipos a comprar."""
-    if es_admin(user):
-        return True
-    return IngresoEquipo.objects.filter(pk=pk, estado__in=ESTADOS_ADMINISTRATIVOS).exists()
-
-
-def _sin_permiso_cambio_estado(request):
-    messages.error(
-        request,
-        'Solo un administrador puede reacondicionar equipos chatarrizados desde Bodegaje.',
-    )
-    return redirect('econotec:bienvenida')
-
-
 @tecnico_requerido
 @require_POST
 def equipo_reacondicionar(request, pk):
-    """Pasa un equipo chatarrizado, donado o comprado al Inventario reacondicionado."""
-    if not _puede_cambiar_estado_equipo(request.user, pk):
-        return _sin_permiso_cambio_estado(request)
+    """Pasa un equipo chatarrizado, donado o comprado al Inventario reacondicionado.
+    Lo pueden hacer todos los roles (admin, técnicos y asesoras)."""
     try:
         ingreso, item = reacondicionar_equipo(pk, request.POST, request.user)
     except ReacondicionarError as error:
         messages.error(request, str(error))
         return _volver_seguro(request, 'econotec:admin_activos_bodegaje')
+    tecnico = ingreso.tecnico_reacondicionado
+    nombre_tecnico = f'{tecnico.first_name} {tecnico.last_name}'.strip() or tecnico.username
     messages.success(
         request,
         f'{ingreso.codigo_equipo} quedó en el Inventario reacondicionado '
-        f'({item.get_ubicacion_display()}) con el código {item.codigo}.',
+        f'({item.get_ubicacion_display()}) con el código {item.codigo}. '
+        f'+{PUNTOS_EQUIPO_REACONDICIONADO} puntos para {nombre_tecnico}.',
     )
     _avisar_cambio_estado_compra(request, ingreso, 'Reacondicionó')
     return _volver_seguro(request, 'econotec:admin_activos_bodegaje')
@@ -1964,8 +1948,6 @@ def equipo_reacondicionar(request, pk):
 @require_POST
 def equipo_administrativo_chatarrizar(request, pk):
     """Donados y Compras: envía el equipo a chatarrización sin tocar su estado ni su egreso."""
-    if not _puede_cambiar_estado_equipo(request.user, pk):
-        return _sin_permiso_cambio_estado(request)
     try:
         ingreso = chatarrizar_administrativo(pk)
     except ReacondicionarError as error:

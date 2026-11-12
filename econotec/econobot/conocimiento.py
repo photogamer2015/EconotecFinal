@@ -9,7 +9,7 @@ from ..alertas import (
     COSTO_BODEGAJE_DIA, UMBRAL_DIAS_BODEGAJE, UMBRAL_DIAS_DIAGNOSTICO, UMBRAL_DIAS_REPARACION_ADMIN,
     UMBRAL_DIAS_REPARACION_TECNICO,
 )
-from ..gamificacion import PUNTOS_POR_ESTADO_SALIDA, PUNTOS_VENTA_PRODUCTO
+from ..gamificacion import PUNTOS_EQUIPO_REACONDICIONADO, PUNTOS_POR_ESTADO_SALIDA, PUNTOS_VENTA_PRODUCTO
 from ..permisos import es_admin, puede_confirmar_salida_fisica, puede_ver_ranking, puede_ver_seguimiento_pago
 from . import texto as tx
 from .respuesta import enlace, opcion, respuesta
@@ -333,13 +333,15 @@ def _roles(request):
     return respuesta(
         'Roles del sistema:\n'
         '• Administrador: acceso total (Registro Administrativo, egresos, auditoría, avisos, deshacer salidas, '
-        'chatarrización, valores del ranking).\n'
+        'valores del ranking y ajustes manuales de puntaje).\n'
         '• Técnico: registra ingresos, finaliza equipos, registra pagos y consulta clientes e historial. Llega '
         'hasta «equipo finalizado»: no confirma la salida de la oficina.\n'
         '• Asesora comercial: registra ingresos y pagos, finaliza equipos y confirma la salida de la oficina; '
         'sus salidas de retiro aparecen en su perfil y en el ranking de asesoras.\n'
         '• Asesora - Asistente de caja: todo lo de la asesora, más Seguimiento de pago (registra los egresos de la '
-        'semana) y gestionar el inventario (ingresar, editar, cantidades y eliminar).\n'
+        'semana).\n'
+        '• Todos los roles: Bodegaje / Chatarrización (enviar a chatarrización y reacondicionar), Donados / Equipos '
+        'a comprar e Inventarios (ingresar, editar, cantidades y eliminar).\n'
         '• Las asesoras reciben notificaciones cuando queda un saldo por cobrar.',
     )
 
@@ -348,11 +350,13 @@ def _ranking(request):
     return respuesta(
         f'Ranking de técnicos: el técnico que reparó (el que se indica al finalizar) suma '
         f'{PUNTOS_POR_ESTADO_SALIDA["pendiente_retiro"]} puntos por equipo reparado, '
-        f'{PUNTOS_POR_ESTADO_SALIDA["cliente_no_acepta"]} si el cliente no quiso reparar y '
-        f'{PUNTOS_VENTA_PRODUCTO} por venta de producto; resta '
+        f'{PUNTOS_POR_ESTADO_SALIDA["cliente_no_acepta"]} si el cliente no quiso reparar, '
+        f'{PUNTOS_VENTA_PRODUCTO} por venta de producto y {PUNTOS_EQUIPO_REACONDICIONADO} por equipo '
+        'reacondicionado (al técnico responsable elegido al reacondicionarlo); resta '
         f'{abs(PUNTOS_POR_ESTADO_SALIDA["no_reparable"])} si no se pudo reparar y '
         f'{abs(PUNTOS_POR_ESTADO_SALIDA["garantia"])} por garantía. '
         'Revisión en prueba, cortesía y chatarrización no suman ni restan. '
+        'El administrador también puede sumar o restar puntos a mano, con un motivo. '
         'Los valores económicos del ranking solo los ve el administrador.',
         [enlace('Ranking de Técnicos', 'salida_totales')] if puede_ver_ranking(request.user) else [],
     )

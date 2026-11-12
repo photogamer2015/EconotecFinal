@@ -68,6 +68,7 @@ class ReacondicionadoBase(TestCase):
             'modelo': 'L4160',
             'serie': 'X123',
             'observacion': 'Cabezal cambiado, probado.',
+            'tecnico_responsable': str(self.tecnico.pk),
             'next': reverse('econotec:admin_activos_bodegaje'),
         }
         datos.update(extra)
@@ -154,24 +155,32 @@ class InventarioDosLineasTests(ReacondicionadoBase):
 
 
 class ReacondicionarDesdeChatarrizacionTests(ReacondicionadoBase):
-    def test_boton_y_ventana_solo_para_admin(self):
-        ingreso = self.crear_chatarrizado()
-        url = reverse('econotec:equipo_reacondicionar', kwargs={'pk': ingreso.pk})
+    def test_boton_y_ventana_para_todos_los_roles(self):
+        asesora = get_user_model().objects.create_user(username='Kimberly')
+        asesora.groups.add(Group.objects.create(name='Asesores Comerciales'))
+        sin_rol = get_user_model().objects.create_user(username='SinRol')
+        uno, dos = self.crear_chatarrizado(), self.crear_chatarrizado(marca='HP')
 
-        pagina = self.client.get(reverse('econotec:admin_activos_bodegaje'))
-        self.assertContains(pagina, '🔧 Reacondicionar equipo')
-        self.assertContains(pagina, f'data-rea-url="{url}"')
-        self.assertContains(pagina, 'id="rea-modal"')
+        for usuario, ingreso in ((self.tecnico, uno), (asesora, dos)):
+            with self.subTest(usuario=usuario.username):
+                url = reverse('econotec:equipo_reacondicionar', kwargs={'pk': ingreso.pk})
+                self.client.force_login(usuario)
+                pagina = self.client.get(reverse('econotec:admin_activos_bodegaje'))
+                self.assertContains(pagina, '🔧 Reacondicionar equipo')
+                self.assertContains(pagina, f'data-rea-url="{url}"')
+                self.assertContains(pagina, 'id="rea-modal"')
 
-        self.client.force_login(self.tecnico)
-        pagina = self.client.get(reverse('econotec:admin_activos_bodegaje'))
-        self.assertContains(pagina, ingreso.codigo_equipo)
-        self.assertNotContains(pagina, f'data-rea-url="{url}"')
-        self.assertNotContains(pagina, 'id="rea-modal"')
+                self.client.post(url, self.datos_reacondicionar(marca=ingreso.marca))
+                self.assertTrue(InventarioItem.objects.filter(ingreso_origen=ingreso).exists())
 
-        respuesta = self.client.post(url, self.datos_reacondicionar())
+        # Un usuario sin rol no puede reacondicionar.
+        tres = self.crear_chatarrizado(marca='Canon')
+        self.client.force_login(sin_rol)
+        respuesta = self.client.post(
+            reverse('econotec:equipo_reacondicionar', kwargs={'pk': tres.pk}), self.datos_reacondicionar(),
+        )
         self.assertRedirects(respuesta, reverse('econotec:bienvenida'), fetch_redirect_response=False)
-        self.assertFalse(InventarioItem.objects.exists())
+        self.assertFalse(InventarioItem.objects.filter(ingreso_origen=tres).exists())
 
     def test_reacondicionar_crea_la_ficha_y_marca_la_fila(self):
         ingreso = self.crear_chatarrizado()
@@ -352,6 +361,21 @@ class DonadosComprasCambiarEstadoTests(ReacondicionadoBase):
         self.assertContains(lista, '🔧 Reacondicionado')
         self.assertContains(lista, 'Era: Donado')
         self.assertNotContains(lista, '🔄 Cambiar estado')
+
+    def test_tarjeta_del_inicio_para_todos_los_roles(self):
+        asesora = get_user_model().objects.create_user(username='Kimberly')
+        asesora.groups.add(Group.objects.create(name='Asesores Comerciales'))
+        general = reverse('econotec:equipos_administrativos_general')
+        for usuario in (self.tecnico, asesora):
+            with self.subTest(usuario=usuario.username):
+                self.client.force_login(usuario)
+                inicio = self.client.get(reverse('econotec:bienvenida'))
+                self.assertContains(inicio, 'Donados / Equipos a comprar')
+                self.assertContains(inicio, f'href="{general}"')
+                self.assertEqual(self.client.get(general).status_code, 200)
+        self.client.force_login(self.admin)
+        inicio = self.client.get(reverse('econotec:bienvenida'))
+        self.assertContains(inicio, f'href="{reverse("econotec:admin_equipos_administrativos")}" class="card-box"')
 
     def test_no_chatarriza_equipos_de_reparacion(self):
         ingreso = self.crear_ingreso(estado='en_reparacion', subestado_reparacion='en_reparacion')
@@ -545,3 +569,159 @@ class ReacondicionadoSinSubtiposTests(ReacondicionadoBase):
         producto.refresh_from_db()
         self.assertEqual(viejo.tipo, 'impresora')
         self.assertEqual(producto.tipo, 'impresora-laser')
+
+
+class PuntosReacondicionadoTests(ReacondicionadoBase):
+    """El botón «Reacondicionar» da +3 puntos al técnico responsable elegido en su ventana."""
+
+    def setUp(self):
+        super().setUp()
+        self.otro = get_user_model().objects.create_user(
+            username='carlos', first_name='Carlos', last_name='Mora',
+        )
+        self.otro.groups.add(Group.objects.get(name='Tecnicos'))
+
+    def reacondicionar(self, ingreso, tecnico=None, **extra):
+        datos = self.datos_reacondicionar(**extra)
+        if tecnico is not None:
+            datos['tecnico_responsable'] = str(tecnico.pk)
+        return self.client.post(
+            reverse('econotec:equipo_reacondicionar', kwargs={'pk': ingreso.pk}), datos, follow=True,
+        )
+
+    def puntos(self, usuario):
+        from .views import puntaje_tecnico
+        return puntaje_tecnico(usuario)
+
+    def ranking_del_mes(self):
+        hoy = date.today()
+        respuesta = self.client.get(reverse('econotec:salida_totales'), {
+            'desde': hoy.replace(day=1).isoformat(), 'hasta': hoy.isoformat(),
+        })
+        return {fila['tecnico_id']: fila for fila in respuesta.context['ranking']}
+
+    def test_ventana_pide_el_tecnico_responsable(self):
+        self.crear_chatarrizado()
+        pagina = self.client.get(reverse('econotec:admin_activos_bodegaje'))
+        self.assertContains(pagina, 'name="tecnico_responsable"')
+        self.assertContains(pagina, 'Técnico responsable de la reparación')
+        self.assertContains(pagina, f'<option value="{self.otro.pk}">Carlos Mora</option>', html=True)
+        self.assertContains(pagina, '+3 puntos en el Ranking de Técnicos')
+
+    def test_sin_tecnico_valido_no_reacondiciona(self):
+        ingreso = self.crear_chatarrizado()
+        respuesta = self.reacondicionar(ingreso, tecnico_responsable='')
+        self.assertContains(respuesta, 'Elige el técnico responsable de reparar el equipo.')
+        # Un usuario que no es técnico, un número que no existe o un texto tampoco valen.
+        for valor in (str(self.admin.pk), '999999', 'abc', '١'):
+            self.reacondicionar(ingreso, tecnico_responsable=valor)
+        self.assertFalse(InventarioItem.objects.exists())
+        ingreso.refresh_from_db()
+        self.assertIsNone(ingreso.tecnico_reacondicionado)
+        self.assertIsNone(ingreso.fecha_reacondicionado)
+
+    def test_da_3_puntos_al_tecnico_elegido(self):
+        # El que reparó en la salida (chatarrización = 0) no es el que reacondicionó.
+        ingreso = self.crear_chatarrizado()
+        self.assertEqual(self.puntos(self.otro)['total'], 0)
+
+        respuesta = self.reacondicionar(ingreso, tecnico=self.otro)
+
+        self.assertContains(respuesta, '+3 puntos para Carlos Mora.')
+        ingreso.refresh_from_db()
+        self.assertEqual(ingreso.tecnico_reacondicionado, self.otro)
+        self.assertIsNotNone(ingreso.fecha_reacondicionado)
+        self.assertEqual(ingreso.estado, 'entregado')
+        perfil = self.puntos(self.otro)
+        self.assertEqual((perfil['total'], perfil['reacondicionados']), (3, 1))
+        self.assertEqual(self.puntos(self.tecnico)['total'], 0)
+
+    def test_donados_y_compras_tambien_dan_puntos(self):
+        donado = self.crear_ingreso(estado='donado')
+        self.client.force_login(self.tecnico)
+        self.reacondicionar(donado, tecnico=self.tecnico, next=reverse('econotec:admin_equipos_administrativos'))
+        self.assertTrue(InventarioItem.objects.filter(ingreso_origen=donado).exists())
+        self.assertEqual(self.puntos(self.tecnico)['total'], 3)
+
+    def test_ranking_suma_y_explica_los_puntos(self):
+        # El técnico ya tiene un reparado (+3) en el mes; el reacondicionado suma otros 3.
+        reparado = self.crear_ingreso(estado='entregado')
+        SalidaEquipo.objects.create(
+            ingreso=reparado, fecha_salida=date.today(), estado_reparacion='retirado',
+            tecnico_reparo=self.otro, valor_final_cobrado=Decimal('0.00'),
+            metodo_pago_final='sin_pago', registrado_por=self.admin,
+        )
+        self.reacondicionar(self.crear_chatarrizado(), tecnico=self.otro)
+
+        fila = self.ranking_del_mes()[self.otro.pk]
+        self.assertEqual(fila['puntos'], 6)
+        self.assertEqual(fila['reacondicionados'], 1)
+        self.assertIn(
+            {'etiqueta': 'Equipo reacondicionado', 'cantidad': 1, 'unitario': 3, 'subtotal': 3},
+            fila['puntos_detalle'],
+        )
+
+        from .views import ranking_con_dinero
+        hoy = date.today()
+        _registros, filas, _resumen = ranking_con_dinero(hoy.replace(day=1).isoformat(), hoy.isoformat())
+        self.assertEqual({f['tecnico_id']: f['puntos'] for f in filas}[self.otro.pk], 6)
+
+    def test_tecnico_solo_con_reacondicionados_aparece_en_el_ranking(self):
+        self.reacondicionar(self.crear_chatarrizado(), tecnico=self.otro)
+        fila = self.ranking_del_mes()[self.otro.pk]
+        self.assertEqual((fila['nombre'], fila['puntos'], fila['num_equipos']), ('Carlos Mora', 3, 0))
+        self.assertIsNotNone(fila['puesto'])
+
+    def test_cuenta_en_el_mes_en_que_se_reacondiciono(self):
+        ingreso = self.crear_chatarrizado()
+        self.reacondicionar(ingreso, tecnico=self.otro)
+        from django.utils import timezone
+        IngresoEquipo.objects.filter(pk=ingreso.pk).update(
+            fecha_reacondicionado=timezone.now() - timedelta(days=60),
+        )
+        self.assertNotIn(self.otro.pk, self.ranking_del_mes())
+        # Mi perfil cuenta todo el historial.
+        self.assertEqual(self.puntos(self.otro)['total'], 3)
+
+    def test_volver_a_reacondicionar_no_duplica_los_puntos(self):
+        ingreso = self.crear_chatarrizado()
+        self.reacondicionar(ingreso, tecnico=self.tecnico)
+        # Se borra la ficha por error y se reacondiciona otra vez con otro técnico.
+        InventarioItem.objects.filter(ingreso_origen=ingreso).delete()
+        self.reacondicionar(ingreso, tecnico=self.otro)
+        self.assertEqual(InventarioItem.objects.filter(ingreso_origen=ingreso).count(), 1)
+        self.assertEqual(self.puntos(self.tecnico)['total'], 0)
+        self.assertEqual(self.puntos(self.otro)['total'], 3)
+
+    def test_vender_o_borrar_la_ficha_no_quita_los_puntos(self):
+        ingreso = self.crear_chatarrizado()
+        self.reacondicionar(ingreso, tecnico=self.otro)
+        item = InventarioItem.objects.get(ingreso_origen=ingreso)
+        InventarioItem.objects.filter(pk=item.pk).update(cantidad=0)
+        self.assertEqual(self.puntos(self.otro)['total'], 3)
+        item.delete()
+        self.assertEqual(self.puntos(self.otro)['total'], 3)
+
+    def test_registrar_un_reacondicionado_a_mano_no_da_puntos(self):
+        # Solo el botón «Reacondicionar» da puntos; una ficha creada en el
+        # inventario no tiene técnico responsable.
+        InventarioItem.objects.create(
+            linea='reacondicionado', sede='guayaquil', categoria='impresora', tipo='impresora',
+            producto='Impresora', marca='HP', modelo='M404', ubicacion='guayaquil_norte',
+            registrado_por=self.tecnico,
+        )
+        self.assertEqual(self.puntos(self.tecnico)['total'], 0)
+        self.assertNotIn(self.tecnico.pk, self.ranking_del_mes())
+
+    def test_reiniciar_el_perfil_deja_fuera_los_anteriores(self):
+        from django.utils import timezone
+        from .models import UsuarioActividad
+        self.reacondicionar(self.crear_chatarrizado(), tecnico=self.otro)
+        UsuarioActividad.objects.update_or_create(
+            user=self.otro, defaults={'fecha_reinicio_perfil': timezone.now()},
+        )
+        self.otro.refresh_from_db()
+        self.assertEqual(self.puntos(self.otro)['total'], 0)
+        self.reacondicionar(self.crear_chatarrizado(marca='HP'), tecnico=self.otro)
+        self.otro.refresh_from_db()
+        self.assertEqual(self.puntos(self.otro)['total'], 3)

@@ -24,6 +24,9 @@ PUNTOS_POR_ESTADO_SALIDA = {
     'garantia_fallos_adicionales': -4,  # Garantía + fallos adicionales
 }
 PUNTOS_VENTA_PRODUCTO = 1
+# Equipo chatarrizado, donado o comprado que se reacondiciona con el botón
+# «Reacondicionar»: los puntos van al técnico responsable elegido en esa ventana.
+PUNTOS_EQUIPO_REACONDICIONADO = 3
 
 # Revisión es neutra (0), pero su subcategoría «No se pudo reparar» o
 # «Cliente no quiso reparar» cuenta como ese estado. «Equipo de prueba» y
@@ -56,18 +59,24 @@ NIVELES_TECNICO = (
 )
 
 
-def puntos_de_salidas(conteo_por_estado, ventas_producto=0):
-    """Suma de puntos de un grupo de salidas ({estado: cantidad}) y ventas.
-    Puede ser negativa; el perfil la corta en 0 con calcular_puntaje_perfil."""
+def puntos_de_salidas(conteo_por_estado, ventas_producto=0, reacondicionados=0, ajuste_manual=0):
+    """Suma de puntos de un grupo de salidas ({estado: cantidad}), ventas,
+    equipos reacondicionados y los puntos que el administrador sumó o restó a
+    mano (`ajuste_manual`, ya con su signo). Puede ser negativa; el perfil la
+    corta en 0 con calcular_puntaje_perfil."""
     return sum(
         PUNTOS_POR_ESTADO_SALIDA.get(estado, 0) * cantidad
         for estado, cantidad in conteo_por_estado.items()
-    ) + ventas_producto * PUNTOS_VENTA_PRODUCTO
+    ) + (
+        ventas_producto * PUNTOS_VENTA_PRODUCTO
+        + reacondicionados * PUNTOS_EQUIPO_REACONDICIONADO
+        + ajuste_manual
+    )
 
 
-def calcular_puntaje_perfil(conteo_por_estado, ventas_producto):
+def calcular_puntaje_perfil(conteo_por_estado, ventas_producto, reacondicionados=0, ajuste_manual=0):
     """Puntaje acumulado del perfil; nunca baja de 0."""
-    return max(0, puntos_de_salidas(conteo_por_estado, ventas_producto))
+    return max(0, puntos_de_salidas(conteo_por_estado, ventas_producto, reacondicionados, ajuste_manual))
 
 
 def nivel_por_puntos(total):
