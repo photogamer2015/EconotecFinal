@@ -5124,14 +5124,14 @@ def _reacondicionados_ranking(desde, hasta):
 
 def _ajustes_puntaje_ranking(desde, hasta):
     """Puntos sumados o restados a mano por el administrador («Puntajes»), por
-    técnico y según su fecha: {tecnico_id: (cantidad de ajustes, puntos con signo, nombre)}."""
+    técnico y según su fecha: {tecnico_id: (lista de ajustes, nombre)}. Cada
+    ajuste se muestra aparte en el Ranking, con su fecha y su motivo."""
     ajustes = aplicar_rango_fecha(AjustePuntaje.objects.all(), 'fecha', desde, hasta)
     resultado = {}
-    for ajuste in ajustes.select_related('tecnico'):
+    for ajuste in ajustes.select_related('tecnico').order_by('fecha', 'creado'):
         tecnico = ajuste.tecnico
-        cantidad, puntos, _nombre = resultado.get(tecnico.pk, (0, 0, ''))
         nombre = f'{tecnico.first_name} {tecnico.last_name}'.strip() or tecnico.username
-        resultado[tecnico.pk] = (cantidad + 1, puntos + ajuste.puntos_con_signo, nombre)
+        resultado.setdefault(tecnico.pk, ([], nombre))[0].append(ajuste)
     return resultado
 
 
@@ -5183,17 +5183,24 @@ def _ranking_salidas_por_tecnico(
                 'unitario': PUNTOS_EQUIPO_REACONDICIONADO,
                 'subtotal': equipos_rea * PUNTOS_EQUIPO_REACONDICIONADO,
             })
-        num_ajustes, puntos_ajuste, nombre_ajuste = ajustes.get(tid, (0, 0, ''))
-        if num_ajustes:
+        ajustes_tecnico, nombre_ajuste = ajustes.get(tid, ([], ''))
+        if ajustes_tecnico:
+            puntos_ajuste = sum(ajuste.puntos_con_signo for ajuste in ajustes_tecnico)
             fila['ajuste_manual'] = puntos_ajuste
             fila['puntos'] += puntos_ajuste
-            fila['puntos_detalle'].append({
-                'etiqueta': 'Ajuste manual del administrador',
-                'cantidad': num_ajustes,
-                # Cada ajuste vale distinto: no hay valor por unidad.
-                'unitario': None,
-                'subtotal': puntos_ajuste,
-            })
+            # Una línea por ajuste, con su fecha y su motivo, para saber el porqué.
+            fila['puntos_detalle'].extend(
+                {
+                    'etiqueta': 'Ajuste del administrador',
+                    'cantidad': 1,
+                    # Cada ajuste vale distinto: no hay valor por unidad.
+                    'unitario': None,
+                    'subtotal': ajuste.puntos_con_signo,
+                    'fecha': ajuste.fecha,
+                    'motivo': ajuste.motivo,
+                }
+                for ajuste in ajustes_tecnico
+            )
         fila.update({
             'tecnico_id': tid,
             'nombre': (

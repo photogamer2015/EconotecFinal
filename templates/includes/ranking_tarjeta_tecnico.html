@@ -86,10 +86,20 @@
                     <h5 class="tech-block-title">Puntos de este período</h5>
                     <ul class="puntos-desglose">
                         {% for d in r.puntos_detalle %}
-                        <li>
-                            <span>{% if d.unitario is None %}{{ d.etiqueta }} ({{ d.cantidad }}){% else %}{{ d.cantidad }} × {{ d.etiqueta }} ({% if d.unitario > 0 %}+{% endif %}{{ d.unitario }}){% endif %}</span>
+                        {% if d.unitario is None %}
+                        <li class="ajuste-manual">
+                            <span class="ajuste-texto">
+                                <span>{{ d.etiqueta }} · {{ d.fecha|date:"d/m/Y" }}</span>
+                                <small class="ajuste-motivo"><b>Motivo:</b> {{ d.motivo|linebreaksbr }}</small>
+                            </span>
                             <strong class="{% if d.subtotal > 0 %}pos{% else %}neg{% endif %}">{% if d.subtotal > 0 %}+{% endif %}{{ d.subtotal }}</strong>
                         </li>
+                        {% else %}
+                        <li>
+                            <span>{{ d.cantidad }} × {{ d.etiqueta }} ({% if d.unitario > 0 %}+{% endif %}{{ d.unitario }})</span>
+                            <strong class="{% if d.subtotal > 0 %}pos{% else %}neg{% endif %}">{% if d.subtotal > 0 %}+{% endif %}{{ d.subtotal }}</strong>
+                        </li>
+                        {% endif %}
                         {% empty %}
                         <li class="vacio">Sin resultados que den o quiten puntos en este período.</li>
                         {% endfor %}
