@@ -19,22 +19,21 @@ from .models import IngresoEquipo, InventarioItem, SalidaEquipo
 
 ESTADOS_ADMINISTRATIVOS = ('donado', 'equipo_a_comprar')
 
-# Tipo del ingreso → (categoría, tipo) del inventario. Cuando la categoría
-# tiene varios tipos y no se puede saber cuál es (impresora láser o de
-# inyección, consola de mesa o portátil), el tipo queda vacío para que el
-# administrador lo elija en la ventana.
-TIPO_INGRESO_A_INVENTARIO = {
-    'impresora': ('impresora', ''),
-    'laptop': ('computadora', 'laptops'),
-    'pc': ('computadora', 'pc'),
-    'cpu': ('computadora', 'pc'),
-    'monitor': ('otros-equipos-materiales', 'otros-equipos-materiales'),
-    'celular': ('celular', 'celular'),
-    'tablet': ('tablet', 'tablet'),
-    'consola': ('consola', ''),
-    'mando': ('mando', 'mando'),
-    'maquina_coser': ('otros-equipos-materiales', 'otros-equipos-materiales'),
-    'otro': ('otros-equipos-materiales', 'otros-equipos-materiales'),
+# Tipo del ingreso → categoría del Inventario reacondicionado. Este inventario
+# no se divide por tipo (no hay láser/inyección ni PC/laptops): cada categoría
+# es una sola tabla y el tipo guardado es la misma categoría.
+TIPO_INGRESO_A_CATEGORIA = {
+    'impresora': 'impresora',
+    'laptop': 'computadora',
+    'pc': 'computadora',
+    'cpu': 'computadora',
+    'monitor': 'otros-equipos-materiales',
+    'celular': 'celular',
+    'tablet': 'tablet',
+    'consola': 'consola',
+    'mando': 'mando',
+    'maquina_coser': 'otros-equipos-materiales',
+    'otro': 'otros-equipos-materiales',
 }
 
 
@@ -44,21 +43,15 @@ class ReacondicionarError(Exception):
 
 def _catalogo():
     from .views import (
-        INVENTARIO_CATEGORIAS, INVENTARIO_SEDES, INVENTARIO_UBICACIONES_POR_SEDE,
+        INVENTARIO_CATEGORIAS_REACONDICIONADO, INVENTARIO_SEDES, INVENTARIO_UBICACIONES_POR_SEDE,
     )
-    return INVENTARIO_CATEGORIAS, INVENTARIO_SEDES, INVENTARIO_UBICACIONES_POR_SEDE
+    return INVENTARIO_CATEGORIAS_REACONDICIONADO, INVENTARIO_SEDES, INVENTARIO_UBICACIONES_POR_SEDE
 
 
 def contexto_modal_reacondicionar():
     """Opciones de la ventana «Reacondicionar equipo» (sedes, tipos y ubicaciones)."""
     categorias, sedes, ubicaciones = _catalogo()
-    sugerencias = {}
-    for tipo_ingreso, (categoria, tipo) in TIPO_INGRESO_A_INVENTARIO.items():
-        sugerencias[tipo_ingreso] = {
-            'valor': f'{categoria}|{tipo}' if tipo else '',
-            'categoria': categorias[categoria]['nombre'],
-            'opciones': ' o '.join(nombre for _slug, nombre in categorias[categoria]['tipos']),
-        }
+    sugerencias = dict(TIPO_INGRESO_A_CATEGORIA)
     return {
         'reacondicionar_config': {
             'sedes': [{'valor': slug, 'nombre': nombre} for slug, nombre in sedes.items()],
@@ -67,13 +60,7 @@ def contexto_modal_reacondicionar():
                 for sede, opciones in ubicaciones.items()
             },
             'categorias': [
-                {
-                    'nombre': info['nombre'],
-                    'tipos': [
-                        {'valor': f'{slug}|{tipo_slug}', 'nombre': tipo_nombre}
-                        for tipo_slug, tipo_nombre in info['tipos']
-                    ],
-                }
+                {'valor': slug, 'nombre': info['nombre']}
                 for slug, info in categorias.items()
             ],
             'sugerencias': sugerencias,
@@ -170,10 +157,11 @@ def reacondicionar_equipo(ingreso_pk, datos, user):
     if ubicacion not in ubicaciones_validas:
         raise ReacondicionarError('Elige la ubicación de Guayaquil: Norte o Centro.')
 
-    categoria_slug, _sep, tipo_slug = (datos.get('tipo_inventario') or '').partition('|')
-    categoria = categorias.get(categoria_slug)
-    if not categoria or tipo_slug not in dict(categoria['tipos']):
-        raise ReacondicionarError('Elige el tipo de equipo.')
+    categoria_slug = (datos.get('categoria') or '').strip()
+    if categoria_slug not in categorias:
+        raise ReacondicionarError('Elige la categoría del equipo.')
+    # Sin subtipos: el tipo guardado es la misma categoría.
+    tipo_slug = categoria_slug
 
     marca = _texto(datos, 'marca', 100)
     modelo = _texto(datos, 'modelo', 100)

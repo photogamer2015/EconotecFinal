@@ -47,7 +47,7 @@ class DineroComprasYReacondicionadosTests(TestCase):
 
     def vender_reacondicionado(self, valor='80.00'):
         equipo = InventarioItem.objects.create(
-            linea='reacondicionado', sede='guayaquil', categoria='computadora', tipo='laptops',
+            linea='reacondicionado', sede='guayaquil', categoria='computadora', tipo='computadora',
             producto='Laptop reacondicionada', marca='Lenovo', modelo='ThinkPad',
             ubicacion='guayaquil_norte', cantidad=1, costo=Decimal(valor),
         )
@@ -126,7 +126,7 @@ class DineroComprasYReacondicionadosTests(TestCase):
         # Reacondicionar la compra no mueve dinero.
         self.client.post(reverse('econotec:equipo_reacondicionar', kwargs={'pk': compra.pk}), {
             'sede': 'guayaquil', 'ubicacion': 'guayaquil_norte',
-            'tipo_inventario': 'computadora|laptops', 'marca': 'Lenovo', 'modelo': 'ThinkPad',
+            'categoria': 'computadora', 'marca': 'Lenovo', 'modelo': 'ThinkPad',
         })
         self.assertEqual(self.caja()['saldo_final'], Decimal('-30.00'))
 

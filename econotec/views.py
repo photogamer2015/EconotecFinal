@@ -1001,6 +1001,20 @@ INVENTARIO_CATEGORIAS = {
 }
 
 
+# El inventario reacondicionado no se divide por tipo: cada categoría tiene una
+# sola tabla (Impresora, Computadora, Consola...), sin láser/inyección ni PC/laptops.
+INVENTARIO_CATEGORIAS_REACONDICIONADO = {
+    slug: {'nombre': info['nombre'], 'tipos': ((slug, info['nombre']),)}
+    for slug, info in INVENTARIO_CATEGORIAS.items()
+}
+
+
+def _inventario_categorias(linea='producto'):
+    if linea == 'reacondicionado':
+        return INVENTARIO_CATEGORIAS_REACONDICIONADO
+    return INVENTARIO_CATEGORIAS
+
+
 # Dos inventarios con la misma estructura de sedes y categorías. El de producto
 # conserva sus direcciones de siempre (/inventario/<sede>/...); el de equipos
 # reacondicionados vive en /inventario/reacondicionado/<sede>/...
@@ -1142,9 +1156,9 @@ def _inventario_redirect_tabla(item):
     )
 
 
-def _inventario_contexto_base(sede_slug, categoria_slug, tipo_slug):
+def _inventario_contexto_base(sede_slug, categoria_slug, tipo_slug, linea='producto'):
     sede_label = INVENTARIO_SEDES.get(sede_slug)
-    categoria_info = INVENTARIO_CATEGORIAS.get(categoria_slug)
+    categoria_info = _inventario_categorias(linea).get(categoria_slug)
     if not sede_label or not categoria_info:
         return None, None, None
     return sede_label, categoria_info, _inventario_tipo_por_slug(categoria_info, tipo_slug)
@@ -1156,7 +1170,7 @@ def _inventario_item_contexto(request, item, box_size=8):
 
     detalle_url = reverse('econotec:inventario_detalle_item', kwargs={'codigo': item.codigo})
     qr_url = request.build_absolute_uri(detalle_url)
-    categoria_info = INVENTARIO_CATEGORIAS.get(item.categoria, {'nombre': item.categoria})
+    categoria_info = _inventario_categorias(item.linea).get(item.categoria, {'nombre': item.categoria})
     tipo_info = {'slug': item.tipo, 'nombre': item.tipo}
     if 'tipos' in categoria_info:
         tipo_info = _inventario_tipo_por_slug(categoria_info, item.tipo) or tipo_info
@@ -1221,7 +1235,7 @@ def inventario_categoria(request, sede, categoria, linea='producto'):
     sede_slug = (sede or '').strip().lower()
     categoria_slug = (categoria or '').strip().lower()
     sede_label = INVENTARIO_SEDES.get(sede_slug)
-    categoria_info = INVENTARIO_CATEGORIAS.get(categoria_slug)
+    categoria_info = _inventario_categorias(linea_info['slug']).get(categoria_slug)
     if not sede_label or not categoria_info:
         messages.error(request, 'Selecciona una sede y una categoría válida para inventario.')
         return redirect(f'econotec:inventario_{linea_info["slug"]}')
@@ -1255,7 +1269,7 @@ def inventario_tabla(request, sede, categoria, tipo, linea='producto'):
     categoria_slug = (categoria or '').strip().lower()
     tipo_slug = (tipo or '').strip().lower()
     sede_label = INVENTARIO_SEDES.get(sede_slug)
-    categoria_info = INVENTARIO_CATEGORIAS.get(categoria_slug)
+    categoria_info = _inventario_categorias(linea_info['slug']).get(categoria_slug)
     if not sede_label or not categoria_info:
         messages.error(request, 'Selecciona una sede y una categoría válida para inventario.')
         return redirect(f'econotec:inventario_{linea_info["slug"]}')
@@ -1324,7 +1338,7 @@ def inventario_export(request, sede, categoria, tipo, linea='producto'):
     categoria_slug = (categoria or '').strip().lower()
     tipo_slug = (tipo or '').strip().lower()
     sede_label = INVENTARIO_SEDES.get(sede_slug)
-    categoria_info = INVENTARIO_CATEGORIAS.get(categoria_slug)
+    categoria_info = _inventario_categorias(linea_info['slug']).get(categoria_slug)
     if not sede_label or not categoria_info:
         messages.error(request, 'Selecciona una sede y una categoría válida para exportar inventario.')
         return redirect(f'econotec:inventario_{linea_info["slug"]}')
@@ -1465,7 +1479,7 @@ def inventario_registrar(request, sede, categoria, tipo, linea='producto'):
     categoria_slug = (categoria or '').strip().lower()
     tipo_slug = (tipo or '').strip().lower()
     sede_label = INVENTARIO_SEDES.get(sede_slug)
-    categoria_info = INVENTARIO_CATEGORIAS.get(categoria_slug)
+    categoria_info = _inventario_categorias(linea_info['slug']).get(categoria_slug)
     if not sede_label or not categoria_info:
         messages.error(request, 'Selecciona una sede y una categoría válida para inventario.')
         return redirect(f'econotec:inventario_{linea_info["slug"]}')
@@ -1533,6 +1547,7 @@ def inventario_editar(request, codigo):
         item.sede,
         item.categoria,
         item.tipo,
+        item.linea,
     )
     if not sede_label or not categoria_info or not tipo_info:
         messages.error(request, 'Este producto tiene una categoría de inventario inválida.')
@@ -2918,7 +2933,7 @@ def _venta_observacion_producto_limpia(valor):
 
 
 def _inventario_item_venta_json(item, cantidad=None, relacion_id=None, observacion=''):
-    categoria_info = INVENTARIO_CATEGORIAS.get(item.categoria, {})
+    categoria_info = _inventario_categorias(item.linea).get(item.categoria, {})
     categoria_nombre = categoria_info.get('nombre', item.categoria)
     tipo_info = _inventario_tipo_por_slug(categoria_info, item.tipo) if categoria_info else None
     seleccionable = item.estado == 'disponible' and item.cantidad > 0
@@ -2960,7 +2975,7 @@ def _venta_inventario_item_json(relacion):
     )
 
 
-def _venta_inventario_categorias_json():
+def _venta_inventario_categorias_json(linea='producto'):
     return [
         {
             'slug': slug,
@@ -2970,7 +2985,7 @@ def _venta_inventario_categorias_json():
                 for tipo_slug, tipo_nombre in info['tipos']
             ],
         }
-        for slug, info in INVENTARIO_CATEGORIAS.items()
+        for slug, info in _inventario_categorias(linea).items()
     ]
 
 
@@ -3783,7 +3798,7 @@ def venta_registrar(request, linea='producto'):
         'venta': None,
         'inventario_seleccionados_json': inventario_seleccionados_json,
         'venta_inventario_sedes_json': VENTA_INVENTARIO_UBICACIONES,
-        'venta_inventario_categorias_json': _venta_inventario_categorias_json(),
+        'venta_inventario_categorias_json': _venta_inventario_categorias_json(linea_info['slug']),
         'venta_pago_form': _venta_pago_contexto(request.POST if request.method == 'POST' else None),
         'modo': 'registrar',
         'venta_linea': linea_info,
@@ -3870,7 +3885,7 @@ def venta_editar(request, pk):
             _venta_inventario_item_json(relacion) for relacion in relaciones_inventario
         ],
         'venta_inventario_sedes_json': VENTA_INVENTARIO_UBICACIONES,
-        'venta_inventario_categorias_json': _venta_inventario_categorias_json(),
+        'venta_inventario_categorias_json': _venta_inventario_categorias_json(_venta_linea_de(venta)),
         'venta_pago_form': _venta_pago_contexto(request.POST if request.method == 'POST' else None, venta),
         'modo': 'editar',
         'venta_linea': _venta_linea(_venta_linea_de(venta)),

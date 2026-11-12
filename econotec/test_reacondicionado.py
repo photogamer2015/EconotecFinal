@@ -63,7 +63,7 @@ class ReacondicionadoBase(TestCase):
         datos = {
             'sede': 'guayaquil',
             'ubicacion': 'guayaquil_centro',
-            'tipo_inventario': 'impresora|impresora-inyeccion',
+            'categoria': 'impresora',
             'marca': 'Epson',
             'modelo': 'L4160',
             'serie': 'X123',
@@ -99,19 +99,20 @@ class InventarioDosLineasTests(ReacondicionadoBase):
         )
         self.assertEqual(
             reverse('econotec:inventario_reacondicionado_tabla', kwargs={
-                'sede': 'guayaquil', 'categoria': 'impresora', 'tipo': 'impresora-laser',
+                'sede': 'guayaquil', 'categoria': 'impresora', 'tipo': 'impresora',
             }),
-            '/inventario/reacondicionado/guayaquil/impresora/impresora-laser/',
+            '/inventario/reacondicionado/guayaquil/impresora/impresora/',
         )
 
     def test_cada_inventario_muestra_solo_sus_equipos(self):
         kwargs = {'sede': 'guayaquil', 'categoria': 'impresora', 'tipo': 'impresora-laser'}
+        kwargs_rea = {'sede': 'guayaquil', 'categoria': 'impresora', 'tipo': 'impresora'}
         InventarioItem.objects.create(
             sede='guayaquil', categoria='impresora', tipo='impresora-laser',
             producto='Tóner producto', marca='HP', modelo='85A', ubicacion='guayaquil_norte',
         )
         respuesta = self.client.post(
-            reverse('econotec:inventario_reacondicionado_registrar', kwargs=kwargs),
+            reverse('econotec:inventario_reacondicionado_registrar', kwargs=kwargs_rea),
             {
                 'producto': 'Impresora reacondicionada', 'marca': 'HP', 'modelo': 'M404',
                 'serie': '', 'estado': 'disponible', 'causa_no_disponible': '',
@@ -121,21 +122,21 @@ class InventarioDosLineasTests(ReacondicionadoBase):
         rea = InventarioItem.objects.get(producto='Impresora reacondicionada')
         self.assertEqual(rea.linea, 'reacondicionado')
         self.assertTrue(rea.codigo.startswith('REA-GYE-'))
-        self.assertRedirects(respuesta, reverse('econotec:inventario_reacondicionado_tabla', kwargs=kwargs))
+        self.assertRedirects(respuesta, reverse('econotec:inventario_reacondicionado_tabla', kwargs=kwargs_rea))
 
         tabla_producto = self.client.get(reverse('econotec:inventario_tabla', kwargs=kwargs))
         self.assertContains(tabla_producto, 'Tóner producto')
         self.assertNotContains(tabla_producto, 'Impresora reacondicionada')
 
-        tabla_rea = self.client.get(reverse('econotec:inventario_reacondicionado_tabla', kwargs=kwargs))
+        tabla_rea = self.client.get(reverse('econotec:inventario_reacondicionado_tabla', kwargs=kwargs_rea))
         self.assertContains(tabla_rea, 'Impresora reacondicionada')
         self.assertNotContains(tabla_rea, 'Tóner producto')
         self.assertContains(tabla_rea, 'INVENTARIO REACONDICIONADO')
-        self.assertContains(tabla_rea, reverse('econotec:inventario_reacondicionado_export', kwargs=kwargs))
+        self.assertContains(tabla_rea, reverse('econotec:inventario_reacondicionado_export', kwargs=kwargs_rea))
 
         detalle = self.client.get(reverse('econotec:inventario_detalle_item', kwargs={'codigo': rea.codigo}))
         self.assertContains(detalle, f'href="{reverse("econotec:inventario_reacondicionado")}"')
-        self.assertContains(detalle, reverse('econotec:inventario_reacondicionado_tabla', kwargs=kwargs))
+        self.assertContains(detalle, reverse('econotec:inventario_reacondicionado_tabla', kwargs=kwargs_rea))
 
     def test_ventas_solo_ofrecen_el_inventario_de_producto(self):
         InventarioItem.objects.create(
@@ -143,7 +144,7 @@ class InventarioDosLineasTests(ReacondicionadoBase):
             producto='Tóner producto', marca='HP', modelo='85A', ubicacion='guayaquil_norte',
         )
         InventarioItem.objects.create(
-            linea='reacondicionado', sede='guayaquil', categoria='impresora', tipo='impresora-laser',
+            linea='reacondicionado', sede='guayaquil', categoria='impresora', tipo='impresora',
             producto='Impresora reacondicionada', marca='HP', modelo='M404', ubicacion='guayaquil_norte',
         )
         datos = self.client.get(reverse('econotec:venta_inventario_catalogo')).json()
@@ -183,7 +184,7 @@ class ReacondicionarDesdeChatarrizacionTests(ReacondicionadoBase):
         self.assertEqual(item.linea, 'reacondicionado')
         self.assertEqual(item.ingreso_origen, ingreso)
         self.assertEqual((item.sede, item.ubicacion), ('guayaquil', 'guayaquil_centro'))
-        self.assertEqual((item.categoria, item.tipo), ('impresora', 'impresora-inyeccion'))
+        self.assertEqual((item.categoria, item.tipo), ('impresora', 'impresora'))
         self.assertEqual((item.marca, item.modelo, item.serie), ('Epson', 'L4160', 'X123'))
         self.assertEqual(item.producto, 'Impresora Epson L4160')
         self.assertEqual(item.cantidad, 1)
@@ -204,7 +205,7 @@ class ReacondicionarDesdeChatarrizacionTests(ReacondicionadoBase):
         url = reverse('econotec:equipo_reacondicionar', kwargs={'pk': ingreso.pk})
 
         self.client.post(url, self.datos_reacondicionar(ubicacion=''))
-        self.client.post(url, self.datos_reacondicionar(tipo_inventario='impresora|pc'))
+        self.client.post(url, self.datos_reacondicionar(categoria='impresora-laser'))
         self.client.post(url, self.datos_reacondicionar(sede='ventas'))
         self.client.post(url, self.datos_reacondicionar(marca='  '))
         self.assertFalse(InventarioItem.objects.exists())
@@ -279,7 +280,7 @@ class DonadosComprasCambiarEstadoTests(ReacondicionadoBase):
 
         self.client.post(
             reverse('econotec:equipo_reacondicionar', kwargs={'pk': compra.pk}),
-            self.datos_reacondicionar(tipo_inventario='computadora|laptops'),
+            self.datos_reacondicionar(categoria='computadora'),
         )
         self.assertTrue(InventarioItem.objects.filter(ingreso_origen=compra).exists())
         avisos = NotificacionCambioAdmin.objects.filter(tipo='compra_estado')
@@ -338,7 +339,7 @@ class DonadosComprasCambiarEstadoTests(ReacondicionadoBase):
         self.client.post(
             reverse('econotec:equipo_reacondicionar', kwargs={'pk': donado.pk}),
             self.datos_reacondicionar(
-                tipo_inventario='celular|celular', marca='Samsung', modelo='A10',
+                categoria='celular', marca='Samsung', modelo='A10',
                 next=reverse('econotec:admin_equipos_administrativos'),
             ),
         )
@@ -368,7 +369,7 @@ class VentaReacondicionadoYClienteOpcionalTests(ReacondicionadoBase):
             cantidad=5, costo=Decimal('20.00'),
         )
         self.equipo = InventarioItem.objects.create(
-            linea='reacondicionado', sede='guayaquil', categoria='impresora', tipo='impresora-laser',
+            linea='reacondicionado', sede='guayaquil', categoria='impresora', tipo='impresora',
             producto='Impresora reacondicionada', marca='HP', modelo='M404', ubicacion='guayaquil_norte',
             cantidad=1, costo=Decimal('80.00'),
         )
@@ -473,3 +474,74 @@ class VentaReacondicionadoYClienteOpcionalTests(ReacondicionadoBase):
         respuesta = self.client.post(reverse('econotec:venta_registrar'), datos)
         self.assertEqual(respuesta.status_code, 200)
         self.assertFalse(IngresoEquipo.objects.filter(sede='ventas').exists())
+
+
+class ReacondicionadoSinSubtiposTests(ReacondicionadoBase):
+    """El inventario reacondicionado no se divide en láser/inyección ni PC/laptops."""
+
+    def test_categoria_va_directo_a_una_sola_tabla(self):
+        for categoria in ('impresora', 'computadora', 'consola'):
+            respuesta = self.client.get(reverse('econotec:inventario_reacondicionado_categoria', kwargs={
+                'sede': 'guayaquil', 'categoria': categoria,
+            }))
+            self.assertRedirects(respuesta, reverse('econotec:inventario_reacondicionado_tabla', kwargs={
+                'sede': 'guayaquil', 'categoria': categoria, 'tipo': categoria,
+            }))
+        tabla = self.client.get(reverse('econotec:inventario_reacondicionado_tabla', kwargs={
+            'sede': 'guayaquil', 'categoria': 'impresora', 'tipo': 'impresora',
+        }))
+        self.assertNotContains(tabla, 'Ver tipos')
+        self.assertNotContains(tabla, 'Impresora Laser')
+        # Los subtipos ya no existen en el reacondicionado.
+        vieja = self.client.get(reverse('econotec:inventario_reacondicionado_tabla', kwargs={
+            'sede': 'guayaquil', 'categoria': 'impresora', 'tipo': 'impresora-laser',
+        }))
+        self.assertEqual(vieja.status_code, 302)
+
+    def test_inventario_de_producto_sigue_dividido(self):
+        respuesta = self.client.get(reverse('econotec:inventario_categoria', kwargs={
+            'sede': 'guayaquil', 'categoria': 'impresora',
+        }))
+        self.assertContains(respuesta, 'Impresora Laser')
+        self.assertContains(respuesta, 'Impresora Inyección')
+
+    def test_ventana_pide_categoria_y_laser_e_inyeccion_caen_juntas(self):
+        uno = self.crear_chatarrizado()
+        dos = self.crear_chatarrizado(marca='HP', modelo_serie='M404')
+        pagina = self.client.get(reverse('econotec:admin_activos_bodegaje'))
+        self.assertContains(pagina, 'name="categoria"')
+        self.assertNotContains(pagina, 'Impresora Inyección')
+        for ingreso in (uno, dos):
+            self.client.post(
+                reverse('econotec:equipo_reacondicionar', kwargs={'pk': ingreso.pk}),
+                self.datos_reacondicionar(marca=ingreso.marca, modelo=ingreso.modelo_serie),
+            )
+        tabla = self.client.get(reverse('econotec:inventario_reacondicionado_tabla', kwargs={
+            'sede': 'guayaquil', 'categoria': 'impresora', 'tipo': 'impresora',
+        }))
+        self.assertEqual(tabla.context['total_general'], 2)
+
+    def test_venta_de_reacondicionado_no_pide_subtipo(self):
+        formulario = self.client.get(reverse('econotec:venta_registrar_reacondicionado'))
+        categorias = {c['slug']: c for c in formulario.context['venta_inventario_categorias_json']}
+        self.assertEqual(categorias['impresora']['tipos'], [{'slug': 'impresora', 'nombre': 'Impresora'}])
+        producto = self.client.get(reverse('econotec:venta_registrar'))
+        categorias = {c['slug']: c for c in producto.context['venta_inventario_categorias_json']}
+        self.assertEqual(len(categorias['impresora']['tipos']), 2)
+
+    def test_migracion_une_los_subtipos_ya_guardados(self):
+        from importlib import import_module
+        from django.apps import apps
+        viejo = InventarioItem.objects.create(
+            linea='reacondicionado', sede='guayaquil', categoria='impresora', tipo='impresora-laser',
+            producto='Impresora vieja', marca='Epson', modelo='L4160', ubicacion='guayaquil_norte',
+        )
+        producto = InventarioItem.objects.create(
+            sede='guayaquil', categoria='impresora', tipo='impresora-laser',
+            producto='Tóner', marca='HP', modelo='85A', ubicacion='guayaquil_norte',
+        )
+        import_module('econotec.migrations.0083_reacondicionado_sin_subtipos').unir_subtipos(apps, None)
+        viejo.refresh_from_db()
+        producto.refresh_from_db()
+        self.assertEqual(viejo.tipo, 'impresora')
+        self.assertEqual(producto.tipo, 'impresora-laser')

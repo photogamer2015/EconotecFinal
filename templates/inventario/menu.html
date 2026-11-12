@@ -249,6 +249,10 @@
     }
 </style>
 
+{% if linea.slug == 'reacondicionado' %}
+{# El inventario reacondicionado no se divide por tipo: una sola tabla por categoría. #}
+<style>.categoria-link .subzona { display: none; }</style>
+{% endif %}
 <div class="crumb">
     <a href="{% url 'econotec:bienvenida' %}">Inicio</a> /
     <a href="{{ inv_urls.inicio }}">Inventario</a> / {{ linea.nombre }}

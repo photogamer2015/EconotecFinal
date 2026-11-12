@@ -181,18 +181,13 @@
             </div>
 
             <div class="rea-campo">
-                <label class="form-label" for="rea-tipo">Tipo de equipo</label>
-                <select class="form-input" name="tipo_inventario" id="rea-tipo" required>
-                    <option value="">— Elige el tipo —</option>
+                <label class="form-label" for="rea-tipo">Categoría</label>
+                <select class="form-input" name="categoria" id="rea-tipo" required>
+                    <option value="">— Elige la categoría —</option>
                     {% for categoria in reacondicionar_config.categorias %}
-                    <optgroup label="{{ categoria.nombre }}">
-                        {% for tipo in categoria.tipos %}
-                        <option value="{{ tipo.valor }}">{{ tipo.nombre }}</option>
-                        {% endfor %}
-                    </optgroup>
+                    <option value="{{ categoria.valor }}">{{ categoria.nombre }}</option>
                     {% endfor %}
                 </select>
-                <p class="rea-ayuda" id="rea-tipo-ayuda" hidden></p>
             </div>
 
             <div class="rea-grid">
@@ -233,7 +228,6 @@
         var ubicacionCampo = document.getElementById('rea-ubicacion-campo');
         var ubicacion = document.getElementById('rea-ubicacion');
         var tipo = document.getElementById('rea-tipo');
-        var tipoAyuda = document.getElementById('rea-tipo-ayuda');
         var ultimoFoco = null;
 
         function sedeElegida() {
@@ -281,15 +275,8 @@
             if (sede) sede.checked = true;
             pintarUbicaciones();
 
-            var sugerencia = config.sugerencias[d.reaTipoEquipo || ''] || null;
-            tipo.value = sugerencia ? sugerencia.valor : '';
-            if (sugerencia && !sugerencia.valor) {
-                tipoAyuda.textContent = 'Este equipo entró como ' + (d.reaTipoNombre || sugerencia.categoria)
-                    + ': elige si es ' + sugerencia.opciones + '.';
-                tipoAyuda.hidden = false;
-            } else {
-                tipoAyuda.hidden = true;
-            }
+            // La categoría sale del tipo con el que entró el equipo.
+            tipo.value = config.sugerencias[d.reaTipoEquipo || ''] || '';
 
             modal.classList.add('show');
             modal.setAttribute('aria-hidden', 'false');
@@ -303,7 +290,6 @@
 
         form.addEventListener('change', function (e) {
             if (e.target.name === 'sede') pintarUbicaciones();
-            if (e.target === tipo) tipoAyuda.hidden = true;
         });
         form.addEventListener('submit', function () {
             var boton = document.getElementById('rea-confirmar');
