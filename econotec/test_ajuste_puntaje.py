@@ -85,26 +85,40 @@ class AjustePuntajeTests(TestCase):
         self.assertFalse(AjustePuntaje.objects.exists())
 
     def test_ranking_suma_el_ajuste_del_periodo(self):
-        self.ajustar('sumar', 8)
-        self.ajustar('restar', 3)
+        self.ajustar('sumar', 8, motivo='Ayudó con los equipos de Quito')
+        self.ajustar('restar', 3, motivo='Llegó tarde')
         # Un ajuste de hace dos meses no cuenta en el mes actual.
         self.ajustar('sumar', 100, fecha=HOY - timedelta(days=70))
 
         fila = self.ranking_del_mes()[self.tecnico.pk]
-        self.assertEqual(fila['puntos'], 5)
-        self.assertIn(
-            {'etiqueta': 'Ajuste manual del administrador', 'cantidad': 2, 'unitario': None, 'subtotal': 5},
-            fila['puntos_detalle'],
+        self.assertEqual((fila['puntos'], fila['ajuste_manual']), (5, 5))
+        ajustes = [d for d in fila['puntos_detalle'] if d['unitario'] is None]
+        self.assertEqual(
+            [(d['etiqueta'], d['subtotal'], d['fecha'], d['motivo']) for d in ajustes],
+            [
+                ('Ajuste del administrador', 8, HOY, 'Ayudó con los equipos de Quito'),
+                ('Ajuste del administrador', -3, HOY, 'Llegó tarde'),
+            ],
         )
         _registros, filas, _resumen = ranking_con_dinero(HOY.replace(day=1).isoformat(), HOY.isoformat())
         self.assertEqual({f['tecnico_id']: f['puntos'] for f in filas}[self.tecnico.pk], 5)
         # Mi perfil cuenta todo el historial.
         self.assertEqual(self.total(), 105)
 
+    def test_ranking_muestra_el_motivo_de_cada_ajuste(self):
+        self.ajustar('sumar', 3, motivo='Reparó la impresora del cliente VIP\nsin costo extra')
+        self.ajustar('restar', 1, motivo='<b>no cerró</b> el equipo')
+
         pagina = self.client.get(reverse('econotec:salida_totales'), {
             'desde': HOY.replace(day=1).isoformat(), 'hasta': HOY.isoformat(),
         })
-        self.assertContains(pagina, 'Ajuste manual del administrador (2)')
+        self.assertContains(pagina, f'Ajuste del administrador · {HOY:%d/%m/%Y}', count=2)
+        self.assertContains(pagina, 'Reparó la impresora del cliente VIP<br>sin costo extra')
+        self.assertContains(pagina, '<strong class="pos">+3</strong>', html=True)
+        self.assertContains(pagina, '<strong class="neg">-1</strong>', html=True)
+        # El motivo se muestra como texto, nunca como código de la página.
+        self.assertContains(pagina, '&lt;b&gt;no cerró&lt;/b&gt; el equipo')
+        self.assertNotContains(pagina, '<b>no cerró</b>')
 
     def test_borrar_el_ajuste_deshace_los_puntos(self):
         self.ajustar('sumar', 7)

@@ -382,6 +382,16 @@
     .puntos-desglose .pos { color: var(--success); }
     .puntos-desglose .neg { color: var(--danger); }
     .puntos-desglose li.vacio { color: var(--text-muted); font-style: italic; }
+    /* Ajuste manual del administrador: fecha y motivo debajo. */
+    .puntos-desglose .ajuste-texto { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+    .puntos-desglose .ajuste-motivo {
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--text-main);
+        line-height: 1.4;
+        overflow-wrap: anywhere;
+    }
+    .puntos-desglose .ajuste-motivo b { color: var(--text-soft); }
     .puntos-desglose li.total {
         margin-top: 2px;
         border-top: 2px solid var(--border-color);
