@@ -1,0 +1,44 @@
+{% extends 'base.html' %}
+
+{% block title %}Inventario — Econotec{% endblock %}
+
+{% block content %}
+<style>
+    .inventario-linea-total {
+        display: inline-flex;
+        align-items: center;
+        min-height: 26px;
+        margin-top: 10px;
+        padding: 0 10px;
+        border-radius: 999px;
+        background: var(--surface-muted);
+        color: var(--text-muted);
+        font-size: 12.5px;
+        font-weight: 700;
+    }
+</style>
+
+<div class="crumb">
+    <a href="{% url 'econotec:bienvenida' %}">Inicio</a> / Inventario
+</div>
+
+<h2 class="page-title">Inventario</h2>
+<p class="page-subtitle">Elige qué inventario quieres abrir.</p>
+
+<div class="menu-grid">
+    {% for linea in lineas %}
+    <a href="{{ linea.url }}" class="menu-card" data-inventario-linea="{{ linea.slug }}">
+        <span class="menu-card-icon {% if linea.slug == 'reacondicionado' %}is-green{% else %}is-orange{% endif %}" aria-hidden="true">{{ linea.icono }}</span>
+        <div class="menu-card-body">
+            <h3>{{ linea.nombre }}</h3>
+            {% if linea.slug == 'reacondicionado' %}
+            <p>Equipos reacondicionados desde chatarrización, donados o comprados. Por sede y categoría.</p>
+            {% else %}
+            <p>Productos, piezas y equipos por sede y categoría.</p>
+            {% endif %}
+            <span class="inventario-linea-total">{{ linea.total }} registro{{ linea.total|pluralize }}</span>
+        </div>
+    </a>
+    {% endfor %}
+</div>
+{% endblock %}

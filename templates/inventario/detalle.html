@@ -222,7 +222,8 @@
 
 <div class="crumb">
     <a href="{% url 'econotec:bienvenida' %}">Inicio</a> /
-    <a href="{% url 'econotec:inventario_menu' %}">Inventario</a> /
+    <a href="{{ inv_urls.inicio }}">Inventario</a> /
+    <a href="{{ inv_urls.menu }}">{{ linea.nombre }}</a> /
     Detalle {{ item.codigo }}
 </div>
 
@@ -238,7 +239,7 @@
                 {% if puede_gestionar_inventario %}
                     <a href="{% url 'econotec:inventario_editar' codigo=item.codigo %}" class="btn btn-secondary">Editar producto</a>
                 {% endif %}
-                <a href="{% url 'econotec:inventario_tabla' sede=item.sede categoria=item.categoria tipo=item.tipo %}" class="btn btn-secondary">Volver a tabla</a>
+                <a href="{{ inv_urls.tabla }}" class="btn btn-secondary">Volver a tabla</a>
             </div>
         </div>
     </div>
@@ -286,6 +287,17 @@
             {% endif %}
         </div>
         <div class="inventario-detalle-row"><span>Ubicación</span><strong>{{ item.get_ubicacion_display }}</strong></div>
+        {% if item.linea == 'reacondicionado' %}
+        <div class="inventario-detalle-row">
+            <span>Equipo de origen</span>
+            {% if item.ingreso_origen %}
+                <strong><a href="{% url 'econotec:ingreso_detalle' pk=item.ingreso_origen.pk %}">{{ item.ingreso_origen.codigo_equipo }}</a></strong>
+                <small>{{ item.ingreso_origen.tipo_equipo_display }} · {% if item.ingreso_origen.estado == 'donado' or item.ingreso_origen.estado == 'equipo_a_comprar' %}{{ item.ingreso_origen.get_estado_display }}{% else %}Chatarrización{% endif %}</small>
+            {% else %}
+                <strong>Registrado a mano</strong>
+            {% endif %}
+        </div>
+        {% endif %}
         <div class="inventario-detalle-row full"><span>Observación</span><strong>{{ item.observacion|default:"—"|linebreaksbr }}</strong></div>
     </div>
 </div>

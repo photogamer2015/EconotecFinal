@@ -1276,7 +1276,9 @@ class VentasTests(TestCase):
         self.assertContains(response, 'data-color="#ec4899"')
 
     def test_inventario_menu_muestra_sedes_iniciales(self):
-        response = self.client.get(reverse('econotec:inventario_menu'))
+        # /inventario/ ahora pregunta qué inventario abrir; las sedes del de
+        # producto están en /inventario/producto/.
+        response = self.client.get(reverse('econotec:inventario_producto'))
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Inventario')

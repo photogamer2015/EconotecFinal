@@ -40,6 +40,11 @@ from .models import (
     NotificacionCambioAdmin, SEDES_EQUIPOS, VentaInventarioItem,
 )
 from .pagination import paginar_resultados
+from .avisos_cambios import avisar_cambio
+from .reacondicionado import (
+    ESTADOS_ADMINISTRATIVOS, ReacondicionarError, chatarrizar_administrativo, contexto_modal_reacondicionar,
+    equipos_en_chatarrizacion, reacondicionar_equipo,
+)
 from .permisos import (
     GRUPO_ASISTENTE_CAJA, GRUPOS_ASESOR_COMERCIAL, GRUPOS_TECNICO, admin_requerido, es_admin,
     puede_ver_valores_ranking, tecnico_requerido,
@@ -1011,8 +1016,10 @@ def admin_ventas_inventario(request):
         or 0
     )
 
+    # Este panel resume el inventario de producto; el reacondicionado va aparte.
+    inventario_producto = InventarioItem.objects.filter(linea='producto')
     inventario_valores = list(
-        InventarioItem.objects.values('cantidad', 'costo', 'estado')
+        inventario_producto.values('cantidad', 'costo', 'estado')
     )
     inventario_unidades = sum(item['cantidad'] for item in inventario_valores)
     inventario_valor = sum(
@@ -1051,7 +1058,7 @@ def admin_ventas_inventario(request):
     ).order_by('first_name', 'last_name', 'username')
 
     categorias_inventario = list(
-        InventarioItem.objects
+        inventario_producto
         .exclude(categoria='')
         .order_by('categoria')
         .values_list('categoria', flat=True)
@@ -1194,7 +1201,7 @@ def admin_ventas_inventario(request):
         )
 
     else:
-        inventario_qs = InventarioItem.objects.select_related('registrado_por')
+        inventario_qs = inventario_producto.select_related('registrado_por')
         if q:
             inventario_qs = inventario_qs.filter(
                 Q(producto__icontains=q)
@@ -1876,15 +1883,101 @@ def admin_activos_bodegaje(request):
                 'wa_link': whatsapp_link_bodegaje(s),
             })
             
-    chatarrerizacion = SalidaEquipo.objects.filter(
-        estado_reparacion='chatarrerizacion'
-    ).select_related('ingreso', 'ingreso__cliente').order_by('-fecha_retiro_real')
-    
+    # Chatarrizados desde Bodegaje y Donados / Compras chatarrizados.
+    chatarrerizacion = equipos_en_chatarrizacion()
+
     return render(request, 'admin_panel/activos_bodegaje.html', {
         'activos': activos,
         'chatarrerizacion': chatarrerizacion,
-        'count_chatarrerizacion': chatarrerizacion.count(),
+        'count_chatarrerizacion': len(chatarrerizacion),
+        **contexto_modal_reacondicionar(),
     })
+
+
+def _volver_seguro(request, defecto):
+    next_url = (request.POST.get('next') or '').strip()
+    if next_url and url_has_allowed_host_and_scheme(
+        next_url,
+        allowed_hosts={request.get_host()},
+        require_https=request.is_secure(),
+    ):
+        return redirect(next_url)
+    return redirect(defecto)
+
+
+def _avisar_cambio_estado_compra(request, ingreso, accion):
+    """Campanita 🔔 del admin: alguien cambió el estado de un equipo comprado.
+
+    Solo avisa en Equipos a comprar (hubo un pago / egreso) y cuando no lo
+    hace el propio administrador. Los donados no generan aviso.
+    """
+    if ingreso.estado != 'equipo_a_comprar':
+        return
+    from .templatetags.econotec_extras import dinero_signo
+    avisar_cambio(
+        request.user,
+        'compra_estado',
+        f'{accion} el equipo comprado {ingreso.codigo_equipo} '
+        f'({ingreso.tipo_equipo_display} {ingreso.marca} {ingreso.modelo_serie}), '
+        f'por el que se pagó {dinero_signo(ingreso.valor_acordado)}.',
+        ingreso=ingreso,
+        url=reverse('econotec:admin_equipos_administrativos') + f'?q={ingreso.codigo_equipo}',
+    )
+
+
+def _puede_cambiar_estado_equipo(user, pk):
+    """El admin siempre; los demás roles solo en Donados y Equipos a comprar."""
+    if es_admin(user):
+        return True
+    return IngresoEquipo.objects.filter(pk=pk, estado__in=ESTADOS_ADMINISTRATIVOS).exists()
+
+
+def _sin_permiso_cambio_estado(request):
+    messages.error(
+        request,
+        'Solo un administrador puede reacondicionar equipos chatarrizados desde Bodegaje.',
+    )
+    return redirect('econotec:bienvenida')
+
+
+@tecnico_requerido
+@require_POST
+def equipo_reacondicionar(request, pk):
+    """Pasa un equipo chatarrizado, donado o comprado al Inventario reacondicionado."""
+    if not _puede_cambiar_estado_equipo(request.user, pk):
+        return _sin_permiso_cambio_estado(request)
+    try:
+        ingreso, item = reacondicionar_equipo(pk, request.POST, request.user)
+    except ReacondicionarError as error:
+        messages.error(request, str(error))
+        return _volver_seguro(request, 'econotec:admin_activos_bodegaje')
+    messages.success(
+        request,
+        f'{ingreso.codigo_equipo} quedó en el Inventario reacondicionado '
+        f'({item.get_ubicacion_display()}) con el código {item.codigo}.',
+    )
+    _avisar_cambio_estado_compra(request, ingreso, 'Reacondicionó')
+    return _volver_seguro(request, 'econotec:admin_activos_bodegaje')
+
+
+@tecnico_requerido
+@require_POST
+def equipo_administrativo_chatarrizar(request, pk):
+    """Donados y Compras: envía el equipo a chatarrización sin tocar su estado ni su egreso."""
+    if not _puede_cambiar_estado_equipo(request.user, pk):
+        return _sin_permiso_cambio_estado(request)
+    try:
+        ingreso = chatarrizar_administrativo(pk)
+    except ReacondicionarError as error:
+        messages.error(request, str(error))
+        return _volver_seguro(request, 'econotec:admin_equipos_administrativos')
+    messages.success(
+        request,
+        f'{ingreso.codigo_equipo} pasó a chatarrización. Ya aparece en '
+        f'«Equipos en Chatarrización» de Bodegaje.',
+    )
+    _avisar_cambio_estado_compra(request, ingreso, 'Envió a chatarrización')
+    return _volver_seguro(request, 'econotec:admin_equipos_administrativos')
 
 
 @tecnico_requerido
@@ -1925,7 +2018,7 @@ def _equipos_administrativos_filtrados(request, incluir_egreso=False):
     """Consulta común sin calcular totales financieros para vistas generales."""
     estado_filtro = (request.GET.get('estado') or '').strip()
     q = (request.GET.get('q') or '').strip()
-    relaciones = ['cliente', 'registrado_por', 'tecnico_encargado']
+    relaciones = ['cliente', 'registrado_por', 'tecnico_encargado', 'item_reacondicionado']
     if incluir_egreso:
         relaciones.extend([
             'egreso_compra',
@@ -1975,6 +2068,7 @@ def equipos_administrativos_general(request):
         'estado_filtro': estado_filtro,
         'q': q,
         'vista_admin': False,
+        **contexto_modal_reacondicionar(),
     })
 
 
@@ -2000,6 +2094,7 @@ def admin_equipos_administrativos(request):
         'estado_filtro': estado_filtro,
         'q': q,
         'vista_admin': True,
+        **contexto_modal_reacondicionar(),
     })
 
 

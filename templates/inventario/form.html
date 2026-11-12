@@ -123,8 +123,9 @@
 
 <div class="crumb">
     <a href="{% url 'econotec:bienvenida' %}">Inicio</a> /
-    <a href="{% url 'econotec:inventario_menu' %}">Inventario</a> /
-    <a href="{% url 'econotec:inventario_tabla' sede=sede_slug categoria=categoria_slug tipo=tipo.slug %}">{{ tipo.nombre }}</a> /
+    <a href="{{ inv_urls.inicio }}">Inventario</a> /
+    <a href="{{ inv_urls.menu }}">{{ linea.nombre }}</a> /
+    <a href="{{ inv_urls.tabla }}">{{ tipo.nombre }}</a> /
     {% if modo_formulario == 'editar' %}Editar {{ item.codigo }}{% else %}Ingresar{% endif %}
 </div>
 
@@ -219,7 +220,7 @@
         </div>
 
         <div class="inventario-form-actions">
-            <a href="{% url 'econotec:inventario_tabla' sede=sede_slug categoria=categoria_slug tipo=tipo.slug %}" class="btn btn-secondary">
+            <a href="{{ inv_urls.tabla }}" class="btn btn-secondary">
                 Cancelar
             </a>
             <button type="submit" class="btn btn-primary">

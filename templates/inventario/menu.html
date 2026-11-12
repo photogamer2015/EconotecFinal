@@ -1,7 +1,7 @@
 {% extends 'base.html' %}
 {% load static %}
 
-{% block title %}Inventario — Econotec{% endblock %}
+{% block title %}{{ linea.nombre }} — Econotec{% endblock %}
 
 {% block content %}
 <style>
@@ -249,12 +249,17 @@
     }
 </style>
 
+{% if linea.slug == 'reacondicionado' %}
+{# El inventario reacondicionado no se divide por tipo: una sola tabla por categoría. #}
+<style>.categoria-link .subzona { display: none; }</style>
+{% endif %}
 <div class="crumb">
-    <a href="{% url 'econotec:bienvenida' %}">Inicio</a> / Inventario
+    <a href="{% url 'econotec:bienvenida' %}">Inicio</a> /
+    <a href="{{ inv_urls.inicio }}">Inventario</a> / {{ linea.nombre }}
 </div>
 
-<h2 class="page-title">Inventario</h2>
-<p class="page-subtitle">Selecciona la sede para empezar a organizar el inventario.</p>
+<h2 class="page-title">{{ linea.nombre }}</h2>
+<p class="page-subtitle">Selecciona la sede para empezar a organizar el {{ linea.nombre|lower }}.</p>
 
 <div class="inventario-grid">
     <button type="button" class="card-box inventario-card sede-inventario-btn" data-sede="guayaquil" data-sede-label="Guayaquil" aria-controls="inventario-categorias" aria-expanded="false">
@@ -280,7 +285,7 @@
     </div>
 
     <div class="categoria-grid">
-        <a href="#" class="card-box inventario-card categoria-link" data-target-template="{% url 'econotec:inventario_categoria' sede='__sede__' categoria='impresora' %}">
+        <a href="#" class="card-box inventario-card categoria-link" data-target-template="{{ categoria_urls.impresora }}">
             <img src="{% static 'inventario/impresora.png' %}" alt="Impresora" class="inventario-photo">
             <div class="inventario-content">
                 <h3>Impresoras</h3>
@@ -291,7 +296,7 @@
             </div>
         </a>
 
-        <a href="#" class="card-box inventario-card quito categoria-link" data-target-template="{% url 'econotec:inventario_categoria' sede='__sede__' categoria='computadora' %}">
+        <a href="#" class="card-box inventario-card quito categoria-link" data-target-template="{{ categoria_urls.computadora }}">
             <img src="{% static 'inventario/computadora.png' %}" alt="Computadora" class="inventario-photo" style="object-fit: contain; background-color: #ffffff;">
             <div class="inventario-content">
                 <h3>Computadoras</h3>
@@ -302,7 +307,7 @@
             </div>
         </a>
 
-        <a href="#" class="card-box inventario-card categoria-link" style="border-left-color: #2e7d32;" data-target-template="{% url 'econotec:inventario_categoria' sede='__sede__' categoria='consola' %}">
+        <a href="#" class="card-box inventario-card categoria-link" style="border-left-color: #2e7d32;" data-target-template="{{ categoria_urls.consola }}">
             <img src="{% static 'inventario/consola.jpeg' %}" alt="Consola" class="inventario-photo">
             <div class="inventario-content">
                 <h3>Consolas</h3>
@@ -313,28 +318,28 @@
             </div>
         </a>
 
-        <a href="#" class="card-box inventario-card categoria-link" style="border-left-color: #c62828;" data-target-template="{% url 'econotec:inventario_categoria' sede='__sede__' categoria='celular' %}">
+        <a href="#" class="card-box inventario-card categoria-link" style="border-left-color: #c62828;" data-target-template="{{ categoria_urls.celular }}">
             <img src="{% static 'inventario/celular.jpg' %}" alt="Celular" class="inventario-photo">
             <div class="inventario-content">
                 <h3>Celulares</h3>
             </div>
         </a>
 
-        <a href="#" class="card-box inventario-card categoria-link" style="border-left-color: #6a1b9a;" data-target-template="{% url 'econotec:inventario_categoria' sede='__sede__' categoria='tablet' %}">
+        <a href="#" class="card-box inventario-card categoria-link" style="border-left-color: #6a1b9a;" data-target-template="{{ categoria_urls.tablet }}">
             <img src="{% static 'inventario/tablet.jpeg' %}" alt="Tablet" class="inventario-photo">
             <div class="inventario-content">
                 <h3>Tablets</h3>
             </div>
         </a>
 
-        <a href="#" class="card-box inventario-card categoria-link" style="border-left-color: #856404;" data-target-template="{% url 'econotec:inventario_categoria' sede='__sede__' categoria='mando' %}">
+        <a href="#" class="card-box inventario-card categoria-link" style="border-left-color: #856404;" data-target-template="{{ categoria_urls.mando }}">
             <img src="{% static 'inventario/mando.jpg' %}" alt="Mando" class="inventario-photo">
             <div class="inventario-content">
                 <h3>Mandos</h3>
             </div>
         </a>
 
-        <a href="#" class="card-box inventario-card categoria-link" style="border-left-color: #db2777;" data-target-template="{% url 'econotec:inventario_categoria' sede='__sede__' categoria='otros-equipos-materiales' %}">
+        <a href="#" class="card-box inventario-card categoria-link" style="border-left-color: #db2777;" data-target-template="{{ categoria_urls.otros_equipos_materiales }}">
             <img src="{% static 'inventario/otros-equipos-materiales.png' %}" alt="Otros equipos y materiales" class="inventario-photo">
             <div class="inventario-content">
                 <h3>Otros equipos/materiales</h3>

@@ -1,0 +1,312 @@
+{# Ventana «Reacondicionar equipo». La abre window.abrirReacondicionar(boton) o cualquier botón con la clase js-reacondicionar. #}
+{# El botón lleva los datos del equipo en data-rea-*: url, codigo, descripcion, sede, tipo-equipo, tipo-nombre, marca, modelo, serie. #}
+<style>
+    .rea-modal {
+        position: fixed;
+        inset: 0;
+        z-index: 10000;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        padding: 18px;
+        background: rgba(15, 12, 10, 0.55);
+        backdrop-filter: blur(3px);
+    }
+    .rea-modal.show {
+        display: flex;
+        animation: rea-fade 0.18s ease;
+    }
+    .rea-card {
+        display: flex;
+        flex-direction: column;
+        width: min(600px, 100%);
+        max-height: calc(100dvh - 36px);
+        margin: 0;
+        border: 1px solid var(--border-color);
+        border-radius: 18px;
+        background: var(--card-bg);
+        color: var(--text-main);
+        box-shadow: var(--shadow-lg);
+        animation: rea-pop 0.22s ease;
+        overflow: hidden;
+    }
+    .rea-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 18px 22px 14px;
+        border-bottom: 1px solid var(--border-color);
+    }
+    .rea-head h3 {
+        margin: 0;
+        color: var(--text-main);
+        font-size: 17px;
+        font-weight: 800;
+    }
+    .rea-x {
+        width: 34px;
+        height: 34px;
+        border: none;
+        border-radius: 50%;
+        background: var(--surface-muted);
+        color: var(--text-muted);
+        font-size: 20px;
+        line-height: 1;
+        cursor: pointer;
+    }
+    .rea-x:hover { color: var(--text-main); }
+    .rea-body {
+        display: grid;
+        gap: 14px;
+        padding: 16px 22px;
+        overflow-y: auto;
+    }
+    .rea-equipo {
+        display: grid;
+        gap: 2px;
+        padding: 11px 13px;
+        border: 1px solid var(--border-color);
+        border-left: 3px solid #2e7d32;
+        border-radius: 10px;
+        background: var(--surface-muted);
+        font-size: 14px;
+    }
+    .rea-equipo span {
+        color: var(--text-muted);
+        font-size: 12.5px;
+        font-weight: 600;
+    }
+    .rea-campo { display: grid; gap: 6px; min-width: 0; }
+    .rea-modal [hidden] { display: none !important; }
+    .rea-campo .form-label { margin: 0; }
+    .rea-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 14px;
+    }
+    .rea-sedes {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+        margin: 0;
+        padding: 0;
+        border: 0;
+    }
+    .rea-sede {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        min-height: 46px;
+        padding: 10px 13px;
+        border: 1.5px solid var(--border-color);
+        border-radius: 10px;
+        background: var(--card-bg);
+        color: var(--text-main);
+        font-weight: 800;
+        cursor: pointer;
+    }
+    .rea-sede:has(input:checked) {
+        border-color: var(--primary);
+        background: var(--primary-light);
+        color: var(--primary-dark);
+    }
+    .rea-sede input { accent-color: var(--primary); }
+    .rea-sede small {
+        margin-left: auto;
+        color: var(--text-muted);
+        font-size: 11.5px;
+        font-weight: 700;
+    }
+    .rea-ayuda {
+        margin: 0;
+        color: var(--tint-amber-fg, #92400e);
+        font-size: 12.5px;
+        font-weight: 700;
+    }
+    .rea-opcional {
+        color: var(--text-muted);
+        font-weight: 600;
+    }
+    .rea-pie {
+        display: flex;
+        justify-content: flex-end;
+        gap: 10px;
+        padding: 14px 22px 18px;
+        border-top: 1px solid var(--border-color);
+    }
+    @keyframes rea-fade { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes rea-pop {
+        from { opacity: 0; transform: translateY(10px) scale(0.98); }
+        to { opacity: 1; transform: none; }
+    }
+    @media (max-width: 520px) {
+        .rea-head, .rea-body, .rea-pie { padding-left: 16px; padding-right: 16px; }
+        .rea-grid { grid-template-columns: 1fr; }
+        .rea-pie { flex-direction: column-reverse; }
+        .rea-pie .btn { width: 100%; justify-content: center; }
+    }
+</style>
+
+<div class="rea-modal" id="rea-modal" aria-hidden="true">
+    <form method="post" action="" class="rea-card" id="rea-form" role="dialog" aria-modal="true" aria-labelledby="rea-titulo">
+        {% csrf_token %}
+        <input type="hidden" name="next" value="{{ request.get_full_path }}">
+        <div class="rea-head">
+            <h3 id="rea-titulo">🔧 Reacondicionar equipo</h3>
+            <button type="button" class="rea-x" data-rea-cerrar aria-label="Cerrar">×</button>
+        </div>
+        <div class="rea-body">
+            <div class="rea-equipo">
+                <strong id="rea-codigo">—</strong>
+                <span id="rea-descripcion"></span>
+            </div>
+
+            <div class="rea-campo">
+                <span class="form-label" id="rea-sede-label">Sede</span>
+                <fieldset class="rea-sedes" aria-labelledby="rea-sede-label">
+                    {% for sede in reacondicionar_config.sedes %}
+                    <label class="rea-sede">
+                        <input type="radio" name="sede" value="{{ sede.valor }}" required>
+                        {{ sede.nombre }}
+                        {% if sede.valor == 'guayaquil' %}<small>Norte - Centro</small>{% endif %}
+                    </label>
+                    {% endfor %}
+                </fieldset>
+            </div>
+
+            <div class="rea-campo" id="rea-ubicacion-campo" hidden>
+                <label class="form-label" for="rea-ubicacion">Ubicación en Guayaquil</label>
+                <select class="form-input" name="ubicacion" id="rea-ubicacion" required></select>
+            </div>
+
+            <div class="rea-campo">
+                <label class="form-label" for="rea-tipo">Categoría</label>
+                <select class="form-input" name="categoria" id="rea-tipo" required>
+                    <option value="">— Elige la categoría —</option>
+                    {% for categoria in reacondicionar_config.categorias %}
+                    <option value="{{ categoria.valor }}">{{ categoria.nombre }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="rea-grid">
+                <div class="rea-campo">
+                    <label class="form-label" for="rea-marca">Marca</label>
+                    <input class="form-input" type="text" name="marca" id="rea-marca" maxlength="100" required autocomplete="off">
+                </div>
+                <div class="rea-campo">
+                    <label class="form-label" for="rea-modelo">Modelo</label>
+                    <input class="form-input" type="text" name="modelo" id="rea-modelo" maxlength="100" required autocomplete="off">
+                </div>
+            </div>
+
+            <div class="rea-campo">
+                <label class="form-label" for="rea-serie">Serie <span class="rea-opcional">(opcional)</span></label>
+                <input class="form-input" type="text" name="serie" id="rea-serie" maxlength="120" autocomplete="off">
+            </div>
+
+            <div class="rea-campo">
+                <label class="form-label" for="rea-observacion">Observación</label>
+                <textarea class="form-input" name="observacion" id="rea-observacion" rows="3"
+                          placeholder="Ej.: Se cambió el cabezal, probado y funcionando."></textarea>
+            </div>
+        </div>
+        <div class="rea-pie">
+            <button type="button" class="btn btn-secondary" data-rea-cerrar>Cancelar</button>
+            <button type="submit" class="btn btn-primary" id="rea-confirmar">Confirmar reacondicionado</button>
+        </div>
+    </form>
+</div>
+{{ reacondicionar_config|json_script:"rea-config" }}
+<script>
+    (function () {
+        var modal = document.getElementById('rea-modal');
+        var form = document.getElementById('rea-form');
+        if (!modal || !form) return;
+        var config = JSON.parse(document.getElementById('rea-config').textContent);
+        var ubicacionCampo = document.getElementById('rea-ubicacion-campo');
+        var ubicacion = document.getElementById('rea-ubicacion');
+        var tipo = document.getElementById('rea-tipo');
+        var ultimoFoco = null;
+
+        function sedeElegida() {
+            var marcada = form.querySelector('input[name="sede"]:checked');
+            return marcada ? marcada.value : '';
+        }
+
+        function pintarUbicaciones() {
+            var opciones = config.ubicaciones[sedeElegida()] || [];
+            var anterior = ubicacion.value;
+            ubicacion.innerHTML = '';
+            if (opciones.length > 1) {
+                ubicacion.appendChild(new Option('— Elige Norte o Centro —', ''));
+            }
+            opciones.forEach(function (op) {
+                ubicacion.appendChild(new Option(op.nombre, op.valor));
+            });
+            if (opciones.some(function (op) { return op.valor === anterior; })) {
+                ubicacion.value = anterior;
+            }
+            // Quito tiene una sola ubicación: se envía sola, sin preguntar.
+            ubicacionCampo.hidden = opciones.length <= 1;
+        }
+
+        function cerrar() {
+            if (!modal.classList.contains('show')) return;
+            modal.classList.remove('show');
+            modal.setAttribute('aria-hidden', 'true');
+            document.body.style.overflow = '';
+            if (ultimoFoco && ultimoFoco.focus) ultimoFoco.focus();
+        }
+
+        window.abrirReacondicionar = function (boton) {
+            var d = boton.dataset;
+            ultimoFoco = boton;
+            form.reset();
+            form.action = d.reaUrl;
+            document.getElementById('rea-codigo').textContent = d.reaCodigo || '—';
+            document.getElementById('rea-descripcion').textContent = d.reaDescripcion || '';
+            document.getElementById('rea-marca').value = d.reaMarca || '';
+            document.getElementById('rea-modelo').value = d.reaModelo || '';
+            document.getElementById('rea-serie').value = d.reaSerie || '';
+
+            var sede = form.querySelector('input[name="sede"][value="' + (d.reaSede || '') + '"]');
+            if (sede) sede.checked = true;
+            pintarUbicaciones();
+
+            // La categoría sale del tipo con el que entró el equipo.
+            tipo.value = config.sugerencias[d.reaTipoEquipo || ''] || '';
+
+            modal.classList.add('show');
+            modal.setAttribute('aria-hidden', 'false');
+            document.body.style.overflow = 'hidden';
+            var primero = !sede ? form.querySelector('input[name="sede"]')
+                : (!ubicacionCampo.hidden && !ubicacion.value) ? ubicacion
+                : !tipo.value ? tipo
+                : document.getElementById('rea-observacion');
+            if (primero) primero.focus();
+        };
+
+        form.addEventListener('change', function (e) {
+            if (e.target.name === 'sede') pintarUbicaciones();
+        });
+        form.addEventListener('submit', function () {
+            var boton = document.getElementById('rea-confirmar');
+            boton.disabled = true;
+            boton.textContent = 'Guardando…';
+        });
+        document.addEventListener('click', function (e) {
+            var boton = e.target.closest('.js-reacondicionar');
+            if (boton) {
+                e.preventDefault();
+                window.abrirReacondicionar(boton);
+                return;
+            }
+            if (e.target.closest('[data-rea-cerrar]') || e.target === modal) cerrar();
+        });
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape') cerrar();
+        });
+    })();
+</script>
