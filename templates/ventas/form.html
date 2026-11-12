@@ -891,6 +891,23 @@
     <div class="form-section">
         <h3>Datos del Cliente</h3>
 
+        <!-- Los datos del cliente son opcionales: con «No» la venta va a nombre de Consumidor final. -->
+        <div class="venta-aplica-cliente" style="margin-bottom:16px;">
+            <span class="form-label" id="label-aplica-cliente">¿Aplica dato del cliente? *</span>
+            <div style="display:flex; gap:10px; flex-wrap:wrap;" role="radiogroup" aria-labelledby="label-aplica-cliente">
+                <label style="display:inline-flex; align-items:center; gap:7px; padding:9px 16px; border:1.5px solid var(--border-color); border-radius:10px; font-weight:700; cursor:pointer;">
+                    <input type="radio" name="venta_aplica_cliente" value="si" {% if venta_aplica_cliente != 'no' %}checked{% endif %}> Sí
+                </label>
+                <label style="display:inline-flex; align-items:center; gap:7px; padding:9px 16px; border:1.5px solid var(--border-color); border-radius:10px; font-weight:700; cursor:pointer;">
+                    <input type="radio" name="venta_aplica_cliente" value="no" {% if venta_aplica_cliente == 'no' %}checked{% endif %}> No
+                </label>
+            </div>
+            <small id="aplica-cliente-nota" style="color:var(--text-muted); font-size:12px; {% if venta_aplica_cliente != 'no' %}display:none;{% endif %}">
+                La venta se registrará a nombre de <strong>Consumidor final</strong>, sin cédula ni RUC.
+            </small>
+        </div>
+
+        <div id="venta-cliente-campos" {% if venta_aplica_cliente == 'no' %}style="display:none;"{% endif %}>
         <!-- Aviso dinámico cuando se encuentra cliente por cédula -->
         <div id="cliente-aviso"
             style="display:none; margin-bottom:14px; padding:12px 16px; border-radius:8px; background:#e8f5e9; border-left:4px solid #2e7d32; font-size:13px;">
@@ -933,18 +950,24 @@
                 {{ cli_form.sector_otro }}
             </div>
         </div>
+        </div>
     </div>
 
     <!-- Detalles del equipo -->
     <div class="form-section">
-        <h3>Detalles del Producto Vendido</h3>
+        <h3>{% if venta_linea.slug == 'reacondicionado' %}Detalles del Equipo Reacondicionado Vendido{% else %}Detalles del Producto Vendido{% endif %}</h3>
         <div class="venta-inventario-panel">
             <div class="venta-inventario-head">
                 <div>
+                    {% if venta_linea.slug == 'reacondicionado' %}
+                    <h4>Equipos seleccionados del inventario reacondicionado</h4>
+                    <p class="venta-inventario-help">Selecciona equipos reacondicionados disponibles y confirma la cantidad exacta de la venta.</p>
+                    {% else %}
                     <h4>Productos seleccionados del inventario</h4>
                     <p class="venta-inventario-help">Selecciona productos disponibles y confirma la cantidad exacta de la venta.</p>
+                    {% endif %}
                 </div>
-                <button type="button" class="btn btn-primary" id="btn-ver-inventario">+ Ver inventario</button>
+                <button type="button" class="btn btn-primary" id="btn-ver-inventario">+ Ver inventario{% if venta_linea.slug == 'reacondicionado' %} reacondicionado{% endif %}</button>
             </div>
             <div class="venta-sede-toolbar">
                 <span class="venta-sede-toolbar-label">Sede de inventario</span>
@@ -1209,7 +1232,7 @@
     <div class="venta-inventario-dialog" role="dialog" aria-modal="true" aria-labelledby="inventario-catalogo-title">
         <div class="venta-modal-top">
             <div class="venta-modal-title">
-                <h3 id="inventario-catalogo-title">Seleccionar producto del inventario</h3>
+                <h3 id="inventario-catalogo-title">{% if venta_linea.slug == 'reacondicionado' %}Seleccionar equipo del inventario reacondicionado{% else %}Seleccionar producto del inventario{% endif %}</h3>
                 <button type="button" class="venta-modal-close" data-close-inventario aria-label="Cerrar">×</button>
             </div>
             <p class="venta-modal-note" style="margin-top:7px;">Elige sede, categoría y tipo para ver los productos del inventario.</p>
@@ -2136,6 +2159,7 @@
             params.set('sede', flow.location.sede);
             params.set('categoria', flow.category.slug);
             params.set('tipo', flow.type.slug);
+            params.set('linea', "{{ venta_linea.slug|default:'producto' }}");
             if (searchInput.value) params.set('q', searchInput.value);
             fetch(catalogUrl + '?' + params.toString(), {credentials: 'same-origin'})
                 .then(function (response) { return response.json(); })
@@ -2490,6 +2514,26 @@
 </script>
 
 <script>
+    // «¿Aplica dato del cliente?»: con «No» se ocultan y desactivan los campos
+    // del cliente (no se validan ni se envían).
+    (function() {
+        var radios = document.querySelectorAll('input[name="venta_aplica_cliente"]');
+        var campos = document.getElementById('venta-cliente-campos');
+        var nota = document.getElementById('aplica-cliente-nota');
+        if (!radios.length || !campos) return;
+        function aplicar() {
+            var marcado = document.querySelector('input[name="venta_aplica_cliente"]:checked');
+            var aplica = !marcado || marcado.value !== 'no';
+            campos.style.display = aplica ? '' : 'none';
+            if (nota) nota.style.display = aplica ? 'none' : '';
+            campos.querySelectorAll('input, select, textarea').forEach(function(campo) {
+                campo.disabled = !aplica;
+            });
+        }
+        radios.forEach(function(radio) { radio.addEventListener('change', aplicar); });
+        aplicar();
+    })();
+
     // Autocompletado de cliente por cédula
     // Cuando el técnico escribe la cédula, busca al cliente y rellena los campos.
     (function () {

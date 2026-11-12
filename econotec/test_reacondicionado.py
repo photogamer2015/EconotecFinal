@@ -13,8 +13,11 @@ from django.contrib.auth.models import Group
 from django.test import TestCase
 from django.urls import reverse
 
-from .models import Cliente, Egreso, IngresoEquipo, InventarioItem, SalidaEquipo
-from .views import _sincronizar_egreso_compra
+from .models import (
+    Cliente, Egreso, IngresoEquipo, InventarioItem, NotificacionCambioAdmin, SalidaEquipo,
+    VentaInventarioItem,
+)
+from .views import CEDULA_CONSUMIDOR_FINAL, _sincronizar_egreso_compra
 
 
 class ReacondicionadoBase(TestCase):
@@ -241,10 +244,59 @@ class DonadosComprasCambiarEstadoTests(ReacondicionadoBase):
         self.assertContains(pagina, reverse('econotec:equipo_administrativo_chatarrizar', kwargs={'pk': donado.pk}))
         self.assertContains(pagina, 'id="rea-modal"')
 
+        # Cualquier rol ve el apartado y puede cambiar el estado.
         self.client.force_login(self.tecnico)
         general = self.client.get(reverse('econotec:equipos_administrativos_general'))
         self.assertContains(general, donado.codigo_equipo)
-        self.assertNotContains(general, '🔄 Cambiar estado')
+        self.assertContains(general, '🔄 Cambiar estado')
+        self.assertContains(general, 'id="rea-modal"')
+        self.assertContains(general, 'data-avisa-admin="no"')
+
+    def test_valor_de_la_compra_se_muestra_como_egreso(self):
+        self.crear_compra()
+        lista = self.client.get(reverse('econotec:admin_equipos_administrativos'))
+        self.assertContains(lista, 'class="es-egreso"')
+        self.assertContains(lista, '−$30,00')
+
+    def test_otro_rol_cambia_compra_y_se_avisa_al_admin(self):
+        compra = self.crear_compra()
+        self.client.force_login(self.tecnico)
+        general = self.client.get(reverse('econotec:equipos_administrativos_general'))
+        self.assertContains(general, 'data-avisa-admin="si"')
+
+        self.client.post(
+            reverse('econotec:equipo_administrativo_chatarrizar', kwargs={'pk': compra.pk}),
+            {'next': reverse('econotec:equipos_administrativos_general')},
+        )
+        compra.refresh_from_db()
+        self.assertIsNotNone(compra.fecha_chatarrizacion)
+        self.assertEqual(compra.estado, 'equipo_a_comprar')
+        aviso = NotificacionCambioAdmin.objects.get(tipo='compra_estado')
+        self.assertEqual(aviso.ingreso, compra)
+        self.assertEqual(aviso.creado_por, self.tecnico)
+        self.assertIn('Envió a chatarrización', aviso.mensaje)
+        self.assertIn('$30,00', aviso.mensaje)
+
+        self.client.post(
+            reverse('econotec:equipo_reacondicionar', kwargs={'pk': compra.pk}),
+            self.datos_reacondicionar(tipo_inventario='computadora|laptops'),
+        )
+        self.assertTrue(InventarioItem.objects.filter(ingreso_origen=compra).exists())
+        avisos = NotificacionCambioAdmin.objects.filter(tipo='compra_estado')
+        self.assertEqual(avisos.count(), 2)
+        self.assertTrue(any('Reacondicionó' in a.mensaje for a in avisos))
+
+    def test_donado_y_admin_no_generan_aviso(self):
+        donado = self.crear_ingreso(estado='donado')
+        compra = self.crear_compra()
+        # El admin cambia una compra: no se avisa a sí mismo.
+        self.client.post(reverse('econotec:equipo_administrativo_chatarrizar', kwargs={'pk': compra.pk}))
+        # Un técnico cambia un donado: no hubo pago, no hay aviso.
+        self.client.force_login(self.tecnico)
+        self.client.post(reverse('econotec:equipo_administrativo_chatarrizar', kwargs={'pk': donado.pk}))
+        donado.refresh_from_db()
+        self.assertIsNotNone(donado.fecha_chatarrizacion)
+        self.assertFalse(NotificacionCambioAdmin.objects.filter(tipo='compra_estado').exists())
 
     def test_chatarrizar_compra_no_toca_estado_ni_egreso(self):
         compra = self.crear_compra()
@@ -300,15 +352,124 @@ class DonadosComprasCambiarEstadoTests(ReacondicionadoBase):
         self.assertContains(lista, 'Era: Donado')
         self.assertNotContains(lista, '🔄 Cambiar estado')
 
-    def test_solo_admin_puede_chatarrizar(self):
-        donado = self.crear_ingreso(estado='donado')
-        self.client.force_login(self.tecnico)
-        self.client.post(reverse('econotec:equipo_administrativo_chatarrizar', kwargs={'pk': donado.pk}))
-        donado.refresh_from_db()
-        self.assertIsNone(donado.fecha_chatarrizacion)
-
     def test_no_chatarriza_equipos_de_reparacion(self):
         ingreso = self.crear_ingreso(estado='en_reparacion', subestado_reparacion='en_reparacion')
         self.client.post(reverse('econotec:equipo_administrativo_chatarrizar', kwargs={'pk': ingreso.pk}))
         ingreso.refresh_from_db()
         self.assertIsNone(ingreso.fecha_chatarrizacion)
+
+
+class VentaReacondicionadoYClienteOpcionalTests(ReacondicionadoBase):
+    def setUp(self):
+        super().setUp()
+        self.producto = InventarioItem.objects.create(
+            sede='guayaquil', categoria='impresora', tipo='impresora-laser',
+            producto='Tóner producto', marca='HP', modelo='85A', ubicacion='guayaquil_norte',
+            cantidad=5, costo=Decimal('20.00'),
+        )
+        self.equipo = InventarioItem.objects.create(
+            linea='reacondicionado', sede='guayaquil', categoria='impresora', tipo='impresora-laser',
+            producto='Impresora reacondicionada', marca='HP', modelo='M404', ubicacion='guayaquil_norte',
+            cantidad=1, costo=Decimal('80.00'),
+        )
+        asesora = get_user_model().objects.create_user(username='Kimberly')
+        asesora.groups.add(Group.objects.create(name='Asesores Comerciales'))
+
+    def datos_venta(self, item, **extra):
+        import json
+        datos = {
+            'ing-fecha_ingreso': date.today().isoformat(),
+            'ing-tecnico_encargado': str(self.tecnico.pk),
+            'ing-asesor_comercial': 'Kimberly',
+            'ing-tipo_equipo': 'otro',
+            'ing-tipo_equipo_otro': 'Venta',
+            'ing-marca': 'N/A',
+            'ing-modelo_serie': 'N/A',
+            'ing-accesorios_entregados': 'Ninguno',
+            'ing-problema_reportado': 'Venta de mostrador',
+            'ing-valor_acordado': '80.00',
+            'ing-diagnostico_inmediato': 'no',
+            'ing-estado': 'entregado',
+            'ing-subestado_entregado': 'con_solucion',
+            'ing-firma_cliente_opcion': 'no',
+            'venta_tipo_pago': 'completo',
+            'venta_metodo_pago': 'efectivo',
+            'inventario_seleccionado': json.dumps([{'item_id': item.pk, 'cantidad': 1, 'observacion': ''}]),
+            'cli-cedula': '0911111111',
+            'cli-nombres': 'Ana Ruiz',
+            'cli-sector': 'norte',
+        }
+        datos.update(extra)
+        return datos
+
+    def test_menu_ofrece_producto_o_equipo_reacondicionado(self):
+        menu = self.client.get(reverse('econotec:venta_menu'))
+        self.assertContains(menu, 'Vender producto')
+        self.assertContains(menu, 'Vender equipo reacondicionado')
+        self.assertContains(menu, reverse('econotec:venta_registrar_reacondicionado'))
+
+        formulario = self.client.get(reverse('econotec:venta_registrar_reacondicionado'))
+        self.assertContains(formulario, 'Nueva Venta de Equipo Reacondicionado')
+        self.assertContains(formulario, 'params.set(\'linea\', "reacondicionado")')
+        self.assertContains(formulario, '¿Aplica dato del cliente?')
+        producto = self.client.get(reverse('econotec:venta_registrar'))
+        self.assertContains(producto, 'params.set(\'linea\', "producto")')
+
+    def test_catalogo_separa_por_inventario(self):
+        url = reverse('econotec:venta_inventario_catalogo')
+        rea = [i['producto'] for i in self.client.get(url, {'linea': 'reacondicionado'}).json()['items']]
+        self.assertEqual(rea, ['Impresora reacondicionada'])
+        prod = [i['producto'] for i in self.client.get(url).json()['items']]
+        self.assertEqual(prod, ['Tóner producto'])
+
+    def test_vender_reacondicionado_descuenta_su_inventario(self):
+        respuesta = self.client.post(
+            reverse('econotec:venta_registrar_reacondicionado'), self.datos_venta(self.equipo),
+        )
+        self.assertEqual(respuesta.status_code, 302, respuesta.context and respuesta.context['ing_form'].errors)
+        venta = IngresoEquipo.objects.get(sede='ventas')
+        self.assertEqual(venta.cliente.nombres, 'Ana Ruiz')
+        self.equipo.refresh_from_db()
+        self.producto.refresh_from_db()
+        self.assertEqual(self.equipo.cantidad, 0)
+        self.assertEqual(self.producto.cantidad, 5)
+        self.assertEqual(VentaInventarioItem.objects.get(venta=venta).inventario_item, self.equipo)
+
+        editar = self.client.get(reverse('econotec:venta_editar', kwargs={'pk': venta.pk}))
+        self.assertContains(editar, 'params.set(\'linea\', "reacondicionado")')
+
+    def test_no_mezcla_inventarios(self):
+        respuesta = self.client.post(
+            reverse('econotec:venta_registrar_reacondicionado'), self.datos_venta(self.producto),
+        )
+        self.assertEqual(respuesta.status_code, 200)
+        self.assertFalse(IngresoEquipo.objects.filter(sede='ventas').exists())
+        self.producto.refresh_from_db()
+        self.assertEqual(self.producto.cantidad, 5)
+
+    def test_venta_sin_datos_del_cliente_va_a_consumidor_final(self):
+        datos = self.datos_venta(self.producto, venta_aplica_cliente='no')
+        for campo in ('cli-cedula', 'cli-nombres', 'cli-sector'):
+            datos.pop(campo)
+        respuesta = self.client.post(reverse('econotec:venta_registrar'), datos)
+        self.assertEqual(respuesta.status_code, 302, respuesta.context and respuesta.context['ing_form'].errors)
+        venta = IngresoEquipo.objects.get(sede='ventas')
+        self.assertEqual(venta.cliente.cedula, CEDULA_CONSUMIDOR_FINAL)
+        self.assertEqual(venta.cliente.nombres, 'Consumidor final')
+
+        editar = self.client.get(reverse('econotec:venta_editar', kwargs={'pk': venta.pk}))
+        self.assertContains(editar, 'name="venta_aplica_cliente" value="no" checked')
+
+        # Al editar y poner datos, se usa el cliente real y «Consumidor final» no se toca.
+        datos_editar = self.datos_venta(self.producto, venta_aplica_cliente='si')
+        self.client.post(reverse('econotec:venta_editar', kwargs={'pk': venta.pk}), datos_editar)
+        venta.refresh_from_db()
+        self.assertEqual(venta.cliente.nombres, 'Ana Ruiz')
+        self.assertEqual(Cliente.objects.get(cedula=CEDULA_CONSUMIDOR_FINAL).nombres, 'Consumidor final')
+
+    def test_con_si_el_cliente_sigue_siendo_obligatorio(self):
+        datos = self.datos_venta(self.producto, venta_aplica_cliente='si')
+        datos['cli-cedula'] = ''
+        respuesta = self.client.post(reverse('econotec:venta_registrar'), datos)
+        self.assertEqual(respuesta.status_code, 200)
+        self.assertFalse(IngresoEquipo.objects.filter(sede='ventas').exists())

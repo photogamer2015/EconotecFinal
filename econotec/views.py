@@ -3038,12 +3038,85 @@ def _resumen_venta_inventario(venta):
     )
 
 
-def _aplicar_inventario_a_venta(venta, selecciones):
+# Venta sin datos del cliente: se guarda a nombre de «Consumidor final».
+CEDULA_CONSUMIDOR_FINAL = '9999999999999'
+
+VENTA_LINEAS = {
+    'producto': {
+        'slug': 'producto',
+        'titulo': 'Nueva Venta de Producto',
+        'inventario': 'inventario',
+        'unidad': 'producto',
+        'unidades': 'productos',
+    },
+    'reacondicionado': {
+        'slug': 'reacondicionado',
+        'titulo': 'Nueva Venta de Equipo Reacondicionado',
+        'inventario': 'inventario reacondicionado',
+        'unidad': 'equipo',
+        'unidades': 'equipos',
+    },
+}
+
+
+def _venta_linea(linea):
+    return VENTA_LINEAS.get(linea) or VENTA_LINEAS['producto']
+
+
+def _venta_linea_de(venta):
+    """De qué inventario salió una venta ya registrada."""
+    es_reacondicionado = venta.productos_inventario.filter(
+        inventario_item__linea='reacondicionado',
+    ).exists()
+    return 'reacondicionado' if es_reacondicionado else 'producto'
+
+
+def _cliente_consumidor_final():
+    cliente, _creado = Cliente.objects.get_or_create(
+        cedula=CEDULA_CONSUMIDOR_FINAL,
+        defaults={'nombres': 'Consumidor final'},
+    )
+    return cliente
+
+
+def _es_consumidor_final(cliente):
+    return bool(cliente and cliente.cedula == CEDULA_CONSUMIDOR_FINAL)
+
+
+def _venta_aplica_cliente(post_data):
+    """«¿Aplica dato del cliente?» Sí (por defecto) o No."""
+    return (post_data.get('venta_aplica_cliente') or 'si').strip().lower() != 'no'
+
+
+def _venta_form_cliente(post_data, cliente_actual=None):
+    """Formulario del cliente de una venta cuando sí aplican sus datos.
+
+    Si la cédula ya existe se actualiza ese cliente. Al editar se conserva el
+    cliente de la venta, salvo que fuera «Consumidor final»: ese registro es
+    compartido y nunca se edita desde una venta.
+    """
+    cedula = (post_data.get('cli-cedula') or '').strip()
+    existente = Cliente.objects.filter(cedula=cedula).first() if cedula else None
+    if cliente_actual and not _es_consumidor_final(cliente_actual):
+        instancia = cliente_actual
+    else:
+        instancia = existente
+    form = ClienteForm(post_data, prefix='cli', instance=instancia)
+    if cedula == CEDULA_CONSUMIDOR_FINAL:
+        form.add_error('cedula', 'Para «Consumidor final» elige «No» en ¿Aplica dato del cliente?')
+    return form
+
+
+def _aplicar_inventario_a_venta(venta, selecciones, linea='producto'):
     """Descuenta stock y crea las relaciones dentro de la transacción de venta."""
     for item_id, cantidad, observacion in selecciones:
         item = InventarioItem.objects.select_for_update().filter(pk=item_id).first()
         if not item:
             raise ValueError('Uno de los productos seleccionados ya no existe en inventario.')
+        if item.linea != linea:
+            raise ValueError(
+                f'«{item.producto}» no pertenece al {_venta_linea(linea)["inventario"]}.'
+            )
         if item.estado != 'disponible' or item.cantidad < cantidad:
             raise ValueError(
                 f'No hay suficiente disponibilidad para «{item.producto}». '
@@ -3095,9 +3168,10 @@ def venta_inventario_catalogo(request):
     sede = (request.GET.get('sede') or '').strip()
     categoria = (request.GET.get('categoria') or '').strip()
     tipo = (request.GET.get('tipo') or '').strip()
-    # Solo el inventario de producto: los reacondicionados llevan su propio inventario.
+    # Cada venta saca de un solo inventario: el de producto o el reacondicionado.
+    linea = _venta_linea((request.GET.get('linea') or '').strip())['slug']
     items = InventarioItem.objects.filter(
-        linea='producto',
+        linea=linea,
         sede__in=['guayaquil', 'quito'],
     ).order_by('producto', 'marca', 'modelo')
     ubicaciones_validas = {opcion['slug'] for opcion in VENTA_INVENTARIO_UBICACIONES}
@@ -3143,6 +3217,11 @@ def venta_inventario_agregar(request, pk):
         return JsonResponse({'ok': False, 'error': str(exc)}, status=400)
 
     item = get_object_or_404(InventarioItem.objects.select_for_update(), pk=item_id)
+    if venta.productos_inventario.exists() and item.linea != _venta_linea_de(venta):
+        return JsonResponse({
+            'ok': False,
+            'error': 'Una venta no puede mezclar productos y equipos reacondicionados.',
+        }, status=400)
     if item.estado != 'disponible' or item.cantidad < cantidad:
         return JsonResponse({
             'ok': False,
@@ -3599,38 +3678,42 @@ def _aplicar_pago_venta(venta, post_data):
 
 @tecnico_requerido
 @transaction.atomic
-def venta_registrar(request):
-    """Registra una nueva venta de producto."""
+def venta_registrar(request, linea='producto'):
+    """Registra una nueva venta: de producto o de equipo reacondicionado."""
+    linea_info = _venta_linea(linea)
+    aplica_cliente = True
     if request.method == 'POST':
         post_data = request.POST.copy()
         _preparar_post_venta(post_data)
 
-        cli_form = ClienteForm(post_data, prefix='cli')
+        aplica_cliente = _venta_aplica_cliente(post_data)
         ing_form = IngresoEquipoForm(post_data, prefix='ing')
         _configurar_form_venta(ing_form)
-
-        cedula = (post_data.get('cli-cedula') or '').strip()
-        cliente_existente = Cliente.objects.filter(cedula=cedula).first() if cedula else None
 
         cliente = None
         venta = None
 
-        if cliente_existente:
-            cli_form_existente = ClienteForm(post_data, prefix='cli', instance=cliente_existente)
-            cli_form = cli_form_existente
+        if aplica_cliente:
+            cli_form = _venta_form_cliente(post_data)
+            cliente_ok = cli_form.is_valid()
         else:
-            cli_form_existente = cli_form
+            # Sin datos del cliente: la venta va a nombre de «Consumidor final».
+            cli_form = ClienteForm(prefix='cli')
+            cliente_ok = True
 
-        if cli_form_existente.is_valid() and ing_form.is_valid():
+        if cliente_ok and ing_form.is_valid():
             _validar_pago_venta(post_data, ing_form)
 
-        if cli_form_existente.is_valid() and ing_form.is_valid():
+        if cliente_ok and ing_form.is_valid():
             try:
                 selecciones = _venta_inventario_selecciones(post_data)
                 if not selecciones:
-                    raise ValueError('Selecciona al menos un producto del inventario para registrar la venta.')
+                    raise ValueError(
+                        f'Selecciona al menos un {linea_info["unidad"]} del '
+                        f'{linea_info["inventario"]} para registrar la venta.'
+                    )
                 with transaction.atomic():
-                    cliente = cli_form_existente.save()
+                    cliente = cli_form.save() if aplica_cliente else _cliente_consumidor_final()
                     venta = ing_form.save(commit=False)
                     venta.cliente = cliente
                     venta.sede = 'ventas'
@@ -3639,7 +3722,7 @@ def venta_registrar(request):
                     venta.subestado_entregado = 'con_solucion'
                     _aplicar_pago_venta(venta, post_data)
                     venta.save()
-                    _aplicar_inventario_a_venta(venta, selecciones)
+                    _aplicar_inventario_a_venta(venta, selecciones, linea_info['slug'])
                     if selecciones and not (venta.problema_reportado or '').strip():
                         venta.problema_reportado = _resumen_venta_inventario(venta)
                         venta.save(update_fields=['problema_reportado', 'actualizado'])
@@ -3697,7 +3780,9 @@ def venta_registrar(request):
         'venta_inventario_categorias_json': _venta_inventario_categorias_json(),
         'venta_pago_form': _venta_pago_contexto(request.POST if request.method == 'POST' else None),
         'modo': 'registrar',
-        'titulo': 'Nueva Venta de Producto',
+        'venta_linea': linea_info,
+        'venta_aplica_cliente': 'si' if aplica_cliente else 'no',
+        'titulo': linea_info['titulo'],
         'siguiente_numero': siguiente_numero,
         'siguiente_codigo': siguiente_codigo,
     })
@@ -3712,22 +3797,36 @@ def venta_editar(request, pk):
         post_data = request.POST.copy()
         _preparar_post_venta(post_data)
             
-        cli_form = ClienteForm(post_data, prefix='cli', instance=venta.cliente)
+        aplica_cliente = _venta_aplica_cliente(post_data)
+        cliente_anterior = venta.cliente
+        if aplica_cliente:
+            cli_form = _venta_form_cliente(post_data, cliente_actual=cliente_anterior)
+            cliente_ok = cli_form.is_valid()
+        else:
+            cli_form = ClienteForm(prefix='cli')
+            cliente_ok = True
         ing_form = IngresoEquipoForm(post_data, prefix='ing', instance=venta)
         _configurar_form_venta(ing_form)
         selecciones = []
-        
-        if cli_form.is_valid() and ing_form.is_valid():
+
+        if cliente_ok and ing_form.is_valid():
             _validar_pago_venta(post_data, ing_form)
             try:
                 selecciones = _venta_inventario_selecciones(post_data)
             except ValueError as exc:
                 ing_form.add_error(None, str(exc))
 
-        if cli_form.is_valid() and ing_form.is_valid():
-            campos_cambiados = set(cli_form.changed_data or []) | set(ing_form.changed_data or [])
-            cli_form.save()
+        if cliente_ok and ing_form.is_valid():
+            campos_cambiados = set(ing_form.changed_data or [])
+            if aplica_cliente:
+                campos_cambiados |= set(cli_form.changed_data or [])
+                cliente_venta = cli_form.save()
+            else:
+                cliente_venta = _cliente_consumidor_final()
+            if cliente_venta.pk != cliente_anterior.pk:
+                campos_cambiados.add('cliente')
             venta = ing_form.save(commit=False)
+            venta.cliente = cliente_venta
             venta.sede = 'ventas'
             venta.estado = 'entregado'
             venta.subestado_entregado = 'con_solucion'
@@ -3746,9 +3845,13 @@ def venta_editar(request, pk):
                 return redirect('econotec:venta_lista_parciales')
             return redirect('econotec:venta_lista')
     else:
-        cli_form = ClienteForm(prefix='cli', instance=venta.cliente)
+        aplica_cliente = not _es_consumidor_final(venta.cliente)
+        cli_form = (
+            ClienteForm(prefix='cli', instance=venta.cliente)
+            if aplica_cliente else ClienteForm(prefix='cli')
+        )
         ing_form = IngresoEquipoForm(prefix='ing', instance=venta)
-        
+
     _configurar_form_venta(ing_form)
 
     relaciones_inventario = venta.productos_inventario.select_related('inventario_item').all()
@@ -3764,6 +3867,8 @@ def venta_editar(request, pk):
         'venta_inventario_categorias_json': _venta_inventario_categorias_json(),
         'venta_pago_form': _venta_pago_contexto(request.POST if request.method == 'POST' else None, venta),
         'modo': 'editar',
+        'venta_linea': _venta_linea(_venta_linea_de(venta)),
+        'venta_aplica_cliente': 'si' if aplica_cliente else 'no',
         'titulo': f'Editar Venta {venta.codigo_equipo}',
         'siguiente_numero': venta.numero_equipo,
         'siguiente_codigo': venta.codigo_equipo,

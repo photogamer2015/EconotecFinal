@@ -130,6 +130,8 @@ urlpatterns = [
     path('ventas/parciales/', views.venta_lista_parciales, name='venta_lista_parciales'),
     path('ventas/menu/', views.venta_menu, name='venta_menu'),
     path('ventas/registrar/', views.venta_registrar, name='venta_registrar'),
+    path('ventas/registrar/reacondicionado/', views.venta_registrar, {'linea': 'reacondicionado'},
+         name='venta_registrar_reacondicionado'),
     path('ventas/inventario/catalogo/', views.venta_inventario_catalogo, name='venta_inventario_catalogo'),
     path('ventas/<int:pk>/inventario/agregar/', views.venta_inventario_agregar, name='venta_inventario_agregar'),
     path('ventas/<int:pk>/inventario/<int:relacion_pk>/cantidad/', views.venta_inventario_actualizar_cantidad, name='venta_inventario_actualizar_cantidad'),

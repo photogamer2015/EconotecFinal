@@ -88,6 +88,8 @@
     .admin-equipment-payment { text-align: right; }
     .admin-equipment-payment strong { display: block; color: #0f766e; font-size: 20px; }
     .is-donado .admin-equipment-payment strong { color: #15803d; }
+    /* La compra de un equipo es dinero que salió: va en rojo, como un egreso. */
+    .admin-equipment-payment strong.es-egreso { color: var(--danger); }
     .estado-admin {
         display: inline-flex;
         border-radius: 999px;
@@ -283,10 +285,11 @@
                 <span class="estado-admin {% if i.estado == 'donado' %}donado{% else %}compra{% endif %}">{{ i.get_estado_display }}</span>
                 {% endif %}
                 <small>{{ i.fecha_ingreso|date:"d/m/Y" }} · {{ i.get_sede_display }}</small>
-                {% if vista_admin and destino != 'reacondicionado' %}
+                {% if destino != 'reacondicionado' %}
                 <button type="button" class="btn btn-secondary btn-sm cambiar-estado-btn"
                         onclick="cambiarEstadoAdministrativo(this)"
                         data-chatarrizado="{% if destino == 'chatarrizado' %}si{% else %}no{% endif %}"
+                        data-avisa-admin="{% if not vista_admin and i.estado == 'equipo_a_comprar' %}si{% else %}no{% endif %}"
                         data-chatarrizar-url="{% url 'econotec:equipo_administrativo_chatarrizar' pk=i.pk %}"
                         data-rea-url="{% url 'econotec:equipo_reacondicionar' pk=i.pk %}"
                         data-rea-codigo="{{ i.codigo_equipo }}"
@@ -304,8 +307,8 @@
             </div>
             <div class="admin-equipment-payment">
                 {% if i.estado == 'equipo_a_comprar' %}
-                <strong>{{ i.valor_acordado|dinero_signo }}</strong>
-                <small>{{ i.get_compra_metodo_pago_display }}</small>
+                <strong class="es-egreso" title="Egreso: dinero pagado por la compra del equipo">−{{ i.valor_acordado|dinero_signo }}</strong>
+                <small>Egreso · {{ i.get_compra_metodo_pago_display }}</small>
                 {% else %}
                 <strong>Gratis</strong>
                 <small>Sin egreso</small>
@@ -441,7 +444,7 @@
 </div>
 {% endif %}
 
-{% if vista_admin %}
+{% if ingresos %}
 <form method="post" action="" id="form-chatarrizar-administrativo" hidden>
     {% csrf_token %}
     <input type="hidden" name="next" value="{{ request.get_full_path }}">
@@ -465,9 +468,10 @@
             Swal.fire({
                 icon: 'question',
                 title: '¿Qué quieres hacer con el equipo?',
-                text: yaChatarrizado
+                text: (yaChatarrizado
                     ? 'Este equipo ya está en chatarrización. Puedes reacondicionarlo.'
-                    : 'Chatarrizar lo pasa a «Equipos en Chatarrización». Reacondicionar lo pasa al Inventario reacondicionado.',
+                    : 'Chatarrizar lo pasa a «Equipos en Chatarrización». Reacondicionar lo pasa al Inventario reacondicionado.')
+                    + (d.avisaAdmin === 'si' ? ' Como este equipo fue comprado, se notificará al administrador.' : ''),
                 showConfirmButton: !yaChatarrizado,
                 confirmButtonText: '♻️ Chatarrizar',
                 confirmButtonColor: '#d33',

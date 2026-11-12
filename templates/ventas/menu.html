@@ -14,8 +14,16 @@
     <a href="{% url 'econotec:venta_registrar' %}" class="menu-card">
         <span class="menu-card-icon is-orange" aria-hidden="true">🛒</span>
         <div class="menu-card-body">
-            <h3>Nueva Venta</h3>
-            <p>Registra una venta directa de un producto o accesorio.</p>
+            <h3>Vender producto</h3>
+            <p>Registra una venta directa de un producto o accesorio del inventario de producto.</p>
+        </div>
+    </a>
+
+    <a href="{% url 'econotec:venta_registrar_reacondicionado' %}" class="menu-card">
+        <span class="menu-card-icon is-green" aria-hidden="true">🔧</span>
+        <div class="menu-card-body">
+            <h3>Vender equipo reacondicionado</h3>
+            <p>Registra la venta de un equipo del inventario reacondicionado.</p>
         </div>
     </a>
 

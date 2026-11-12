@@ -40,8 +40,9 @@ from .models import (
     NotificacionCambioAdmin, SEDES_EQUIPOS, VentaInventarioItem,
 )
 from .pagination import paginar_resultados
+from .avisos_cambios import avisar_cambio
 from .reacondicionado import (
-    ReacondicionarError, chatarrizar_administrativo, contexto_modal_reacondicionar,
+    ESTADOS_ADMINISTRATIVOS, ReacondicionarError, chatarrizar_administrativo, contexto_modal_reacondicionar,
     equipos_en_chatarrizacion, reacondicionar_equipo,
 )
 from .permisos import (
@@ -1904,10 +1905,47 @@ def _volver_seguro(request, defecto):
     return redirect(defecto)
 
 
-@admin_requerido
+def _avisar_cambio_estado_compra(request, ingreso, accion):
+    """Campanita 🔔 del admin: alguien cambió el estado de un equipo comprado.
+
+    Solo avisa en Equipos a comprar (hubo un pago / egreso) y cuando no lo
+    hace el propio administrador. Los donados no generan aviso.
+    """
+    if ingreso.estado != 'equipo_a_comprar':
+        return
+    from .templatetags.econotec_extras import dinero_signo
+    avisar_cambio(
+        request.user,
+        'compra_estado',
+        f'{accion} el equipo comprado {ingreso.codigo_equipo} '
+        f'({ingreso.tipo_equipo_display} {ingreso.marca} {ingreso.modelo_serie}), '
+        f'por el que se pagó {dinero_signo(ingreso.valor_acordado)}.',
+        ingreso=ingreso,
+        url=reverse('econotec:admin_equipos_administrativos') + f'?q={ingreso.codigo_equipo}',
+    )
+
+
+def _puede_cambiar_estado_equipo(user, pk):
+    """El admin siempre; los demás roles solo en Donados y Equipos a comprar."""
+    if es_admin(user):
+        return True
+    return IngresoEquipo.objects.filter(pk=pk, estado__in=ESTADOS_ADMINISTRATIVOS).exists()
+
+
+def _sin_permiso_cambio_estado(request):
+    messages.error(
+        request,
+        'Solo un administrador puede reacondicionar equipos chatarrizados desde Bodegaje.',
+    )
+    return redirect('econotec:bienvenida')
+
+
+@tecnico_requerido
 @require_POST
 def equipo_reacondicionar(request, pk):
     """Pasa un equipo chatarrizado, donado o comprado al Inventario reacondicionado."""
+    if not _puede_cambiar_estado_equipo(request.user, pk):
+        return _sin_permiso_cambio_estado(request)
     try:
         ingreso, item = reacondicionar_equipo(pk, request.POST, request.user)
     except ReacondicionarError as error:
@@ -1918,13 +1956,16 @@ def equipo_reacondicionar(request, pk):
         f'{ingreso.codigo_equipo} quedó en el Inventario reacondicionado '
         f'({item.get_ubicacion_display()}) con el código {item.codigo}.',
     )
+    _avisar_cambio_estado_compra(request, ingreso, 'Reacondicionó')
     return _volver_seguro(request, 'econotec:admin_activos_bodegaje')
 
 
-@admin_requerido
+@tecnico_requerido
 @require_POST
 def equipo_administrativo_chatarrizar(request, pk):
     """Donados y Compras: envía el equipo a chatarrización sin tocar su estado ni su egreso."""
+    if not _puede_cambiar_estado_equipo(request.user, pk):
+        return _sin_permiso_cambio_estado(request)
     try:
         ingreso = chatarrizar_administrativo(pk)
     except ReacondicionarError as error:
@@ -1935,6 +1976,7 @@ def equipo_administrativo_chatarrizar(request, pk):
         f'{ingreso.codigo_equipo} pasó a chatarrización. Ya aparece en '
         f'«Equipos en Chatarrización» de Bodegaje.',
     )
+    _avisar_cambio_estado_compra(request, ingreso, 'Envió a chatarrización')
     return _volver_seguro(request, 'econotec:admin_equipos_administrativos')
 
 
@@ -2026,6 +2068,7 @@ def equipos_administrativos_general(request):
         'estado_filtro': estado_filtro,
         'q': q,
         'vista_admin': False,
+        **contexto_modal_reacondicionar(),
     })
 
 
