@@ -84,13 +84,112 @@
         body.nav-colapsado .nav-lateral-texto, body.nav-colapsado .nav-lateral-titulo { display: none; }
         body.nav-colapsado .nav-lateral-item { justify-content: center; padding: 8px 6px; border-left-width: 0; }
     }
+    /* Celular y tablet: la barra es un menú deslizable que abre el botón «Apartados». */
+    .nav-lateral-abrir { display: none; }
+    .nav-lateral-fondo { display: none; }
+    @media (max-width: 1199.98px) {
+        .nav-lateral-fila { display: flex; align-items: center; gap: 10px; }
+        .nav-lateral-fila .btn-back-inline { flex: 1 1 auto; width: auto; }
+        .nav-lateral-abrir {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 7px;
+            flex: 0 0 auto;
+            padding: 6px 14px;
+            border: 1px solid var(--primary);
+            border-radius: 999px;
+            background: var(--primary-light);
+            color: var(--primary-dark);
+            font-family: inherit;
+            font-size: 13px;
+            font-weight: 700;
+            cursor: pointer;
+        }
+        body.con-nav-lateral .nav-lateral {
+            display: flex;
+            flex-direction: column;
+            position: fixed;
+            top: 0;
+            left: 0;
+            bottom: 0;
+            width: min(290px, 86vw);
+            z-index: 10060;
+            background: var(--card-bg);
+            border-right: 1px solid var(--border-color);
+            box-shadow: 0 0 40px rgba(0, 0, 0, 0.28);
+            transform: translateX(-105%);
+            visibility: hidden;
+            transition: transform 0.22s ease, visibility 0.22s;
+        }
+        body.nav-abierto .nav-lateral { transform: none; visibility: visible; }
+        body.nav-abierto { overflow: hidden; }
+        body.nav-abierto .nav-lateral-fondo {
+            display: block;
+            position: fixed;
+            inset: 0;
+            z-index: 10050;
+            background: rgba(15, 12, 10, 0.5);
+        }
+        .nav-lateral-top {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 16px 16px 10px;
+        }
+        .nav-lateral-titulo {
+            font-size: 12px;
+            font-weight: 800;
+            letter-spacing: 0.14em;
+            text-transform: uppercase;
+            color: var(--text-muted);
+        }
+        .nav-lateral-toggle {
+            width: 38px;
+            height: 38px;
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            background: var(--card-bg);
+            color: var(--text-muted);
+            font-size: 15px;
+            cursor: pointer;
+        }
+        .nav-lateral-lista {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+            padding: 4px 12px 20px;
+            overflow-y: auto;
+        }
+        .nav-lateral-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            min-height: 46px;
+            padding: 10px 12px;
+            border-left: 3px solid transparent;
+            border-radius: 10px;
+            color: var(--text-soft);
+            font-size: 15px;
+            font-weight: 700;
+            text-decoration: none;
+        }
+        .nav-lateral-item.activa {
+            background: var(--primary-light);
+            border-left-color: var(--primary);
+            color: var(--primary-dark);
+        }
+        .nav-lateral-icono { width: 24px; flex: 0 0 auto; text-align: center; font-size: 18px; }
+    }
     @media print {
         .nav-lateral { display: none !important; }
         body.con-nav-lateral { padding-left: 0 !important; }
     }
 </style>
 
-<aside class="nav-lateral no-print" aria-label="Navegación entre apartados">
+<div class="nav-lateral-fondo no-print" id="nav-lateral-fondo"></div>
+<aside class="nav-lateral no-print" id="nav-lateral" aria-label="Navegación entre apartados">
     <div class="nav-lateral-top">
         <span class="nav-lateral-titulo">Apartados</span>
         <button type="button" class="nav-lateral-toggle" id="nav-lateral-toggle"
@@ -170,10 +269,25 @@
         try {
             if (localStorage.getItem(CLAVE) === 'si') document.body.classList.add('nav-colapsado');
         } catch (e) { /* Sin almacenamiento local: el menú queda abierto. */ }
+        // En celular y tablet la barra es un menú deslizable.
+        var angosta = window.matchMedia('(max-width: 1199.98px)');
+        function abrir(si) {
+            document.body.classList.toggle('nav-abierto', si);
+            var boton = document.getElementById('nav-lateral-abrir');
+            if (boton) boton.setAttribute('aria-expanded', si ? 'true' : 'false');
+        }
         document.addEventListener('click', function (e) {
+            if (e.target.closest('#nav-lateral-abrir')) { abrir(true); return; }
+            if (e.target.closest('#nav-lateral-fondo')) { abrir(false); return; }
             if (!e.target.closest('#nav-lateral-toggle')) return;
+            if (angosta.matches) { abrir(false); return; }
             var colapsado = document.body.classList.toggle('nav-colapsado');
             try { localStorage.setItem(CLAVE, colapsado ? 'si' : 'no'); } catch (e2) { /* nada */ }
         });
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape') abrir(false);
+        });
+        // Al agrandar la ventana, el menú deslizable no debe quedar abierto.
+        angosta.addEventListener('change', function () { abrir(false); });
     })();
 </script>
