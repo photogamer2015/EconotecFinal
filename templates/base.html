@@ -1991,10 +1991,16 @@
 
     <div class="container">
         {% if request.resolver_match.url_name != 'bienvenida' %}
-        <div class="no-print" style="margin-bottom: 16px;">
+        <div class="no-print nav-lateral-fila" style="margin-bottom: 16px;">
             <button type="button" onclick="history.back()" class="btn-back-inline" title="Regresar a la pantalla anterior">
                 <span class="btn-back-arrow" aria-hidden="true">←</span> Atrás
             </button>
+            {% if user.is_authenticated %}
+            {# Solo se ve en celular y tablet: abre la barra de apartados como menú deslizable. #}
+            <button type="button" class="nav-lateral-abrir" id="nav-lateral-abrir" aria-controls="nav-lateral" aria-expanded="false" title="Ver los apartados">
+                <span aria-hidden="true">☰</span> Apartados
+            </button>
+            {% endif %}
         </div>
         {% endif %}
 

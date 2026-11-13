@@ -100,3 +100,11 @@ class NavLateralTests(TestCase):
         self.assertContains(pagina, enlace_activo('inventario'))
         for seccion in ('ingresos', 'ventas', 'pagos', 'ranking', 'registro', 'ayuda'):
             self.assertNotContains(pagina, f'data-seccion="{seccion}"')
+
+    def test_boton_apartados_para_celular_y_tablet(self):
+        self.client.force_login(self.tecnico)
+        pagina = self.client.get(reverse('econotec:venta_menu'))
+        self.assertContains(pagina, 'id="nav-lateral-abrir"')
+        self.assertContains(pagina, 'id="nav-lateral-fondo"')
+        # En el Inicio no hay barra ni botón.
+        self.assertNotContains(self.client.get(reverse('econotec:bienvenida')), 'nav-lateral-abrir')
