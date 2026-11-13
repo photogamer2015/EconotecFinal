@@ -1,0 +1,179 @@
+{# Barra lateral tipo CRM: navegar entre apartados sin volver al Inicio. #}
+{# Se muestra en pantallas anchas (≥1200px) en todas las páginas menos el Inicio; #}
+{# en celular y tablet no aparece y todo queda como antes. Cada rol ve solo sus enlaces. #}
+{% load econotec_extras %}
+<style>
+    .nav-lateral { display: none; }
+    @media (min-width: 1200px) {
+        body.con-nav-lateral { padding-left: 240px; transition: padding-left 0.18s ease; }
+        body.con-nav-lateral.nav-colapsado { padding-left: 76px; }
+        body.con-nav-lateral .nav-lateral {
+            display: flex;
+            flex-direction: column;
+            position: fixed;
+            top: 0;
+            left: 0;
+            bottom: 0;
+            width: 240px;
+            z-index: 120;
+            background: var(--card-bg);
+            border-right: 1px solid var(--border-color);
+            transition: width 0.18s ease;
+        }
+        body.con-nav-lateral.nav-colapsado .nav-lateral { width: 76px; }
+        .nav-lateral-top {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            padding: 14px 14px 10px;
+        }
+        body.nav-colapsado .nav-lateral-top { justify-content: center; padding-left: 8px; padding-right: 8px; }
+        .nav-lateral-titulo {
+            font-size: 11px;
+            font-weight: 800;
+            letter-spacing: 0.14em;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            white-space: nowrap;
+        }
+        .nav-lateral-toggle {
+            width: 30px;
+            height: 30px;
+            flex: 0 0 auto;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            background: var(--card-bg);
+            color: var(--text-muted);
+            font-size: 13px;
+            line-height: 1;
+            cursor: pointer;
+        }
+        .nav-lateral-toggle:hover { color: var(--text-main); border-color: var(--primary); }
+        .nav-lateral-flecha { display: inline-block; transition: transform 0.18s ease; }
+        body.nav-colapsado .nav-lateral-flecha { transform: rotate(180deg); }
+        .nav-lateral-lista {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            padding: 4px 10px 16px;
+            overflow-y: auto;
+            scrollbar-width: thin;
+        }
+        .nav-lateral-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 10px;
+            border-left: 3px solid transparent;
+            border-radius: 10px;
+            color: var(--text-soft);
+            font-size: 13.5px;
+            font-weight: 700;
+            text-decoration: none;
+            white-space: nowrap;
+        }
+        .nav-lateral-item:hover { background: var(--surface-muted); color: var(--text-main); }
+        .nav-lateral-item.activa {
+            background: var(--primary-light);
+            border-left-color: var(--primary);
+            color: var(--primary-dark);
+        }
+        .nav-lateral-icono { width: 22px; flex: 0 0 auto; text-align: center; font-size: 16px; }
+        body.nav-colapsado .nav-lateral-texto, body.nav-colapsado .nav-lateral-titulo { display: none; }
+        body.nav-colapsado .nav-lateral-item { justify-content: center; padding: 8px 6px; border-left-width: 0; }
+    }
+    @media print {
+        .nav-lateral { display: none !important; }
+        body.con-nav-lateral { padding-left: 0 !important; }
+    }
+</style>
+
+<aside class="nav-lateral no-print" aria-label="Navegación entre apartados">
+    <div class="nav-lateral-top">
+        <span class="nav-lateral-titulo">Apartados</span>
+        <button type="button" class="nav-lateral-toggle" id="nav-lateral-toggle"
+                title="Contraer o expandir el menú lateral" aria-label="Contraer o expandir el menú lateral">
+            <span class="nav-lateral-flecha" aria-hidden="true">❮</span>
+        </button>
+    </div>
+    <nav class="nav-lateral-lista">
+        {% with ruta=request.path %}
+        <a href="{% url 'econotec:bienvenida' %}" class="nav-lateral-item" data-seccion="inicio" title="Inicio">
+            <span class="nav-lateral-icono" aria-hidden="true">🏠</span><span class="nav-lateral-texto">Inicio</span>
+        </a>
+        {% if puede_gestionar_equipos %}
+        <a href="{% url 'econotec:ingreso_menu' %}" class="nav-lateral-item{% if ruta|empieza_con:'/ingresos/' and not ruta|empieza_con:'/ingresos/donados-compras' %} activa{% endif %}" data-seccion="ingresos" title="Ingreso de Equipo / Cliente">
+            <span class="nav-lateral-icono" aria-hidden="true">📥</span><span class="nav-lateral-texto">Ingresos</span>
+        </a>
+        <a href="{% url 'econotec:venta_menu' %}" class="nav-lateral-item{% if ruta|empieza_con:'/ventas/' %} activa{% endif %}" data-seccion="ventas" title="Vender productos o equipos reacondicionados">
+            <span class="nav-lateral-icono" aria-hidden="true">🛒</span><span class="nav-lateral-texto">Ventas</span>
+        </a>
+        <a href="{% url 'econotec:salida_menu' %}" class="nav-lateral-item{% if ruta|empieza_con:'/salidas/' and not ruta|empieza_con:'/salidas/totales' and not ruta|empieza_con:'/salidas/salidas-fisicas-confirmadas' %} activa{% endif %}" data-seccion="listos" title="Equipo listo / finalizado">
+            <span class="nav-lateral-icono" aria-hidden="true">✅</span><span class="nav-lateral-texto">Equipos listos</span>
+        </a>
+        {% endif %}
+        {% if puede_confirmar_salida_fisica %}
+        <a href="{% url 'econotec:salida_retiros_lista' %}" class="nav-lateral-item{% if ruta|empieza_con:'/salidas/salidas-fisicas-confirmadas' %} activa{% endif %}" data-seccion="salidas-fisicas" title="Salidas físicas confirmadas">
+            <span class="nav-lateral-icono" aria-hidden="true">🚚</span><span class="nav-lateral-texto">Salidas físicas</span>
+        </a>
+        {% endif %}
+        {% if puede_gestionar_equipos %}
+        <a href="{% url 'econotec:cliente_lista' %}" class="nav-lateral-item{% if ruta|empieza_con:'/clientes/' or ruta|empieza_con:'/historial' %} activa{% endif %}" data-seccion="clientes" title="Clientes">
+            <span class="nav-lateral-icono" aria-hidden="true">👥</span><span class="nav-lateral-texto">Clientes</span>
+        </a>
+        {% endif %}
+        {% if puede_gestionar_pagos %}
+        <a href="{% url 'econotec:pagos_lista' %}" class="nav-lateral-item{% if ruta|empieza_con:'/pagos/' and not ruta|empieza_con:'/pagos/seguimiento' %} activa{% endif %}" data-seccion="pagos" title="Pagos">
+            <span class="nav-lateral-icono" aria-hidden="true">💳</span><span class="nav-lateral-texto">Pagos</span>
+        </a>
+        {% endif %}
+        {% if puede_gestionar_equipos %}
+        <a href="{% url 'econotec:admin_activos_bodegaje' %}" class="nav-lateral-item{% if ruta|empieza_con:'/admin-panel/activos-bodegaje' or ruta|empieza_con:'/alertas/bodegaje' or ruta|empieza_con:'/bodegaje-chatarrerizacion' %} activa{% endif %}" data-seccion="bodegaje" title="Bodegaje / Chatarrización">
+            <span class="nav-lateral-icono" aria-hidden="true">📦</span><span class="nav-lateral-texto">Bodegaje</span>
+        </a>
+        <a href="{% if es_admin %}{% url 'econotec:admin_equipos_administrativos' %}{% else %}{% url 'econotec:equipos_administrativos_general' %}{% endif %}" class="nav-lateral-item{% if ruta|empieza_con:'/ingresos/donados-compras' or ruta|empieza_con:'/admin-panel/equipos-administrativos' %} activa{% endif %}" data-seccion="donados" title="Donados / Equipos a comprar">
+            <span class="nav-lateral-icono" aria-hidden="true">🎁</span><span class="nav-lateral-texto">Donados / Compras</span>
+        </a>
+        {% endif %}
+        <a href="{% url 'econotec:inventario_menu' %}" class="nav-lateral-item{% if ruta|empieza_con:'/inventario/' %} activa{% endif %}" data-seccion="inventario" title="Inventario">
+            <span class="nav-lateral-icono" aria-hidden="true">🗃️</span><span class="nav-lateral-texto">Inventario</span>
+        </a>
+        {% if puede_ver_ranking %}
+        <a href="{% url 'econotec:salida_totales' %}" class="nav-lateral-item{% if ruta|empieza_con:'/salidas/totales' %} activa{% endif %}" data-seccion="ranking" title="Ranking de Técnicos">
+            <span class="nav-lateral-icono" aria-hidden="true">🏆</span><span class="nav-lateral-texto">Ranking</span>
+        </a>
+        {% endif %}
+        {% if puede_ver_seguimiento_pago %}
+        <a href="{% url 'econotec:seguimiento_pago' %}" class="nav-lateral-item{% if ruta|empieza_con:'/pagos/seguimiento' %} activa{% endif %}" data-seccion="seguimiento" title="Seguimiento de pago">
+            <span class="nav-lateral-icono" aria-hidden="true">📆</span><span class="nav-lateral-texto">Seguimiento</span>
+        </a>
+        {% endif %}
+        {% if es_admin %}
+        <a href="{% url 'econotec:admin_dashboard' %}" class="nav-lateral-item{% if ruta|empieza_con:'/admin-panel/' and not ruta|empieza_con:'/admin-panel/activos-bodegaje' and not ruta|empieza_con:'/admin-panel/equipos-administrativos' %} activa{% endif %}" data-seccion="registro" title="Registro Administrativo">
+            <span class="nav-lateral-icono" aria-hidden="true">🧾</span><span class="nav-lateral-texto">Registro Admin.</span>
+        </a>
+        {% endif %}
+        {% if puede_gestionar_equipos or puede_gestionar_pagos %}
+        <a href="{% url 'econotec:ayuda' %}" class="nav-lateral-item{% if ruta|empieza_con:'/ayuda' %} activa{% endif %}" data-seccion="ayuda" title="Ayuda">
+            <span class="nav-lateral-icono" aria-hidden="true">❓</span><span class="nav-lateral-texto">Ayuda</span>
+        </a>
+        {% endif %}
+        {% endwith %}
+    </nav>
+</aside>
+
+<script>
+    (function () {
+        var CLAVE = 'econotecNavLateralColapsado';
+        try {
+            if (localStorage.getItem(CLAVE) === 'si') document.body.classList.add('nav-colapsado');
+        } catch (e) { /* Sin almacenamiento local: el menú queda abierto. */ }
+        document.addEventListener('click', function (e) {
+            if (!e.target.closest('#nav-lateral-toggle')) return;
+            var colapsado = document.body.classList.toggle('nav-colapsado');
+            try { localStorage.setItem(CLAVE, colapsado ? 'si' : 'no'); } catch (e2) { /* nada */ }
+        });
+    })();
+</script>

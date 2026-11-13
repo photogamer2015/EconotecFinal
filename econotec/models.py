@@ -2972,6 +2972,12 @@ class AjustePuntaje(models.Model):
         verbose_name='Fecha',
         help_text='Día en que cuenta el ajuste: el Ranking lo suma en el período que incluye esta fecha.',
     )
+    cuenta_como_reparado = models.BooleanField(
+        default=False,
+        verbose_name='Cuenta como equipo reparado',
+        help_text='Márcalo si el ajuste es por un equipo que el técnico reparó: suma +1 en Reparados '
+                  'y en equipos finalizados del Ranking. Solo con «Sumar puntos».',
+    )
     creado_por = models.ForeignKey(
         'auth.User', on_delete=models.SET_NULL,
         null=True, blank=True,
@@ -2989,6 +2995,14 @@ class AjustePuntaje(models.Model):
     def puntos_con_signo(self):
         """Puntos que suma (positivo) o resta (negativo)."""
         return -self.puntos if self.tipo == self.RESTAR else self.puntos
+
+    def clean(self):
+        super().clean()
+        if self.cuenta_como_reparado and self.tipo == self.RESTAR:
+            from django.core.exceptions import ValidationError
+            raise ValidationError({
+                'cuenta_como_reparado': 'Un equipo reparado suma puntos: elige «Sumar puntos» o desmarca esta casilla.',
+            })
 
     def __str__(self):
         signo = '+' if self.puntos_con_signo > 0 else ''

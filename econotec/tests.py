@@ -7526,9 +7526,10 @@ class VentasTests(TestCase):
         self.assertContains(response, 'equipo finalizado con factura.')
         self.assertContains(response, 'Lista de equipos finalizados')
         self.assertNotContains(response, 'Salidas físicas confirmadas')
-        self.assertNotContains(response, 'Ranking de Técnicos')
         self.assertNotContains(response, reverse('econotec:salida_retiros_lista'))
-        self.assertNotContains(response, reverse('econotec:salida_totales'))
+        # El Ranking sí puede verlo el técnico: su enlace vive ahora en la
+        # barra lateral de apartados, no en las tarjetas de este menú.
+        self.assertNotContains(response, 'data-seccion="salidas-fisicas"')
         self.assertNotContains(response, 'Buscar salidas por fecha')
         self.assertNotContains(response, 'Buscar facturas por fecha')
 

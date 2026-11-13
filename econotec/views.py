@@ -5135,6 +5135,50 @@ def _ajustes_puntaje_ranking(desde, hasta):
     return resultado
 
 
+def _reparados_extra(equipos_reacondicionados, ajustes_tecnico):
+    """Equipos reparados que no vienen de una salida: cada reacondicionado
+    (botón «Reacondicionar») y cada ajuste de Puntajes marcado «Cuenta como
+    equipo reparado»."""
+    return equipos_reacondicionados + sum(1 for ajuste in ajustes_tecnico if ajuste.cuenta_como_reparado)
+
+
+def _total_reparados_extra(reacondicionados, ajustes):
+    """Reparados extra de todo el taller en el rango (ver _reparados_extra)."""
+    return (
+        sum(cantidad for cantidad, _nombre in reacondicionados.values())
+        + sum(_reparados_extra(0, lista) for lista, _nombre in ajustes.values())
+    )
+
+
+def _aplicar_reparados_extra(resumen, cantidad):
+    """Cuenta `cantidad` equipos como «Finalizado y reparado» en un resumen ya
+    hecho: suben Reparados, Suman, equipos finalizados y la efectividad. No
+    toca los puntos (cada uno ya suma los suyos aparte), ni Ubicación ni Dinero.
+    """
+    if not cantidad:
+        return resumen
+    resumen['reparados_extra'] = resumen.get('reparados_extra', 0) + cantidad
+    resumen['num_equipos'] += cantidad
+    resumen['resultados']['reparado'] += cantidad
+    resumen['reparados'] += cantidad
+    resumen['salidas_positivas'] += cantidad
+    for grupo in resumen['grupos']:
+        if grupo['efecto'] == 'suma':
+            grupo['total'] += cantidad
+            for parte in grupo['partes']:
+                if parte['clave'] == 'reparado':
+                    parte['cantidad'] += cantidad
+    for grupo in resumen['grupos']:
+        grupo['porcentaje'] = round(
+            grupo['total'] / resumen['num_equipos'] * 100, 1,
+        ) if resumen['num_equipos'] else 0
+    base_efectividad = resumen['salidas_positivas'] + resumen['salidas_negativas']
+    resumen['efectividad'] = round(
+        resumen['salidas_positivas'] / base_efectividad * 100, 1,
+    ) if base_efectividad else None
+    return resumen
+
+
 def _ranking_salidas_por_tecnico(
     registros, mostrar_valores_monetarios, ventas_producto=None, reacondicionados=None,
     ajustes=None,
@@ -5178,7 +5222,7 @@ def _ranking_salidas_por_tecnico(
             fila['reacondicionados'] = equipos_rea
             fila['puntos'] += equipos_rea * PUNTOS_EQUIPO_REACONDICIONADO
             fila['puntos_detalle'].append({
-                'etiqueta': 'Equipo reacondicionado',
+                'etiqueta': 'Equipo reacondicionado (cuenta como reparado)',
                 'cantidad': equipos_rea,
                 'unitario': PUNTOS_EQUIPO_REACONDICIONADO,
                 'subtotal': equipos_rea * PUNTOS_EQUIPO_REACONDICIONADO,
@@ -5198,9 +5242,11 @@ def _ranking_salidas_por_tecnico(
                     'subtotal': ajuste.puntos_con_signo,
                     'fecha': ajuste.fecha,
                     'motivo': ajuste.motivo,
+                    'cuenta_como_reparado': ajuste.cuenta_como_reparado,
                 }
                 for ajuste in ajustes_tecnico
             )
+        _aplicar_reparados_extra(fila, _reparados_extra(equipos_rea, ajustes_tecnico))
         fila.update({
             'tecnico_id': tid,
             'nombre': (
@@ -5273,9 +5319,14 @@ def _comprobaciones_totales(resumen, filas, meses_resumen, mostrar_valores_monet
         ],
         total,
     )
+    partes_ubicacion = [('Fuera de oficina', resumen['entregados']), ('En oficina', resumen['pendientes'])]
+    if resumen.get('reparados_extra'):
+        # Reacondicionados y ajustes marcados como equipo reparado: no tienen
+        # salida de la oficina, por eso van aparte.
+        partes_ubicacion.append(('Reacondicionados / manuales', resumen['reparados_extra']))
     comprobar(
         'Fuera de oficina + En oficina = equipos finalizados',
-        [('Fuera de oficina', resumen['entregados']), ('En oficina', resumen['pendientes'])],
+        partes_ubicacion,
         total,
     )
 
@@ -5352,14 +5403,19 @@ def _agregar_nivel_ranking(filas):
 def ranking_con_dinero(desde, hasta):
     """El Ranking de Técnicos con todo su dinero, para el Registro Administrativo."""
     registros = _registros_salidas_ranking(desde, hasta, True)
+    reacondicionados = _reacondicionados_ranking(desde, hasta)
+    ajustes = _ajustes_puntaje_ranking(desde, hasta)
     filas = _ranking_salidas_por_tecnico(
         registros, True,
         _ventas_producto_ranking(desde, hasta),
-        _reacondicionados_ranking(desde, hasta),
-        _ajustes_puntaje_ranking(desde, hasta),
+        reacondicionados,
+        ajustes,
     )
     _agregar_nivel_ranking(filas)
-    return registros, filas, _resumir_salidas(registros, True)
+    resumen = _aplicar_reparados_extra(
+        _resumir_salidas(registros, True), _total_reparados_extra(reacondicionados, ajustes),
+    )
+    return registros, filas, resumen
 
 
 def resumir_salidas_con_dinero(registros):
@@ -5452,14 +5508,21 @@ def salida_totales(request):
     # técnico que reparó en la salida, no al técnico encargado del ingreso.
     # Las tarjetas de arriba y los meses se suman de los mismos registros.
     registros = _registros_salidas_ranking(desde, hasta, mostrar_valores_monetarios)
+    reacondicionados_periodo = _reacondicionados_ranking(desde, hasta)
+    ajustes_periodo = _ajustes_puntaje_ranking(desde, hasta)
     ranking_list = _ranking_salidas_por_tecnico(
         registros,
         mostrar_valores_monetarios,
         _ventas_producto_ranking(desde, hasta),
-        _reacondicionados_ranking(desde, hasta),
-        _ajustes_puntaje_ranking(desde, hasta),
+        reacondicionados_periodo,
+        ajustes_periodo,
     )
-    resumen_salidas = _resumir_salidas(registros, mostrar_valores_monetarios)
+    # Los reacondicionados y los ajustes marcados como equipo reparado cuentan
+    # como «Finalizado y reparado» también en las tarjetas de arriba.
+    resumen_salidas = _aplicar_reparados_extra(
+        _resumir_salidas(registros, mostrar_valores_monetarios),
+        _total_reparados_extra(reacondicionados_periodo, ajustes_periodo),
+    )
 
     _agregar_nivel_ranking(ranking_list)
 
@@ -5471,12 +5534,20 @@ def salida_totales(request):
             registro for registro in registros
             if inicio_mes <= registro['fecha_salida'] <= fin_mes
         ]
+        reacondicionados_mes = _reacondicionados_ranking(inicio_mes, fin_mes)
+        ajustes_mes = _ajustes_puntaje_ranking(inicio_mes, fin_mes)
         meses_resumen.append({
             'etiqueta': date_format(inicio_mes, 'F Y'),
-            'resumen': _resumir_salidas(registros_mes, mostrar_valores_monetarios),
+            'resumen': _aplicar_reparados_extra(
+                _resumir_salidas(registros_mes, mostrar_valores_monetarios),
+                _total_reparados_extra(reacondicionados_mes, ajustes_mes),
+            ),
             'por_tecnico': {
                 fila['tecnico_id']: fila
-                for fila in _ranking_salidas_por_tecnico(registros_mes, mostrar_valores_monetarios)
+                for fila in _ranking_salidas_por_tecnico(
+                    registros_mes, mostrar_valores_monetarios,
+                    reacondicionados=reacondicionados_mes, ajustes=ajustes_mes,
+                )
             },
         })
     for fila in ranking_list:
@@ -5501,6 +5572,8 @@ def salida_totales(request):
             for fila in _ranking_salidas_por_tecnico(
                 _registros_salidas_ranking(*periodo_anterior, False),
                 False,
+                reacondicionados=_reacondicionados_ranking(*periodo_anterior),
+                ajustes=_ajustes_puntaje_ranking(*periodo_anterior),
             )
         }
         for fila in ranking_list:
@@ -6810,7 +6883,11 @@ def puntaje_tecnico(user):
         conteo[estado] = conteo.get(estado, 0) + fila['cantidad']
     ventas_producto = ventas_producto_qs.count()
     reacondicionados = reacondicionados_qs.count()
-    ajuste_manual = sum(ajuste.puntos_con_signo for ajuste in ajustes_qs.only('tipo', 'puntos'))
+    ajustes = list(ajustes_qs.only('tipo', 'puntos', 'cuenta_como_reparado'))
+    ajuste_manual = sum(ajuste.puntos_con_signo for ajuste in ajustes)
+    # Reacondicionados y ajustes marcados como equipo reparado cuentan como
+    # equipos reparados (sus puntos ya están en reacondicionados / ajuste_manual).
+    reparados_extra = _reparados_extra(reacondicionados, ajustes)
     total = calcular_puntaje_perfil(conteo, ventas_producto, reacondicionados, ajuste_manual)
     return {
         'fecha_reinicio': fecha_reinicio,
@@ -6818,7 +6895,8 @@ def puntaje_tecnico(user):
         'ventas_producto': ventas_producto,
         'reacondicionados': reacondicionados,
         'ajuste_manual': ajuste_manual,
-        'salidas_buenas': sum(conteo.get(estado, 0) for estado in SALIDA_PUNTOS_POSITIVOS),
+        'reparados_extra': reparados_extra,
+        'salidas_buenas': sum(conteo.get(estado, 0) for estado in SALIDA_PUNTOS_POSITIVOS) + reparados_extra,
         'salidas_malas': sum(conteo.get(estado, 0) for estado in SALIDA_PUNTOS_NEGATIVOS),
         'total': total,
         **nivel_por_puntos(total),

@@ -271,7 +271,9 @@ class SeguimientoPagoTests(TestCase):
         response = self.ver()
 
         self.assertNotIn('ranking', response.context)
-        self.assertNotContains(response, 'Ranking')
+        # La palabra «Ranking» aparece en la barra lateral de apartados; lo
+        # que no debe tener esta página es la sección del ranking embebida.
+        self.assertNotContains(response, 'id="salidas-tecnicos"')
 
     def test_pago_mixto_incompleto_va_a_otros(self):
         self.crear_ingreso(

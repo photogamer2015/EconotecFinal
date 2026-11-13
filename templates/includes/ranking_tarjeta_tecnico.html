@@ -89,7 +89,7 @@
                         {% if d.unitario is None %}
                         <li class="ajuste-manual">
                             <span class="ajuste-texto">
-                                <span>{{ d.etiqueta }} · {{ d.fecha|date:"d/m/Y" }}</span>
+                                <span>{{ d.etiqueta }} · {{ d.fecha|date:"d/m/Y" }}{% if d.cuenta_como_reparado %} · cuenta como reparado{% endif %}</span>
                                 <small class="ajuste-motivo"><b>Motivo:</b> {{ d.motivo|linebreaksbr }}</small>
                             </span>
                             <strong class="{% if d.subtotal > 0 %}pos{% else %}neg{% endif %}">{% if d.subtotal > 0 %}+{% endif %}{{ d.subtotal }}</strong>
