@@ -115,10 +115,10 @@ class AjustePuntajeAdmin(admin.ModelAdmin):
     list_display = (
         'fecha', 'tecnico_nombre', 'ajuste', 'motivo', 'puntaje_actual', 'creado_por', 'creado',
     )
-    list_filter = ('tipo', ('tecnico', admin.RelatedOnlyFieldListFilter), 'fecha')
+    list_filter = ('tipo', 'cuenta_como_reparado', ('tecnico', admin.RelatedOnlyFieldListFilter), 'fecha')
     search_fields = ('tecnico__username', 'tecnico__first_name', 'tecnico__last_name', 'motivo')
     date_hierarchy = 'fecha'
-    fields = ('tecnico', 'tipo', 'puntos', 'motivo', 'fecha', 'creado_por', 'creado')
+    fields = ('tecnico', 'tipo', 'puntos', 'cuenta_como_reparado', 'motivo', 'fecha', 'creado_por', 'creado')
     readonly_fields = ('creado_por', 'creado')
     radio_fields = {'tipo': admin.HORIZONTAL}
     list_select_related = ('tecnico', 'creado_por')
@@ -134,7 +134,8 @@ class AjustePuntajeAdmin(admin.ModelAdmin):
     @admin.display(description='Ajuste')
     def ajuste(self, obj):
         puntos = obj.puntos_con_signo
-        return f'+{puntos} pts' if puntos > 0 else f'{puntos} pts'
+        texto = f'+{puntos} pts' if puntos > 0 else f'{puntos} pts'
+        return f'{texto} · equipo reparado' if obj.cuenta_como_reparado else texto
 
     @admin.display(description='Puntaje actual del técnico')
     def puntaje_actual(self, obj):

@@ -657,9 +657,12 @@ class PuntosReacondicionadoTests(ReacondicionadoBase):
         self.assertEqual(fila['puntos'], 6)
         self.assertEqual(fila['reacondicionados'], 1)
         self.assertIn(
-            {'etiqueta': 'Equipo reacondicionado', 'cantidad': 1, 'unitario': 3, 'subtotal': 3},
+            {'etiqueta': 'Equipo reacondicionado (cuenta como reparado)', 'cantidad': 1, 'unitario': 3, 'subtotal': 3},
             fila['puntos_detalle'],
         )
+        # El reacondicionado cuenta como un equipo reparado más (sin duplicar puntos).
+        self.assertEqual((fila['reparados'], fila['num_equipos'], fila['salidas_positivas']), (2, 2, 2))
+        self.assertEqual(fila['efectividad'], 100.0)
 
         from .views import ranking_con_dinero
         hoy = date.today()
@@ -669,8 +672,34 @@ class PuntosReacondicionadoTests(ReacondicionadoBase):
     def test_tecnico_solo_con_reacondicionados_aparece_en_el_ranking(self):
         self.reacondicionar(self.crear_chatarrizado(), tecnico=self.otro)
         fila = self.ranking_del_mes()[self.otro.pk]
-        self.assertEqual((fila['nombre'], fila['puntos'], fila['num_equipos']), ('Carlos Mora', 3, 0))
+        # Cuenta como 1 equipo reparado, sin salida de la oficina.
+        self.assertEqual((fila['nombre'], fila['puntos'], fila['num_equipos']), ('Carlos Mora', 3, 1))
+        self.assertEqual((fila['reparados'], fila['entregados'], fila['pendientes']), (1, 0, 0))
         self.assertIsNotNone(fila['puesto'])
+
+    def test_reacondicionado_cuenta_como_reparado_en_tarjetas_perfil_y_cuadres(self):
+        reparado = self.crear_ingreso(estado='entregado')
+        SalidaEquipo.objects.create(
+            ingreso=reparado, fecha_salida=date.today(), estado_reparacion='retirado',
+            fecha_retiro_real=date.today(), tecnico_reparo=self.otro,
+            valor_final_cobrado=Decimal('0.00'), metodo_pago_final='sin_pago', registrado_por=self.admin,
+        )
+        self.reacondicionar(self.crear_chatarrizado(), tecnico=self.otro)
+        hoy = date.today()
+        respuesta = self.client.get(reverse('econotec:salida_totales'), {
+            'desde': hoy.replace(day=1).isoformat(), 'hasta': hoy.isoformat(),
+        })
+        resumen = respuesta.context['resumen_salidas']
+        # 1 reparado con salida + 1 reacondicionado (el chatarrizado del equipo no suma ni resta).
+        self.assertEqual(resumen['resultados']['reparado'], 2)
+        self.assertEqual(resumen['reparados_extra'], 1)
+        # Todas las cuentas de la Guía de los totales siguen cuadrando.
+        self.assertEqual(
+            [c['titulo'] for c in respuesta.context['comprobaciones'] if not c['cuadra']], [],
+        )
+        # Mi perfil: 2 equipos buenos; puntos 3 + 3 (sin duplicar).
+        perfil = self.puntos(self.otro)
+        self.assertEqual((perfil['salidas_buenas'], perfil['total']), (2, 6))
 
     def test_cuenta_en_el_mes_en_que_se_reacondiciono(self):
         ingreso = self.crear_chatarrizado()

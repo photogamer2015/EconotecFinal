@@ -1694,7 +1694,10 @@
         });
     </script>
 </head>
-<body>
+{# La clase con-nav-lateral activa la barra lateral de apartados (tipo CRM) en pantallas anchas. #}
+{# En el Inicio no se muestra: ahí ya está el menú principal con sus tarjetas. #}
+<body{% if user.is_authenticated and request.resolver_match and request.resolver_match.url_name != 'bienvenida' %} class="con-nav-lateral"{% endif %}>
+    {% if user.is_authenticated and request.resolver_match and request.resolver_match.url_name != 'bienvenida' %}{% include 'includes/nav_lateral.html' %}{% endif %}
     <header class="top no-print">
         <div class="brand">
             <a href="{% url 'econotec:bienvenida' %}" style="display: flex; align-items: center; gap: 14px; text-decoration: none; color: inherit;">

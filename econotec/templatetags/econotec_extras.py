@@ -48,6 +48,15 @@ def _formatear_es(valor_decimal):
     return s
 
 
+@register.filter(name='empieza_con')
+def empieza_con(valor, prefijo):
+    """¿El texto empieza con el prefijo? Para marcar el apartado activo en la navegación.
+
+    Uso: {% if request.path|empieza_con:'/ventas/' %}
+    """
+    return str(valor or '').startswith(prefijo)
+
+
 @register.filter(name='dinero')
 def dinero(valor):
     """Devuelve el monto con 2 decimales y coma decimal, sin signo $.

@@ -30,14 +30,17 @@ class AjustePuntajeTests(TestCase):
         self.asesora.groups.add(Group.objects.create(name='Asesores Comerciales'))
         self.client.force_login(self.admin)
 
-    def ajustar(self, tipo, puntos, fecha=HOY, motivo='Buen trabajo', tecnico=None):
-        return self.client.post(reverse('admin:econotec_ajustepuntaje_add'), {
+    def ajustar(self, tipo, puntos, fecha=HOY, motivo='Buen trabajo', tecnico=None, reparado=False):
+        datos = {
             'tecnico': str((tecnico or self.tecnico).pk),
             'tipo': tipo,
             'puntos': str(puntos),
             'motivo': motivo,
             'fecha': fecha.isoformat(),
-        })
+        }
+        if reparado:
+            datos['cuenta_como_reparado'] = 'on'
+        return self.client.post(reverse('admin:econotec_ajustepuntaje_add'), datos)
 
     def total(self):
         self.tecnico.refresh_from_db()
@@ -147,4 +150,31 @@ class AjustePuntajeTests(TestCase):
         self.client.force_login(self.tecnico)
         respuesta = self.client.get(reverse('admin:econotec_ajustepuntaje_add'))
         self.assertEqual(respuesta.status_code, 302)
+        self.assertFalse(AjustePuntaje.objects.exists())
+
+    def test_casilla_cuenta_como_equipo_reparado(self):
+        self.assertContains(self.client.get(reverse('admin:econotec_ajustepuntaje_add')), 'Cuenta como equipo reparado')
+
+        self.ajustar('sumar', 3, motivo='Washington Garcia Troya - G1073', reparado=True)
+        # Un ajuste sin la casilla da puntos pero no cuenta como reparado.
+        self.ajustar('sumar', 2, motivo='Bono por puntualidad')
+
+        fila = self.ranking_del_mes()[self.tecnico.pk]
+        self.assertEqual(fila['puntos'], 5)
+        self.assertEqual((fila['reparados'], fila['num_equipos'], fila['salidas_positivas']), (1, 1, 1))
+        self.assertEqual(fila['efectividad'], 100.0)
+        perfil = puntaje_tecnico(self.tecnico)
+        self.assertEqual((perfil['salidas_buenas'], perfil['total']), (1, 5))
+
+        pagina = self.client.get(reverse('econotec:salida_totales'), {
+            'desde': HOY.replace(day=1).isoformat(), 'hasta': HOY.isoformat(),
+        })
+        self.assertContains(pagina, 'cuenta como reparado', count=1)
+        lista = self.client.get(reverse('admin:econotec_ajustepuntaje_changelist'))
+        self.assertContains(lista, '+3 pts · equipo reparado')
+
+    def test_restar_no_puede_contar_como_reparado(self):
+        respuesta = self.ajustar('restar', 3, reparado=True)
+        self.assertEqual(respuesta.status_code, 200)
+        self.assertContains(respuesta, 'Un equipo reparado suma puntos')
         self.assertFalse(AjustePuntaje.objects.exists())
