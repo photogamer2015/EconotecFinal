@@ -500,6 +500,10 @@
     .sp-egresos-lista tr:last-child td { border-bottom: 0; }
     .sp-egresos-lista .num { text-align: right; white-space: nowrap; }
     .sp-egresos-lista td.num { color: var(--danger); font-weight: 800; }
+    .sp-egresos-lista td.sp-egreso-acciones { white-space: nowrap; text-align: right; vertical-align: middle; }
+    .sp-egreso-acciones form { display: inline; }
+    .sp-egreso-acciones .btn { margin: 0 0 0 4px; }
+    .sp-egreso-auto { color: var(--text-muted); font-size: 12px; font-weight: 700; }
     .sp-egresos-vacio { margin: 12px 0 0; color: var(--text-muted); font-size: 13px; font-weight: 600; }
 
     /* Ventana para registrar el egreso */
@@ -729,6 +733,7 @@
                     <th>Forma de pago</th>
                     <th>Registrado por</th>
                     <th class="num">Monto</th>
+                    <th class="num">Acciones</th>
                 </tr>
             </thead>
             <tbody>
@@ -741,6 +746,18 @@
                     <td>{{ e.forma_pago_texto }}</td>
                     <td>{% if e.registrado_por %}{{ e.registrado_por.get_full_name|default:e.registrado_por.username }}{% else %}—{% endif %}</td>
                     <td class="num">−{{ e.monto|dinero_signo }}</td>
+                    <td class="sp-egreso-acciones">
+                        {% if e.ingreso_compra_id %}
+                        <span class="sp-egreso-auto" title="Se generó solo desde un Equipo a comprar: se cambia desde su ingreso.">Automático</span>
+                        {% else %}
+                        <a href="{{ url_hoja }}&amp;editar={{ e.pk }}#egresos" class="btn btn-sm btn-secondary" aria-label="Editar el egreso {{ e.concepto }}">✏️ Editar</a>
+                        <form method="post" action="{% url 'econotec:seguimiento_pago_egreso_eliminar' pk=e.pk %}?{{ filtros_qs }}"
+                              onsubmit="confirmDelete(event, this, '¿Eliminar este egreso? Su monto vuelve al saldo de la semana.');">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-sm btn-danger" aria-label="Eliminar el egreso {{ e.concepto }}">🗑</button>
+                        </form>
+                        {% endif %}
+                    </td>
                 </tr>
                 {% endfor %}
             </tbody>
@@ -751,19 +768,24 @@
     {% endif %}
 </section>
 
-<dialog class="sp-dialogo" id="sp-egreso-dialogo" aria-labelledby="sp-egreso-titulo" data-abrir="{{ abrir_egreso|yesno:'true,false' }}">
+<dialog class="sp-dialogo" id="sp-egreso-dialogo" aria-labelledby="sp-egreso-titulo" data-abrir="{{ abrir_egreso|yesno:'true,false' }}"{% if editando_egreso %} data-volver="{{ url_hoja }}#egresos"{% endif %}>
     <form method="post" action="{{ request.get_full_path }}">
         {% csrf_token %}
         <div class="sp-dialogo-cabecera">
             <div>
+                {% if editando_egreso %}
+                <h3 id="sp-egreso-titulo">✏️ Editar egreso</h3>
+                <p>Corrige los datos y guarda: el saldo de la semana se recalcula y se avisa al administrador.</p>
+                {% else %}
                 <h3 id="sp-egreso-titulo">💸 Registrar egreso</h3>
                 <p>Se resta del saldo de esta semana y se avisa al administrador.</p>
+                {% endif %}
             </div>
             <button type="button" class="sp-dialogo-cerrar" data-cerrar-egreso aria-label="Cerrar">✕</button>
         </div>
 
         <div class="sp-egreso-saldo{% if caja.disponible < 0 %} is-negativo{% endif %}" id="sp-egreso-saldo"
-             data-url="{% url 'econotec:seguimiento_pago_saldo' %}" data-disponible="{{ caja.disponible|stringformat:'s' }}" aria-live="polite">
+             data-url="{% url 'econotec:seguimiento_pago_saldo' %}" data-disponible="{{ caja.disponible|stringformat:'s' }}"{% if editando_egreso %} data-propio="{{ form_egreso.monto_original|stringformat:'s' }}"{% endif %} aria-live="polite">
             <div class="sp-egreso-saldo-semana" data-saldo="semana">Semana {{ caja.titulo }}</div>
             <div class="sp-egreso-saldo-cifras">
                 <span>Recaudado <b data-saldo="recaudado">{{ caja.recaudado|dinero_signo }}</b></span>
@@ -944,7 +966,7 @@
 
         <div class="sp-dialogo-pie">
             <button type="button" class="btn btn-secondary" data-cerrar-egreso>Cancelar</button>
-            <button type="submit" class="sp-egreso-boton">Registrar egreso</button>
+            <button type="submit" class="sp-egreso-boton">{% if editando_egreso %}Guardar cambios{% else %}Registrar egreso{% endif %}</button>
         </div>
     </form>
 </dialog>
@@ -1090,6 +1112,11 @@
     const aviso = document.getElementById('sp-egreso-aviso');
     const enviar = form.querySelector('[type="submit"]');
     let disponible = Number(caja.dataset.disponible);
+    // Al editar, el saldo ya tiene restado este egreso: su monto anterior no cuenta dos veces.
+    const propio = Number(caja.dataset.propio || 0);
+    const tope = () => propio > 0
+        ? Math.max(centavos(disponible) + centavos(propio), centavos(propio))
+        : centavos(disponible);
     let cargando = false;
     let consulta = 0;
 
@@ -1104,7 +1131,7 @@
     function revisar() {
         const valor = (monto.value || '').trim();
         const fuera = fueraDeSemana();
-        const excede = !fuera && valor !== '' && !Number.isNaN(Number(valor)) && centavos(valor) > centavos(disponible);
+        const excede = !fuera && valor !== '' && !Number.isNaN(Number(valor)) && centavos(valor) > tope();
         const repetido = fuera && errorFechaServidor && fecha.value === fechaInicial;
         aviso.textContent = fuera ? aviso.dataset.avisoFecha : aviso.dataset.avisoMonto;
         aviso.hidden = !((fuera && !repetido) || excede);
@@ -1151,6 +1178,8 @@
     dialogo.querySelectorAll('[data-cerrar-egreso]').forEach(boton => boton.addEventListener('click', () => dialogo.close()));
     // Clic fuera de la ventana la cierra.
     dialogo.addEventListener('click', e => { if (e.target === dialogo) dialogo.close(); });
+    // Al cancelar una edición se vuelve a la hoja, sin el egreso abierto.
+    if (dialogo.dataset.volver) dialogo.addEventListener('close', () => { window.location.href = dialogo.dataset.volver; });
     fecha.addEventListener('change', actualizar);
     fecha.addEventListener('input', revisar);
     monto.addEventListener('input', revisar);

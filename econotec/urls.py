@@ -183,6 +183,8 @@ urlpatterns = [
     path('pagos/seguimiento/excel/', views_pagos.seguimiento_pago_excel, name='seguimiento_pago_excel'),
     path('pagos/seguimiento/saldo/', views_pagos.seguimiento_pago_saldo, name='seguimiento_pago_saldo'),
     path('pagos/seguimiento/equipo/', views_pagos.seguimiento_pago_equipo, name='seguimiento_pago_equipo'),
+    path('pagos/seguimiento/egresos/<int:pk>/eliminar/',
+         views_pagos.seguimiento_pago_egreso_eliminar, name='seguimiento_pago_egreso_eliminar'),
     path('ingresos/<int:pk>/abonos/',
          views_pagos.ingreso_abonos, name='ingreso_abonos'),
     path('ingresos/<int:pk>/valor-acordado/',
