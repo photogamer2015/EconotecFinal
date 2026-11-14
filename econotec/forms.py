@@ -2577,6 +2577,9 @@ class EgresoSeguimientoForm(forms.ModelForm):
     Según la categoría pide más datos: en «Repuestos», el equipo (sede G/U y
     número, que debe existir) o «General»; en «Compra de equipo», el tipo de
     equipo. El método de pago es el de cualquier egreso, mixto incluido.
+
+    Con `instance` edita un egreso ya registrado: su monto anterior ya está
+    restado del saldo de la semana, así que no cuenta dos veces.
     """
 
     repuesto_alcance = forms.ChoiceField(
@@ -2674,6 +2677,10 @@ class EgresoSeguimientoForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         self.saldo = None
         self.ingreso_repuesto = None
+        # Al editar: lo que el egreso ya restaba del saldo, y de qué día.
+        self.editando = bool(self.instance.pk)
+        self.monto_original = self.instance.monto if self.editando else None
+        self.fecha_original = self.instance.fecha if self.editando else None
         self.semana = semana
         self.domingo = fin_semana(semana) if semana else None
         self.etiqueta_semana = etiqueta_semana(semana) if semana else ''
@@ -2682,13 +2689,26 @@ class EgresoSeguimientoForm(forms.ModelForm):
             self.fields['fecha'].widget.attrs.update(
                 min=semana.isoformat(), max=self.domingo.isoformat(),
             )
-        categorias = list(CategoriaEgreso.objects.filter(activo=True))
-        self.fields['categoria'].queryset = CategoriaEgreso.objects.filter(activo=True)
+        # Activas, más la del egreso que se edita aunque ya no lo esté.
+        qs_categorias = CategoriaEgreso.objects.filter(
+            Q(activo=True) | Q(pk=self.instance.categoria_id)
+        )
+        categorias = list(qs_categorias)
+        self.fields['categoria'].queryset = qs_categorias
         self.fields['categoria'].empty_label = '— Selecciona categoría —'
         # Para mostrar los campos de cada categoría en el navegador.
         self.categorias_repuestos = [c.pk for c in categorias if c.es_repuestos]
         self.categorias_compra = [c.pk for c in categorias if c.es_compra_equipo]
-        _campo_asesora(self.fields['asesora'])
+        if self.editando:
+            # El equipo del repuesto no es un campo del modelo: se propone el guardado.
+            equipo = self.instance.ingreso_repuesto
+            if equipo is not None:
+                self.initial.setdefault('repuesto_alcance', 'equipo')
+                self.initial.setdefault('repuesto_sede', equipo.sede)
+                self.initial.setdefault('repuesto_numero', equipo.numero_equipo)
+            elif self.instance.categoria_id in self.categorias_repuestos:
+                self.initial.setdefault('repuesto_alcance', 'general')
+        _campo_asesora(self.fields['asesora'], self.instance.asesora_id)
         self.fields['asesora'].required = True
         self.fields['asesora'].empty_label = '— Selecciona la asesora —'
         self.fields['compra_tipo_equipo'].choices = [('', '— Selecciona el tipo de equipo —')] + [
@@ -2720,10 +2740,19 @@ class EgresoSeguimientoForm(forms.ModelForm):
             self.add_error('monto', 'El monto debe ser mayor que cero.')
         elif fecha and monto is not None:
             self.saldo = saldo_semana(fecha)
-            if monto > self.saldo['disponible']:
+            disponible = self.saldo['disponible']
+            misma_semana = bool(
+                self.editando and self.saldo['lunes'] <= self.fecha_original <= self.saldo['domingo']
+            )
+            if misma_semana:
+                # El saldo ya tiene restado este mismo egreso: se le devuelve.
+                disponible += self.monto_original
+            # Si al editar no sube el monto, no hay nada nuevo que revisar.
+            sin_subir = misma_semana and monto <= self.monto_original
+            if monto > disponible and not sin_subir:
                 self.add_error('monto', (
                     f'El egreso supera el saldo disponible de la semana {self.saldo["etiqueta"]} '
-                    f'({dinero_signo(self.saldo["disponible"])}).'
+                    f'({dinero_signo(disponible)}).'
                 ))
         return cleaned
 

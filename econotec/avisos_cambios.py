@@ -27,11 +27,13 @@ def avisar_cambio(user, tipo, mensaje, *, ingreso=None, codigo='', url=''):
     )
 
 
-def avisar_egreso(user, egreso, saldo, url=''):
-    """Aviso 🔔 de un egreso registrado desde Seguimiento de pago.
+def avisar_egreso(user, egreso, saldo, url='', accion='Registró', antes=''):
+    """Aviso 🔔 de un egreso registrado, editado o eliminado desde Seguimiento de pago.
 
-    Llega aunque lo registre un administrador: así queda constancia de cada
-    salida de dinero. `saldo` es el de la semana ya con este egreso restado.
+    Llega aunque lo haga un administrador: así queda constancia de cada
+    salida de dinero. `saldo` es el de la semana ya con el cambio aplicado.
+    `accion` es el verbo del aviso («Registró», «Editó» o «Eliminó») y `antes`,
+    al editar, cómo estaba el egreso.
     """
     from .templatetags.econotec_extras import dinero_signo
 
@@ -44,9 +46,10 @@ def avisar_egreso(user, egreso, saldo, url=''):
         usuario_nombre=(user.get_full_name() or user.username) if user else '',
         tipo='egreso_seguimiento',
         mensaje=(
-            f'Registró un egreso de {dinero_signo(egreso.monto)}: {egreso.concepto} '
+            f'{accion} un egreso de {dinero_signo(egreso.monto)}: {egreso.concepto} '
             f'({egreso.fecha:%d/%m/%Y}), aplicado por {asesora}. Categoría: {egreso.categoria.nombre}'
             f'{f" ({detalle})" if detalle else ""}. Pago: {egreso.forma_pago_texto}. '
+            f'{f"Antes: {antes}. " if antes else ""}'
             f'Saldo disponible de la semana {saldo["etiqueta"]}: {disponible_txt}.'
         ),
         codigo=egreso.ingreso_repuesto.codigo_equipo if egreso.ingreso_repuesto else 'Egreso',

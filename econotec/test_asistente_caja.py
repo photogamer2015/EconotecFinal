@@ -119,6 +119,132 @@ class AsistenteCajaTests(TestCase):
         self.client.force_login(self.admin)
         self.assertContains(self.client.get(reverse('econotec:bienvenida')), 'Cable HDMI')
 
+    def _egreso(self, **datos):
+        return Egreso.objects.create(**{
+            'fecha': MIERCOLES, 'categoria': self.categoria, 'concepto': 'Cable HDMI',
+            'monto': Decimal('20.00'), 'metodo': 'efectivo', 'asesora': self.asistente,
+            'registrado_por': self.admin, 'notas': 'Nota del admin', **datos,
+        })
+
+    def _editar(self, egreso, metodo='get', **cambios):
+        url = f"{reverse('econotec:seguimiento_pago')}?semana={MIERCOLES.isoformat()}&editar={egreso.pk}"
+        datos = {
+            'fecha': MIERCOLES.isoformat(), 'concepto': 'Cable HDMI', 'asesora': self.asistente.pk,
+            'categoria': self.categoria.pk, 'monto': '20.00', 'metodo': 'efectivo', **cambios,
+        }
+        with patch('econotec.views_pagos.timezone.localdate', return_value=MIERCOLES):
+            return self.client.post(url, datos) if metodo == 'post' else self.client.get(url)
+
+    def test_ve_editar_y_eliminar_en_los_egresos_de_la_semana(self):
+        egreso = self._egreso()
+        for usuario in (self.asistente, self.admin):
+            self.client.force_login(usuario)
+            hoja = self.seguimiento(semana=MIERCOLES.isoformat())
+            self.assertContains(hoja, f'editar={egreso.pk}#egresos')
+            self.assertContains(hoja, reverse('econotec:seguimiento_pago_egreso_eliminar', args=[egreso.pk]))
+
+    def test_edita_un_egreso_sin_duplicarlo(self):
+        egreso = self._egreso()
+        self.client.force_login(self.asistente)
+
+        ventana = self._editar(egreso)
+        self.assertContains(ventana, 'Editar egreso')
+        self.assertContains(ventana, 'Guardar cambios')
+        self.assertContains(ventana, 'value="Cable HDMI"')
+
+        response = self._editar(egreso, 'post', concepto='Cable DisplayPort', monto='35.00')
+
+        self.assertEqual(response.status_code, 302)
+        self.assertNotIn('editar=', response['Location'])
+        egreso = Egreso.objects.get()
+        self.assertEqual((egreso.concepto, egreso.monto), ('Cable DisplayPort', Decimal('35.00')))
+        # Lo que no está en la ventana se conserva.
+        self.assertEqual((egreso.registrado_por, egreso.notas), (self.admin, 'Nota del admin'))
+        # El admin recibe el aviso, con cómo estaba antes.
+        aviso = NotificacionCambioAdmin.objects.get()
+        self.assertEqual(aviso.creado_por, self.asistente)
+        self.assertTrue(aviso.mensaje.startswith('Editó un egreso de $35,00: Cable DisplayPort'), aviso.mensaje)
+        self.assertIn('Antes: $20,00, Cable HDMI', aviso.mensaje)
+
+    def test_al_editar_el_monto_anterior_no_cuenta_dos_veces(self):
+        # Recaudado 100: con un egreso de 80 quedan 20 disponibles.
+        egreso = self._egreso(monto=Decimal('80.00'))
+        self.client.force_login(self.asistente)
+
+        # Subirlo a 100 cabe (80 propios + 20 libres); a 101 ya no.
+        self.assertEqual(self._editar(egreso, 'post', monto='100.00').status_code, 302)
+        pasado = self._editar(egreso, 'post', monto='101.00')
+        self.assertEqual(pasado.status_code, 200)
+        self.assertContains(pasado, 'supera el saldo disponible')
+        egreso.refresh_from_db()
+        self.assertEqual(egreso.monto, Decimal('100.00'))
+
+    def test_edita_el_texto_aunque_la_semana_este_en_negativo(self):
+        egreso = self._egreso(monto=Decimal('150.00'))
+        self.client.force_login(self.asistente)
+
+        self.assertEqual(self._editar(egreso, 'post', concepto='Corregido', monto='150.00').status_code, 302)
+        egreso.refresh_from_db()
+        self.assertEqual(egreso.concepto, 'Corregido')
+
+    def test_edita_un_repuesto_y_conserva_su_equipo(self):
+        ingreso = IngresoEquipo.objects.get()
+        repuestos = CategoriaEgreso.objects.filter(nombre__iexact='Repuestos').first() \
+            or CategoriaEgreso.objects.create(nombre='Repuestos')
+        self.assertTrue(repuestos.es_repuestos)
+        egreso = self._egreso(categoria=repuestos, ingreso_repuesto=ingreso)
+        self.client.force_login(self.asistente)
+
+        ventana = self._editar(egreso)
+        self.assertEqual(ventana.context['form_egreso'].initial['repuesto_numero'], ingreso.numero_equipo)
+
+        response = self._editar(
+            egreso, 'post', categoria=repuestos.pk, concepto='Teclado', repuesto_alcance='equipo',
+            repuesto_sede=ingreso.sede, repuesto_numero=ingreso.numero_equipo,
+        )
+        self.assertEqual(response.status_code, 302)
+        egreso.refresh_from_db()
+        self.assertEqual((egreso.concepto, egreso.ingreso_repuesto), ('Teclado', ingreso))
+
+    def test_elimina_un_egreso(self):
+        egreso = self._egreso()
+        self.client.force_login(self.asistente)
+        url = reverse('econotec:seguimiento_pago_egreso_eliminar', args=[egreso.pk])
+
+        # Solo por POST.
+        self.assertEqual(self.client.get(url).status_code, 405)
+        self.assertTrue(Egreso.objects.exists())
+
+        response = self.client.post(f'{url}?tipo=total')
+        self.assertEqual(response.status_code, 302)
+        self.assertIn(f'semana={MIERCOLES.isoformat()}', response['Location'])
+        self.assertFalse(Egreso.objects.exists())
+        aviso = NotificacionCambioAdmin.objects.get()
+        self.assertEqual(aviso.creado_por, self.asistente)
+        self.assertTrue(aviso.mensaje.startswith('Eliminó un egreso de $20,00: Cable HDMI'), aviso.mensaje)
+
+    def test_no_toca_el_egreso_automatico_de_un_equipo_a_comprar(self):
+        egreso = self._egreso(ingreso_compra=IngresoEquipo.objects.get())
+        self.client.force_login(self.asistente)
+
+        hoja = self.seguimiento(semana=MIERCOLES.isoformat())
+        self.assertNotContains(hoja, f'editar={egreso.pk}')
+        self.assertContains(hoja, 'Automático')
+        self.assertEqual(self._editar(egreso, 'post', concepto='Cambiado').status_code, 302)
+        self.client.post(reverse('econotec:seguimiento_pago_egreso_eliminar', args=[egreso.pk]))
+        egreso.refresh_from_db()
+        self.assertEqual(egreso.concepto, 'Cable HDMI')
+        self.assertFalse(NotificacionCambioAdmin.objects.exists())
+
+    def test_la_asesora_y_el_tecnico_no_editan_ni_eliminan_egresos(self):
+        egreso = self._egreso()
+        for usuario in (self.asesora, self.tecnico):
+            self.client.force_login(usuario)
+            self._editar(egreso, 'post', concepto='Cambiado')
+            self.client.post(reverse('econotec:seguimiento_pago_egreso_eliminar', args=[egreso.pk]))
+        egreso.refresh_from_db()
+        self.assertEqual(egreso.concepto, 'Cable HDMI')
+
     def test_gestiona_el_inventario(self):
         self.client.force_login(self.asistente)
         detalle = self.client.get(reverse('econotec:inventario_detalle_item', args=[self.item.codigo]))

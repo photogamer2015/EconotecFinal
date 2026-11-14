@@ -22,7 +22,7 @@ from .avisos_cambios import avisar_cambio, avisar_egreso
 from .bitacora import registrar_bitacora
 from .emails import enviar_correo_abono_seguro
 from .forms import AbonoForm, EgresoSeguimientoForm, ValorAcordadoPagoForm
-from .models import SEDES_EQUIPOS, Abono, IngresoEquipo
+from .models import SEDES_EQUIPOS, Abono, Egreso, IngresoEquipo
 from .pagination import paginar_resultados
 from . import salida_asesora
 from .permisos import (
@@ -380,6 +380,22 @@ def _filtros_seguimiento(request):
     return hoy, lunes, sede, tipo, forma_pago
 
 
+def _url_hoja(dia, tipo, sede, forma_pago):
+    """Enlace a la hoja de la semana de `dia`, con los filtros abiertos."""
+    filtros = {'semana': dia.isoformat(), 'tipo': tipo}
+    if sede:
+        filtros['sede'] = sede
+    if forma_pago:
+        filtros['forma_pago'] = forma_pago
+    return f"{reverse('econotec:seguimiento_pago')}?{urlencode(filtros)}"
+
+
+# Los egresos de «Equipo a comprar» se generan solos desde su ingreso.
+AVISO_EGRESO_AUTOMATICO = (
+    'Ese egreso se generó solo desde un Equipo a comprar: se cambia o se quita desde su ingreso.'
+)
+
+
 @seguimiento_pago_requerido
 def seguimiento_pago(request):
     """
@@ -395,31 +411,53 @@ def seguimiento_pago(request):
 
     POST registra un egreso (ver EgresoSeguimientoForm): se guarda como
     cualquier egreso, se avisa al admin y se abre la semana del egreso.
+
+    ?editar=<id> abre ese egreso de la semana en la misma ventana para
+    corregirlo; el POST guarda los cambios en vez de registrar uno nuevo.
     """
     hoy, lunes, sede, tipo, forma_pago = _filtros_seguimiento(request)
     semana_actual = inicio_semana(hoy)
     tipos = dict(TIPOS)
 
+    egreso_editar = None
+    editar = (request.GET.get('editar') or '').strip()
+    if editar:
+        # Solo egresos de la hoja abierta.
+        egreso_editar = Egreso.objects.filter(
+            pk=int(editar), fecha__range=(lunes, fin_semana(lunes)),
+        ).first() if editar.isdigit() else None
+        if egreso_editar is None or egreso_editar.ingreso_compra_id:
+            messages.error(
+                request,
+                AVISO_EGRESO_AUTOMATICO if egreso_editar else 'Ese egreso ya no está en esta semana.',
+            )
+            return redirect(f'{_url_hoja(lunes, tipo, sede, forma_pago)}#egresos')
+
     form_egreso = None
     if request.method == 'POST':
         # La fecha debe ser de la semana de la hoja abierta (?semana=).
-        form_egreso = EgresoSeguimientoForm(request.POST, semana=lunes)
+        # Cómo estaba antes de editarlo, para el aviso al admin.
+        antes = (
+            f'{dinero_signo(egreso_editar.monto)}, {egreso_editar.concepto} ({egreso_editar.fecha:%d/%m/%Y})'
+            if egreso_editar else ''
+        )
+        form_egreso = EgresoSeguimientoForm(request.POST, semana=lunes, instance=egreso_editar)
         if form_egreso.is_valid():
             with transaction.atomic():
                 egreso = form_egreso.save(commit=False)
-                egreso.registrado_por = request.user
+                if egreso_editar is None:
+                    egreso.registrado_por = request.user
                 egreso.save()
             saldo = saldo_semana(egreso.fecha)
-            filtros = {'semana': egreso.fecha.isoformat(), 'tipo': tipo}
-            if sede:
-                filtros['sede'] = sede
-            if forma_pago:
-                filtros['forma_pago'] = forma_pago
-            url = f"{reverse('econotec:seguimiento_pago')}?{urlencode(filtros)}"
-            avisar_egreso(request.user, egreso, saldo, url=url)
+            url = _url_hoja(egreso.fecha, tipo, sede, forma_pago)
+            if egreso_editar is None:
+                avisar_egreso(request.user, egreso, saldo, url=url)
+            else:
+                avisar_egreso(request.user, egreso, saldo, url=url, accion='Editó', antes=antes)
             messages.success(
                 request,
-                f'Egreso registrado: {egreso.concepto} por {dinero_signo(egreso.monto)}. '
+                f'Egreso {"actualizado" if egreso_editar else "registrado"}: '
+                f'{egreso.concepto} por {dinero_signo(egreso.monto)}. '
                 f'Saldo disponible de la semana {saldo["etiqueta"]}: {_dinero(saldo["disponible"])}.',
             )
             return redirect(f'{url}#egresos')
@@ -432,6 +470,8 @@ def seguimiento_pago(request):
         lunes, recaudado=hoja['total'] if tipo == TOTAL and not sede and not forma_pago else None,
     )
     caja['disponible_texto'] = _dinero(caja['disponible'])
+    if form_egreso is None and egreso_editar is not None:
+        form_egreso = EgresoSeguimientoForm(instance=egreso_editar, semana=lunes)
     if form_egreso is None:
         # Fecha sugerida: hoy si cae en la semana abierta; si no, el día más cercano de ella.
         inicial = {'fecha': min(max(hoy, lunes), fin_semana(lunes))}
@@ -474,8 +514,33 @@ def seguimiento_pago(request):
         'caja': caja,
         'form_egreso': form_egreso,
         # Si el egreso tuvo errores, el formulario se abre solo para corregirlos.
-        'abrir_egreso': form_egreso.is_bound,
+        'abrir_egreso': form_egreso.is_bound or egreso_editar is not None,
+        # Egreso que se está editando (None al registrar uno nuevo).
+        'editando_egreso': egreso_editar is not None,
+        'url_hoja': _url_hoja(lunes, tipo, sede, forma_pago),
     })
+
+
+@seguimiento_pago_requerido
+@require_POST
+def seguimiento_pago_egreso_eliminar(request, pk):
+    """Elimina un egreso desde la hoja de Seguimiento de pago y vuelve a su semana."""
+    _hoy, _lunes, sede, tipo, forma_pago = _filtros_seguimiento(request)
+    egreso = get_object_or_404(Egreso, pk=pk)
+    url = f'{_url_hoja(egreso.fecha, tipo, sede, forma_pago)}#egresos'
+    if egreso.ingreso_compra_id:
+        messages.error(request, AVISO_EGRESO_AUTOMATICO)
+        return redirect(url)
+    concepto, monto = egreso.concepto, egreso.monto
+    egreso.delete()
+    saldo = saldo_semana(egreso.fecha)
+    avisar_egreso(request.user, egreso, saldo, url=url.split('#')[0], accion='Eliminó')
+    messages.success(
+        request,
+        f'Egreso eliminado: {concepto} por {dinero_signo(monto)}. '
+        f'Saldo disponible de la semana {saldo["etiqueta"]}: {_dinero(saldo["disponible"])}.',
+    )
+    return redirect(url)
 
 
 def _dinero(valor):
