@@ -28,17 +28,77 @@
         font-size: 11px; font-weight: 800;
     }
     [data-theme="dark"] .pendiente-pill { background: rgba(249,118,24,0.25); color: #fbbf73; }
+    /* Resumen de períodos. El color lo pone la variante: naranja para las
+       salidas físicas y verde azulado para los equipos finalizados que siguen
+       en la oficina, para que la asesora distinga de un vistazo cada lista. */
+    .exit-summary {
+        --exit-accent: var(--primary);
+        --exit-accent-ring: rgba(249, 118, 24, .16);
+        --exit-accent-soft: #fbe5d4;
+        --exit-accent-ink: #a4410c;
+        margin: 0 0 18px;
+        max-width: 960px;
+    }
+    .exit-summary--finalizados {
+        --exit-accent: #0f766e;
+        --exit-accent-ring: rgba(15, 118, 110, .18);
+        --exit-accent-soft: #d6f1ec;
+        --exit-accent-ink: #0f766e;
+    }
+    /* En modo oscuro las tarjetas usan un tono medio, no negro, para que
+       el apartado se lea con descanso. */
+    [data-theme="dark"] .exit-summary {
+        --exit-accent-soft: #6b4426;
+        --exit-accent-ink: #ffc496;
+        --exit-card-bg: #334645;
+        --exit-card-border: #4d615e;
+    }
+    [data-theme="dark"] .exit-summary--finalizados {
+        --exit-accent: #2dd4bf;
+        --exit-accent-ring: rgba(45, 212, 191, .20);
+        --exit-accent-soft: #1d524d;
+        --exit-accent-ink: #7eeadb;
+    }
+    [data-theme="dark"] .exit-summary .exit-day-label { color: #b9c8c3; }
+    .exit-summary-head {
+        display: flex;
+        align-items: center;
+        gap: 11px;
+        margin: 0 0 10px;
+    }
+    .exit-summary-icon {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        flex: 0 0 38px;
+        width: 38px;
+        height: 38px;
+        border-radius: 11px;
+        background: var(--exit-accent-soft);
+        color: var(--exit-accent-ink);
+        font-size: 19px;
+    }
+    .exit-summary-copy h3 {
+        margin: 0;
+        color: var(--text-main);
+        font-size: 15px;
+        line-height: 1.2;
+    }
+    .exit-summary-copy p {
+        margin: 2px 0 0;
+        color: var(--text-muted);
+        font-size: 12px;
+        line-height: 1.4;
+    }
     .exit-day-summary {
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr));
         gap: 12px;
-        margin: 0 0 18px;
-        max-width: 640px;
     }
     .exit-day-card {
-        background: var(--card-bg);
-        border: 1px solid var(--border-color);
-        border-left: 4px solid var(--primary);
+        background: var(--exit-card-bg, var(--card-bg));
+        border: 1px solid var(--exit-card-border, var(--border-color));
+        border-left: 4px solid var(--exit-accent, var(--primary));
         border-radius: 12px;
         box-shadow: var(--shadow);
         display: flex;
@@ -47,8 +107,8 @@
         padding: 14px 16px;
     }
     .exit-day-card.is-active {
-        border-color: var(--primary);
-        box-shadow: 0 0 0 3px rgba(249, 118, 24, 0.16);
+        border-color: var(--exit-accent, var(--primary));
+        box-shadow: 0 0 0 3px var(--exit-accent-ring, rgba(249, 118, 24, 0.16));
     }
     .exit-day-label {
         color: var(--text-muted);
@@ -68,7 +128,7 @@
         margin: 0;
     }
     .exit-day-link {
-        color: var(--primary);
+        color: var(--exit-accent, var(--primary));
         font-size: 12px;
         font-weight: 800;
         margin-top: 2px;
@@ -76,6 +136,23 @@
         width: fit-content;
     }
     .exit-day-link:hover { text-decoration: underline; }
+    /* Solo en computadora/laptop: la tabla se desplaza dentro de su propio
+       marco y la fila de títulos queda fija arriba al bajar. En tablet y
+       celular (y en el modo tarjetas, hasta 1280px) todo sigue igual. */
+    @media (min-width: 1281px) and (hover: hover) and (pointer: fine) {
+        .table-wrap--cabecera-fija.table-scroll-viewport {
+            max-height: max(480px, calc(100vh - 150px));
+            overflow-y: auto;
+        }
+        .table-wrap--cabecera-fija.table-scroll-viewport > .salidas-table > thead > tr > th {
+            position: sticky;
+            top: 0;
+            z-index: 24;
+        }
+        .table-wrap--cabecera-fija.table-scroll-viewport[data-table-overflow="true"] > .salidas-table > thead > tr > th.table-context-cell {
+            z-index: 26;
+        }
+    }
     .office-exit-cell { min-width: 285px; }
     .office-exit-content {
         display: flex;
@@ -439,15 +516,25 @@
 {% endif %}
 
 {% if resumen_salidas_dia %}
-{# Salidas de la oficina de hoy y de ayer: solo el número; «Ver detalle» filtra la tabla por ese día. #}
-<section class="exit-day-summary" aria-label="Salidas de la oficina de hoy y de ayer">
-    {% for dia in resumen_salidas_dia %}
-    <article class="exit-day-card{% if dia.activo %} is-active{% endif %}">
-        <p class="exit-day-label">{{ dia.etiqueta }} · {{ dia.fecha|date:"d/m/Y" }}</p>
-        <p class="exit-day-value">{{ dia.total }}</p>
-        <a href="{{ dia.url }}" class="exit-day-link">Ver detalle →</a>
-    </article>
-    {% endfor %}
+{# Totales de hoy, de ayer y del mes en curso: solo el número; «Ver detalle» filtra la tabla por ese período. #}
+{# Cada lista lleva su propio color e icono para no confundir «finalizado» (sigue en la oficina) con «salida física». #}
+<section class="exit-summary exit-summary--{{ resumen_tipo }}" aria-label="{{ resumen_titulo }}: hoy, ayer y este mes">
+    <header class="exit-summary-head">
+        <span class="exit-summary-icon" aria-hidden="true">{% if resumen_tipo == 'salidas' %}🚚{% else %}🧰{% endif %}</span>
+        <div class="exit-summary-copy">
+            <h3>{{ resumen_titulo }}</h3>
+            <p>{{ resumen_nota }}</p>
+        </div>
+    </header>
+    <div class="exit-day-summary">
+        {% for dia in resumen_salidas_dia %}
+        <article class="exit-day-card{% if dia.activo %} is-active{% endif %}">
+            <p class="exit-day-label">{{ dia.etiqueta }} · {{ dia.periodo }}</p>
+            <p class="exit-day-value">{{ dia.total }}</p>
+            <a href="{{ dia.url }}" class="exit-day-link">Ver detalle →</a>
+        </article>
+        {% endfor %}
+    </div>
 </section>
 {% endif %}
 
@@ -531,7 +618,7 @@
 {% endif %}
 
 {% if salidas %}
-<div class="table-wrap">
+<div class="table-wrap table-wrap--cabecera-fija">
     <table class="salidas-table">
         <thead>
             <tr>

@@ -23,7 +23,9 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.template.loader import render_to_string
 from django.urls import reverse
 from django.utils import timezone
+from django.utils.formats import date_format
 from django.utils.html import format_html
+from django.utils.text import capfirst
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_GET, require_POST
 
@@ -4170,38 +4172,72 @@ def salida_lista(request, solo_fuera_oficina=False):
     total = total_resultados(qs)
     page_obj, querystring = paginar_resultados(request, qs)
 
-    # Apartado automático «Salidas de hoy / de ayer»: solo el número de equipos
-    # que salieron de la oficina ese día (siempre el total del día, sin depender
-    # de los filtros puestos). «Ver detalle» abre esta misma lista con la tabla
-    # filtrada únicamente por esa fecha.
-    resumen_salidas_dia = None
+    # Apartado automático «Hoy / Ayer / Este mes»: solo el número de equipos de
+    # ese período (siempre el total del período, sin depender de los filtros
+    # puestos). «Ver detalle» abre esta misma lista con la tabla filtrada
+    # únicamente por esas fechas. Cada lista cuenta lo suyo:
+    #   · fuera de la oficina → equipos con salida física confirmada;
+    #   · dentro de la oficina → equipos finalizados que todavía no salen.
+    # El período del mes va del día 1 a hoy: al cambiar de mes el rango se
+    # recalcula y el contador arranca otra vez desde cero.
+    hoy = timezone.localdate()
+    ayer = hoy - timedelta(days=1)
+    inicio_mes = hoy.replace(day=1)
     if solo_fuera_oficina:
-        hoy = timezone.localdate()
-        ayer = hoy - timedelta(days=1)
+        resumen_tipo = 'salidas'
+        resumen_titulo = 'Salidas de la oficina'
+        resumen_nota = 'Equipos que ya salieron físicamente de la oficina.'
+        resumen_base = SalidaEquipo.objects.filter(fecha_retiro_real__isnull=False)
+        campo_resumen = 'fecha_retiro_real'
         url_base = reverse('econotec:salida_retiros_lista')
-        resumen_salidas_dia = []
-        for clave, etiqueta, dia in (('hoy', 'Hoy', hoy), ('ayer', 'Ayer', ayer)):
-            parametros = QueryDict(mutable=True)
-            parametros.update({
-                'fecha_preset': clave,
-                'fecha_desde': dia.isoformat(),
-                'fecha_hasta': dia.isoformat(),
-            })
-            resumen_salidas_dia.append({
-                'clave': clave,
-                'etiqueta': etiqueta,
-                'fecha': dia,
-                'total': SalidaEquipo.objects.filter(fecha_retiro_real=dia).count(),
-                'url': f'{url_base}?{parametros.urlencode()}',
-                'activo': (
-                    not por_finalizacion
-                    and fecha_desde == dia
-                    and fecha_hasta == dia
-                ),
-            })
+    else:
+        resumen_tipo = 'finalizados'
+        resumen_titulo = 'Equipos finalizados en la oficina'
+        resumen_nota = 'Reparaciones terminadas que todavía no salen de la oficina.'
+        resumen_base = SalidaEquipo.objects.filter(fecha_retiro_real__isnull=True)
+        campo_resumen = 'fecha_salida'
+        url_base = reverse('econotec:salida_lista')
+    periodos = (
+        ('hoy', 'Hoy', hoy, hoy, date_format(hoy, 'd/m/Y')),
+        ('ayer', 'Ayer', ayer, ayer, date_format(ayer, 'd/m/Y')),
+        (
+            'este_mes', 'Este mes', inicio_mes, hoy,
+            capfirst(date_format(hoy, 'F Y')),
+        ),
+    )
+    resumen_salidas_dia = []
+    for clave, etiqueta, desde_periodo, hasta_periodo, texto_periodo in periodos:
+        parametros = QueryDict(mutable=True)
+        parametros.update({
+            'fecha_preset': clave,
+            'fecha_desde': desde_periodo.isoformat(),
+            'fecha_hasta': hasta_periodo.isoformat(),
+        })
+        resumen_salidas_dia.append({
+            'clave': clave,
+            'etiqueta': etiqueta,
+            'fecha': desde_periodo,
+            'periodo': texto_periodo,
+            'total': resumen_base.filter(**{
+                f'{campo_resumen}__gte': desde_periodo,
+                f'{campo_resumen}__lte': hasta_periodo,
+            }).count(),
+            'url': f'{url_base}?{parametros.urlencode()}',
+            'activo': (
+                not por_finalizacion
+                and fecha_desde == desde_periodo
+                and fecha_hasta == hasta_periodo
+                # El día 1 «Hoy» y «Este mes» son el mismo rango: manda el
+                # preset con el que se abrió el detalle.
+                and (not fecha_preset or fecha_preset == clave)
+            ),
+        })
 
     context = {
         'resumen_salidas_dia': resumen_salidas_dia,
+        'resumen_tipo': resumen_tipo,
+        'resumen_titulo': resumen_titulo,
+        'resumen_nota': resumen_nota,
         'salidas': page_obj.object_list,
         'page_obj': page_obj,
         'querystring': querystring,
