@@ -18,7 +18,7 @@ from django.core.validators import validate_email
 from django.db import transaction
 from django.db.models import Count, Q, Sum
 from django.db.models.deletion import ProtectedError
-from django.http import HttpResponse, JsonResponse
+from django.http import HttpResponse, JsonResponse, QueryDict
 from django.shortcuts import get_object_or_404, redirect, render
 from django.template.loader import render_to_string
 from django.urls import reverse
@@ -4170,7 +4170,38 @@ def salida_lista(request, solo_fuera_oficina=False):
     total = total_resultados(qs)
     page_obj, querystring = paginar_resultados(request, qs)
 
+    # Apartado automático «Salidas de hoy / de ayer»: solo el número de equipos
+    # que salieron de la oficina ese día (siempre el total del día, sin depender
+    # de los filtros puestos). «Ver detalle» abre esta misma lista con la tabla
+    # filtrada únicamente por esa fecha.
+    resumen_salidas_dia = None
+    if solo_fuera_oficina:
+        hoy = timezone.localdate()
+        ayer = hoy - timedelta(days=1)
+        url_base = reverse('econotec:salida_retiros_lista')
+        resumen_salidas_dia = []
+        for clave, etiqueta, dia in (('hoy', 'Hoy', hoy), ('ayer', 'Ayer', ayer)):
+            parametros = QueryDict(mutable=True)
+            parametros.update({
+                'fecha_preset': clave,
+                'fecha_desde': dia.isoformat(),
+                'fecha_hasta': dia.isoformat(),
+            })
+            resumen_salidas_dia.append({
+                'clave': clave,
+                'etiqueta': etiqueta,
+                'fecha': dia,
+                'total': SalidaEquipo.objects.filter(fecha_retiro_real=dia).count(),
+                'url': f'{url_base}?{parametros.urlencode()}',
+                'activo': (
+                    not por_finalizacion
+                    and fecha_desde == dia
+                    and fecha_hasta == dia
+                ),
+            })
+
     context = {
+        'resumen_salidas_dia': resumen_salidas_dia,
         'salidas': page_obj.object_list,
         'page_obj': page_obj,
         'querystring': querystring,
@@ -4187,6 +4218,13 @@ def salida_lista(request, solo_fuera_oficina=False):
         'total': total,
         'lista_salidas_confirmadas': solo_fuera_oficina,
         'fecha_por_finalizacion': por_finalizacion,
+        # La asesora no ve la fecha de finalización en las salidas físicas
+        # confirmadas: para ella la fecha que cuenta es la de salida de la oficina.
+        'ocultar_fecha_finalizacion': (
+            solo_fuera_oficina
+            and es_asesor(request.user)
+            and not es_admin(request.user)
+        ),
     }
     context.update(contexto_rango_fecha(
         fecha_desde,

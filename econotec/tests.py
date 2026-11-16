@@ -6646,6 +6646,7 @@ class VentasTests(TestCase):
         self.assertContains(lista_finalizados, 'El equipo ya salió · Clic aquí')
         self.assertContains(lista_finalizados, '🚚')
         self.assertContains(lista_finalizados, 'class="salidas-table"')
+        self.assertContains(lista_finalizados, 'Fecha de finalización')
         self.assertContains(lista_finalizados, '⏳ Reparado — pendiente de retiro')
         self.assertContains(lista_finalizados, 'class="salidas-filter-form"')
         self.assertContains(lista_finalizados, 'Pago mixto (2 métodos)')
@@ -6678,6 +6679,10 @@ class VentasTests(TestCase):
         self.assertContains(lista_salidas_fisicas, '— Estado de salida física —')
         self.assertContains(lista_salidas_fisicas, '✅ Salió de la oficina')
         self.assertNotContains(lista_salidas_fisicas, '⏳ Reparado — pendiente de retiro')
+        # La asesora no ve la fecha de finalización en las salidas físicas
+        # confirmadas; sí la sigue viendo en los equipos que están en la oficina.
+        self.assertTrue(lista_salidas_fisicas.context['ocultar_fecha_finalizacion'])
+        self.assertNotContains(lista_salidas_fisicas, 'Fecha de finalización')
         self.assertEqual(
             lista_salidas_fisicas.context['estados'],
             [('retirado', '✅ Salió de la oficina')],

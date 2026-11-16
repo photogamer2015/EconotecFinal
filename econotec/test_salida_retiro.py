@@ -4,7 +4,7 @@ La confirma la asesora o el administrador; el técnico ya no. Cada salida guarda
 quién la confirmó: la asesora lo ve en su perfil y el administrador en el ranking.
 Con saldo pendiente, el aviso ofrece pagar ahí mismo o notificar al técnico.
 """
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 
 from django.contrib.auth import get_user_model
@@ -320,3 +320,83 @@ class AsesoraDeLaSalidaTests(BaseSalidaRetiro):
         ranking = self.client.get(reverse('econotec:ranking_asesoras_salidas'))
         self.assertContains(ranking, 'Detalle de todas las salidas de retiro')
         self.assertEqual([s.pk for s in ranking.context['detalle_salidas']], [salida.pk])
+
+
+class ResumenSalidasDelDiaTests(BaseSalidaRetiro):
+    """Apartado «Hoy / Ayer» de la lista de salidas físicas confirmadas."""
+
+    def setUp(self):
+        super().setUp()
+        self.hoy = date.today()
+        self.ayer = self.hoy - timedelta(days=1)
+        self.salidas_hoy = []
+        for _ in range(2):
+            salida = self.crear_salida()
+            SalidaEquipo.objects.filter(pk=salida.pk).update(
+                fecha_retiro_real=self.hoy, estado_reparacion='retirado',
+            )
+            salida.refresh_from_db()
+            self.salidas_hoy.append(salida)
+        self.salida_ayer = self.crear_salida()
+        SalidaEquipo.objects.filter(pk=self.salida_ayer.pk).update(
+            fecha_retiro_real=self.ayer, estado_reparacion='retirado',
+        )
+        self.salida_ayer.refresh_from_db()
+        # Una salida vieja que no debe contarse en ninguno de los dos días.
+        salida_vieja = self.crear_salida()
+        SalidaEquipo.objects.filter(pk=salida_vieja.pk).update(
+            fecha_retiro_real=self.hoy - timedelta(days=5), estado_reparacion='retirado',
+        )
+
+    def _resumen(self, usuario):
+        self.client.force_login(usuario)
+        respuesta = self.client.get(reverse('econotec:salida_retiros_lista'))
+        self.assertEqual(respuesta.status_code, 200)
+        return respuesta
+
+    def test_asesora_y_admin_ven_los_totales_de_hoy_y_ayer(self):
+        for usuario in (self.asesora, self.admin):
+            respuesta = self._resumen(usuario)
+            resumen = respuesta.context['resumen_salidas_dia']
+            self.assertEqual(
+                [(d['clave'], d['fecha'], d['total']) for d in resumen],
+                [('hoy', self.hoy, 2), ('ayer', self.ayer, 1)],
+            )
+            self.assertContains(respuesta, 'class="exit-day-summary"')
+            self.assertContains(respuesta, 'Ver detalle →', count=2)
+
+    def test_el_total_del_dia_no_depende_de_los_filtros(self):
+        self.client.force_login(self.asesora)
+        respuesta = self.client.get(
+            reverse('econotec:salida_retiros_lista'), {'sede': 'quito'},
+        )
+        self.assertEqual(respuesta.context['total'], 0)
+        self.assertEqual(
+            [d['total'] for d in respuesta.context['resumen_salidas_dia']], [2, 1],
+        )
+
+    def test_ver_detalle_filtra_la_tabla_por_ese_dia(self):
+        self.client.force_login(self.asesora)
+        resumen = self._resumen(self.asesora).context['resumen_salidas_dia']
+
+        detalle_hoy = self.client.get(resumen[0]['url'])
+        self.assertEqual(
+            sorted(s.pk for s in detalle_hoy.context['salidas']),
+            sorted(s.pk for s in self.salidas_hoy),
+        )
+        self.assertTrue(detalle_hoy.context['resumen_salidas_dia'][0]['activo'])
+        self.assertFalse(detalle_hoy.context['resumen_salidas_dia'][1]['activo'])
+
+        detalle_ayer = self.client.get(resumen[1]['url'])
+        self.assertEqual(
+            [s.pk for s in detalle_ayer.context['salidas']], [self.salida_ayer.pk],
+        )
+        self.assertTrue(detalle_ayer.context['resumen_salidas_dia'][1]['activo'])
+
+    def test_el_tecnico_no_llega_al_apartado(self):
+        self.client.force_login(self.tecnico)
+        respuesta = self.client.get(reverse('econotec:salida_retiros_lista'))
+        self.assertRedirects(respuesta, reverse('econotec:salida_lista'), fetch_redirect_response=False)
+        lista_oficina = self.client.get(reverse('econotec:salida_lista'))
+        self.assertIsNone(lista_oficina.context['resumen_salidas_dia'])
+        self.assertNotContains(lista_oficina, 'class="exit-day-summary"')

@@ -39,6 +39,7 @@ class Command(BaseCommand):
             ('Servicios básicos', '💡', '#00838f', 4),
             ('Herramientas', '🛠️', '#5d4037', 5),
             ('Marketing', '📣', '#6a1b9a', 6),
+            ('Devolución', '↩️', '#c62828', 7),
             ('Otros', '📦', '#455a64', 99),
         ]
         for nombre, icono, color, orden in defaults:
