@@ -323,12 +323,13 @@ class AsesoraDeLaSalidaTests(BaseSalidaRetiro):
 
 
 class ResumenSalidasDelDiaTests(BaseSalidaRetiro):
-    """Apartado «Hoy / Ayer» de la lista de salidas físicas confirmadas."""
+    """Apartado «Hoy / Ayer / Este mes» de la lista de salidas confirmadas."""
 
     def setUp(self):
         super().setUp()
         self.hoy = date.today()
         self.ayer = self.hoy - timedelta(days=1)
+        self.inicio_mes = self.hoy.replace(day=1)
         self.salidas_hoy = []
         for _ in range(2):
             salida = self.crear_salida()
@@ -343,10 +344,22 @@ class ResumenSalidasDelDiaTests(BaseSalidaRetiro):
         )
         self.salida_ayer.refresh_from_db()
         # Una salida vieja que no debe contarse en ninguno de los dos días.
+        self.fecha_vieja = self.hoy - timedelta(days=5)
         salida_vieja = self.crear_salida()
         SalidaEquipo.objects.filter(pk=salida_vieja.pk).update(
-            fecha_retiro_real=self.hoy - timedelta(days=5), estado_reparacion='retirado',
+            fecha_retiro_real=self.fecha_vieja, estado_reparacion='retirado',
         )
+        # Una salida del mes pasado: nunca entra en el total del mes en curso.
+        self.salida_mes_pasado = self.crear_salida()
+        SalidaEquipo.objects.filter(pk=self.salida_mes_pasado.pk).update(
+            fecha_retiro_real=self.inicio_mes - timedelta(days=1),
+            estado_reparacion='retirado',
+        )
+        # Del día 1 a hoy: las salidas de arriba que caen dentro del mes.
+        self.total_mes = SalidaEquipo.objects.filter(
+            fecha_retiro_real__gte=self.inicio_mes,
+            fecha_retiro_real__lte=self.hoy,
+        ).count()
 
     def _resumen(self, usuario):
         self.client.force_login(usuario)
@@ -354,16 +367,30 @@ class ResumenSalidasDelDiaTests(BaseSalidaRetiro):
         self.assertEqual(respuesta.status_code, 200)
         return respuesta
 
-    def test_asesora_y_admin_ven_los_totales_de_hoy_y_ayer(self):
+    def test_asesora_y_admin_ven_los_totales_de_hoy_ayer_y_del_mes(self):
         for usuario in (self.asesora, self.admin):
             respuesta = self._resumen(usuario)
             resumen = respuesta.context['resumen_salidas_dia']
             self.assertEqual(
                 [(d['clave'], d['fecha'], d['total']) for d in resumen],
-                [('hoy', self.hoy, 2), ('ayer', self.ayer, 1)],
+                [
+                    ('hoy', self.hoy, 2),
+                    ('ayer', self.ayer, 1),
+                    ('este_mes', self.inicio_mes, self.total_mes),
+                ],
             )
             self.assertContains(respuesta, 'class="exit-day-summary"')
-            self.assertContains(respuesta, 'Ver detalle →', count=2)
+            self.assertContains(respuesta, 'Ver detalle →', count=3)
+
+    def test_el_total_del_mes_deja_fuera_las_salidas_del_mes_pasado(self):
+        resumen = self._resumen(self.asesora).context['resumen_salidas_dia']
+        mes = resumen[2]
+        self.assertEqual(mes['etiqueta'], 'Este mes')
+        detalle_mes = self.client.get(mes['url'])
+        pks = {s.pk for s in detalle_mes.context['salidas']}
+        self.assertNotIn(self.salida_mes_pasado.pk, pks)
+        self.assertEqual(detalle_mes.context['total'], mes['total'])
+        self.assertTrue(detalle_mes.context['resumen_salidas_dia'][2]['activo'])
 
     def test_el_total_del_dia_no_depende_de_los_filtros(self):
         self.client.force_login(self.asesora)
@@ -372,7 +399,8 @@ class ResumenSalidasDelDiaTests(BaseSalidaRetiro):
         )
         self.assertEqual(respuesta.context['total'], 0)
         self.assertEqual(
-            [d['total'] for d in respuesta.context['resumen_salidas_dia']], [2, 1],
+            [d['total'] for d in respuesta.context['resumen_salidas_dia']],
+            [2, 1, self.total_mes],
         )
 
     def test_ver_detalle_filtra_la_tabla_por_ese_dia(self):
@@ -393,10 +421,112 @@ class ResumenSalidasDelDiaTests(BaseSalidaRetiro):
         )
         self.assertTrue(detalle_ayer.context['resumen_salidas_dia'][1]['activo'])
 
-    def test_el_tecnico_no_llega_al_apartado(self):
+    def test_el_tecnico_no_llega_a_la_lista_de_salidas(self):
         self.client.force_login(self.tecnico)
         respuesta = self.client.get(reverse('econotec:salida_retiros_lista'))
         self.assertRedirects(respuesta, reverse('econotec:salida_lista'), fetch_redirect_response=False)
+        # En la lista de la oficina el apartado cuenta equipos finalizados,
+        # no salidas físicas, y se nota por su color y su título.
         lista_oficina = self.client.get(reverse('econotec:salida_lista'))
-        self.assertIsNone(lista_oficina.context['resumen_salidas_dia'])
-        self.assertNotContains(lista_oficina, 'class="exit-day-summary"')
+        self.assertEqual(lista_oficina.context['resumen_tipo'], 'finalizados')
+        self.assertContains(lista_oficina, 'class="exit-summary exit-summary--finalizados"')
+        self.assertNotContains(lista_oficina, 'class="exit-summary exit-summary--salidas"')
+
+
+class ResumenFinalizadosTests(BaseSalidaRetiro):
+    """Apartado «Hoy / Ayer / Este mes» de la lista de equipos finalizados."""
+
+    def setUp(self):
+        super().setUp()
+        self.hoy = date.today()
+        self.ayer = self.hoy - timedelta(days=1)
+        self.inicio_mes = self.hoy.replace(day=1)
+        # Finalizados hoy: dos siguen en la oficina y uno ya salió.
+        self.finalizados_hoy = [self.crear_salida() for _ in range(2)]
+        salida_mismo_dia = self.crear_salida()
+        SalidaEquipo.objects.filter(pk=salida_mismo_dia.pk).update(
+            fecha_retiro_real=self.hoy, estado_reparacion='retirado',
+        )
+        # Finalizado ayer, todavía en la oficina.
+        self.finalizado_ayer = self.crear_salida()
+        SalidaEquipo.objects.filter(pk=self.finalizado_ayer.pk).update(
+            fecha_salida=self.ayer,
+        )
+        # Finalizado el mes pasado: nunca entra en el total del mes en curso.
+        self.finalizado_mes_pasado = self.crear_salida()
+        SalidaEquipo.objects.filter(pk=self.finalizado_mes_pasado.pk).update(
+            fecha_salida=self.inicio_mes - timedelta(days=1),
+        )
+        self.total_mes = SalidaEquipo.objects.filter(
+            fecha_retiro_real__isnull=True,
+            fecha_salida__gte=self.inicio_mes,
+            fecha_salida__lte=self.hoy,
+        ).count()
+
+    def _lista(self, usuario):
+        self.client.force_login(usuario)
+        respuesta = self.client.get(reverse('econotec:salida_lista'))
+        self.assertEqual(respuesta.status_code, 200)
+        return respuesta
+
+    def test_cuenta_los_finalizados_que_siguen_en_la_oficina(self):
+        for usuario in (self.tecnico, self.asesora, self.admin):
+            respuesta = self._lista(usuario)
+            resumen = respuesta.context['resumen_salidas_dia']
+            self.assertEqual(
+                [(d['clave'], d['fecha'], d['total']) for d in resumen],
+                [
+                    ('hoy', self.hoy, 2),
+                    ('ayer', self.ayer, 1),
+                    ('este_mes', self.inicio_mes, self.total_mes),
+                ],
+            )
+            self.assertContains(respuesta, 'Ver detalle →', count=3)
+
+    def test_el_total_no_depende_de_los_filtros(self):
+        self.client.force_login(self.tecnico)
+        respuesta = self.client.get(
+            reverse('econotec:salida_lista'), {'sede': 'quito'},
+        )
+        self.assertEqual(respuesta.context['total'], 0)
+        self.assertEqual(
+            [d['total'] for d in respuesta.context['resumen_salidas_dia']],
+            [2, 1, self.total_mes],
+        )
+
+    def test_ver_detalle_filtra_por_fecha_de_finalizacion(self):
+        resumen = self._lista(self.tecnico).context['resumen_salidas_dia']
+
+        detalle_hoy = self.client.get(resumen[0]['url'])
+        self.assertEqual(
+            sorted(s.pk for s in detalle_hoy.context['salidas']),
+            sorted(s.pk for s in self.finalizados_hoy),
+        )
+        self.assertTrue(detalle_hoy.context['resumen_salidas_dia'][0]['activo'])
+
+        detalle_ayer = self.client.get(resumen[1]['url'])
+        self.assertEqual(
+            [s.pk for s in detalle_ayer.context['salidas']], [self.finalizado_ayer.pk],
+        )
+        self.assertTrue(detalle_ayer.context['resumen_salidas_dia'][1]['activo'])
+
+        detalle_mes = self.client.get(resumen[2]['url'])
+        pks = {s.pk for s in detalle_mes.context['salidas']}
+        self.assertNotIn(self.finalizado_mes_pasado.pk, pks)
+        self.assertEqual(detalle_mes.context['total'], resumen[2]['total'])
+        self.assertTrue(detalle_mes.context['resumen_salidas_dia'][2]['activo'])
+
+    def test_cada_lista_lleva_su_propio_color_y_titulo(self):
+        finalizados = self._lista(self.tecnico)
+        self.assertContains(finalizados, 'class="exit-summary exit-summary--finalizados"')
+        self.assertContains(finalizados, 'Equipos finalizados en la oficina')
+        # Los comentarios de plantilla nunca deben salir como texto en la página.
+        self.assertNotContains(finalizados, 'Totales de hoy')
+
+        self.client.force_login(self.asesora)
+        salidas = self.client.get(reverse('econotec:salida_retiros_lista'))
+        self.assertContains(salidas, 'class="exit-summary exit-summary--salidas"')
+        self.assertContains(salidas, 'Salidas de la oficina')
+        self.assertNotContains(
+            salidas, 'class="exit-summary exit-summary--finalizados"',
+        )

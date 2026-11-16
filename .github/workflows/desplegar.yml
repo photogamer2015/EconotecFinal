@@ -1,0 +1,87 @@
+# Despliegue automático de Econotec en el servidor (EC2).
+#
+# Al fusionar en «main», GitHub entra por SSH al servidor y ejecuta
+# scripts/aws_update.sh, que es exactamente lo mismo que se hacía a mano:
+# git pull, dependencias, migraciones, estáticos, setup_roles y reinicio
+# del servicio.
+#
+# Secretos necesarios (Settings → Secrets and variables → Actions):
+#   SSH_HOST            IP o dominio del servidor (ej.: 18.222.1.10)
+#   SSH_USUARIO         usuario con el que entras por SSH (ej.: ubuntu)
+#   SSH_CLAVE_PRIVADA   clave privada completa, con sus líneas BEGIN/END
+#   SSH_KNOWN_HOSTS     (recomendado) salida de: ssh-keyscan -H TU_SERVIDOR
+# Variables opcionales (misma pantalla, pestaña «Variables»):
+#   RUTA_PROYECTO       por defecto /var/www/EconotecFinal
+#   NOMBRE_SERVICIO     por defecto econotec
+#
+# Mientras falten los secretos, el despliegue se salta solo y lo avisa:
+# nada falla y el servidor sigue actualizándose a mano.
+name: Desplegar en el servidor
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Un despliegue a la vez; si llegan dos seguidos, el segundo espera.
+concurrency:
+  group: despliegue-produccion
+  cancel-in-progress: false
+
+jobs:
+  desplegar:
+    name: Actualizar Econotec por SSH
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      SSH_HOST: ${{ secrets.SSH_HOST }}
+      SSH_USUARIO: ${{ secrets.SSH_USUARIO }}
+      SSH_PUERTO: ${{ vars.SSH_PUERTO || '22' }}
+      RUTA_PROYECTO: ${{ vars.RUTA_PROYECTO || '/var/www/EconotecFinal' }}
+      NOMBRE_SERVICIO: ${{ vars.NOMBRE_SERVICIO || 'econotec' }}
+
+    steps:
+      - name: Avisar si faltan los secretos
+        if: env.SSH_HOST == '' || env.SSH_USUARIO == ''
+        run: |
+          echo "::notice::Faltan los secretos SSH_HOST / SSH_USUARIO: no se despliega." \
+               "Configúralos en Settings → Secrets and variables → Actions."
+
+      - name: Preparar la clave SSH
+        if: env.SSH_HOST != '' && env.SSH_USUARIO != ''
+        env:
+          SSH_CLAVE_PRIVADA: ${{ secrets.SSH_CLAVE_PRIVADA }}
+          SSH_KNOWN_HOSTS: ${{ secrets.SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          if [ -z "$SSH_CLAVE_PRIVADA" ]; then
+            echo "Falta el secreto SSH_CLAVE_PRIVADA." >&2
+            exit 1
+          fi
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "$SSH_CLAVE_PRIVADA" > ~/.ssh/econotec_deploy
+          chmod 600 ~/.ssh/econotec_deploy
+          if [ -n "$SSH_KNOWN_HOSTS" ]; then
+            printf '%s\n' "$SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          else
+            echo "::warning::Sin SSH_KNOWN_HOSTS se acepta la huella que anuncie el servidor." \
+                 "Añade el secreto con: ssh-keyscan -H TU_SERVIDOR"
+            ssh-keyscan -p "$SSH_PUERTO" -H "$SSH_HOST" > ~/.ssh/known_hosts 2>/dev/null
+          fi
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Actualizar el servidor
+        if: env.SSH_HOST != '' && env.SSH_USUARIO != ''
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/econotec_deploy \
+              -o IdentitiesOnly=yes \
+              -o StrictHostKeyChecking=yes \
+              -p "$SSH_PUERTO" \
+              "$SSH_USUARIO@$SSH_HOST" \
+              "cd '$RUTA_PROYECTO' && SERVICE_NAME='$NOMBRE_SERVICIO' bash scripts/aws_update.sh"
+
+      - name: Borrar la clave del runner
+        if: always()
+        run: rm -f ~/.ssh/econotec_deploy
