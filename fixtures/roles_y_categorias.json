@@ -103,6 +103,19 @@
 },
 {
     "model": "econotec.categoriaegreso",
+    "pk": 8,
+    "fields": {
+        "nombre": "Devolución",
+        "descripcion": "",
+        "color": "#c62828",
+        "icono": "↩️",
+        "orden": 7,
+        "activo": true,
+        "creado": "2026-06-05T20:29:30.769Z"
+    }
+},
+{
+    "model": "econotec.categoriaegreso",
     "pk": 7,
     "fields": {
         "nombre": "Otros",

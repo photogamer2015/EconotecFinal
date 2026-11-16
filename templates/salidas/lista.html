@@ -28,6 +28,54 @@
         font-size: 11px; font-weight: 800;
     }
     [data-theme="dark"] .pendiente-pill { background: rgba(249,118,24,0.25); color: #fbbf73; }
+    .exit-day-summary {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr));
+        gap: 12px;
+        margin: 0 0 18px;
+        max-width: 640px;
+    }
+    .exit-day-card {
+        background: var(--card-bg);
+        border: 1px solid var(--border-color);
+        border-left: 4px solid var(--primary);
+        border-radius: 12px;
+        box-shadow: var(--shadow);
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        padding: 14px 16px;
+    }
+    .exit-day-card.is-active {
+        border-color: var(--primary);
+        box-shadow: 0 0 0 3px rgba(249, 118, 24, 0.16);
+    }
+    .exit-day-label {
+        color: var(--text-muted);
+        font-size: 12px;
+        font-weight: 900;
+        letter-spacing: .04em;
+        margin: 0;
+        text-transform: uppercase;
+    }
+    .exit-day-value {
+        color: var(--text-main);
+        font-size: 34px;
+        font-variant-numeric: tabular-nums;
+        font-weight: 900;
+        letter-spacing: -.03em;
+        line-height: 1.1;
+        margin: 0;
+    }
+    .exit-day-link {
+        color: var(--primary);
+        font-size: 12px;
+        font-weight: 800;
+        margin-top: 2px;
+        text-decoration: none;
+        width: fit-content;
+    }
+    .exit-day-link:hover { text-decoration: underline; }
     .office-exit-cell { min-width: 285px; }
     .office-exit-content {
         display: flex;
@@ -390,6 +438,19 @@
 <p class="page-subtitle">{{ total }} equipo{{ total|pluralize }} finalizado{{ total|pluralize }} aún en la oficina.</p>
 {% endif %}
 
+{% if resumen_salidas_dia %}
+{# Salidas de la oficina de hoy y de ayer: solo el número; «Ver detalle» filtra la tabla por ese día. #}
+<section class="exit-day-summary" aria-label="Salidas de la oficina de hoy y de ayer">
+    {% for dia in resumen_salidas_dia %}
+    <article class="exit-day-card{% if dia.activo %} is-active{% endif %}">
+        <p class="exit-day-label">{{ dia.etiqueta }} · {{ dia.fecha|date:"d/m/Y" }}</p>
+        <p class="exit-day-value">{{ dia.total }}</p>
+        <a href="{{ dia.url }}" class="exit-day-link">Ver detalle →</a>
+    </article>
+    {% endfor %}
+</section>
+{% endif %}
+
 <div class="toolbar">
     <form method="get" class="salidas-filter-form" style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
         <input type="text" name="q" value="{{ q }}" placeholder="Buscar por N°, cliente, marca…" class="form-input">
@@ -475,7 +536,7 @@
         <thead>
             <tr>
                 <th>Equipo N°</th>
-                <th>Fecha de finalización</th>
+                {% if not ocultar_fecha_finalizacion %}<th>Fecha de finalización</th>{% endif %}
                 <th>Cliente</th>
                 <th>Equipo</th>
                 <th>Técnico / Registró</th>
@@ -490,7 +551,7 @@
         {% for s in salidas %}
             <tr>
                 <td data-label="Equipo N°"><strong style="color: var(--primary);">{{ s.ingreso.codigo_equipo }}</strong></td>
-                <td data-label="Fecha de finalización">{{ s.fecha_salida|date:"d/m/Y" }}</td>
+                {% if not ocultar_fecha_finalizacion %}<td data-label="Fecha de finalización">{{ s.fecha_salida|date:"d/m/Y" }}</td>{% endif %}
                 <td data-label="Cliente">{{ s.ingreso.cliente.nombres }}</td>
                 <td data-label="Equipo">{{ s.ingreso.tipo_equipo_display }} — {{ s.ingreso.marca|truncatechars:25 }}</td>
                 <td data-label="Técnico / Registró" style="white-space: nowrap; font-size: 12px;">
