@@ -98,7 +98,10 @@ sudo nginx -t
 sudo systemctl restart nginx
 ```
 
-## Actualizar después de subir cambios a GitHub
+## Actualizar después de subir cambios a GitHub (a mano)
+
+Si ya configuraste el despliegue automático (sección siguiente), esto no hace
+falta: queda como respaldo.
 
 ```bash
 cd /var/www/EconotecFinal
@@ -126,6 +129,59 @@ Si solo quieres preparar archivos sin reiniciar systemd:
 ```bash
 SERVICE_NAME= bash scripts/aws_update.sh
 ```
+
+## Despliegue automático desde GitHub
+
+El workflow `.github/workflows/desplegar.yml` hace esto solo: cada vez que algo
+entra en `main` (merge de un PR o push directo), GitHub entra por SSH al
+servidor y ejecuta `scripts/aws_update.sh`, el mismo script de arriba.
+
+### 1. Clave SSH solo para el despliegue
+
+En tu computadora:
+
+```bash
+ssh-keygen -t ed25519 -C "despliegue-econotec" -f ~/.ssh/econotec_deploy -N ""
+ssh-copy-id -i ~/.ssh/econotec_deploy.pub ubuntu@IP_DEL_SERVIDOR
+ssh-keyscan -H IP_DEL_SERVIDOR
+```
+
+### 2. Secretos en GitHub
+
+En el repositorio → **Settings → Secrets and variables → Actions → New
+repository secret**:
+
+| Secreto | Valor |
+| --- | --- |
+| `SSH_HOST` | IP o dominio del servidor |
+| `SSH_USUARIO` | usuario del servidor (ej.: `ubuntu`) |
+| `SSH_CLAVE_PRIVADA` | contenido completo de `~/.ssh/econotec_deploy` (con las líneas `BEGIN`/`END`) |
+| `SSH_KNOWN_HOSTS` | salida de `ssh-keyscan -H IP_DEL_SERVIDOR` |
+
+En la pestaña **Variables** puedes cambiar, si tu servidor es distinto:
+`RUTA_PROYECTO` (por defecto `/var/www/EconotecFinal`), `NOMBRE_SERVICIO`
+(por defecto `econotec`) y `SSH_PUERTO` (por defecto `22`).
+
+Mientras falten `SSH_HOST` o `SSH_USUARIO`, el workflow se salta el despliegue
+y lo avisa: no falla nada y el servidor se sigue actualizando a mano.
+
+### 3. Sudo sin contraseña para reiniciar el servicio
+
+El script reinicia `econotec.service` con `sudo`, y por SSH automático no hay
+quién escriba la contraseña. En el servidor:
+
+```bash
+echo 'ubuntu ALL=(ALL) NOPASSWD: /bin/systemctl restart econotec.service, /bin/systemctl status econotec.service' | sudo tee /etc/sudoers.d/econotec-deploy
+sudo chmod 440 /etc/sudoers.d/econotec-deploy
+```
+
+### 4. Probarlo
+
+En GitHub → pestaña **Actions** → «Desplegar en el servidor» → **Run
+workflow**. Ahí mismo se ve el registro completo del despliegue.
+
+Ojo: el script se detiene si el servidor tiene cambios locales en archivos
+versionados (`git status` sucio). Es a propósito, para no pisar nada.
 
 ## Backup opcional a S3
 
