@@ -111,6 +111,16 @@
         padding: 5px 10px;
         font-size: 12px;
     }
+    .aviso-cliente-btns {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+        gap: 6px;
+        margin-top: 10px;
+    }
+    .aviso-cliente-btns .btn { padding: 5px 10px; font-size: 12px; }
+    .aviso-cliente-btns .aviso-btn-wa { background: #1da851; color: #fff; }
+    .aviso-cliente-btns .aviso-btn-wa:hover { background: #168f44; color: #fff; }
     .admin-equipment-details {
         border-top: 1px solid var(--border);
         background: color-mix(in srgb, var(--card-bg) 94%, #0f766e 6%);
@@ -192,6 +202,7 @@
     @media (max-width: 980px) {
         .admin-equipment-summary { grid-template-columns: 1fr 1fr; }
         .admin-equipment-payment { text-align: left; }
+        .aviso-cliente-btns { justify-content: flex-start; }
     }
     @media (max-width: 700px) {
         .admin-special-filter > div { min-width: 100%; }
@@ -312,6 +323,16 @@
                 {% else %}
                 <strong>Gratis</strong>
                 <small>Sin egreso</small>
+                {% endif %}
+                {% if vista_admin and i.estado == 'donado' or vista_admin and i.estado == 'equipo_a_comprar' %}
+                <div class="aviso-cliente-btns">
+                    <a href="{% url 'econotec:equipo_administrativo_pdf' pk=i.pk %}" class="btn btn-secondary btn-sm aviso-btn-pdf">📄 Descargar PDF</a>
+                    {% if i.wa_aviso_link %}
+                    <a href="{{ i.wa_aviso_link }}" target="_blank" rel="noopener" class="btn btn-sm aviso-btn-wa">💬 Enviar WhatsApp</a>
+                    {% else %}
+                    <small>Sin WhatsApp registrado</small>
+                    {% endif %}
+                </div>
                 {% endif %}
             </div>
         </div>

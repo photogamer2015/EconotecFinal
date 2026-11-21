@@ -33,6 +33,7 @@ from .caja import (
     historico_mensual, movimientos_de_dinero, ocultar_guardado,
 )
 from .date_filters import aplicar_rango_fecha, contexto_rango_fecha, obtener_rango_fecha
+from .alertas import whatsapp_link_equipo_donado_comprado
 from .emails import enviar_correo_bodegaje_seguro
 from .models import (
     IngresoEquipo, SalidaEquipo, Abono, CajaGrande, Egreso, CategoriaEgreso, Cliente,
@@ -2070,8 +2071,11 @@ def admin_equipos_administrativos(request):
             total=Sum('valor_acordado')
         )['total'] or Decimal('0.00'),
     }
+    ingresos = list(qs)
+    for ingreso in ingresos:
+        ingreso.wa_aviso_link = whatsapp_link_equipo_donado_comprado(ingreso)
     return render(request, 'admin_panel/equipos_administrativos.html', {
-        'ingresos': qs,
+        'ingresos': ingresos,
         'resumen': resumen,
         'estado_filtro': estado_filtro,
         'q': q,

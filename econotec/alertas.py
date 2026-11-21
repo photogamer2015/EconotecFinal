@@ -508,6 +508,114 @@ def whatsapp_link_bodegaje(salida):
     return f"https://wa.me/{numero_limpio}?text={quote(mensaje)}"
 
 
+def _lineas_equipo_administrativo(ingreso):
+    """Tipo, marca, modelo y serie del equipo; omite lo que no esté registrado."""
+    equipo = ' '.join(
+        parte for parte in (ingreso.tipo_equipo_display, ingreso.marca) if parte
+    )
+    lineas = f"• Equipo: {equipo}\n" if equipo else ""
+    if (ingreso.modelo_serie or '').strip():
+        lineas += f"• Modelo: {ingreso.modelo_serie.strip()}\n"
+    if (ingreso.serie or '').strip():
+        lineas += f"• Serie: {ingreso.serie.strip()}\n"
+    return lineas
+
+
+def metodo_pago_compra_texto(ingreso, dinero=None):
+    """Método con que Econotec pagó la compra del equipo, en una sola línea.
+
+    Incluye el banco o la app cuando se registró y, si fue pago mixto, cada
+    parte con su valor. Devuelve '' si no hay método registrado.
+    """
+    dinero = dinero or _dinero_whatsapp
+    metodo = ingreso.compra_metodo_pago
+    if not metodo:
+        return ''
+    if metodo == 'mixto':
+        partes = [
+            f"{dinero(parte['monto'])} en {parte['detalle']}"
+            for parte in ingreso.compra_pago_mixto_partes
+            if parte['monto'] is not None
+        ]
+        if partes:
+            return 'Pago mixto: ' + ' y '.join(partes)
+        return ingreso.get_compra_metodo_pago_display()
+    texto = ingreso.get_compra_metodo_pago_display()
+    if metodo == 'transferencia' and ingreso.compra_banco:
+        banco = (
+            ingreso.compra_banco_otro
+            if ingreso.compra_banco == 'otro' and ingreso.compra_banco_otro
+            else ingreso.get_compra_banco_display()
+        )
+        texto += f' ({banco})'
+    elif metodo == 'tarjeta' and ingreso.compra_tarjeta_app:
+        texto += f' ({ingreso.get_compra_tarjeta_app_display()})'
+    return texto
+
+
+def whatsapp_link_equipo_donado_comprado(ingreso):
+    """Aviso al cliente de que su equipo quedó donado o comprado por Econotec.
+
+    Donado: agradece la donación. Comprado: confirma la compra con el valor
+    pagado y el método. Devuelve None si el estado es otro o si el cliente
+    no tiene WhatsApp.
+    """
+    if ingreso.estado not in ('donado', 'equipo_a_comprar'):
+        return None
+    numero_limpio = _normalizar_numero_ec((ingreso.cliente.whatsapp or '').strip())
+    if not numero_limpio:
+        return None
+
+    nombre_cliente = (ingreso.cliente.nombres or '').split(' ')[0] or 'cliente'
+    lineas_equipo = _lineas_equipo_administrativo(ingreso)
+    saludo = (
+        f"Estimado(a) {nombre_cliente}, reciba un cordial saludo de parte de "
+        f"*Econotec — Reparación de Tecnología*.\n\n"
+    )
+    despedida = (
+        "Saludos cordiales,\n"
+        "*Econotec — Reparación de Tecnología*"
+    )
+
+    if ingreso.estado == 'donado':
+        mensaje = (
+            f"{saludo}"
+            f"🎁 Queremos *agradecerle sinceramente por donar su equipo* a Econotec.\n\n"
+            f"📋 *Detalle de la donación*\n"
+            f"• Código: *{ingreso.codigo_equipo}*\n"
+            f"{lineas_equipo}"
+            f"• Fecha: {ingreso.fecha_ingreso.strftime('%d/%m/%Y')}\n"
+            f"• Sede: {ingreso.get_sede_display()}\n\n"
+            f"Le adjuntamos el certificado de equipo donado en PDF como respaldo.\n\n"
+            f"Gracias por su confianza y generosidad. Quedamos a su disposición "
+            f"para lo que necesite.\n\n"
+            f"{despedida}"
+        )
+    else:
+        lineas_pago = ""
+        if ingreso.valor_acordado is not None:
+            lineas_pago += f"• Valor pagado: *{_dinero_whatsapp(ingreso.valor_acordado)}*\n"
+        metodo = metodo_pago_compra_texto(ingreso)
+        if metodo:
+            lineas_pago += f"• Método de pago: {metodo}\n"
+        bloque_pago = f"\n💳 *Detalle del pago*\n{lineas_pago}" if lineas_pago else ""
+        mensaje = (
+            f"{saludo}"
+            f"🧾 Le confirmamos que *Econotec compró su equipo*.\n\n"
+            f"📋 *Detalle de la compra*\n"
+            f"• Código: *{ingreso.codigo_equipo}*\n"
+            f"{lineas_equipo}"
+            f"• Fecha: {ingreso.fecha_ingreso.strftime('%d/%m/%Y')}\n"
+            f"• Sede: {ingreso.get_sede_display()}\n"
+            f"{bloque_pago}\n"
+            f"Le adjuntamos el comprobante de equipo comprado en PDF como respaldo.\n\n"
+            f"Gracias por confiar en Econotec. Quedamos a su disposición "
+            f"para lo que necesite.\n\n"
+            f"{despedida}"
+        )
+    return f"https://wa.me/{numero_limpio}?text={quote(mensaje)}"
+
+
 # ─────────────────────────────────────────────────────────────────
 # Helpers internos
 # ─────────────────────────────────────────────────────────────────
