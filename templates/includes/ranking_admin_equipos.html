@@ -30,7 +30,7 @@
                     <td class="texto">{{ equipo.cliente }}</td>
                     <td class="texto">{{ equipo.fecha_salida|date:"d/m/Y" }}</td>
                     <td class="texto">{{ equipo.resultado_texto }}</td>
-                    <td class="texto">{% if equipo.fuera_de_oficina %}Fuera de oficina{% else %}En oficina{% endif %}</td>
+                    <td class="texto">{% if equipo.a_domicilio %}A domicilio{% elif equipo.fuera_de_oficina %}Fuera de oficina{% else %}En oficina{% endif %}</td>
                     <td>{{ equipo.acordado|dinero_signo }}</td>
                     <td>{{ equipo.domicilio|dinero_signo:"—" }}</td>
                     <td class="positivo">{{ equipo.cobrado|dinero_signo }}</td>

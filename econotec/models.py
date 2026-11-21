@@ -1308,6 +1308,10 @@ class IngresoEquipo(RetencionFactura):
             return Decimal('0.00')
 
         salida = self.salida if hasattr(self, 'salida') else None
+        # No se pudo / No quiso reparar a domicilio: el valor acordado no aplica;
+        # solo se cobra el valor a domicilio (se suma en valor_efectivo_a_cobrar).
+        if salida and salida.domicilio_sin_reparar:
+            return Decimal('0.00')
         if salida and salida.revision_con_valor_propio:
             valor_revision = salida.valor_acordado_revision
             if salida.tiene_valor_acordado_adicional:
@@ -1925,6 +1929,16 @@ class SalidaEquipo(RetencionFactura):
         ('cliente_no_acepta', '🚫 Cliente no quiso reparar'),
     ]
 
+    # Equipo a domicilio finalizado en casa del cliente: se guarda con el estado
+    # de siempre (para puntos, ranking y totales) y la marca
+    # finalizado_a_domicilio. El equipo nunca queda en la oficina.
+    ESTADOS_DOMICILIO = [
+        ('reparado', 'retirado', '✅ Reparado — equipo finalizado (a domicilio)'),
+        ('no_reparable', 'no_reparable', '❌ No se pudo reparar (a domicilio)'),
+        ('cliente_no_acepta', 'cliente_no_acepta', '🚫 No quiso reparar (a domicilio)'),
+    ]
+    ESTADOS_DOMICILIO_SIN_REPARAR = ('no_reparable', 'cliente_no_acepta')
+
     SI_NO = [
         ('si', 'Sí'),
         ('no', 'No'),
@@ -1970,6 +1984,12 @@ class SalidaEquipo(RetencionFactura):
         null=True, blank=True, editable=False,
         verbose_name='Salió de Equipo en prueba el',
         help_text='Se llena sola. Desde esta fecha cuentan los días de gracia del bodegaje.',
+    )
+    finalizado_a_domicilio = models.BooleanField(
+        default=False,
+        verbose_name='Finalizado a domicilio',
+        help_text='El equipo se finalizó en casa del cliente: no pasa por la oficina '
+                  'ni queda pendiente de retiro.',
     )
 
     # ── Técnico que REPARÓ el equipo (se declara en la salida) ───────────
@@ -2230,6 +2250,32 @@ class SalidaEquipo(RetencionFactura):
         ]
         return [p for p in partes if p]
 
+    def get_estado_reparacion_display(self):
+        """Etiqueta del resultado; los cierres a domicilio dicen «(a domicilio)»."""
+        clave = self.estado_domicilio_key
+        if clave:
+            return next(
+                etiqueta
+                for key, _estado, etiqueta in self.ESTADOS_DOMICILIO
+                if key == clave
+            )
+        return dict(self.ESTADO_REPARACION).get(self.estado_reparacion, self.estado_reparacion)
+
+    @property
+    def estado_domicilio_key(self):
+        """'reparado', 'no_reparable' o 'cliente_no_acepta' si se finalizó a domicilio."""
+        if not self.finalizado_a_domicilio:
+            return ''
+        for clave, estado, _etiqueta in self.ESTADOS_DOMICILIO:
+            if estado == self.estado_reparacion:
+                return clave
+        return ''
+
+    @property
+    def domicilio_sin_reparar(self):
+        """No se pudo reparar / No quiso reparar a domicilio: solo se cobra el domicilio."""
+        return self.estado_domicilio_key in self.ESTADOS_DOMICILIO_SIN_REPARAR
+
     @property
     def es_positivo(self):
         """¿La salida es positiva (cliente se llevó equipo reparado)?"""
@@ -2296,6 +2342,8 @@ class SalidaEquipo(RetencionFactura):
     @property
     def estado_operativo_display(self):
         """Etiqueta de salida física sin perder el resultado técnico guardado."""
+        if self.estado_domicilio_key:
+            return self.get_estado_reparacion_display()
         return dict(self.ESTADO_REPARACION).get(
             self.estado_operativo_key,
             self.estado_operativo_key,
@@ -2405,7 +2453,9 @@ class SalidaEquipo(RetencionFactura):
         # de taller. La única reapertura válida primero limpia fecha_retiro_real
         # desde la acción administrativa "Deshacer salida".
         estado_cerrado = None
-        if self.pk and self.fecha_retiro_real is not None:
+        # A domicilio el equipo nunca estuvo en la oficina: su resultado se
+        # puede corregir entre los estados a domicilio.
+        if self.pk and self.fecha_retiro_real is not None and not self.finalizado_a_domicilio:
             anterior = (
                 type(self).objects
                 .filter(pk=self.pk)

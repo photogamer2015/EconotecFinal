@@ -44,7 +44,15 @@
         </div>
     </a>
 
-    <a href="{% url 'econotec:ingreso_lista' %}?sede=todas&valor=pendiente" class="menu-card pending-value-card">
+    <a href="{% url 'econotec:ingreso_lista' %}?alcance=domicilio" class="menu-card">
+        <span class="menu-card-icon is-green" aria-hidden="true">🏠</span>
+        <div class="menu-card-body">
+            <h3>Lista de Equipos a Domicilio</h3>
+            <p>{{ total_domicilio }} equipo{{ total_domicilio|pluralize }} a domicilio — {{ pendientes_domicilio }} pendiente{{ pendientes_domicilio|pluralize }}.</p>
+        </div>
+    </a>
+
+    <a href="{% url 'econotec:ingreso_lista' %}?sede=todas&valor=pendiente&alcance=todos" class="menu-card pending-value-card">
         <span class="menu-card-icon is-amber" aria-hidden="true">⚠️</span>
         <div class="menu-card-body">
             <h3>Pendiente de Valores Acordados</h3>

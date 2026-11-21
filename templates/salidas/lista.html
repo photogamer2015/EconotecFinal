@@ -59,6 +59,36 @@
         --exit-accent-soft: #1d524d;
         --exit-accent-ink: #7eeadb;
     }
+    /* Equipos a domicilio: verde, en su propia lista. */
+    .exit-summary--domicilio {
+        --exit-accent: #059669;
+        --exit-accent-ring: rgba(5, 150, 105, .18);
+        --exit-accent-soft: #d1fae5;
+        --exit-accent-ink: #047857;
+    }
+    [data-theme="dark"] .exit-summary--domicilio {
+        --exit-accent: #34d399;
+        --exit-accent-ring: rgba(52, 211, 153, .20);
+        --exit-accent-soft: #14532d;
+        --exit-accent-ink: #6ee7b7;
+    }
+    .alcance-tabs { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 16px; }
+    .alcance-tab {
+        display: inline-flex; align-items: center; gap: 8px;
+        padding: 9px 16px; border-radius: 999px;
+        border: 1px solid var(--border); background: var(--surface);
+        color: var(--text-soft); font-size: 13px; font-weight: 800; text-decoration: none;
+    }
+    .alcance-tab.activa { background: var(--primary); border-color: var(--primary); color: #fff; }
+    .alcance-tab.activa.es-domicilio { background: #059669; border-color: #059669; }
+    .domicilio-pill {
+        display: inline-block; padding: 4px 9px; border-radius: 999px;
+        background: #d1fae5; color: #047857; font-size: 11px; font-weight: 800; white-space: nowrap;
+    }
+    [data-theme="dark"] .domicilio-pill { background: rgba(16, 185, 129, 0.2); color: #6ee7b7; }
+    @media (max-width: 640px) {
+        .alcance-tab { flex: 1 1 calc(50% - 8px); justify-content: center; }
+    }
     [data-theme="dark"] .exit-summary .exit-day-label { color: #b9c8c3; }
     .exit-summary-head {
         display: flex;
@@ -501,6 +531,9 @@
     <a href="{% url 'econotec:bienvenida' %}">Inicio</a> /
     {% if lista_salidas_confirmadas %}
         Salidas físicas confirmadas
+    {% elif lista_domicilio %}
+        <a href="{% url 'econotec:salida_menu' %}">Equipo listo / finalizado</a> /
+        Equipos finalizados a domicilio
     {% else %}
         <a href="{% url 'econotec:salida_menu' %}">Equipo listo / finalizado</a> /
         Lista de equipos finalizados
@@ -509,10 +542,24 @@
 
 {% if lista_salidas_confirmadas %}
 <h2 class="page-title">Salidas físicas <span class="accent">confirmadas</span></h2>
-<p class="page-subtitle">{{ total }} equipo{{ total|pluralize }} con salida física confirmada{% if confirmo_usuario %} por <strong>{{ confirmo_usuario.get_full_name|default:confirmo_usuario.username }}</strong> · <a href="{% url 'econotec:salida_retiros_lista' %}">Ver todas</a>{% endif %}.</p>
+<p class="page-subtitle">{{ total }} equipo{{ total|pluralize }} con salida física confirmada{% if confirmo_usuario %} por <strong>{{ confirmo_usuario.get_full_name|default:confirmo_usuario.username }}</strong> · <a href="{% url 'econotec:salida_retiros_lista' %}">Ver todas</a>{% endif %}.{% if not alcance %} Los equipos a domicilio están en su <a href="{% url 'econotec:salida_lista' %}?alcance=domicilio">propia lista</a>.{% endif %}</p>
+{% elif lista_domicilio %}
+<h2 class="page-title">Equipos finalizados <span class="accent">a domicilio</span></h2>
+<p class="page-subtitle">{{ total }} equipo{{ total|pluralize }} a domicilio finalizado{{ total|pluralize }}: en casa del cliente o llevado{{ total|pluralize }} a la oficina.</p>
 {% else %}
 <h2 class="page-title">Lista de equipos <span class="accent">finalizados</span></h2>
 <p class="page-subtitle">{{ total }} equipo{{ total|pluralize }} finalizado{{ total|pluralize }} aún en la oficina.</p>
+{% endif %}
+
+{% if not lista_salidas_confirmadas %}
+{# Los equipos a domicilio van en su propia lista; «todos» viene del ranking o de un perfil. #}
+<nav class="alcance-tabs" aria-label="Lista de equipos finalizados">
+    <a href="{% url 'econotec:salida_lista' %}" class="alcance-tab{% if not alcance %} activa{% endif %}">🧰 En la oficina</a>
+    <a href="{% url 'econotec:salida_lista' %}?alcance=domicilio" class="alcance-tab es-domicilio{% if lista_domicilio %} activa{% endif %}">🏠 A domicilio</a>
+    {% if alcance == 'todos' %}
+    <span class="alcance-tab activa">Todos (oficina y a domicilio)</span>
+    {% endif %}
+</nav>
 {% endif %}
 
 {% if resumen_salidas_dia %}
@@ -520,7 +567,7 @@
 {# Cada lista lleva su propio color e icono para no confundir «finalizado» (sigue en la oficina) con «salida física». #}
 <section class="exit-summary exit-summary--{{ resumen_tipo }}" aria-label="{{ resumen_titulo }}: hoy, ayer y este mes">
     <header class="exit-summary-head">
-        <span class="exit-summary-icon" aria-hidden="true">{% if resumen_tipo == 'salidas' %}🚚{% else %}🧰{% endif %}</span>
+        <span class="exit-summary-icon" aria-hidden="true">{% if resumen_tipo == 'salidas' %}🚚{% elif resumen_tipo == 'domicilio' %}🏠{% else %}🧰{% endif %}</span>
         <div class="exit-summary-copy">
             <h3>{{ resumen_titulo }}</h3>
             <p>{{ resumen_nota }}</p>
@@ -540,6 +587,7 @@
 
 <div class="toolbar">
     <form method="get" class="salidas-filter-form" style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
+        {% if alcance %}<input type="hidden" name="alcance" value="{{ alcance }}">{% endif %}
         <input type="text" name="q" value="{{ q }}" placeholder="Buscar por N°, cliente, marca…" class="form-input">
         {% include 'includes/filtro_fecha_rango.html' %}
         {% if confirmo_filtro %}
@@ -551,7 +599,7 @@
             <input type="hidden" name="fecha_por" value="finalizacion">
         {% endif %}
         <select name="estado" class="form-input" style="max-width:220px;">
-            <option value="">{% if lista_salidas_confirmadas %}— Estado de salida física —{% else %}— Estado de reparación —{% endif %}</option>
+            <option value="">{% if lista_salidas_confirmadas %}— Estado de salida física —{% elif lista_domicilio %}— Resultado a domicilio —{% else %}— Estado de reparación —{% endif %}</option>
             {% for value, label in estados %}
                 <option value="{{ value }}" {% if estado_filtro == value %}selected{% endif %}>{{ label }}</option>
             {% endfor %}
@@ -656,7 +704,10 @@
                 {# El técnico no ve el apartado de salida de la oficina. #}
                 {% if puede_confirmar_salida_fisica %}
                 <td class="office-exit-cell" data-label="Salida de la oficina">
-                    {% if s.cliente_ya_retiro %}
+                    {% if s.finalizado_a_domicilio %}
+                        {# Finalizado en casa del cliente: nunca estuvo en la oficina. #}
+                        <span class="domicilio-pill">🏠 Con el cliente desde {{ s.fecha_retiro_real|date:"d/m/Y" }}</span>
+                    {% elif s.cliente_ya_retiro %}
                         <div style="display: flex; gap: 4px; align-items: center; white-space: nowrap;">
                             <span class="ret-pill">✅ Salió de la oficina {{ s.fecha_retiro_real|date:"d/m/Y" }}</span>
                             {% if es_admin %}
@@ -718,7 +769,9 @@
                     </span>
                 </td>
                 <td class="row-actions" data-label="Acciones">
-                    {% if s.pendiente_de_retiro_fisico and not s.cliente_ya_retiro %}
+                    {% if s.finalizado_a_domicilio %}
+                        <a href="{% url 'econotec:salida_listo_aviso' pk=s.pk %}" class="wa-mini" title="Enviar PDF y WhatsApp del servicio a domicilio">💬</a>
+                    {% elif s.pendiente_de_retiro_fisico and not s.cliente_ya_retiro %}
                         <a href="{% url 'econotec:salida_listo_aviso' pk=s.pk %}" class="wa-mini" title="Avisar por WhatsApp">💬</a>
                     {% endif %}
                     <a href="{% url 'econotec:ingreso_abonos' pk=s.ingreso.pk %}" class="btn btn-sm btn-secondary">Ver Abonos / Pagos</a>
@@ -738,6 +791,9 @@
     {% if lista_salidas_confirmadas %}
     <h3>No hay salidas físicas confirmadas</h3>
     <p>Los equipos aparecerán aquí cuando se confirme que salieron de la oficina.</p>
+    {% elif lista_domicilio %}
+    <h3>No hay equipos a domicilio finalizados</h3>
+    <p>Los equipos con «A domicilio: Sí» aparecen aquí al finalizarlos.</p>
     {% else %}
     <h3>No hay equipos finalizados en la oficina</h3>
     <p>La finalización se registra desde el detalle de cada equipo.</p>

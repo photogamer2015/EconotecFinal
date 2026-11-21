@@ -288,6 +288,10 @@ def whatsapp_link_equipo_listo(salida):
     nombre_cliente = (ingreso.cliente.nombres or '').split(' ')[0] or 'cliente'
     nombre_tecnico = salida.tecnico_reparo_nombre or 'el equipo técnico de Econotec'
 
+    if salida.estado_domicilio_key:
+        mensaje = _mensaje_whatsapp_domicilio(salida, nombre_cliente, nombre_tecnico)
+        return f"https://wa.me/{numero_limpio}?text={quote(mensaje)}"
+
     # Estado del trabajo en términos claros para el cliente
     estado_label = salida.estado_operativo_display
 
@@ -370,6 +374,74 @@ def whatsapp_link_equipo_listo(salida):
         f"*Econotec — Reparación de Tecnología*"
     )
     return f"https://wa.me/{numero_limpio}?text={quote(mensaje)}"
+
+
+def _dinero_whatsapp(valor):
+    return f'${valor:.2f}'.replace('.', ',')
+
+
+def _mensaje_whatsapp_domicilio(salida, nombre_cliente, nombre_tecnico):
+    """Mensaje del servicio a domicilio: sin retiro ni bodegaje, con lo pagado.
+
+    Si el cliente no pagó nada, no se muestra «valor pagado»; si no debe nada,
+    se confirma que no tiene saldo pendiente.
+    """
+    ingreso = salida.ingreso
+    clave = salida.estado_domicilio_key
+    if clave == 'reparado':
+        linea_aviso = (
+            "Le confirmamos que el servicio *a domicilio* de su equipo fue "
+            "*finalizado y su equipo quedó reparado*."
+        )
+    elif clave == 'no_reparable':
+        linea_aviso = (
+            "Le informamos que en el servicio *a domicilio* *no se pudo reparar* su equipo. "
+            "Solo se cobra el valor de la visita a domicilio."
+        )
+    else:
+        linea_aviso = (
+            "Le confirmamos que el servicio *a domicilio* finalizó *sin reparación*, "
+            "por decisión suya. Solo se cobra el valor de la visita a domicilio."
+        )
+
+    linea_equipo = f"• Equipo: {ingreso.tipo_equipo_display} {ingreso.marca}"
+    if ingreso.modelo_serie:
+        linea_equipo += f" — {ingreso.modelo_serie_detalle}"
+
+    total = ingreso.valor_efectivo_a_cobrar
+    pagado = ingreso.total_abonado
+    saldo = ingreso.diferencia
+    lineas_pago = f"• Valor total: {_dinero_whatsapp(total)}\n"
+    if pagado > 0:
+        lineas_pago += f"• Valor pagado: {_dinero_whatsapp(pagado)}\n"
+    if saldo > 0:
+        lineas_pago += f"\n💵 *Saldo pendiente:* {_dinero_whatsapp(saldo)}\n"
+    else:
+        lineas_pago += "\n✅ *Ningún saldo pendiente. Todo en orden.*\n"
+
+    linea_garantia = ""
+    if clave == 'reparado' and salida.garantia_dias and salida.garantia_dias > 0:
+        linea_garantia = (
+            f"🛡 *Garantía:* {salida.garantia_dias} días sobre el trabajo realizado.\n"
+        )
+
+    return (
+        f"Estimado(a) {nombre_cliente}, reciba un cordial saludo de parte de *Econotec — Reparación de Tecnología*.\n\n"
+        f"🏠 {linea_aviso}\n\n"
+        f"📋 *Detalle del servicio a domicilio*\n"
+        f"• Código de equipo: *{ingreso.codigo_equipo}*\n"
+        f"{linea_equipo}\n"
+        f"• Estado del trabajo: {salida.get_estado_reparacion_display()}\n"
+        f"• Fecha del servicio: {salida.fecha_salida.strftime('%d/%m/%Y')}\n"
+        f"• Técnico: {nombre_tecnico}\n\n"
+        f"💳 *Detalle de pago*\n"
+        f"{lineas_pago}"
+        f"{linea_garantia}"
+        f"\nLe adjuntamos el acta del servicio a domicilio en PDF como respaldo.\n\n"
+        f"Gracias por confiar en Econotec. Quedamos atentos a sus comentarios.\n\n"
+        f"Saludos cordiales,\n"
+        f"*Econotec — Reparación de Tecnología*"
+    )
 
 
 def whatsapp_link_bodegaje(salida):

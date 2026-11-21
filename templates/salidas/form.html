@@ -237,11 +237,99 @@
         font-weight: 700;
         font-size: 12px;
     }
+
+    /* ── Cierre a domicilio ───────────────────────────────────── */
+    .domicilio-card {
+        margin-top: 14px;
+        background: #ecfdf5;
+        border: 1px solid #6ee7b7;
+        border-left: 4px solid #059669;
+        border-radius: 10px;
+        padding: 16px;
+    }
+    .domicilio-card .domicilio-titulo {
+        font-weight: 800;
+        color: #065f46;
+        font-size: 14px;
+        margin-bottom: 4px;
+    }
+    .domicilio-card .domicilio-ayuda {
+        display: block;
+        color: #065f46;
+        font-size: 12px;
+        line-height: 1.45;
+        margin-bottom: 12px;
+    }
+    .domicilio-resumen {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+        gap: 8px;
+        margin: 12px 0 14px;
+    }
+    .domicilio-resumen .dato {
+        background: var(--card-bg);
+        border: 1px solid #a7f3d0;
+        border-radius: 8px;
+        padding: 8px 10px;
+    }
+    .domicilio-resumen .dato span {
+        display: block;
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 0.4px;
+        text-transform: uppercase;
+        color: #047857;
+    }
+    .domicilio-resumen .dato strong {
+        display: block;
+        font-size: 16px;
+        color: #1f2937;
+        margin-top: 2px;
+    }
+    .domicilio-resumen .dato.total strong { color: #065f46; font-size: 18px; }
+    .pago-domicilio-opciones {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 6px;
+    }
+    .pago-domicilio-opciones label {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 16px;
+        border: 2px solid #a7f3d0;
+        border-radius: 10px;
+        background: var(--card-bg);
+        font-weight: 700;
+        cursor: pointer;
+        color: #1f2937;
+    }
+    .pago-domicilio-opciones label:has(input:checked) {
+        border-color: #059669;
+        background: #d1fae5;
+        color: #065f46;
+    }
+    .pago-domicilio-opciones input { accent-color: #059669; width: 18px; height: 18px; }
+    #saldo-tras-pago-domicilio {
+        display: none;
+        margin-top: 8px;
+        font-size: 13px;
+        font-weight: 700;
+    }
+    [data-theme="dark"] .domicilio-card { background: rgba(5, 150, 105, 0.12); border-color: rgba(110, 231, 183, 0.45); }
+    [data-theme="dark"] .domicilio-card .domicilio-titulo,
+    [data-theme="dark"] .domicilio-card .domicilio-ayuda,
+    [data-theme="dark"] .domicilio-resumen .dato span { color: #6ee7b7; }
+    [data-theme="dark"] .domicilio-resumen .dato strong,
+    [data-theme="dark"] .pago-domicilio-opciones label { color: #e5e7eb; }
+    [data-theme="dark"] .domicilio-resumen .dato.total strong { color: #6ee7b7; }
+    [data-theme="dark"] .pago-domicilio-opciones label:has(input:checked) { background: rgba(5, 150, 105, 0.25); color: #d1fae5; }
 </style>
 
 <div class="crumb">
     <a href="{% url 'econotec:bienvenida' %}">Inicio</a> /
-    <a href="{% url 'econotec:salida_lista' %}">Equipos finalizados</a> / {{ titulo }}
+    <a href="{% url 'econotec:salida_lista' %}{% if ingreso.a_domicilio == 'si' %}?alcance=domicilio{% endif %}">Equipos finalizados{% if ingreso.a_domicilio == 'si' %} a domicilio{% endif %}</a> / {{ titulo }}
 </div>
 
 <form method="post" class="form-card">
@@ -295,14 +383,19 @@
         {% if wa_link %}
             <div id="envio-pdf-card" class="envio-pdf-card">
                 <h3>
-                    {% if salida.estado_reparacion == 'retirado' or salida.cliente_ya_retiro %}
+                    {% if salida.finalizado_a_domicilio %}
+                        🏠 Enviar PDF del servicio a domicilio
+                    {% elif salida.estado_reparacion == 'retirado' or salida.cliente_ya_retiro %}
                         💬 Enviar confirmación de retiro al cliente
                     {% else %}
                         📄 Enviar acta del equipo al cliente
                     {% endif %}
                 </h3>
                 <p>
-                    {% if salida.estado_reparacion == 'retirado' or salida.cliente_ya_retiro %}
+                    {% if salida.finalizado_a_domicilio %}
+                        El equipo se finalizó <strong>a domicilio</strong>. Descarga el PDF y envíaselo
+                        al cliente por WhatsApp con el mensaje ya redactado.
+                    {% elif salida.estado_reparacion == 'retirado' or salida.cliente_ya_retiro %}
                         El equipo está marcado como <strong>retirado por el cliente</strong>.
                         Abre WhatsApp con un mensaje profesional de confirmación y agradecimiento.
                     {% else %}
@@ -444,6 +537,40 @@
                 {% endif %}
             </div>
         </div>
+
+        {% if form.es_domicilio %}
+        <div id="wrap-domicilio" class="domicilio-card" style="display:none;">
+            <div class="domicilio-titulo">🏠 Equipo a domicilio</div>
+            <small class="domicilio-ayuda" id="ayuda-domicilio">
+                El equipo se queda con el cliente: no queda pendiente de retiro ni acumula bodegaje.
+            </small>
+
+            <div id="wrap-valor-domicilio-cobro" style="display:none; margin-bottom:4px;">
+                <label class="form-label" for="{{ form.valor_domicilio_cobro.id_for_label }}">Valor a pagar: valor a domicilio (USD) *</label>
+                {{ form.valor_domicilio_cobro }}
+                {{ form.valor_domicilio_cobro.errors }}
+                <small class="domicilio-ayuda" style="margin:4px 0 0;">
+                    No se pudo / No quiso reparar: el valor acordado no se cobra, solo el valor a domicilio. Puedes cambiarlo.
+                </small>
+            </div>
+
+            <div class="domicilio-resumen">
+                <div class="dato" id="dom-dato-servicio"><span>Valor de la reparación</span><strong id="dom-servicio">$0.00</strong></div>
+                <div class="dato"><span>Valor a domicilio</span><strong id="dom-domicilio">$0.00</strong></div>
+                <div class="dato" id="dom-dato-pagado"><span>Ya pagado antes</span><strong id="dom-pagado">$0.00</strong></div>
+                <div class="dato total"><span>Total a pagar</span><strong id="dom-total">$0.00</strong></div>
+            </div>
+
+            <label class="form-label">¿Cuándo paga el cliente? *</label>
+            <div class="pago-domicilio-opciones">
+                {% for radio in form.pago_domicilio %}
+                    <label for="{{ radio.id_for_label }}">{{ radio.tag }} {{ radio.choice_label }}</label>
+                {% endfor %}
+            </div>
+            {{ form.pago_domicilio.errors }}
+            <small class="domicilio-ayuda" id="ayuda-pago-domicilio" style="margin:8px 0 0;"></small>
+        </div>
+        {% endif %}
     </div>
 
     {% if ingreso.estado != 'cortesia' %}
@@ -455,10 +582,13 @@
                 <label class="form-label" id="label-valor-cobrado">Valor cobrado ahora (USD)</label>
                 {{ form.valor_final_cobrado }}
                 <small id="ayuda-valor-cobrado" style="color:#888; font-size:11px; transition: color 0.3s; display: block; margin-top: 4px; line-height: 1.4;">Si ya estaba pagado o si aún no ha pagado, déjalo en 0 para que se registre como saldo pendiente. Si está pagando ahora mismo, ingresa el valor aquí.</small>
+                {{ form.valor_final_cobrado.errors }}
+                <div id="saldo-tras-pago-domicilio"></div>
             </div>
             <div>
                 <label class="form-label">Método de pago</label>
                 {{ form.metodo_pago_final }}
+                {{ form.metodo_pago_final.errors }}
             </div>
         </div>
 
@@ -637,8 +767,41 @@
         // reemplaza al valor acordado y se mantiene.
         var valorRevisionAnterior = {% if salida and salida.estado_reparacion == 'revision' and salida.valor_acordado_revision is not None %}parseFloat("{{ salida.valor_acordado_revision|stringformat:'f' }}") || 0{% else %}null{% endif %};
 
+        // ── Equipo a domicilio ──
+        var wrapDomicilio = document.getElementById('wrap-domicilio');
+        var wrapValorDomicilioCobro = document.getElementById('wrap-valor-domicilio-cobro');
+        var inputValorDomicilioCobro = document.querySelector('[name="valor_domicilio_cobro"]');
+        var radiosPagoDomicilio = document.querySelectorAll('[name="pago_domicilio"]');
+        var ayudaPagoDomicilio = document.getElementById('ayuda-pago-domicilio');
+        var saldoTrasPagoDomicilio = document.getElementById('saldo-tras-pago-domicilio');
+        var valorAcordadoDom = parseFloat("{{ ingreso.valor_acordado|default:0|stringformat:'f' }}") || 0;
+        var valorDomicilioDom = parseFloat("{{ ingreso.valor_domicilio_aplicable|stringformat:'f' }}") || 0;
+        // Lo pagado antes de esta finalización (anticipo y abonos, sin bodegaje).
+        var abonadoPrevioDom = (parseFloat("{{ ingreso.total_abonado|default:0|stringformat:'f' }}") || 0)
+            - (parseFloat("{{ ingreso.bodegaje_cobrado_en_abonos|default:0|stringformat:'f' }}") || 0)
+            - (parseFloat("{% if salida %}{{ salida.valor_final_cobrado|stringformat:'f' }}{% else %}0{% endif %}") || 0);
+        // El valor que paga ahora sale lleno con el total; si la persona lo
+        // cambia, se respeta lo que escribió.
+        var pagoDomicilioEditado = {% if form.is_bound or salida.valor_final_cobrado %}true{% else %}false{% endif %};
+
+        function dinero(valor) {
+            return '$' + (valor || 0).toFixed(2);
+        }
+
+        function pagoDomicilioElegido() {
+            for (var i = 0; i < radiosPagoDomicilio.length; i++) {
+                if (radiosPagoDomicilio[i].checked) return radiosPagoDomicilio[i].value;
+            }
+            return '';
+        }
+
+        function texto(id, valor) {
+            var el = document.getElementById(id);
+            if (el) el.textContent = valor;
+        }
+
         // Estados considerados "positivos" → permiten enviar la hoja
-        var ESTADOS_POSITIVOS = ['pendiente_retiro', 'garantia', 'garantia_fallos_adicionales', 'reparado_parcial', 'retirado'];
+        var ESTADOS_POSITIVOS = ['pendiente_retiro', 'garantia', 'garantia_fallos_adicionales', 'reparado_parcial', 'retirado', 'domicilio'];
 
         function valorInputCobrado(input) {
             if (!input) return 0;
@@ -818,8 +981,98 @@
                 if (wrapValorRevision) wrapValorRevision.style.display = 'none';
                 setNotificacionAsesora(false);
                 bloquearMetodoPagoPendiente(metodoPago, false);
+                if (wrapDomicilio) wrapDomicilio.style.display = v === 'domicilio' ? '' : 'none';
+                if (saldoTrasPagoDomicilio) saldoTrasPagoDomicilio.style.display = 'none';
+                if (inputValorDomicilioCobro && v !== 'domicilio') {
+                    inputValorDomicilioCobro.removeAttribute('required');
+                }
 
-                if (v === 'garantia_fallos_adicionales') {
+                if (v === 'domicilio') {
+                    // Cierre a domicilio: reparado cobra valor acordado + domicilio;
+                    // No se pudo / No quiso reparar cobra solo el domicilio (editable).
+                    var subDomicilio = selEstado.value.split(':')[1] || '';
+                    var sinReparar = subDomicilio === 'no_reparable' || subDomicilio === 'cliente_no_acepta';
+                    if (wrapValorDomicilioCobro) wrapValorDomicilioCobro.style.display = sinReparar ? '' : 'none';
+                    if (inputValorDomicilioCobro) {
+                        if (sinReparar) {
+                            inputValorDomicilioCobro.setAttribute('required', 'required');
+                        } else {
+                            inputValorDomicilioCobro.removeAttribute('required');
+                        }
+                    }
+                    var servicioDom = sinReparar ? 0 : valorAcordadoDom;
+                    var domicilioCobro = sinReparar ? valorInputCobrado(inputValorDomicilioCobro) : valorDomicilioDom;
+                    var saldoDom = Math.max(servicioDom + domicilioCobro - abonadoPrevioDom, 0);
+                    texto('dom-servicio', sinReparar ? 'No se cobra' : dinero(servicioDom));
+                    texto('dom-domicilio', dinero(domicilioCobro));
+                    texto('dom-pagado', dinero(Math.max(abonadoPrevioDom, 0)));
+                    texto('dom-total', dinero(saldoDom));
+                    var datoPagado = document.getElementById('dom-dato-pagado');
+                    if (datoPagado) datoPagado.style.display = abonadoPrevioDom > 0 ? '' : 'none';
+
+                    var pagoDom = pagoDomicilioElegido();
+                    if (saldoNota) {
+                        saldoNota.style.display = '';
+                        var partes = sinReparar
+                            ? ['Solo valor a domicilio ' + dinero(domicilioCobro)]
+                            : ['Reparación ' + dinero(servicioDom), '+ domicilio ' + dinero(domicilioCobro)];
+                        if (abonadoPrevioDom > 0) partes.push('− ya pagado ' + dinero(abonadoPrevioDom));
+                        saldoNota.textContent = partes.join(' ') + '.';
+                    }
+
+                    if (pagoDom === 'ahora' && saldoDom > 0) {
+                        if (labelValorCobrado) labelValorCobrado.textContent = 'Valor que paga el cliente ahora (USD) *';
+                        if (inputCobrado) {
+                            inputCobrado.removeAttribute('readonly');
+                            inputCobrado.setAttribute('min', '0.01');
+                            inputCobrado.setAttribute('max', saldoDom.toFixed(2));
+                            if (!pagoDomicilioEditado || valorInputCobrado(inputCobrado) <= 0) {
+                                inputCobrado.value = saldoDom.toFixed(2);
+                            }
+                        }
+                        if (metodoPago && (metodoPago.value === 'sin_pago' || metodoPago.value === 'cortesia')) {
+                            metodoPago.value = 'efectivo';
+                            metodoPago.dispatchEvent(new Event('change'));
+                        }
+                        var pagadoAhora = valorInputCobrado(inputCobrado);
+                        var quedaPendiente = Math.max(saldoDom - pagadoAhora, 0);
+                        saldoDisplay.textContent = dinero(quedaPendiente);
+                        saldoDisplay.style.color = quedaPendiente > 0 ? 'var(--danger)' : 'var(--success)';
+                        if (saldoTrasPagoDomicilio) {
+                            saldoTrasPagoDomicilio.style.display = 'block';
+                            saldoTrasPagoDomicilio.style.color = quedaPendiente > 0 ? 'var(--danger)' : '#047857';
+                            saldoTrasPagoDomicilio.textContent = quedaPendiente > 0
+                                ? 'Queda saldo pendiente: ' + dinero(quedaPendiente) + ' (se cobra después en Pagos).'
+                                : '✅ Pago completo: ningún saldo pendiente.';
+                        }
+                        if (ayudaValor) {
+                            ayudaValor.innerHTML = 'Sale lleno con el total a pagar y lo puedes cambiar. Si paga menos, lo que falta queda como saldo pendiente.';
+                            ayudaValor.style.color = '#047857';
+                        }
+                        if (ayudaPagoDomicilio) {
+                            ayudaPagoDomicilio.textContent = 'Abajo pon cuánto paga el cliente y cómo paga.';
+                        }
+                    } else {
+                        if (sectionCierreEconomico) sectionCierreEconomico.style.display = 'none';
+                        if (inputCobrado) {
+                            inputCobrado.value = '0';
+                            inputCobrado.setAttribute('readonly', 'readonly');
+                        }
+                        if (metodoPago && metodoPago.value !== 'sin_pago') {
+                            metodoPago.value = 'sin_pago';
+                            metodoPago.dispatchEvent(new Event('change'));
+                        }
+                        saldoDisplay.textContent = dinero(saldoDom);
+                        saldoDisplay.style.color = saldoDom > 0 ? 'var(--danger)' : 'var(--success)';
+                        if (ayudaPagoDomicilio) {
+                            ayudaPagoDomicilio.textContent = saldoDom <= 0
+                                ? 'No hay nada que cobrar: ningún saldo pendiente.'
+                                : pagoDom === 'despues'
+                                    ? 'El saldo de ' + dinero(saldoDom) + ' queda pendiente. Regístralo en Pagos cuando el cliente pague.'
+                                    : 'Elige Pago ahora o Pago después.';
+                        }
+                    }
+                } else if (v === 'garantia_fallos_adicionales') {
                     setNotificacionAsesora(true, 'fallos');
                     var valorFallos = valorInputCobrado(inputCobrado);
                     saldoDisplay.textContent = '$' + valorFallos.toFixed(2);
@@ -1044,12 +1297,28 @@
         }
 
         if (selEstado) {
-            selEstado.addEventListener('change', actualizar);
+            selEstado.addEventListener('change', function () {
+                // Al cambiar el resultado, el pago vuelve a salir lleno con el nuevo total.
+                pagoDomicilioEditado = false;
+                actualizar();
+            });
         }
         var inputCobrado = document.querySelector('input[name="valor_final_cobrado"]');
         if (inputCobrado) {
+            inputCobrado.addEventListener('input', function () {
+                pagoDomicilioEditado = true;
+            });
             inputCobrado.addEventListener('input', actualizar);
             inputCobrado.addEventListener('change', actualizar);
+        }
+        for (var r = 0; r < radiosPagoDomicilio.length; r++) {
+            radiosPagoDomicilio[r].addEventListener('change', actualizar);
+        }
+        if (inputValorDomicilioCobro) {
+            inputValorDomicilioCobro.addEventListener('input', function () {
+                pagoDomicilioEditado = false;
+                actualizar();
+            });
         }
         if (aplicaValorAdicional) {
             aplicaValorAdicional.addEventListener('change', function () {

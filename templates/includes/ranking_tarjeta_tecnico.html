@@ -153,6 +153,16 @@
                                title="Ver equipos finalizados por este técnico que aún están en la oficina">Equipos finalizados</a>
                         {% endif %}
                     </div>
+                    {# Equipos «A domicilio: Sí»: en casa del cliente o llevados a la oficina. #}
+                    <div class="ubicacion-item">
+                        <span class="ubi-label">Equipo a domicilio</span>
+                        <span class="ubi-valor">{{ r.a_domicilio|default:0 }}</span>
+                        {% if not r.sin_asignar %}
+                            <a href="{% url 'econotec:salida_lista' %}?alcance=domicilio&tecnico_salida={{ r.tecnico_id }}{% if filtros.desde %}&fecha_desde={{ filtros.desde }}{% endif %}{% if filtros.hasta %}&fecha_hasta={{ filtros.hasta }}{% endif %}"
+                               class="btn btn-domicilio"
+                               title="Ver equipos a domicilio finalizados por este técnico">Equipos a domicilio</a>
+                        {% endif %}
+                    </div>
                 </div>
 
                 {% if mostrar_valores_monetarios %}

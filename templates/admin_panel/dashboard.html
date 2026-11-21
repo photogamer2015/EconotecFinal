@@ -939,7 +939,7 @@
         <a href="{% url 'econotec:admin_egresos_lista' %}" class="btn btn-secondary">Ver Egresos</a>
         <a href="{% url 'econotec:admin_equipos_administrativos' %}" class="btn btn-secondary" style="background:#0f766e; color:#fff; border-color:#0f766e;">🎁 Donados / Compras</a>
         <a href="{% url 'econotec:admin_equipos_cortesia' %}?ano={{ year }}&mes={{ month }}" class="btn btn-secondary" style="background:#0369a1; color:#fff; border-color:#0369a1;">Equipos de cortesía</a>
-        <a href="{% url 'econotec:salida_retiros_lista' %}?fecha_desde={{ ingresos_tecnicos_desde|date:'Y-m-d' }}&fecha_hasta={{ ingresos_tecnicos_hasta|date:'Y-m-d' }}" class="btn btn-secondary" style="background:#6d28d9; color:#fff; border-color:#6d28d9;">🚚 Salidas físicas confirmadas</a>
+        <a href="{% url 'econotec:salida_retiros_lista' %}?fecha_desde={{ ingresos_tecnicos_desde|date:'Y-m-d' }}&fecha_hasta={{ ingresos_tecnicos_hasta|date:'Y-m-d' }}&alcance=todos" class="btn btn-secondary" style="background:#6d28d9; color:#fff; border-color:#6d28d9;">🚚 Salidas físicas confirmadas</a>
         <a href="{% url 'econotec:ranking_asesoras_salidas' %}" class="btn btn-secondary">🏅 Ranking asesoras — Salidas de retiro</a>
         <a href="{% url 'econotec:admin_bitacoras_tecnicos' %}" class="btn btn-secondary">Bitácoras Técnicos</a>
         <a href="{% url 'econotec:admin_ventas_inventario' %}?ano={{ year }}&mes={{ month }}" class="btn btn-secondary" style="background:#0f766e; color:#fff; border-color:#0f766e;">Ventas e Inventario</a>
@@ -1098,7 +1098,7 @@
                         </td>
                         <td data-label="Registros">
                             {% if fila.tecnico_id %}
-                                <a href="{% url 'econotec:ingreso_lista' %}?sede=todas&tecnico={{ fila.tecnico_id }}&fecha_desde={{ ingresos_tecnicos_desde|date:'Y-m-d' }}&fecha_hasta={{ ingresos_tecnicos_hasta|date:'Y-m-d' }}">Ver equipos</a>
+                                <a href="{% url 'econotec:ingreso_lista' %}?sede=todas&tecnico={{ fila.tecnico_id }}&fecha_desde={{ ingresos_tecnicos_desde|date:'Y-m-d' }}&fecha_hasta={{ ingresos_tecnicos_hasta|date:'Y-m-d' }}&alcance=todos">Ver equipos</a>
                             {% else %}
                                 <a href="#registros-ingresos-tecnicos" onclick="document.getElementById('registros-ingresos-tecnicos').open = true;">Ver abajo</a>
                             {% endif %}
@@ -1174,7 +1174,7 @@
         </div>
         <div class="physical-exit-actions">
             <div class="assignment-period">{{ mes_nombre }} {{ year }}</div>
-            <a class="physical-exit-link" href="{% url 'econotec:salida_retiros_lista' %}?fecha_desde={{ ingresos_tecnicos_desde|date:'Y-m-d' }}&fecha_hasta={{ ingresos_tecnicos_hasta|date:'Y-m-d' }}{% if tecnico_resumen_filtro and tecnico_resumen_filtro != 'sin_asignar' %}&tecnico_salida={{ tecnico_resumen_filtro }}{% endif %}">
+            <a class="physical-exit-link" href="{% url 'econotec:salida_retiros_lista' %}?fecha_desde={{ ingresos_tecnicos_desde|date:'Y-m-d' }}&fecha_hasta={{ ingresos_tecnicos_hasta|date:'Y-m-d' }}{% if tecnico_resumen_filtro and tecnico_resumen_filtro != 'sin_asignar' %}&tecnico_salida={{ tecnico_resumen_filtro }}{% endif %}&alcance=todos">
                 Ver lista completa →
             </a>
         </div>

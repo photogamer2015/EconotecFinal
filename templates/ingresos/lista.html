@@ -91,7 +91,55 @@
         font-weight: 700;
         text-align: center;
     }
+    .alcance-tabs {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin: 0 0 16px;
+    }
+    .alcance-tab {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 9px 16px;
+        border-radius: 999px;
+        border: 1px solid var(--border);
+        background: var(--surface);
+        color: var(--text-soft);
+        font-size: 13px;
+        font-weight: 800;
+        text-decoration: none;
+    }
+    .alcance-tab.activa {
+        background: var(--primary);
+        border-color: var(--primary);
+        color: #fff;
+    }
+    .alcance-tab.activa.es-domicilio {
+        background: #059669;
+        border-color: #059669;
+    }
+    .domicilio-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        margin-top: 5px;
+        padding: 3px 7px;
+        border-radius: 6px;
+        background: #ecfdf5;
+        border: 1px solid #a7f3d0;
+        color: #047857;
+        font-size: 10.5px;
+        font-weight: 800;
+        white-space: nowrap;
+    }
+    [data-theme="dark"] .domicilio-badge {
+        background: rgba(16, 185, 129, 0.16);
+        border-color: rgba(16, 185, 129, 0.35);
+        color: #6ee7b7;
+    }
     @media (max-width: 640px) {
+        .alcance-tab { flex: 1 1 calc(50% - 8px); justify-content: center; }
         .ingreso-pagination {
             align-items: stretch;
             gap: 8px;
@@ -110,16 +158,18 @@
 
 <div class="crumb">
     <a href="{% url 'econotec:bienvenida' %}">Inicio</a> /
-    <a href="{% url 'econotec:ingreso_menu' %}">Ingreso de Equipo</a> / Lista
+    <a href="{% url 'econotec:ingreso_menu' %}">Ingreso de Equipo</a> / {% if alcance == 'domicilio' %}A domicilio{% else %}Lista{% endif %}
 </div>
 
 {% if valor_filtro == 'pendiente' %}
 <h2 class="page-title">Equipos <span class="accent">Pendientes de Valor</span></h2>
+{% elif alcance == 'domicilio' %}
+<h2 class="page-title">Equipos <span class="accent">a Domicilio</span></h2>
 {% else %}
 <h2 class="page-title">Equipos <span class="accent">Registrados</span></h2>
 {% endif %}
 <p class="page-subtitle">
-    {{ total }} equipos
+    {{ total }} equipos{% if alcance == 'domicilio' %} a domicilio{% endif %}
     {% if sede_filtro == 'guayaquil' %}en sede Guayaquil
     {% elif sede_filtro == 'quito' %}en sede Quito
     {% else %}en total (todas las sedes)
@@ -129,8 +179,18 @@
 <div class="valor-filter-banner">⚠ Lista de equipos pendientes de valor acordado.</div>
 {% endif %}
 
+{# Los equipos a domicilio van en su propia lista; «todos» viene del ranking, perfiles o panel. #}
+<nav class="alcance-tabs" aria-label="Lista de equipos">
+    <a href="{% url 'econotec:ingreso_lista' %}" class="alcance-tab{% if not alcance %} activa{% endif %}">📋 Lista de equipos</a>
+    <a href="{% url 'econotec:ingreso_lista' %}?alcance=domicilio" class="alcance-tab es-domicilio{% if alcance == 'domicilio' %} activa{% endif %}">🏠 A domicilio</a>
+    {% if alcance == 'todos' %}
+    <span class="alcance-tab activa">Todos (oficina y a domicilio)</span>
+    {% endif %}
+</nav>
+
 <div class="toolbar ingresos-filters">
     <form method="get">
+        {% if alcance %}<input type="hidden" name="alcance" value="{{ alcance }}">{% endif %}
         <input aria-label="Buscar equipos o clientes" type="text" name="q" value="{{ q }}" placeholder="Buscar por N° equipo, cliente, cédula, marca…" class="form-input">
         {% include 'includes/filtro_fecha_rango.html' %}
         <select aria-label="Sede" name="sede" class="form-input" style="max-width:180px;">
@@ -200,7 +260,7 @@
         <tbody>
         {% for i in ingresos %}
             <tr>
-                <td><strong style="color: var(--primary);">{{ i.codigo_equipo }}</strong></td>
+                <td><strong style="color: var(--primary);">{{ i.codigo_equipo }}</strong>{% if alcance == 'todos' and i.a_domicilio == 'si' %}<br><span class="domicilio-badge">🏠 A domicilio</span>{% endif %}</td>
                 <td>{{ i.fecha_ingreso|date:"d/m/Y" }}</td>
                 <td>{{ i.cliente.nombres }}</td>
                 <td>{{ i.cliente.cedula }}</td>

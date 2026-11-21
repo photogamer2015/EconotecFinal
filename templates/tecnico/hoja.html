@@ -716,10 +716,10 @@
                     <div class="perfil-mobile-progress-text" id="perfil-mobile-progress-text"></div>
                 </div>
                 <div class="perfil-mobile-links">
-                    <a href="{% url 'econotec:ingreso_lista' %}?tecnico={{ request.user.id }}" class="perfil-mobile-link">
+                    <a href="{% url 'econotec:ingreso_lista' %}?tecnico={{ request.user.id }}&alcance=todos" class="perfil-mobile-link">
                         <span>📥 Ver mis equipos recibidos</span><span>›</span>
                     </a>
-	                    <a href="{% url 'econotec:salida_lista' %}?tecnico_salida={{ request.user.id }}" class="perfil-mobile-link">
+	                    <a href="{% url 'econotec:salida_lista' %}?tecnico_salida={{ request.user.id }}&alcance=todos" class="perfil-mobile-link">
 	                        <span>🔧 Ver mis equipos reparados</span><span>›</span>
 	                    </a>
 	                    <button type="button" id="btn-bitacora-mobile" class="perfil-mobile-link perfil-mobile-link-button">
