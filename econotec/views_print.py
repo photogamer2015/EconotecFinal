@@ -17,7 +17,7 @@ from django.shortcuts import get_object_or_404, render
 from django.utils import timezone
 
 from .models import IngresoEquipo, SalidaEquipo
-from .permisos import tecnico_requerido
+from .permisos import admin_requerido, tecnico_requerido
 from .qr_utils import qr_data_uri_para_ingreso, url_hoja_movil, qr_png_bytes_para_ingreso
 from .retencion import porcentajes_retencion
 
@@ -2161,5 +2161,223 @@ def salida_factura_pdf(request, pk):
     response = HttpResponse(pdf, content_type='application/pdf')
     response['Content-Disposition'] = (
         f'attachment; filename="factura_{ingreso.codigo_equipo}.pdf"'
+    )
+    return response
+
+
+# ─────────────────────────────────────────────────────────────────
+# Donados y Compras: hoja de equipo donado / equipo comprado
+# ─────────────────────────────────────────────────────────────────
+
+def _texto_presente(valor):
+    """Devuelve el texto limpio o '' si no hay dato (para omitir la fila)."""
+    return str(valor or '').strip()
+
+
+def generar_equipo_administrativo_pdf_bytes(ingreso):
+    """Hoja «EQUIPO DONADO» o «EQUIPO COMPRADO» con cliente y equipo.
+
+    La de comprado incluye el detalle del pago y del egreso vinculado. Las
+    filas sin dato se omiten; la franja y la constancia dicen siempre si el
+    equipo fue donado o comprado, aunque falten datos.
+    """
+    from reportlab.lib.colors import Color, black
+    from reportlab.lib.utils import simpleSplit
+    from .alertas import metodo_pago_compra_texto
+
+    es_donado = ingreso.estado == 'donado'
+    cliente = ingreso.cliente
+    titulo = 'EQUIPO DONADO' if es_donado else 'EQUIPO COMPRADO'
+    naranja = Color(*ECO_NARANJA)
+    verde = Color(0.02, 0.45, 0.33)
+    gris = Color(0.38, 0.38, 0.38)
+    margen = 50
+    ancho = 500
+    limite_inferior = 70
+    fecha = ingreso.fecha_ingreso.strftime('%d/%m/%Y')
+
+    buf = BytesIO()
+    c, width, height = _setup_pdf(buf, f'{titulo.capitalize()} {ingreso.codigo_equipo}')
+
+    def nueva_pagina():
+        c.showPage()
+        y_nuevo = _draw_header_econotec(c, width, height, titulo)
+        c.setFillColor(gris)
+        c.setFont('Helvetica', 7.5)
+        c.drawRightString(margen + ancho, y_nuevo + 2, f'Equipo {ingreso.codigo_equipo} · continuación')
+        return y_nuevo - 14
+
+    def con_espacio(y, alto):
+        return nueva_pagina() if y - alto < limite_inferior else y
+
+    def titulo_seccion(y, texto):
+        y = con_espacio(y, 40)
+        c.setFillColor(naranja)
+        c.setFont('Helvetica-Bold', 11)
+        c.drawString(margen, y, texto)
+        return y - 18
+
+    def filas(y, datos):
+        for etiqueta, valor in datos:
+            valor = _texto_presente(valor)
+            if not valor:
+                continue
+            y = con_espacio(y, 19)
+            label_w = max(70, c.stringWidth(etiqueta, 'Helvetica-Bold', 9) + 10)
+            _draw_label_value(
+                c, margen, y, etiqueta,
+                _clip_pdf_text(c, valor, 'Helvetica', 9, ancho - label_w - 8),
+                label_w=label_w, line_w=ancho - label_w,
+            )
+            y -= 19
+        return y - 4
+
+    body_y = _draw_header_econotec(c, width, height, titulo)
+    _draw_box_field(c, 40, height - 95, 90, 32, 'EQUIPO', ingreso.codigo_equipo)
+    _draw_box_field(c, width - 130, height - 95, 90, 32, 'FECHA', fecha)
+
+    # ── Franja del estado ──
+    y = body_y - 4
+    c.setStrokeColor(verde)
+    c.setLineWidth(1)
+    c.setFillColorRGB(0.92, 0.98, 0.95)
+    c.roundRect(margen, y - 26, ancho, 26, 5, stroke=1, fill=1)
+    c.setFillColor(verde)
+    c.setFont('Helvetica-Bold', 10.5)
+    c.drawCentredString(
+        margen + ancho / 2, y - 17,
+        'EQUIPO DONADO A ECONOTEC · SIN COSTO' if es_donado
+        else 'EQUIPO COMPRADO POR ECONOTEC',
+    )
+    y -= 46
+
+    # ── Cliente ──
+    y = titulo_seccion(y, 'DATOS DEL CLIENTE')
+    y = filas(y, [
+        ('Cliente:', cliente.nombres),
+        ('Cédula / RUC:', cliente.cedula),
+        ('WhatsApp:', cliente.whatsapp),
+        ('Correo:', cliente.correo),
+        ('Sector:', cliente.get_sector_display() if cliente.sector else ''),
+    ])
+
+    # ── Equipo ──
+    y = titulo_seccion(y, 'DATOS DEL EQUIPO')
+    y = filas(y, [
+        ('Tipo:', ingreso.tipo_equipo_display),
+        ('Marca:', ingreso.marca),
+        ('Modelo:', ingreso.modelo_serie),
+        ('Serie:', ingreso.serie),
+        ('Accesorios:', ingreso.accesorios_entregados),
+        ('Sede:', ingreso.get_sede_display()),
+    ])
+
+    # ── Pago (solo comprado) ──
+    if not es_donado:
+        y = titulo_seccion(y, 'DETALLE DEL PAGO')
+        y = con_espacio(y, 50)
+        caja_w = ancho / 2
+        cajas = [
+            ('VALOR PAGADO AL CLIENTE',
+             _money_text(ingreso.valor_acordado) if ingreso.valor_acordado is not None else 'Sin registrar'),
+            ('MÉTODO DE PAGO', ingreso.get_compra_metodo_pago_display() if ingreso.compra_metodo_pago else 'Sin registrar'),
+        ]
+        for indice, (etiqueta, valor) in enumerate(cajas):
+            x = margen + indice * caja_w
+            c.setStrokeColor(Color(0.88, 0.78, 0.72))
+            c.setFillColorRGB(1, 0.97, 0.94)
+            c.rect(x, y - 40, caja_w, 40, stroke=1, fill=1)
+            c.setFillColor(gris)
+            c.setFont('Helvetica-Bold', 7)
+            c.drawString(x + 8, y - 13, etiqueta)
+            c.setFillColor(black)
+            c.setFont('Helvetica-Bold', 12)
+            c.drawString(x + 8, y - 30, _clip_pdf_text(c, valor, 'Helvetica-Bold', 12, caja_w - 16))
+        y -= 56
+
+        detalle_metodo = metodo_pago_compra_texto(ingreso, dinero=_money_text)
+        datos_pago = []
+        if ingreso.compra_metodo_pago == 'mixto':
+            for parte in ingreso.compra_pago_mixto_partes:
+                datos_pago.append((
+                    f"Parte {parte['numero']}:",
+                    f"{_money_text(parte['monto'])} · {parte['detalle']}",
+                ))
+        elif detalle_metodo and detalle_metodo != ingreso.get_compra_metodo_pago_display():
+            datos_pago.append(('Detalle:', detalle_metodo))
+        datos_pago.append(('Comprobante:', ingreso.compra_comprobante_url))
+        y = filas(y, datos_pago)
+
+        egreso = getattr(ingreso, 'egreso_compra', None)
+        if egreso is not None:
+            y = titulo_seccion(y, 'EGRESO REGISTRADO')
+            y = filas(y, [
+                ('Fecha:', egreso.fecha.strftime('%d/%m/%Y') if egreso.fecha else ''),
+                ('Categoría:', egreso.categoria.nombre if egreso.categoria_id else ''),
+                ('Concepto:', egreso.concepto),
+                ('Monto:', _money_text(egreso.monto) if egreso.monto is not None else ''),
+                ('Método:', egreso.get_metodo_display() if egreso.metodo else ''),
+                ('Recibo N.°:', egreso.numero_recibo),
+            ])
+
+    # ── Constancia ──
+    if es_donado:
+        constancia = (
+            f'Econotec deja constancia de que el equipo {ingreso.codigo_equipo} fue DONADO por el '
+            f'cliente el {fecha}, sin costo para la empresa. Gracias por su donación.'
+        )
+    else:
+        valor = (
+            f' por {_money_text(ingreso.valor_acordado)}'
+            if ingreso.valor_acordado is not None else ''
+        )
+        constancia = (
+            f'Econotec deja constancia de que COMPRÓ al cliente el equipo '
+            f'{ingreso.codigo_equipo}{valor} el {fecha}.'
+        )
+    lineas = simpleSplit(constancia, 'Helvetica-Bold', 9, ancho - 24)[:3]
+    alto = 14 + len(lineas) * 12
+    y = con_espacio(y, alto + 10)
+    c.setStrokeColor(verde)
+    c.setFillColorRGB(0.92, 0.98, 0.95)
+    c.roundRect(margen, y - alto, ancho, alto, 4, stroke=1, fill=1)
+    c.setFillColor(black)
+    c.setFont('Helvetica-Bold', 9)
+    for indice, linea in enumerate(lineas):
+        c.drawCentredString(margen + ancho / 2, y - 15 - indice * 12, linea)
+    y -= alto + 16
+
+    # ── Firmas (pueden bajar hasta el margen; el bloque solo mide 12 pt) ──
+    y = y - 36 if y - 36 - 12 >= 40 else nueva_pagina() - 36
+    c.setStrokeColor(Color(0.4, 0.4, 0.4))
+    c.setLineWidth(0.8)
+    for x, etiqueta in ((margen + 10, 'FIRMA DEL CLIENTE'), (margen + ancho - 230, 'ECONOTEC')):
+        c.line(x, y, x + 220, y)
+        c.setFillColor(naranja)
+        c.setFont('Helvetica-Bold', 8)
+        c.drawCentredString(x + 110, y - 10, etiqueta)
+
+    c.showPage()
+    c.save()
+    pdf = buf.getvalue()
+    buf.close()
+    return pdf
+
+
+@admin_requerido
+def equipo_administrativo_pdf(request, pk):
+    """Descarga la hoja de equipo donado o comprado desde Donados y Compras."""
+    ingreso = get_object_or_404(
+        IngresoEquipo.objects.select_related(
+            'cliente', 'egreso_compra', 'egreso_compra__categoria',
+        ),
+        pk=pk,
+        estado__in=('donado', 'equipo_a_comprar'),
+    )
+    pdf = generar_equipo_administrativo_pdf_bytes(ingreso)
+    prefijo = 'equipo_donado' if ingreso.estado == 'donado' else 'equipo_comprado'
+    response = HttpResponse(pdf, content_type='application/pdf')
+    response['Content-Disposition'] = (
+        f'attachment; filename="{prefijo}_{ingreso.codigo_equipo}.pdf"'
     )
     return response
