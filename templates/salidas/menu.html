@@ -19,6 +19,16 @@
         </div>
     </a>
 
+    <a href="{% url 'econotec:salida_lista' %}?alcance=domicilio" class="menu-card">
+        <span class="menu-card-icon is-green" aria-hidden="true">🏠</span>
+        <div class="menu-card-body">
+            <h3>Equipos finalizados a domicilio</h3>
+            <p>
+                <strong>{{ total_domicilio }}</strong> equipo{{ total_domicilio|pluralize }} a domicilio finalizado{{ total_domicilio|pluralize }}{% if domicilio_en_oficina %} — {{ domicilio_en_oficina }} llevado{{ domicilio_en_oficina|pluralize }} a la oficina, aún sin salir{% endif %}.
+            </p>
+        </div>
+    </a>
+
     <a href="{% url 'econotec:salida_facturas_lista' %}?mes=todos" class="menu-card">
         <span class="menu-card-icon is-blue" aria-hidden="true">🧾</span>
         <div class="menu-card-body">

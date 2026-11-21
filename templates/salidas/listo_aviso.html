@@ -64,6 +64,20 @@
         text-decoration: none;
     }
     .wa-card .btn-wa-grande:hover { transform: translateY(-2px); }
+    .wa-card .botones-domicilio { display: flex; flex-wrap: wrap; gap: 10px; }
+    .wa-card .btn-pdf-grande {
+        display: inline-flex; align-items: center; gap: 8px;
+        background: rgba(0,0,0,0.18); color: white;
+        border: 1px solid rgba(255,255,255,0.45);
+        padding: 12px 22px; border-radius: 8px;
+        font-weight: 800; font-size: 15px;
+        text-decoration: none;
+    }
+    .wa-card .btn-pdf-grande:hover { transform: translateY(-2px); }
+    .resumen .row.ok strong { color: #2e7d32; }
+    @media (max-width: 600px) {
+        .wa-card .botones-domicilio a { width: 100%; justify-content: center; }
+    }
 
     /* Pasos: WhatsApp + PDF para que el técnico mande la hoja por el chat */
     .pasos {
@@ -149,7 +163,9 @@
     <div class="exito-card">
         <div class="icono">✅</div>
         <h2>
-            {% if salida.estado_reparacion == 'retirado' or salida.cliente_ya_retiro %}
+            {% if salida.finalizado_a_domicilio %}
+                ¡Equipo finalizado a domicilio!
+            {% elif salida.estado_reparacion == 'retirado' or salida.cliente_ya_retiro %}
                 ¡Salida del equipo de la oficina confirmada!
             {% elif salida.estado_reparacion == 'cortesia' %}
                 ¡Equipo de cortesía finalizado!
@@ -171,7 +187,17 @@
             {% if salida.garantia_dias %}
                 <div class="row"><span>Garantía:</span><strong>{{ salida.garantia_dias }} día{{ salida.garantia_dias|pluralize }}</strong></div>
             {% endif %}
-            {% if ingreso.diferencia > 0 %}
+            {% if salida.finalizado_a_domicilio %}
+                <div class="row"><span>Total a pagar:</span><strong>{{ ingreso.valor_efectivo_a_cobrar|dinero_signo }}</strong></div>
+                {% if ingreso.total_abonado > 0 %}
+                    <div class="row ok"><span>Valor pagado:</span><strong>{{ ingreso.total_abonado|dinero_signo }}</strong></div>
+                {% endif %}
+                {% if ingreso.diferencia > 0 %}
+                    <div class="row"><span>Saldo pendiente:</span><strong style="color: var(--danger);">{{ ingreso.diferencia|dinero_signo }}</strong></div>
+                {% else %}
+                    <div class="row ok"><span>Saldo pendiente:</span><strong>✅ Ninguno, todo pagado</strong></div>
+                {% endif %}
+            {% elif ingreso.diferencia > 0 %}
                 <div class="row"><span>Saldo pendiente:</span><strong style="color: var(--danger);">{{ ingreso.diferencia|dinero_signo }}</strong></div>
             {% endif %}
             {% if ingreso.cliente.whatsapp %}
@@ -179,7 +205,35 @@
             {% endif %}
         </div>
 
-        {% if wa_link %}
+        {% if wa_link and salida.finalizado_a_domicilio %}
+            <div class="wa-card">
+                <h3>
+                    🏠 Envía el PDF y el mensaje al cliente
+                    <span class="tel-pill">📱 {{ ingreso.cliente.whatsapp }}</span>
+                </h3>
+                <p>
+                    El PDF y el mensaje de WhatsApp dicen que el servicio fue <strong>a domicilio</strong>
+                    y muestran lo que el cliente pagó{% if ingreso.diferencia > 0 %} y su saldo pendiente{% endif %}.
+                </p>
+                <div class="botones-domicilio">
+                    <a href="{% url 'econotec:salida_pdf' pk=salida.pk %}" target="_blank" class="btn-pdf-grande">
+                        📄 1. Descargar PDF
+                    </a>
+                    <a href="{{ wa_link }}" target="_blank" rel="noopener" class="btn-wa-grande">
+                        💬 2. Enviar WhatsApp a {{ ingreso.cliente.nombres|truncatechars:22 }}
+                    </a>
+                </div>
+            </div>
+
+            <div class="pasos">
+                <h4>📎 Cómo enviar el PDF</h4>
+                <ol>
+                    <li>Descarga el <strong>PDF del servicio a domicilio</strong>.</li>
+                    <li>Abre WhatsApp con el botón verde: el mensaje ya está redactado.</li>
+                    <li>En el chat, adjunta el PDF descargado y envía.</li>
+                </ol>
+            </div>
+        {% elif wa_link %}
             <div class="wa-card">
                 <h3>
                     {% if salida.estado_reparacion == 'retirado' or salida.cliente_ya_retiro %}
@@ -226,7 +280,7 @@
             <a class="a-info" href="{% url 'econotec:salida_imprimir' pk=salida.pk %}" target="_blank">
                 🖨 Imprimir
             </a>
-            <a class="a-primary" href="{% url 'econotec:salida_lista' %}">Ir a equipos finalizados</a>
+            <a class="a-primary" href="{% url 'econotec:salida_lista' %}{% if ingreso.a_domicilio == 'si' %}?alcance=domicilio{% endif %}">Ir a equipos finalizados{% if ingreso.a_domicilio == 'si' %} a domicilio{% endif %}</a>
             <a class="a-secondary" href="{% url 'econotec:bienvenida' %}">Volver al inicio</a>
         </div>
     </div>
@@ -247,7 +301,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const salidaYaConfirmada = {% if salida_ya_confirmada %}true{% else %}false{% endif %};
     const saldoPendiente = '{{ ingreso.diferencia|dinero_signo|escapejs }}';
     const codigoEquipo = '{{ ingreso.codigo_equipo|escapejs }}';
-    const urlEquiposFinalizados = '{% url "econotec:salida_lista" %}';
+    const urlEquiposFinalizados = '{% url "econotec:salida_lista" %}{% if ingreso.a_domicilio == "si" %}?alcance=domicilio{% endif %}';
     const urlRegistrarPago = '{% url "econotec:abono_crear" ingreso_pk=ingreso.pk %}';
     const urlEnviarCorreoFinalizacion = '{% url "econotec:salida_enviar_correo_finalizacion" pk=salida.pk %}';
     const tieneBodegaje = {% if ingreso.bodegaje_pendiente > 0 %}true{% else %}false{% endif %};
@@ -393,6 +447,27 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
     {% endif %}
+
+    // A domicilio el equipo ya está con el cliente: no se pregunta si está en
+    // la oficina ni se bloquea por saldo; solo queda enviar el PDF.
+    const esDomicilio = {% if salida.finalizado_a_domicilio %}true{% else %}false{% endif %};
+    if (esDomicilio) {
+        Swal.fire({
+            icon: 'success',
+            title: 'Equipo finalizado a domicilio',
+            html:
+                '<p style="line-height:1.55;margin-bottom:10px;">El equipo <b>' + codigoEquipo + '</b> se guardó como finalizado a domicilio.</p>' +
+                (tieneSaldoPendiente
+                    ? '<p style="font-size:15px;font-weight:800;color:#c62828;">Saldo pendiente: ' + saldoPendiente + '</p>' +
+                      '<p style="font-size:13px;color:#6b7280;line-height:1.45;">Regístralo en Pagos cuando el cliente pague.</p>'
+                    : '<p style="font-size:15px;font-weight:800;color:#2e7d32;">✅ Ningún saldo pendiente.</p>') +
+                '<p style="font-size:14px;line-height:1.45;margin-top:10px;">Ahora envía el <b>PDF</b> al cliente por WhatsApp.</p>',
+            confirmButtonText: 'OK',
+            confirmButtonColor: '#2e7d32',
+            allowOutsideClick: false
+        });
+        return;
+    }
 
     if (tieneSaldoPendiente) {
         Swal.fire({

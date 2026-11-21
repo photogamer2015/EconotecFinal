@@ -15,8 +15,8 @@
   {% endif %}
   {% if propio %}
   <div class="social-private-actions" aria-label="Acciones de mi perfil">
-    <a href="{% url 'econotec:ingreso_lista' %}?{% if operativo.tipo_perfil == 'asesor' %}registrador{% else %}tecnico{% endif %}={{ request.user.pk }}&sede=todas" class="social-personal-action"><span aria-hidden="true">📥</span><span>Ver mis equipos recibidos</span><span aria-hidden="true">→</span></a>
-    <a href="{% url 'econotec:salida_lista' %}?tecnico_salida={{ request.user.pk }}" class="social-personal-action"><span aria-hidden="true">🔧</span><span>Ver mis equipos reparados</span><span aria-hidden="true">→</span></a>
+    <a href="{% url 'econotec:ingreso_lista' %}?{% if operativo.tipo_perfil == 'asesor' %}registrador{% else %}tecnico{% endif %}={{ request.user.pk }}&sede=todas&alcance=todos" class="social-personal-action"><span aria-hidden="true">📥</span><span>Ver mis equipos recibidos</span><span aria-hidden="true">→</span></a>
+    <a href="{% url 'econotec:salida_lista' %}?tecnico_salida={{ request.user.pk }}&alcance=todos" class="social-personal-action"><span aria-hidden="true">🔧</span><span>Ver mis equipos reparados</span><span aria-hidden="true">→</span></a>
     <button type="button" id="btn-bitacora" class="social-personal-action"><span aria-hidden="true">📝</span><span id="btn-bitacora-text">Generar bitácora ({{ operativo.bitacora_total }})</span><span aria-hidden="true">→</span></button>
   </div>
   {% if operativo.tipo_perfil == 'asesor' %}<div class="perfil-color-panel"><p>Cambiar color del nivel</p><div class="perfil-color-options">{% for color in operativo.colores_disponibles %}<button type="button" class="perfil-color-btn{% if color == operativo.color %} is-selected{% endif %}" data-color="{{ color }}" style="background:{{ color }}" aria-label="Seleccionar color {{ color }}"></button>{% endfor %}</div></div>{% endif %}

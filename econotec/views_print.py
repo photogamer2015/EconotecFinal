@@ -1340,8 +1340,296 @@ def _draw_anexo_economico_salida(c, width, height, salida, pagos):
         c.line(margen, y + 3, margen + ancho, y + 3)
 
 
+def _mensaje_estado_domicilio(salida):
+    fecha = salida.fecha_salida.strftime('%d/%m/%Y')
+    clave = salida.estado_domicilio_key
+    if clave == 'reparado':
+        return f'Servicio a domicilio finalizado el {fecha}: el equipo quedó reparado y en manos del cliente.'
+    if clave == 'no_reparable':
+        return f'Servicio a domicilio del {fecha}: no se pudo reparar el equipo. Solo se cobra el valor a domicilio.'
+    return f'Servicio a domicilio del {fecha}: el cliente decidió no reparar. Solo se cobra el valor a domicilio.'
+
+
+def generar_salida_domicilio_pdf_bytes(salida):
+    """Acta del equipo finalizado a domicilio.
+
+    El equipo se quedó con el cliente: no hay retiro ni bodegaje. Muestra el
+    resultado a domicilio, el total, lo que el cliente pagó y el saldo.
+    """
+    from reportlab.lib.colors import Color, black
+    from reportlab.lib.utils import simpleSplit
+
+    ingreso = salida.ingreso
+    cliente = ingreso.cliente
+    clave = salida.estado_domicilio_key
+    titulo = 'SERVICIO A DOMICILIO'
+    naranja = Color(*ECO_NARANJA)
+    verde = Color(0.02, 0.45, 0.33)
+    gris = Color(0.38, 0.38, 0.38)
+    margen = 50
+    ancho = 500
+    limite_inferior = 60
+
+    pagos = [
+        {**pago, 'concepto': 'Pago del servicio a domicilio'}
+        if pago['concepto'] == 'Pago al finalizar'
+        else pago
+        for pago in _pagos_detallados_salida(salida)
+    ]
+    servicio = ingreso.valor_servicio_a_cobrar
+    domicilio = ingreso.valor_domicilio_aplicable
+    total = ingreso.valor_efectivo_a_cobrar
+    pagado = ingreso.total_abonado
+    saldo = max(ingreso.diferencia, Decimal('0.00'))
+
+    buf = BytesIO()
+    c, width, height = _setup_pdf(buf, f'Servicio a domicilio {ingreso.codigo_equipo}')
+
+    def nueva_pagina():
+        c.showPage()
+        y_nuevo = _draw_header_econotec(c, width, height, titulo)
+        c.setFillColor(gris)
+        c.setFont('Helvetica', 7.5)
+        c.drawRightString(margen + ancho, y_nuevo + 2, f'Equipo {ingreso.codigo_equipo} · continuación')
+        return y_nuevo - 14
+
+    def con_espacio(y, alto):
+        return nueva_pagina() if y - alto < limite_inferior else y
+
+    body_y = _draw_header_econotec(c, width, height, titulo)
+    _draw_box_field(c, 40, height - 95, 90, 32, 'EQUIPO', ingreso.codigo_equipo)
+    _draw_box_field(c, width - 130, height - 95, 90, 32, 'FECHA',
+                   salida.fecha_salida.strftime('%d/%m/%Y'))
+
+    # ── Franja a domicilio ──
+    y = body_y - 4
+    c.setStrokeColor(verde)
+    c.setLineWidth(1)
+    c.setFillColorRGB(0.92, 0.98, 0.95)
+    c.roundRect(margen, y - 26, ancho, 26, 5, stroke=1, fill=1)
+    c.setFillColor(verde)
+    c.setFont('Helvetica-Bold', 10.5)
+    c.drawCentredString(
+        margen + ancho / 2,
+        y - 17,
+        'EQUIPO FINALIZADO A DOMICILIO · EL EQUIPO QUEDÓ CON EL CLIENTE',
+    )
+    y -= 46
+
+    filas = [
+        ('Cliente:', cliente.nombres, 70),
+        ('Cédula / RUC:', cliente.cedula, 90),
+        ('WhatsApp:', cliente.whatsapp, 80),
+    ]
+    if cliente.sector:
+        filas.append(('Sector:', cliente.sector_display, 60))
+    filas += [
+        ('Equipo:', f'{ingreso.tipo_equipo_display} — {ingreso.marca} {ingreso.modelo_serie_detalle}', 60),
+        ('Técnico:', salida.tecnico_reparo_nombre or '— Sin técnico registrado —', 60),
+    ]
+    for etiqueta, valor, label_w in filas:
+        _draw_label_value(c, margen, y, etiqueta, valor, label_w=label_w, line_w=ancho - label_w)
+        y -= 21
+    y -= 8
+
+    # ── Resultado a domicilio ──
+    c.setFillColor(naranja)
+    c.setFont('Helvetica-Bold', 11)
+    c.drawString(margen, y, 'RESULTADO DEL SERVICIO A DOMICILIO')
+    y -= 18
+    for key, _estado, etiqueta in SalidaEquipo.ESTADOS_DOMICILIO:
+        texto_estado = etiqueta.split(' ', 1)[1]
+        marcado = key == clave
+        c.setStrokeColor(naranja)
+        c.setLineWidth(0.8)
+        c.rect(margen, y - 2, 12, 12, stroke=1, fill=0)
+        if marcado:
+            c.setFillColor(black)
+            c.setFont('Helvetica-Bold', 13)
+            c.drawString(margen + 1.5, y, 'X')
+        c.setFillColor(black if marcado else naranja)
+        c.setFont('Helvetica-Bold' if marcado else 'Helvetica', 9)
+        c.drawString(margen + 18, y + 1, texto_estado)
+        y -= 16
+    y -= 8
+
+    mensaje_lineas = simpleSplit(_mensaje_estado_domicilio(salida), 'Helvetica-Bold', 8.5, ancho - 20)[:2]
+    alto_mensaje = 12 + len(mensaje_lineas) * 11
+    c.setStrokeColor(verde)
+    c.setFillColorRGB(0.92, 0.98, 0.95)
+    c.roundRect(margen, y - alto_mensaje, ancho, alto_mensaje, 4, stroke=1, fill=1)
+    c.setFillColor(black)
+    c.setFont('Helvetica-Bold', 8.5)
+    for indice, linea in enumerate(mensaje_lineas):
+        c.drawCentredString(margen + ancho / 2, y - 14 - (indice * 11), linea)
+    y -= alto_mensaje + 16
+
+    # ── Problema, reporte y observaciones ──
+    y = _draw_paragraph(c, margen, y, 'PROBLEMA REPORTADO ORIGINALMENTE',
+                       ingreso.problema_reportado, max_w=ancho, lines=2)
+    y -= 6
+    if ingreso.reporte_tecnico:
+        y = con_espacio(y, 60)
+        y = _draw_paragraph(c, margen, y, 'REPORTE DEL TÉCNICO',
+                           ingreso.reporte_tecnico, max_w=ancho, lines=3)
+        y -= 6
+    if salida.observaciones:
+        y = con_espacio(y, 46)
+        y = _draw_paragraph(c, margen, y, 'OBSERVACIONES',
+                           salida.observaciones, max_w=ancho, lines=2)
+        y -= 6
+
+    # ── Factura ──
+    if salida.factura_realizada == 'si':
+        def _clip(valor, max_len):
+            texto = str(valor or '—')
+            return texto if len(texto) <= max_len else f'{texto[:max_len - 1]}…'
+
+        y = con_espacio(y, 70)
+        c.setStrokeColor(naranja)
+        c.setLineWidth(0.8)
+        c.rect(margen, y - 52, ancho, 52, stroke=1, fill=0)
+        c.setFillColor(naranja)
+        c.setFont('Helvetica-Bold', 10)
+        c.drawString(margen + 8, y - 14, 'FACTURA REALIZADA')
+        c.setFillColor(black)
+        c.setFont('Helvetica-Bold', 9)
+        c.drawRightString(margen + ancho - 10, y - 14, 'SI')
+        c.setFillColor(naranja)
+        c.setFont('Helvetica-Bold', 7.5)
+        c.drawString(margen + 8, y - 29, 'NOMBRES / RAZÓN SOCIAL')
+        c.drawString(margen + 235, y - 29, 'CÉDULA / RUC')
+        c.drawString(margen + 350, y - 29, 'CORREO')
+        c.setFillColor(black)
+        c.setFont('Helvetica', 8)
+        c.drawString(margen + 8, y - 43, _clip(salida.factura_nombres, 38))
+        c.drawString(margen + 235, y - 43, _clip(salida.factura_cedula, 18))
+        c.drawString(margen + 350, y - 43, _clip(salida.factura_correo, 30))
+        y -= 66
+
+    # ── Detalle de pago ──
+    y = con_espacio(y, 130)
+    c.setFillColor(naranja)
+    c.setFont('Helvetica-Bold', 11)
+    c.drawString(margen, y, 'DETALLE DE PAGO A DOMICILIO')
+    y -= 10
+    if salida.domicilio_sin_reparar:
+        cajas = [
+            ('REPARACIÓN', 'NO SE COBRA'),
+            ('VALOR A DOMICILIO', _money_text(domicilio)),
+            ('TOTAL A PAGAR', _money_text(total)),
+        ]
+    else:
+        cajas = [
+            ('VALOR DE LA REPARACIÓN', _money_text(servicio)),
+            ('VALOR A DOMICILIO', _money_text(domicilio)),
+            ('TOTAL A PAGAR', _money_text(total)),
+        ]
+    caja_w = ancho / 3
+    for indice, (etiqueta, valor) in enumerate(cajas):
+        x = margen + indice * caja_w
+        c.setStrokeColor(Color(0.88, 0.78, 0.72))
+        c.setFillColorRGB(1, 0.97, 0.94)
+        c.rect(x, y - 40, caja_w, 40, stroke=1, fill=1)
+        c.setFillColor(gris)
+        c.setFont('Helvetica-Bold', 7)
+        c.drawString(x + 8, y - 13, etiqueta)
+        c.setFillColor(black)
+        c.setFont('Helvetica-Bold', 12)
+        c.drawString(x + 8, y - 30, valor)
+    y -= 50
+
+    # Estado del pago: valor pagado (solo si pagó algo) y saldo pendiente.
+    pagado_todo = saldo <= 0
+    c.setLineWidth(1)
+    if pagado_todo:
+        c.setStrokeColor(verde)
+        c.setFillColorRGB(0.92, 0.98, 0.95)
+    else:
+        c.setStrokeColor(naranja)
+        c.setFillColorRGB(1, 0.97, 0.94)
+    c.roundRect(margen, y - 36, ancho, 36, 5, stroke=1, fill=1)
+    if pagado > 0:
+        c.setFillColor(verde)
+        c.setFont('Helvetica-Bold', 11)
+        c.drawString(margen + 12, y - 22, f'Valor pagado: {_money_text(pagado)}')
+    elif not pagado_todo:
+        c.setFillColor(gris)
+        c.setFont('Helvetica', 9)
+        c.drawString(margen + 12, y - 22, 'El cliente pagará después.')
+    if pagado_todo:
+        c.setFillColor(verde)
+        c.setFont('Helvetica-Bold', 11)
+        c.drawRightString(margen + ancho - 12, y - 22, 'Ningún saldo pendiente — todo pagado')
+    else:
+        c.setFillColor(Color(0.78, 0.16, 0.16))
+        c.setFont('Helvetica-Bold', 12)
+        c.drawRightString(margen + ancho - 12, y - 22, f'Saldo pendiente: {_money_text(saldo)}')
+    y -= 52
+
+    # ── Pagos registrados ──
+    if pagos:
+        font_name = 'Helvetica'
+        font_size = 6.8
+        leading = 8
+        offsets = [0, 58, 178, 248, 350]
+        anchos_col = [55, 115, 65, 98, 150]
+
+        def encabezado_pagos(y_actual):
+            c.setFillColor(black)
+            c.setFont('Helvetica-Bold', 8.5)
+            c.drawString(margen, y_actual, 'Pagos registrados')
+            y_actual -= 12
+            c.setFillColor(naranja)
+            c.setFont('Helvetica-Bold', 7.5)
+            for texto_col, offset in zip(('Fecha', 'Concepto', 'Valor', 'Método', 'Detalle'), offsets):
+                c.drawString(margen + offset, y_actual, texto_col)
+            y_actual -= 6
+            c.setStrokeColor(Color(0.88, 0.72, 0.6))
+            c.line(margen, y_actual, margen + ancho, y_actual)
+            return y_actual - 8
+
+        y = con_espacio(y, 40)
+        y = encabezado_pagos(y)
+        for pago in pagos:
+            celdas = [
+                [pago['fecha'].strftime('%d/%m/%Y')],
+                simpleSplit(str(pago['concepto']), font_name, font_size, anchos_col[1])[:2] or ['—'],
+                [_money_text(pago['monto'])],
+                simpleSplit(str(pago['metodo'] or '—'), font_name, font_size, anchos_col[3])[:2] or ['—'],
+                simpleSplit(str(pago['detalle'] or '—'), font_name, font_size, anchos_col[4])[:3] or ['—'],
+            ]
+            alto = max(len(lineas) for lineas in celdas) * leading + 5
+            if y - alto < limite_inferior:
+                y = encabezado_pagos(nueva_pagina())
+            c.setFillColor(black)
+            c.setFont(font_name, font_size)
+            for columna, lineas in enumerate(celdas):
+                for indice, linea in enumerate(lineas):
+                    c.drawString(margen + offsets[columna], y - (indice * leading), linea)
+            y -= alto
+
+    # ── Firma ──
+    y = con_espacio(y - 40, 30)
+    c.setStrokeColor(Color(0.4, 0.4, 0.4))
+    firma_x = margen + 140
+    _draw_static_image(c, 'firma_tecnico_recibe.png', firma_x + 52, y + 4, 112, 28)
+    c.line(firma_x, y, firma_x + 220, y)
+    c.setFillColor(naranja)
+    c.setFont('Helvetica-Bold', 8)
+    c.drawCentredString(firma_x + 110, y - 10, 'FIRMA DEL TÉCNICO')
+
+    c.showPage()
+    c.save()
+    pdf = buf.getvalue()
+    buf.close()
+    return pdf
+
+
 def generar_salida_pdf_bytes(salida):
     """Genera el acta oficial de equipo finalizado y devuelve sus bytes."""
+    if salida.estado_domicilio_key:
+        return generar_salida_domicilio_pdf_bytes(salida)
     ingreso = salida.ingreso
     cliente = ingreso.cliente
     # La responsabilidad de la salida nunca se hereda del técnico asignado
@@ -1657,11 +1945,12 @@ def salida_pdf(request, pk):
     )
     pdf = generar_salida_pdf_bytes(salida)
     response = HttpResponse(pdf, content_type='application/pdf')
-    nombre = (
-        f'equipo_finalizado_cortesia_{salida.ingreso.codigo_equipo}.pdf'
-        if salida.estado_reparacion == 'cortesia'
-        else f'equipo_finalizado_{salida.ingreso.codigo_equipo}.pdf'
-    )
+    if salida.estado_reparacion == 'cortesia':
+        nombre = f'equipo_finalizado_cortesia_{salida.ingreso.codigo_equipo}.pdf'
+    elif salida.estado_domicilio_key:
+        nombre = f'equipo_finalizado_a_domicilio_{salida.ingreso.codigo_equipo}.pdf'
+    else:
+        nombre = f'equipo_finalizado_{salida.ingreso.codigo_equipo}.pdf'
     response['Content-Disposition'] = f'attachment; filename="{nombre}"'
     return response
 

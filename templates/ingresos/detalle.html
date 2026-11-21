@@ -779,7 +779,11 @@
         <a href="{% url 'econotec:venta_lista' %}">Ventas</a> /
         Venta {{ ingreso.codigo_equipo }}
     {% else %}
+        {% if ingreso.a_domicilio == 'si' %}
+        <a href="{% url 'econotec:ingreso_lista' %}?alcance=domicilio">Equipos a domicilio</a> /
+        {% else %}
         <a href="{% url 'econotec:ingreso_lista' %}">Equipos</a> /
+        {% endif %}
         Equipo {{ ingreso.codigo_equipo }}
     {% endif %}
 </div>

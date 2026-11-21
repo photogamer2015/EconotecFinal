@@ -14,7 +14,7 @@
 <section class="social-friends" aria-labelledby="retiros-asesora-title">
   <div class="social-heading">
     <div><p class="social-eyebrow">SALIDAS DE RETIRO</p><h2 id="retiros-asesora-title">{% if propio %}Mis salidas de retiro{% else %}Salidas de retiro{% endif %} <small>({{ retiros_asesora.total }})</small></h2></div>
-    <a class="social-btn secondary" href="{% url 'econotec:salida_retiros_lista' %}?confirmo={{ persona.pk }}">🚚 Abrir en Salidas físicas confirmadas →</a>
+    <a class="social-btn secondary" href="{% url 'econotec:salida_retiros_lista' %}?confirmo={{ persona.pk }}&alcance=todos">🚚 Abrir en Salidas físicas confirmadas →</a>
   </div>
   <div class="retiros-total"><strong>{{ retiros_asesora.total }}</strong><span>salida{{ retiros_asesora.total|pluralize }} de la oficina en total a nombre de {% if propio %}mí{% else %}{{ persona.get_full_name|default:persona.username }}{% endif %}</span></div>
   {% if retiros_asesora.salidas %}

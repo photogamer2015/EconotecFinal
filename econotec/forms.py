@@ -1537,6 +1537,25 @@ class SalidaEquipoForm(RetencionFacturaFormMixin, forms.ModelForm):
     ESTADO_NO_QUISO = 'cliente_no_acepta'
     VALOR_ADICIONAL_NO_QUISO = Decimal('5.00')
     MOTIVO_ADICIONAL_NO_QUISO = 'Cliente no quiso reparar'
+    # Equipo a domicilio: «domicilio:reparado», «domicilio:no_reparable», …
+    ESTADO_DOMICILIO = 'domicilio'
+    GRUPO_DOMICILIO = '🏠 A domicilio'
+    GRUPO_OFICINA = '🏢 Equipo llevarlo a la oficina'
+
+    pago_domicilio = forms.ChoiceField(
+        choices=[('ahora', 'Pago ahora'), ('despues', 'Pago después')],
+        required=False,
+        widget=forms.RadioSelect,
+        label='¿Cuándo paga el cliente?',
+    )
+    valor_domicilio_cobro = forms.DecimalField(
+        max_digits=10, decimal_places=2, min_value=Decimal('0.00'),
+        required=False,
+        label='Valor a domicilio a pagar (USD)',
+        widget=forms.NumberInput(attrs={
+            'class': 'form-input', 'step': '0.01', 'min': '0', 'inputmode': 'decimal',
+        }),
+    )
 
     reporte_tecnico = forms.CharField(
         widget=forms.Textarea(attrs={
@@ -1651,7 +1670,12 @@ class SalidaEquipoForm(RetencionFacturaFormMixin, forms.ModelForm):
             'permitir_resultados_negativos',
             False,
         )
+        # Solo el formulario de Finalizar equipo ofrece los estados a domicilio.
+        permitir_estados_domicilio = kwargs.pop('estados_domicilio', False)
         super().__init__(*args, **kwargs)
+        self._domicilio_elegido = ''
+        self._era_domicilio = bool(self.instance and self.instance.finalizado_a_domicilio)
+        self.es_domicilio = permitir_estados_domicilio and self._ingreso_a_domicilio()
         self.notificacion_asesora_tipo = None
         self.notificacion_asesora_valor = Decimal('0.00')
         self.notificacion_asesora_mensaje_default = ''
@@ -1805,6 +1829,9 @@ class SalidaEquipoForm(RetencionFacturaFormMixin, forms.ModelForm):
         ):
             self.initial['estado_reparacion'] = self._valor_revision(self.instance.subestado_revision)
 
+        if self.es_domicilio:
+            self._preparar_estados_domicilio()
+
         es_cortesia = bool(
             self.instance
             and hasattr(self.instance, 'ingreso')
@@ -1848,7 +1875,13 @@ class SalidaEquipoForm(RetencionFacturaFormMixin, forms.ModelForm):
         # Después de la salida física el resultado queda cerrado. Se permite
         # editar datos económicos o administrativos, pero no regresar el equipo
         # a "pendiente de retiro" ni cambiar su resultado desde este formulario.
-        if self.instance and self.instance.pk and self.instance.fecha_retiro_real:
+        # Un cierre a domicilio nunca estuvo en la oficina y sí se puede corregir.
+        if (
+            self.instance
+            and self.instance.pk
+            and self.instance.fecha_retiro_real
+            and not (self.es_domicilio and self._era_domicilio)
+        ):
             estado_cerrado = self.instance.estado_reparacion
             if estado_cerrado == 'pendiente_retiro':
                 estado_cerrado = 'retirado'
@@ -1872,6 +1905,73 @@ class SalidaEquipoForm(RetencionFacturaFormMixin, forms.ModelForm):
             )
             self.initial['estado_reparacion'] = estado_cerrado
 
+    def _ingreso_a_domicilio(self):
+        """¿Este cierre usa los estados a domicilio?
+
+        Aplica a ingresos marcados «A domicilio: Sí», salvo cortesía y
+        garantía (tienen su propio cierre) y salidas de oficina que ya salieron.
+        """
+        ingreso = getattr(self.instance, 'ingreso', None) if self.instance else None
+        if not ingreso or ingreso.a_domicilio != 'si' or ingreso.estado == 'cortesia':
+            return False
+        if (
+            ingreso.estado == 'garantia'
+            or ingreso.equipo_garantia_id
+            or ingreso.equipo_garantia_manual
+        ):
+            return False
+        if self.instance.pk and self.instance.fecha_retiro_real and not self._era_domicilio:
+            return False
+        return True
+
+    def _valor_domicilio(self, clave):
+        return f'{self.ESTADO_DOMICILIO}:{clave}'
+
+    @staticmethod
+    def _etiqueta_oficina(etiqueta):
+        """«⏳ Reparado — pendiente de retiro» → «🏢 Oficina: Reparado — pendiente de retiro»."""
+        primero, _separador, resto = str(etiqueta).partition(' ')
+        if resto and not primero[:1].isalnum():
+            etiqueta = resto
+        return f'🏢 Oficina: {etiqueta}'
+
+    def _preparar_estados_domicilio(self):
+        """Lista agrupada: estados a domicilio y, aparte, los de la oficina."""
+        # «Salió de la oficina» y chatarrización no se eligen aquí. Si el cierre
+        # ya era a domicilio, su No se pudo / No quiso reparar es el de domicilio:
+        # no se repite como estado de oficina.
+        excluidos = {'retirado', 'chatarrerizacion'}
+        if self._era_domicilio:
+            excluidos |= set(self.ESTADOS_REVISION_PENDIENTE)
+        oficina = [
+            (valor, self._etiqueta_oficina(etiqueta))
+            for valor, etiqueta in self.fields['estado_reparacion'].choices
+            if valor and valor not in excluidos
+        ]
+        domicilio = [
+            (self._valor_domicilio(clave), etiqueta)
+            for clave, _estado, etiqueta in SalidaEquipo.ESTADOS_DOMICILIO
+        ]
+        self.fields['estado_reparacion'].choices = [
+            ('', '— Elige cómo termina el equipo —'),
+            (self.GRUPO_DOMICILIO, domicilio),
+            (self.GRUPO_OFICINA, oficina),
+        ]
+        ingreso = self.instance.ingreso
+        if self.is_bound:
+            return
+        self.initial['valor_domicilio_cobro'] = ingreso.valor_domicilio
+        if self.instance.pk:
+            clave = self.instance.estado_domicilio_key
+            if clave:
+                self.initial['estado_reparacion'] = self._valor_domicilio(clave)
+                self.initial['pago_domicilio'] = (
+                    'ahora' if (self.instance.valor_final_cobrado or Decimal('0.00')) > 0 else 'despues'
+                )
+        elif self.initial.get('estado_reparacion') in (None, '', 'pendiente_retiro'):
+            # Lo normal a domicilio: se reparó en casa del cliente.
+            self.initial['estado_reparacion'] = self._valor_domicilio('reparado')
+
     def _valor_revision(self, subestado):
         return f'{self.ESTADO_REVISION}:{subestado}'
 
@@ -1893,6 +1993,14 @@ class SalidaEquipoForm(RetencionFacturaFormMixin, forms.ModelForm):
         subcategoría (se asigna en _clean_finalizacion)."""
         valor = self.cleaned_data.get('estado_reparacion') or ''
         estado, _separador, subestado = valor.partition(':')
+        self._domicilio_elegido = ''
+        if estado == self.ESTADO_DOMICILIO and self.es_domicilio:
+            # «domicilio:no_reparable» se guarda como «No se pudo reparar»
+            # con la marca finalizado_a_domicilio (ver save).
+            estados = {clave: est for clave, est, _etiqueta in SalidaEquipo.ESTADOS_DOMICILIO}
+            self._domicilio_elegido = subestado if subestado in estados else ''
+            self._subestado_revision_elegido = ''
+            return estados.get(subestado, '')
         self._subestado_revision_elegido = subestado if estado == self.ESTADO_REVISION else ''
         return estado
 
@@ -2060,7 +2168,26 @@ class SalidaEquipoForm(RetencionFacturaFormMixin, forms.ModelForm):
         if self.instance and self.instance.ingreso and self.instance.ingreso.estado == 'cortesia':
             self._limpiar_cortesia(cleaned)
             return cleaned
-        
+
+        if self._domicilio_elegido:
+            return self._clean_domicilio(cleaned)
+
+        pago_domicilio = (
+            self.instance.valor_final_cobrado or Decimal('0.00')
+            if self._era_domicilio and self.es_domicilio
+            else Decimal('0.00')
+        )
+        if pago_domicilio > 0:
+            # Pasarlo a la oficina borraría o cambiaría el pago cobrado en casa
+            # del cliente (Revisión lo deja en $0). Primero se pasa a Pagos.
+            self.add_error(
+                'estado_reparacion',
+                f'Este equipo tiene un pago de ${pago_domicilio:.2f} cobrado a domicilio. '
+                'Para llevarlo a la oficina, primero guárdalo con «Pago después» y '
+                'registra ese pago en Pagos; así no se pierde.',
+            )
+            return cleaned
+
         # Validar que no se pueda marcar como retirado si hay saldo pendiente
         if estado_reparacion == 'retirado':
             if self.instance and self.instance.ingreso and self.instance.ingreso.diferencia > 0:
@@ -2300,6 +2427,82 @@ class SalidaEquipoForm(RetencionFacturaFormMixin, forms.ModelForm):
                     ),
                 )
 
+        self._validar_metodo_pago(cleaned, metodo, valor, banco, banco_otro, tarjeta_app)
+        return cleaned
+
+    def total_domicilio_a_cobrar(self, valor_domicilio=None):
+        """Total del cierre a domicilio, antes de restar lo ya pagado.
+
+        Reparado: valor acordado + valor a domicilio. No se pudo / No quiso
+        reparar: solo el valor a domicilio (el valor acordado no aplica).
+        """
+        ingreso = self.instance.ingreso
+        if self._domicilio_elegido in SalidaEquipo.ESTADOS_DOMICILIO_SIN_REPARAR:
+            return valor_domicilio if valor_domicilio is not None else ingreso.valor_domicilio
+        return (ingreso.valor_acordado or Decimal('0.00')) + ingreso.valor_domicilio_aplicable
+
+    def _clean_domicilio(self, cleaned):
+        """Cierre a domicilio: el equipo se queda con el cliente, sin retiro ni
+        bodegaje. Se elige Pago ahora (con su método) o Pago después."""
+        self.instance.subestado_revision = ''
+        cleaned['valor_acordado_revision'] = None
+        self._limpiar_valor_acordado_adicional(cleaned)
+        cleaned['asesora_notificacion'] = None
+        cleaned['mensaje_notificacion'] = ''
+
+        valor_domicilio = None
+        if self._domicilio_elegido in SalidaEquipo.ESTADOS_DOMICILIO_SIN_REPARAR:
+            valor_domicilio = cleaned.get('valor_domicilio_cobro')
+            if valor_domicilio is None:
+                self.add_error(
+                    'valor_domicilio_cobro',
+                    'Ingresa el valor a domicilio que paga el cliente (puede ser $0.00).',
+                )
+                valor_domicilio = Decimal('0.00')
+        cleaned['valor_domicilio_cobro'] = valor_domicilio
+
+        saldo_antes_de_pago = max(
+            self.total_domicilio_a_cobrar(valor_domicilio) - self._total_abonado_previo(),
+            Decimal('0.00'),
+        )
+        pago = cleaned.get('pago_domicilio') or ''
+        valor = cleaned.get('valor_final_cobrado') or Decimal('0.00')
+        metodo = cleaned.get('metodo_pago_final')
+
+        if pago not in ('ahora', 'despues'):
+            self.add_error('pago_domicilio', 'Elige Pago ahora o Pago después.')
+        if pago != 'ahora' or (saldo_antes_de_pago <= 0 and valor <= 0):
+            # Pago después (o nada que cobrar): el saldo queda pendiente en Pagos.
+            cleaned['valor_final_cobrado'] = Decimal('0.00')
+            self._limpiar_pago_pendiente(cleaned)
+            return cleaned
+
+        if valor <= 0:
+            self.add_error(
+                'valor_final_cobrado',
+                'Ingresa el valor que paga el cliente ahora.',
+            )
+        elif valor > saldo_antes_de_pago:
+            self.add_error(
+                'valor_final_cobrado',
+                f'El pago no puede superar el saldo pendiente (${saldo_antes_de_pago:.2f}).',
+            )
+        if metodo in ('', 'sin_pago', 'cortesia', None):
+            self.add_error(
+                'metodo_pago_final',
+                'Selecciona cómo pagó el cliente: efectivo, transferencia, tarjeta o mixto.',
+            )
+        self._validar_metodo_pago(
+            cleaned,
+            metodo,
+            valor,
+            cleaned.get('banco'),
+            cleaned.get('banco_otro'),
+            cleaned.get('tarjeta_app'),
+        )
+        return cleaned
+
+    def _validar_metodo_pago(self, cleaned, metodo, valor, banco, banco_otro, tarjeta_app):
         if metodo == 'mixto':
             monto1 = cleaned.get('monto_1') or Decimal('0.00')
             metodo1 = cleaned.get('metodo_1')
@@ -2332,8 +2535,6 @@ class SalidaEquipoForm(RetencionFacturaFormMixin, forms.ModelForm):
         elif metodo == 'tarjeta':
             if not tarjeta_app:
                 self.add_error('tarjeta_app', 'Selecciona la aplicación o tarjeta usada para el pago.')
-
-        return cleaned
 
     def save(self, commit=True):
         salida = super().save(commit=False)
@@ -2372,23 +2573,59 @@ class SalidaEquipoForm(RetencionFacturaFormMixin, forms.ModelForm):
         else:
             salida.valor_acordado_revision = None
 
+        valor_domicilio_nuevo = self._aplicar_domicilio(salida) if self.es_domicilio else None
+
         salida.cliente_recibe_conforme = 'si' if salida.es_positivo else 'no'
         reporte = self.cleaned_data.get('reporte_tecnico')
-        
+
         if hasattr(salida, 'ingreso') and salida.ingreso:
             salida.ingreso.reporte_tecnico = reporte
             if valor_fallos_adicionales is not None:
                 salida.ingreso.valor_acordado = valor_fallos_adicionales
+            if valor_domicilio_nuevo is not None:
+                salida.ingreso.valor_domicilio = valor_domicilio_nuevo
             if commit:
                 update_fields = ['reporte_tecnico']
                 if valor_fallos_adicionales is not None:
                     update_fields.append('valor_acordado')
+                if valor_domicilio_nuevo is not None:
+                    update_fields.append('valor_domicilio')
                 salida.ingreso.save(update_fields=update_fields)
                 
         if commit:
             salida.save()
             self.save_m2m()
         return salida
+
+    def _aplicar_domicilio(self, salida):
+        """Marca el cierre a domicilio o lo deshace si se lleva a la oficina.
+
+        Devuelve el nuevo valor a domicilio del ingreso (solo en No se pudo /
+        No quiso reparar a domicilio, donde es editable) o None.
+        """
+        if self._domicilio_elegido:
+            # El equipo se queda con el cliente: salió el mismo día del
+            # servicio, sin pendiente de retiro ni bodegaje.
+            salida.finalizado_a_domicilio = True
+            salida.subestado_revision = ''
+            salida.valor_acordado_revision = None
+            salida.fecha_retiro_real = salida.fecha_salida
+            salida.bodegaje_dias_congelado = 0
+            salida.bodegaje_monto_congelado = Decimal('0.00')
+            salida.bodegaje_aplicado_al_pago = False
+            if self._domicilio_elegido in SalidaEquipo.ESTADOS_DOMICILIO_SIN_REPARAR:
+                return self.cleaned_data.get('valor_domicilio_cobro')
+            return None
+        if self._era_domicilio:
+            # Antes se cerró a domicilio y ahora se lleva a la oficina: vuelve
+            # al flujo de siempre (pendiente de retiro, bodegaje, asesora).
+            salida.finalizado_a_domicilio = False
+            salida.fecha_retiro_real = None
+            salida.retiro_confirmado_por = None
+            salida.bodegaje_dias_congelado = None
+            salida.bodegaje_monto_congelado = None
+            salida.bodegaje_aplicado_al_pago = False
+        return None
 
 
 # ─────────────────────────────────────────────────────────

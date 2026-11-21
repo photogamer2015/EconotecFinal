@@ -273,6 +273,26 @@ def ingresos_operativos_qs():
     )
 
 
+# Los equipos «A domicilio: Sí» van en su propia lista. La lista normal no los
+# muestra; «todos» la usan los enlaces del ranking, perfiles y panel, que
+# cuentan todos los equipos y deben cuadrar con lo que abren.
+ALCANCE_DOMICILIO = 'domicilio'
+ALCANCE_TODOS = 'todos'
+
+
+def alcance_domicilio(request):
+    alcance = (request.GET.get('alcance') or '').strip()
+    return alcance if alcance in (ALCANCE_DOMICILIO, ALCANCE_TODOS) else ''
+
+
+def filtrar_alcance_domicilio(qs, alcance, campo='a_domicilio'):
+    if alcance == ALCANCE_DOMICILIO:
+        return qs.filter(**{campo: 'si'})
+    if alcance == ALCANCE_TODOS:
+        return qs
+    return qs.exclude(**{campo: 'si'})
+
+
 def home(request):
     if request.user.is_authenticated:
         return redirect('econotec:bienvenida')
@@ -585,7 +605,7 @@ def dashboard_details(request, tipo):
 
     if tipo == 'equipos_total':
         titulo = "Total de Equipos Ingresados"
-        link_ver_todos = reverse('econotec:ingreso_lista')
+        link_ver_todos = f"{reverse('econotec:ingreso_lista')}?alcance={ALCANCE_TODOS}"
         qs = ingresos_de_equipo_qs().select_related('cliente', 'salida').order_by(
             '-fecha_ingreso', '-creado',
         )
@@ -658,7 +678,7 @@ def dashboard_details(request, tipo):
 
     elif tipo == 'ingresos_mes':
         titulo = f"Ingresos del Mes ({hoy.strftime('%B %Y').capitalize()})"
-        link_ver_todos = reverse('econotec:ingreso_lista')
+        link_ver_todos = f"{reverse('econotec:ingreso_lista')}?alcance={ALCANCE_TODOS}"
         qs = ingresos_de_equipo_qs().select_related('cliente', 'salida').filter(
             fecha_ingreso__year=ano_actual, fecha_ingreso__month=mes_actual
         ).order_by('-fecha_ingreso', '-creado')
@@ -691,7 +711,7 @@ def dashboard_details(request, tipo):
 
     elif tipo == 'pendientes':
         titulo = "Equipos Pendientes en Taller"
-        link_ver_todos = reverse('econotec:ingreso_lista')
+        link_ver_todos = f"{reverse('econotec:ingreso_lista')}?alcance={ALCANCE_TODOS}"
         ingresos = list(ingresos_de_equipo_qs().select_related('cliente').filter(
             estado__in=['ingresado', 'en_reparacion'],
             salida__isnull=True,
@@ -757,7 +777,7 @@ def dashboard_details(request, tipo):
 
     elif tipo == 'salidas_mes':
         titulo = f"Equipos Finalizados del Mes ({hoy.strftime('%B %Y').capitalize()})"
-        link_ver_todos = reverse('econotec:salida_lista')
+        link_ver_todos = f"{reverse('econotec:salida_lista')}?alcance={ALCANCE_TODOS}"
         qs = SalidaEquipo.objects.select_related('ingreso__cliente').filter(
             ingreso__sede__in=SEDES_EQUIPOS,
             fecha_salida__year=ano_actual, fecha_salida__month=mes_actual
@@ -1678,21 +1698,32 @@ def inventario_qr_imprimir(request, codigo):
 
 @tecnico_requerido
 def ingreso_menu(request):
-    """Menú de ingresos: registrar nuevo / ver lista."""
-    ingresos_equipos = ingresos_operativos_qs()
-    total = ingresos_equipos.count()
-    pendientes = ingresos_equipos.filter(
-        estado__in=['ingresado', 'en_reparacion'],
-        salida__isnull=True,
-    ).count() + SalidaEquipo.objects.filter(
-        ingreso__sede__in=SEDES_EQUIPOS,
-        estado_reparacion='pendiente_retiro',
-        fecha_retiro_real__isnull=True,
-    ).count()
+    """Menú de ingresos: registrar nuevo / ver lista / a domicilio."""
+
+    def conteos(alcance):
+        ingresos_equipos = filtrar_alcance_domicilio(ingresos_operativos_qs(), alcance)
+        pendientes = ingresos_equipos.filter(
+            estado__in=['ingresado', 'en_reparacion'],
+            salida__isnull=True,
+        ).count() + filtrar_alcance_domicilio(
+            SalidaEquipo.objects.filter(
+                ingreso__sede__in=SEDES_EQUIPOS,
+                estado_reparacion='pendiente_retiro',
+                fecha_retiro_real__isnull=True,
+            ),
+            alcance,
+            campo='ingreso__a_domicilio',
+        ).count()
+        return ingresos_equipos.count(), pendientes
+
+    total, pendientes = conteos('')
+    total_domicilio, pendientes_domicilio = conteos(ALCANCE_DOMICILIO)
     pendientes_valor = _ingresos_pendientes_valor_qs().count()
     return render(request, 'ingresos/menu.html', {
         'total': total,
         'pendientes': pendientes,
+        'total_domicilio': total_domicilio,
+        'pendientes_domicilio': pendientes_domicilio,
         'pendientes_valor': pendientes_valor,
     })
 
@@ -2494,7 +2525,8 @@ def ingreso_lista(request):
     else:
         sede_filtro = sede_sesion
 
-    qs = (ingresos_operativos_qs()
+    alcance = alcance_domicilio(request)
+    qs = (filtrar_alcance_domicilio(ingresos_operativos_qs(), alcance)
           .select_related('cliente', 'registrado_por', 'salida')
           .prefetch_related('abonos'))
     if es_admin(request.user):
@@ -2612,6 +2644,7 @@ def ingreso_lista(request):
         'estados': estados_filtro,
         'tipos': IngresoEquipo._meta.get_field('tipo_equipo').choices,
         'total': total,
+        'alcance': alcance,
     }
     context.update(contexto_rango_fecha(
         fecha_desde,
@@ -4064,8 +4097,11 @@ def _render_venta_lista(request, filtro_pago='completo'):
 @tecnico_requerido
 def salida_menu(request):
     """Menú de salidas."""
-    total = SalidaEquipo.objects.filter(fecha_retiro_real__isnull=True).count()
-    listos_para_entregar = SalidaEquipo.objects.filter(
+    # Los equipos a domicilio van aparte (ver ALCANCE_DOMICILIO).
+    salidas_oficina = SalidaEquipo.objects.exclude(ingreso__a_domicilio='si')
+    salidas_domicilio = SalidaEquipo.objects.filter(ingreso__a_domicilio='si')
+    total = salidas_oficina.filter(fecha_retiro_real__isnull=True).count()
+    listos_para_entregar = salidas_oficina.filter(
         estado_reparacion='pendiente_retiro',
         fecha_retiro_real__isnull=True,
     ).count()
@@ -4075,6 +4111,8 @@ def salida_menu(request):
     return render(request, 'salidas/menu.html', {
         'total': total,
         'listos_para_entregar': listos_para_entregar,
+        'total_domicilio': salidas_domicilio.count(),
+        'domicilio_en_oficina': salidas_domicilio.filter(fecha_retiro_real__isnull=True).count(),
         'facturas_realizadas': facturas_realizadas,
     })
 
@@ -4089,6 +4127,12 @@ def salida_lista(request, solo_fuera_oficina=False):
             'Las salidas de la oficina las gestionan las asesoras y el administrador.',
         )
         return redirect('econotec:salida_lista')
+    # Los equipos a domicilio tienen su propia lista (en casa del cliente o
+    # llevados a la oficina); las listas de siempre no los muestran.
+    alcance = alcance_domicilio(request)
+    lista_domicilio = alcance == ALCANCE_DOMICILIO
+    if lista_domicilio and solo_fuera_oficina:
+        return redirect(f"{reverse('econotec:salida_lista')}?alcance={ALCANCE_DOMICILIO}")
     q = (request.GET.get('q') or '').strip()
     estado = (request.GET.get('estado') or '').strip()
     sede_filtro = (request.GET.get('sede') or '').strip().lower()
@@ -4110,7 +4154,15 @@ def salida_lista(request, solo_fuera_oficina=False):
     # Cada lista ofrece únicamente estados coherentes con su etapa física.
     # Dentro de la oficina se conservan los resultados de finalización;
     # fuera de la oficina solo corresponde el estado de salida confirmada.
-    if solo_fuera_oficina:
+    if lista_domicilio:
+        estados_filtro = [
+            *[
+                (f'{ALCANCE_DOMICILIO}:{clave}', etiqueta)
+                for clave, _estado, etiqueta in SalidaEquipo.ESTADOS_DOMICILIO
+            ],
+            ('oficina', '🏢 Llevado a la oficina'),
+        ]
+    elif solo_fuera_oficina:
         estados_filtro = [
             e for e in SalidaEquipo.ESTADO_REPARACION
             if e[0] == 'retirado'
@@ -4124,11 +4176,30 @@ def salida_lista(request, solo_fuera_oficina=False):
     if estado not in estados_validos:
         estado = ''
 
-    qs = SalidaEquipo.objects.select_related(
-        'ingreso', 'ingreso__cliente', 'registrado_por', 'tecnico_reparo',
-        'retiro_confirmado_por',
+    qs = filtrar_alcance_domicilio(
+        SalidaEquipo.objects.select_related(
+            'ingreso', 'ingreso__cliente', 'registrado_por', 'tecnico_reparo',
+            'retiro_confirmado_por',
+        ),
+        alcance,
+        campo='ingreso__a_domicilio',
     )
-    if solo_fuera_oficina:
+    if lista_domicilio:
+        qs = qs.order_by('-fecha_salida', '-creado')
+        campo_fecha_filtro = 'fecha_salida'
+        etiqueta_fecha_filtro = 'Fecha de finalización'
+        if estado == 'oficina':
+            qs = qs.filter(finalizado_a_domicilio=False)
+        elif estado:
+            estados_domicilio = {
+                f'{ALCANCE_DOMICILIO}:{clave}': est
+                for clave, est, _etiqueta in SalidaEquipo.ESTADOS_DOMICILIO
+            }
+            qs = qs.filter(
+                finalizado_a_domicilio=True,
+                estado_reparacion=estados_domicilio[estado],
+            )
+    elif solo_fuera_oficina:
         qs = qs.filter(fecha_retiro_real__isnull=False).order_by(
             '-fecha_retiro_real', '-fecha_salida', '-creado',
         )
@@ -4145,7 +4216,7 @@ def salida_lista(request, solo_fuera_oficina=False):
         campo_fecha_filtro = 'fecha_salida'
         etiqueta_fecha_filtro = 'Fecha de finalización'
 
-    if estado and not (solo_fuera_oficina and estado == 'retirado'):
+    if estado and not lista_domicilio and not (solo_fuera_oficina and estado == 'retirado'):
         qs = qs.filter(estado_reparacion=estado)
     if sede_filtro in ('guayaquil', 'quito'):
         qs = qs.filter(ingreso__sede=sede_filtro)
@@ -4183,18 +4254,28 @@ def salida_lista(request, solo_fuera_oficina=False):
     hoy = timezone.localdate()
     ayer = hoy - timedelta(days=1)
     inicio_mes = hoy.replace(day=1)
-    if solo_fuera_oficina:
+    salidas_alcance = filtrar_alcance_domicilio(
+        SalidaEquipo.objects.all(), alcance, campo='ingreso__a_domicilio',
+    )
+    if lista_domicilio:
+        resumen_tipo = 'domicilio'
+        resumen_titulo = 'Equipos finalizados a domicilio'
+        resumen_nota = 'Equipos a domicilio finalizados en casa del cliente o llevados a la oficina.'
+        resumen_base = salidas_alcance
+        campo_resumen = 'fecha_salida'
+        url_base = reverse('econotec:salida_lista')
+    elif solo_fuera_oficina:
         resumen_tipo = 'salidas'
         resumen_titulo = 'Salidas de la oficina'
         resumen_nota = 'Equipos que ya salieron físicamente de la oficina.'
-        resumen_base = SalidaEquipo.objects.filter(fecha_retiro_real__isnull=False)
+        resumen_base = salidas_alcance.filter(fecha_retiro_real__isnull=False)
         campo_resumen = 'fecha_retiro_real'
         url_base = reverse('econotec:salida_retiros_lista')
     else:
         resumen_tipo = 'finalizados'
         resumen_titulo = 'Equipos finalizados en la oficina'
         resumen_nota = 'Reparaciones terminadas que todavía no salen de la oficina.'
-        resumen_base = SalidaEquipo.objects.filter(fecha_retiro_real__isnull=True)
+        resumen_base = salidas_alcance.filter(fecha_retiro_real__isnull=True)
         campo_resumen = 'fecha_salida'
         url_base = reverse('econotec:salida_lista')
     periodos = (
@@ -4208,6 +4289,8 @@ def salida_lista(request, solo_fuera_oficina=False):
     resumen_salidas_dia = []
     for clave, etiqueta, desde_periodo, hasta_periodo, texto_periodo in periodos:
         parametros = QueryDict(mutable=True)
+        if alcance:
+            parametros['alcance'] = alcance
         parametros.update({
             'fecha_preset': clave,
             'fecha_desde': desde_periodo.isoformat(),
@@ -4253,6 +4336,8 @@ def salida_lista(request, solo_fuera_oficina=False):
         'estados': estados_filtro,
         'total': total,
         'lista_salidas_confirmadas': solo_fuera_oficina,
+        'lista_domicilio': lista_domicilio,
+        'alcance': alcance,
         'fecha_por_finalizacion': por_finalizacion,
         # La asesora no ve la fecha de finalización en las salidas físicas
         # confirmadas: para ella la fecha que cuenta es la de salida de la oficina.
@@ -4302,7 +4387,7 @@ def salida_registrar(request, ingreso_pk):
 
     if request.method == 'POST':
         salida_inst = SalidaEquipo(ingreso=ingreso)
-        form = SalidaEquipoForm(request.POST, instance=salida_inst)
+        form = SalidaEquipoForm(request.POST, instance=salida_inst, estados_domicilio=True)
         if form.is_valid():
             salida = form.save(commit=False)
             salida.registrado_por = request.user
@@ -4336,7 +4421,7 @@ def salida_registrar(request, ingreso_pk):
             estado_salida_inicial = 'revision:cliente_no_acepta'
         metodo_salida_inicial = 'cortesia' if ingreso.estado == 'cortesia' else 'efectivo'
         salida_inst = SalidaEquipo(ingreso=ingreso)
-        form = SalidaEquipoForm(instance=salida_inst, initial={
+        form = SalidaEquipoForm(instance=salida_inst, estados_domicilio=True, initial={
             'fecha_salida': date.today(),
             'estado_reparacion': estado_salida_inicial,
             'metodo_pago_final': metodo_salida_inicial,
@@ -4364,7 +4449,7 @@ def salida_editar(request, pk):
         subestado_revision_anterior = salida.subestado_revision
         tecnico_anterior = salida.tecnico_reparo_id
         valor_anterior = salida.valor_final_cobrado
-        form = SalidaEquipoForm(request.POST, instance=salida)
+        form = SalidaEquipoForm(request.POST, instance=salida, estados_domicilio=True)
         if form.is_valid():
             salida = form.save()
             _sincronizar_notificacion_asesora(form, salida, request.user)
@@ -4390,7 +4475,7 @@ def salida_editar(request, pk):
             request.session['confirmar_ubicacion_salida_id'] = salida.pk
             return redirect('econotec:salida_listo_aviso', pk=salida.pk)
     else:
-        form = SalidaEquipoForm(instance=salida)
+        form = SalidaEquipoForm(instance=salida, estados_domicilio=True)
     return render(request, 'salidas/form.html', {
         'form': form,
         'ingreso': salida.ingreso,
@@ -5008,6 +5093,9 @@ def _registros_salidas_ranking(desde, hasta, mostrar_valores_monetarios):
             # (revisión, no reparable, cortesía, etc.) y no debe confundirse
             # con que el equipo continúe o no dentro de la oficina.
             'fuera_de_oficina': salida.fecha_retiro_real is not None,
+            # Los equipos a domicilio van aparte en Ubicación (en casa del
+            # cliente o llevados a la oficina), igual que en sus listas.
+            'a_domicilio': salida.ingreso.a_domicilio == 'si',
             'resultado': _RESULTADO_POR_ESTADO.get(_estado_ranking(salida)),
         }
         if mostrar_valores_monetarios:
@@ -5029,12 +5117,17 @@ def _resumir_salidas(registros, mostrar_valores_monetarios):
     Acordado + Domicilio + A favor = Recaudado + Por cobrar. El bodegaje es un
     plus: se suma aparte y no cambia ninguno de esos valores.
     """
+    # Ubicación: fuera de oficina + en oficina + a domicilio = equipos finalizados.
     resumen = {
         'num_equipos': len(registros),
-        'entregados': sum(1 for registro in registros if registro['fuera_de_oficina']),
+        'a_domicilio': sum(1 for registro in registros if registro['a_domicilio']),
+        'entregados': sum(
+            1 for registro in registros
+            if registro['fuera_de_oficina'] and not registro['a_domicilio']
+        ),
         'resultados': {clave: 0 for clave, *_ in _RESULTADOS_RANKING},
     }
-    resumen['pendientes'] = resumen['num_equipos'] - resumen['entregados']
+    resumen['pendientes'] = resumen['num_equipos'] - resumen['entregados'] - resumen['a_domicilio']
     for registro in registros:
         if registro['resultado']:
             resumen['resultados'][registro['resultado']] += 1
@@ -5393,13 +5486,17 @@ def _comprobaciones_totales(resumen, filas, meses_resumen, mostrar_valores_monet
         ],
         total,
     )
-    partes_ubicacion = [('Fuera de oficina', resumen['entregados']), ('En oficina', resumen['pendientes'])]
+    partes_ubicacion = [
+        ('Fuera de oficina', resumen['entregados']),
+        ('En oficina', resumen['pendientes']),
+        ('A domicilio', resumen.get('a_domicilio', 0)),
+    ]
     if resumen.get('reparados_extra'):
         # Reacondicionados y ajustes marcados como equipo reparado: no tienen
         # salida de la oficina, por eso van aparte.
         partes_ubicacion.append(('Reacondicionados / manuales', resumen['reparados_extra']))
     comprobar(
-        'Fuera de oficina + En oficina = equipos finalizados',
+        'Fuera de oficina + En oficina + A domicilio = equipos finalizados',
         partes_ubicacion,
         total,
     )
@@ -6251,6 +6348,15 @@ def salida_deshacer_retiro(request, pk):
             f'El equipo {salida.ingreso.codigo_equipo} no tenía confirmada la salida de la oficina.'
         )
         return redirect('econotec:salida_lista')
+
+    if salida.finalizado_a_domicilio:
+        # Nunca estuvo en la oficina: para llevarlo allá se edita la finalización.
+        messages.info(
+            request,
+            f'El equipo {salida.ingreso.codigo_equipo} se finalizó a domicilio y no tiene una '
+            'salida de la oficina que deshacer. Para llevarlo a la oficina, edita su finalización.'
+        )
+        return redirect(f"{reverse('econotec:salida_lista')}?alcance={ALCANCE_DOMICILIO}")
 
     salida.fecha_retiro_real = None
     salida.retiro_confirmado_por = None

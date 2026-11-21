@@ -101,7 +101,7 @@
                 <div class="stat-card">
                     <div class="label">Puntos del período</div>
                     <div class="value">{{ ranking_puntos }}</div>
-                    <div class="nota">{{ ranking_resumen.entregados }} fuera de oficina · {{ ranking_resumen.pendientes }} en oficina</div>
+                    <div class="nota">{{ ranking_resumen.entregados }} fuera de oficina · {{ ranking_resumen.pendientes }} en oficina · {{ ranking_resumen.a_domicilio|default:0 }} a domicilio</div>
                 </div>
             </div>
             <div class="stats-row">

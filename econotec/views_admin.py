@@ -2860,7 +2860,10 @@ def ranking_asesoras_salidas(request):
         # Tabla de todas las salidas: equipo, técnico y a qué asesora pertenece.
         'detalle_salidas': salidas,
         'total_salidas': sum(fila['total'] for fila in ranking),
-        'sin_registro': confirmadas.filter(retiro_confirmado_por__isnull=True).count(),
+        # Los finalizados a domicilio no tienen asesora: nunca salieron de la oficina.
+        'sin_registro': confirmadas.filter(
+            retiro_confirmado_por__isnull=True, finalizado_a_domicilio=False,
+        ).count(),
     }
     contexto.update(contexto_rango_fecha(desde, hasta, preset, etiqueta='Fecha de salida física'))
     return render(request, 'admin_panel/ranking_asesoras_salidas.html', contexto)

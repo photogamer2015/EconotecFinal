@@ -122,7 +122,7 @@
                     </table>
                 </div>
                 <div class="ras-actions">
-                    <a class="btn btn-sm btn-secondary" href="{% url 'econotec:salida_retiros_lista' %}?confirmo={{ fila.usuario.pk }}{% if fecha_desde %}&fecha_desde={{ fecha_desde }}{% endif %}{% if fecha_hasta %}&fecha_hasta={{ fecha_hasta }}{% endif %}">Abrir en Salidas físicas confirmadas →</a>
+                    <a class="btn btn-sm btn-secondary" href="{% url 'econotec:salida_retiros_lista' %}?confirmo={{ fila.usuario.pk }}{% if fecha_desde %}&fecha_desde={{ fecha_desde }}{% endif %}{% if fecha_hasta %}&fecha_hasta={{ fecha_hasta }}{% endif %}&alcance=todos">Abrir en Salidas físicas confirmadas →</a>
                 </div>
                 {% else %}
                 <p class="ras-empty">Sin salidas de retiro en este periodo.</p>
