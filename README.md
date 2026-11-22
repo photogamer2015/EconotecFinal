@@ -265,7 +265,8 @@ push, aunque no esté abierto:
 - **Android (Chrome)**: entrar al sistema y tocar **Activar** en el aviso de
   abajo (o en el menú: «Activar notificaciones»). Chrome también ofrece
   «Instalar app».
-- **iPhone (iOS 16.4 o más)**: en Safari, *Compartir → Añadir a pantalla de
+- **iPhone (iOS 16.4 o más)**: en Safari (botón de la barra de abajo) o en
+  Chrome (botón junto a la dirección), *Compartir → Añadir a pantalla de
   inicio*, abrir Econotec desde ese ícono y tocar **Activar notificaciones**.
 
 Llegan los mismos avisos de las campanitas: a los **admins**, los cambios 🔔,
