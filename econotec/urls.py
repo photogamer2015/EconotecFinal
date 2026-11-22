@@ -1,9 +1,16 @@
 from django.urls import path
-from . import views_perfiles, views, views_pagos, views_admin, views_print, views_tecnico, views_econobot
+from . import views_perfiles, views, views_pagos, views_admin, views_print, views_tecnico, views_econobot, views_push
 
 app_name = 'econotec'
 
 urlpatterns = [
+    # ── App instalable y notificaciones push ───────────────
+    path('manifest.webmanifest', views_push.manifest, name='pwa_manifest'),
+    path('service-worker.js', views_push.service_worker, name='pwa_service_worker'),
+    path('push/clave/', views_push.push_clave, name='push_clave'),
+    path('push/suscribir/', views_push.push_suscribir, name='push_suscribir'),
+    path('push/desuscribir/', views_push.push_desuscribir, name='push_desuscribir'),
+    path('push/probar/', views_push.push_probar, name='push_probar'),
     path('mi-perfil/', views_perfiles.perfil, name='mi_perfil'),
     path('comunidad/', views_perfiles.comunidad, name='comunidad'),
     path('perfiles/<int:usuario_id>/', views_perfiles.perfil, name='perfil_social'),

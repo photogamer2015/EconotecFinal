@@ -3,6 +3,16 @@
 
 {% block title %}{{ cliente.nombres }} — Econotec{% endblock %}
 
+{% block extra_head %}
+<style>
+    .cliente-detalle-grid { display: grid; grid-template-columns: 1fr 2fr; gap: 22px; margin-top: 16px; }
+    .cliente-detalle-grid > * { min-width: 0; }
+    @media (max-width: 900px) {
+        .cliente-detalle-grid { grid-template-columns: 1fr; gap: 16px; }
+    }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="crumb">
     <a href="{% url 'econotec:bienvenida' %}">Inicio</a> /
@@ -12,7 +22,7 @@
 <h2 class="page-title">{{ cliente.nombres }}</h2>
 <p class="page-subtitle">Cédula / RUC: <strong>{{ cliente.cedula }}</strong></p>
 
-<div style="display: grid; grid-template-columns: 1fr 2fr; gap: 22px; margin-top: 16px;">
+<div class="cliente-detalle-grid">
 
     <div>
         <div class="card-box">

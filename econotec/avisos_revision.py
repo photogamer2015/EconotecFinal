@@ -109,4 +109,13 @@ def generar_avisos_prueba_demorada(hoy=None):
         if clave not in existentes
     ]
     NotificacionRevisionAdmin.objects.bulk_create(nuevos)
+    if nuevos:
+        # bulk_create no dispara las señales: el push se envía aquí.
+        from .push import push_revision_admin
+        for aviso in (
+            NotificacionRevisionAdmin.objects
+            .select_related('salida__ingreso')
+            .filter(dedupe_key__in=[n.dedupe_key for n in nuevos])
+        ):
+            push_revision_admin(aviso)
     return len(nuevos)

@@ -6,6 +6,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}Econotec — Reparación de Tecnología{% endblock %}</title>
     <link rel="icon" type="image/jpeg" href="{% static 'logo.jpg' %}">
+    {# App instalable (PWA): ícono en la pantalla de inicio y notificaciones push #}
+    <link rel="manifest" href="{% url 'econotec:pwa_manifest' %}">
+    <meta name="theme-color" content="#202936">
+    <link rel="apple-touch-icon" href="{% static 'pwa/apple-touch-icon.png' %}">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="Econotec">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <style>
         header.top a.social-nav-profile { display:inline-flex; align-items:center; justify-content:center; gap:8px; }
         .social-nav-profile img,.social-nav-initial { width:24px; height:24px; border-radius:50%; object-fit:cover; flex-shrink:0; border:1px solid rgba(255,255,255,0.22); }
@@ -427,6 +435,84 @@
         header.top .noti-menu-foot:hover {
             background: var(--primary-light) !important;
         }
+        .push-nav-btn {
+            background: transparent !important;
+            color: #ffffff !important;
+            border: 1px solid rgba(255, 255, 255, 0.12) !important;
+            border-radius: 50% !important;
+            width: 36px;
+            height: 36px;
+            padding: 0 !important;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            font-size: 16px !important;
+            cursor: pointer;
+        }
+        .push-nav-btn[hidden] { display: none !important; }
+        .push-nav-btn .push-nav-texto { display: none; }
+        @media (max-width: 1100px) {
+            .push-nav-btn {
+                width: 100%;
+                height: auto;
+                min-height: 46px;
+                border-radius: 12px !important;
+                padding: 10px 11px !important;
+                background: rgba(255, 255, 255, 0.05) !important;
+                border-color: rgba(255, 255, 255, 0.07) !important;
+                font-size: 13px !important;
+                font-weight: 550;
+            }
+            .push-nav-btn .push-nav-texto { display: inline; }
+        }
+        /* En el menú del celular las campanitas dicen qué son. */
+        .nav-etiqueta-movil { display: none; }
+        @media (max-width: 1100px) {
+            #main-navigation .nav-etiqueta-movil { display: inline; margin: 0 6px; font-size: 13px; font-weight: 550; }
+        }
+        .push-banner {
+            position: fixed;
+            left: 50%;
+            bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+            transform: translateX(-50%);
+            width: min(560px, calc(100% - 24px));
+            z-index: 9000;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 14px 16px;
+            background: #202936;
+            color: #ffffff;
+            border-radius: 14px;
+            border-left: 5px solid #f97618;
+            box-shadow: 0 12px 32px rgba(0, 0, 0, 0.28);
+            font-size: 14px;
+            line-height: 1.4;
+        }
+        .push-banner[hidden] { display: none; }
+        .push-banner-icono { font-size: 26px; flex-shrink: 0; }
+        .push-banner-texto { flex: 1; min-width: 0; }
+        .push-banner-texto strong { display: block; font-size: 15px; margin-bottom: 2px; }
+        .push-banner-texto .solo-ios, .push-banner[data-modo="ios"] .push-banner-texto .solo-activar { display: none; }
+        .push-banner[data-modo="ios"] .push-banner-texto .solo-ios { display: inline; }
+        .push-banner-acciones { display: flex; gap: 8px; flex-shrink: 0; }
+        .push-banner button {
+            border: 0;
+            border-radius: 9px;
+            padding: 9px 14px;
+            font-weight: 700;
+            font-size: 14px;
+            cursor: pointer;
+        }
+        .push-banner [data-push-activar] { background: #f97618; color: #ffffff; }
+        .push-banner [data-push-cerrar] { background: rgba(255, 255, 255, 0.12); color: #ffffff; }
+        @media (max-width: 480px) {
+            .push-banner { flex-wrap: wrap; }
+            .push-banner-acciones { width: 100%; }
+            .push-banner-acciones button { flex: 1; }
+        }
+        @media print { .push-banner { display: none !important; } }
         #btn-logout {
             background: transparent !important;
             border-color: rgba(255, 255, 255, 0.14) !important;
@@ -1679,12 +1765,13 @@
     </script>
     <link rel="stylesheet" href="{% static 'design.css' %}?v=20261028-1">
     {% block extra_head %}{% endblock %}
-    <link rel="stylesheet" href="{% static 'responsive.css' %}?v=20261028-1">
+    <link rel="stylesheet" href="{% static 'responsive.css' %}?v=20261122-1">
     <link rel="stylesheet" href="{% static 'tables.css' %}?v=20261028-1">
     {% if puede_gestionar_equipos or puede_gestionar_pagos %}
     <link rel="stylesheet" href="{% static 'econobot/econobot.css' %}?v=20261025-3">
     {% endif %}
     <script src="{% static 'table_navigation.js' %}?v=20260927-1" defer></script>
+    <script src="{% static 'filtros_movil.js' %}?v=20261122-1" defer></script>
     <!-- SweetAlert2 -->
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 <script>
@@ -1756,7 +1843,7 @@
                 {% if es_asesor and notificaciones_asesora_count > 0 %}
                     <div class="noti-bell-wrap">
                         <button type="button" class="noti-bell-btn" id="noti-bell-btn" aria-expanded="false" aria-controls="noti-bell-menu" title="Notificaciones pendientes">
-                            🔔
+                            🔔<span class="nav-etiqueta-movil">Notificaciones</span>
                             <span class="noti-bell-count">{{ notificaciones_asesora_count }}</span>
                         </button>
                         <div class="noti-menu" id="noti-bell-menu">
@@ -1785,7 +1872,7 @@
                 {% if es_tecnico and notificaciones_tecnico_count > 0 %}
                     <div class="noti-bell-wrap">
                         <button type="button" class="noti-bell-btn" id="tecnico-bell-btn" aria-expanded="false" aria-controls="tecnico-bell-menu" title="Equipos que una asesora te pide revisar">
-                            🔔
+                            🔔<span class="nav-etiqueta-movil">Equipos por revisar</span>
                             <span class="noti-bell-count">{{ notificaciones_tecnico_count }}</span>
                         </button>
                         <div class="noti-menu" id="tecnico-bell-menu">
@@ -1814,7 +1901,7 @@
                 {% if alertas_total_count > 0 %}
                     <a href="{% url 'econotec:bienvenida' %}" class="alert-badge-link"
                        title="Tienes alertas pendientes: ver dashboard">
-                        🚨
+                        🚨<span class="nav-etiqueta-movil">Alertas</span>
                         <span class="alert-badge-num">{{ alertas_total_count }}</span>
                     </a>
                 {% endif %}
@@ -1822,7 +1909,7 @@
                     {% if notificaciones_inventario_admin_count > 0 %}
                         <div class="noti-bell-wrap">
                             <button type="button" class="noti-bell-btn" id="inventario-admin-bell-btn" aria-expanded="false" aria-controls="inventario-admin-bell-menu" title="Inventario con stock crítico">
-                                📦
+                                📦<span class="nav-etiqueta-movil">Inventario bajo</span>
                                 <span class="noti-bell-count">{{ notificaciones_inventario_admin_count }}</span>
                             </button>
                             <div class="noti-menu" id="inventario-admin-bell-menu">
@@ -1852,7 +1939,7 @@
                     {% if notificaciones_revision_admin_count > 0 %}
                         <div class="noti-bell-wrap">
                             <button type="button" class="noti-bell-btn" id="revision-admin-bell-btn" aria-expanded="false" aria-controls="revision-admin-bell-menu" title="Avisos de equipos en Revisión">
-                                🔎
+                                🔎<span class="nav-etiqueta-movil">Revisión</span>
                                 <span class="noti-bell-count">{{ notificaciones_revision_admin_count }}</span>
                             </button>
                             <div class="noti-menu" id="revision-admin-bell-menu">
@@ -1884,7 +1971,7 @@
                     {% endif %}
                     <div class="noti-bell-wrap">
                         <button type="button" class="noti-bell-btn" id="cambios-admin-bell-btn" aria-expanded="false" aria-controls="cambios-admin-bell-menu" title="Cambios de técnicos y asesoras" aria-label="Cambios de técnicos y asesoras">
-                            🔔
+                            🔔<span class="nav-etiqueta-movil">Cambios</span>
                             {% if notificaciones_cambio_admin_count > 0 %}<span class="noti-bell-count">{{ notificaciones_cambio_admin_count }}</span>{% endif %}
                         </button>
                         <div class="noti-menu" id="cambios-admin-bell-menu">
@@ -1929,6 +2016,12 @@
                 
 
 
+                {% if es_admin or es_tecnico or es_asesor %}
+                <button type="button" class="push-nav-btn" data-push-toggle hidden title="Notificaciones en este dispositivo">
+                    <span class="push-nav-icono" aria-hidden="true">🔕</span>
+                    <span class="push-nav-texto">Activar notificaciones</span>
+                </button>
+                {% endif %}
                 <button type="button" class="theme-toggle" id="theme-toggle-btn" title="Alternar modo oscuro">
                     <span class="icon-light" style="display:none;">🌞</span>
                     <span class="icon-dark">🌙</span>
@@ -3338,5 +3431,28 @@
             });
         }
     </script>
+    {% if es_admin or es_tecnico or es_asesor %}
+    <div id="push-config" hidden
+         data-sw="{% url 'econotec:pwa_service_worker' %}"
+         data-clave="{% url 'econotec:push_clave' %}"
+         data-suscribir="{% url 'econotec:push_suscribir' %}"
+         data-desuscribir="{% url 'econotec:push_desuscribir' %}"
+         data-probar="{% url 'econotec:push_probar' %}"
+         data-usuario="{{ user.pk }}"
+         data-csrf="{{ csrf_token }}"></div>
+    <div class="push-banner no-print" id="push-banner" role="dialog" aria-live="polite" aria-label="Notificaciones" hidden>
+        <span class="push-banner-icono" aria-hidden="true">🔔</span>
+        <div class="push-banner-texto">
+            <strong>Recibe los avisos en este dispositivo</strong>
+            <span class="solo-activar">Te llegarán los avisos de tus campanitas aunque no tengas Econotec abierto.</span>
+            <span class="solo-ios">En iPhone, primero añade Econotec a tu pantalla de inicio.</span>
+        </div>
+        <div class="push-banner-acciones">
+            <button type="button" data-push-cerrar>Ahora no</button>
+            <button type="button" data-push-activar>Activar</button>
+        </div>
+    </div>
+    <script src="{% static 'push.js' %}?v=20261122-1" defer></script>
+    {% endif %}
 </body>
 </html>

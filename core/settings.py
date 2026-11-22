@@ -54,6 +54,11 @@ SISTEMA_URL = env('SISTEMA_URL', default='https://econosystem.cc')
 TAREAS_DIARIAS_HORA = env.int('TAREAS_DIARIAS_HORA', default=7)
 # Aviso de bodegaje vencido al cliente cada 7 días (False para apagarlo).
 AVISO_BODEGAJE_AUTOMATICO = env.bool('AVISO_BODEGAJE_AUTOMATICO', default=True)
+# Notificaciones push al celular (avisos de las campanitas). Las claves VAPID
+# se crean solas en la base de datos; definirlas aquí solo si se quieren fijar.
+PUSH_ACTIVO = env.bool('PUSH_ACTIVO', default=True)
+VAPID_PUBLIC_KEY = env('VAPID_PUBLIC_KEY', default='')
+VAPID_PRIVATE_KEY = env('VAPID_PRIVATE_KEY', default='')
 EMAIL_BACKEND = env('EMAIL_BACKEND', default='')
 if not EMAIL_BACKEND:
     EMAIL_BACKEND = (
