@@ -5,6 +5,12 @@
 
 {% block content %}
 <style>
+    .admin-acciones { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+    /* En el celular los accesos quedan en dos columnas parejas. */
+    @media (max-width: 640px) {
+        .admin-acciones { display: grid; grid-template-columns: 1fr 1fr; width: 100%; }
+        .admin-acciones .btn { justify-content: center; text-align: center; white-space: normal; min-height: 46px; margin: 0; }
+    }
     .filter-bar {
         background: var(--card-bg);
         padding: 16px 20px;
@@ -931,7 +937,7 @@
         <h2 class="page-title">Registro <span class="accent">Administrativo</span></h2>
         <p class="page-subtitle">Balance financiero — {{ mes_nombre }} {{ year }}</p>
     </div>
-    <div style="display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end;">
+    <div class="admin-acciones">
         {% if mostrar_valores_monetarios %}
         <a href="#historico-mensual" class="btn btn-secondary">🔐 Caja</a>
         <a href="#ranking-admin" class="btn btn-secondary">🏆 Ranking de Técnicos</a>

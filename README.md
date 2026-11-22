@@ -257,6 +257,28 @@ defecto `7`) y `SISTEMA_URL` (por defecto `https://econosystem.cc`, para los
 enlaces de los correos). Para enviarlo en el momento:
 `python manage.py tareas_diarias --forzar`.
 
+### Notificaciones en el celular (app instalable)
+
+Econotec se puede instalar como app en el celular y recibir notificaciones
+push, aunque no esté abierto:
+
+- **Android (Chrome)**: entrar al sistema y tocar **Activar** en el aviso de
+  abajo (o en el menú: «Activar notificaciones»). Chrome también ofrece
+  «Instalar app».
+- **iPhone (iOS 16.4 o más)**: en Safari, *Compartir → Añadir a pantalla de
+  inicio*, abrir Econotec desde ese ícono y tocar **Activar notificaciones**.
+
+Llegan los mismos avisos de las campanitas: a los **admins**, los cambios 🔔,
+revisión 🔎 e inventario 📦; al **técnico**, los equipos que una asesora le
+pide revisar; a la **asesora**, sus cobros pendientes. Al tocar la
+notificación se abre el aviso. Cada dispositivo se activa por separado y deja
+de recibir al cerrar sesión o desde el mismo botón del menú.
+
+Las claves VAPID se crean solas en la base de datos la primera vez. Variables
+opcionales del `.env`: `PUSH_ACTIVO=False` para apagarlo, y `VAPID_PUBLIC_KEY`
+/ `VAPID_PRIVATE_KEY` para fijar claves propias. Requiere HTTPS (en
+`localhost` también funciona).
+
 ---
 
 ## 📞 Contacto Econotec

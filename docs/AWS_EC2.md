@@ -203,6 +203,14 @@ cd /var/www/EconotecFinal
 tail -n 20 tareas_diarias.log
 ```
 
+## Notificaciones push (app en el celular)
+
+No hay que configurar nada en el servidor: las dependencias (`pywebpush`)
+vienen en `requirements.lock` y las claves VAPID se crean solas en la base de
+datos. Solo hace falta que el sitio se sirva por **HTTPS** y que `/service-worker.js`
+y `/manifest.webmanifest` lleguen a Django (si Nginx sirve archivos de la raíz,
+no debe interceptar esas dos rutas). Para apagarlo: `PUSH_ACTIVO=False` en el `.env`.
+
 ## Backup opcional a S3
 
 Si usas SQLite, Econotec incluye un comando de backup a S3:

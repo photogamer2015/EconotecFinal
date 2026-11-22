@@ -3533,3 +3533,42 @@ class CajaGrande(models.Model):
 
     def __str__(self):
         return f'Caja {self.anio}'
+
+
+# ─────────────────────────────────────────────────────────
+# Notificaciones push al celular (la web instalada como app)
+# ─────────────────────────────────────────────────────────
+
+class SuscripcionPush(models.Model):
+    """Un navegador o celular que aceptó recibir notificaciones de un usuario."""
+    usuario = models.ForeignKey(
+        'auth.User',
+        on_delete=models.CASCADE,
+        related_name='suscripciones_push',
+        verbose_name='Usuario',
+    )
+    endpoint = models.CharField(max_length=700, unique=True, verbose_name='Dirección del servicio push')
+    p256dh = models.CharField(max_length=200, verbose_name='Clave pública del navegador')
+    auth = models.CharField(max_length=100, verbose_name='Secreto del navegador')
+    dispositivo = models.CharField(max_length=300, blank=True, verbose_name='Navegador / dispositivo')
+    creado = models.DateTimeField(auto_now_add=True)
+    ultimo_envio = models.DateTimeField(null=True, blank=True, verbose_name='Último envío correcto')
+
+    class Meta:
+        verbose_name = 'Suscripción a notificaciones push'
+        verbose_name_plural = 'Suscripciones a notificaciones push'
+        ordering = ['-creado']
+
+    def __str__(self):
+        return f'{self.usuario} — {self.dispositivo[:60]}'
+
+
+class ClavesPush(models.Model):
+    """Claves VAPID del servidor. Se crean solas la primera vez (una sola fila)."""
+    clave_publica = models.CharField(max_length=200)
+    clave_privada = models.TextField()
+    creado = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'Claves de notificaciones push'
+        verbose_name_plural = 'Claves de notificaciones push'

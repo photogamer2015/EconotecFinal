@@ -6,3 +6,4 @@ reportlab>=4.0
 qrcode>=8.0
 pillow>=10.0
 boto3>=1.28
+pywebpush>=2.0

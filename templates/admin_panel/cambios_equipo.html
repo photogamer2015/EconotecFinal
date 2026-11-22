@@ -2,6 +2,40 @@
 
 {% block title %}Cambios del equipo — Econotec{% endblock %}
 
+{% block extra_head %}
+<style>
+    /* En el celular cada cambio se ve como una tarjeta en lugar de la tabla. */
+    .cambios-tarjetas { display: none; }
+    @media (max-width: 760px) {
+        .cambios-tabla { display: none; }
+        .cambios-tarjetas { display: grid; gap: 10px; }
+    }
+    .cambio-tarjeta {
+        display: block;
+        padding: 12px 14px;
+        border: 1px solid var(--border-color, rgba(127, 127, 127, 0.25));
+        border-radius: 12px;
+        background: var(--card-bg);
+        color: inherit;
+        text-decoration: none;
+    }
+    .cambio-tarjeta.sin-ver { border-left: 4px solid var(--primary); }
+    .cambio-tarjeta-cabecera {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px 10px;
+        align-items: baseline;
+        justify-content: space-between;
+        font-size: 12px;
+        color: var(--text-muted);
+        margin-bottom: 6px;
+    }
+    .cambio-tarjeta-cabecera strong { color: var(--text-main); font-size: 14px; }
+    .cambio-tarjeta-mensaje { font-size: 14px; line-height: 1.45; overflow-wrap: anywhere; }
+    .cambio-tarjeta-estado { margin-top: 6px; font-size: 12px; font-weight: 700; color: var(--primary); }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="crumb">
     <a href="{% url 'econotec:bienvenida' %}">Inicio</a> /
@@ -17,7 +51,19 @@
 <hr style="margin: 16px 0 22px; border: none; border-top: 1px solid var(--border);">
 
 {% if page_obj %}
-<div class="table-wrap">
+<div class="cambios-tarjetas">
+    {% for aviso in page_obj %}
+    <a href="{% url 'econotec:notificacion_cambio_admin_ver' pk=aviso.pk %}" class="cambio-tarjeta{% if not aviso.leida %} sin-ver{% endif %}">
+        <div class="cambio-tarjeta-cabecera">
+            <span><strong>{{ aviso.usuario_nombre }}</strong>{% if aviso.codigo %} · {{ aviso.codigo }}{% endif %}</span>
+            <span>{{ aviso.creado|date:"d/m/Y H:i" }}</span>
+        </div>
+        <div class="cambio-tarjeta-mensaje">{{ aviso.mensaje }}</div>
+        {% if not aviso.leida %}<div class="cambio-tarjeta-estado">Sin ver</div>{% endif %}
+    </a>
+    {% endfor %}
+</div>
+<div class="table-wrap cambios-tabla">
     <table>
         <thead>
             <tr>

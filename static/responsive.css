@@ -938,3 +938,14 @@
         display: none !important;
     }
 }
+
+/* Filtros plegables en el celular (static/filtros_movil.js). */
+.filtros-movil-toggle { display: none !important; }
+@media (max-width: 760px) {
+    .filtros-plegables .filtros-movil-toggle {
+        display: inline-flex !important;
+        justify-content: center;
+        width: 100%;
+    }
+    .filtros-plegables:not(.filtros-abiertos) > .filtro-extra { display: none !important; }
+}
