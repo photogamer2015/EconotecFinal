@@ -48,6 +48,10 @@ INGRESO_EMAIL_ADJUNTAR_PDF = env.bool('INGRESO_EMAIL_ADJUNTAR_PDF', default=True
 SALIDA_EMAIL_AUTOMATICO = env.bool('SALIDA_EMAIL_AUTOMATICO', default=True)
 PAGO_EMAIL_AUTOMATICO = env.bool('PAGO_EMAIL_AUTOMATICO', default=True)
 EQUIPO_EMAIL_ADJUNTAR_PDF = env.bool('EQUIPO_EMAIL_ADJUNTAR_PDF', default=True)
+# Tareas diarias (cron): dirección del sistema para los enlaces de los correos
+# y hora (Guayaquil) a la que se envían el resumen del admin y los recordatorios.
+SISTEMA_URL = env('SISTEMA_URL', default='https://econosystem.cc')
+TAREAS_DIARIAS_HORA = env.int('TAREAS_DIARIAS_HORA', default=7)
 EMAIL_BACKEND = env('EMAIL_BACKEND', default='')
 if not EMAIL_BACKEND:
     EMAIL_BACKEND = (

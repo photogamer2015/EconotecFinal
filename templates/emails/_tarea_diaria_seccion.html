@@ -1,0 +1,21 @@
+{% load econotec_extras %}{% if items %}
+<tr>
+    <td style="padding:0 30px 22px;">
+        <div style="padding-bottom:9px; color:#f36a0b; font-size:14px; font-weight:800; text-transform:uppercase;">{{ titulo }} ({{ items|length }})</div>
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="border:1px solid #eadfd8; border-radius:12px; overflow:hidden; font-size:13px;">
+            {% for item in items %}
+            <tr>
+                <td valign="top" style="padding:11px 14px;{% if not forloop.first %} border-top:1px solid #eadfd8;{% endif %} white-space:nowrap;">
+                    {% if item.url %}<a href="{{ item.url }}" style="color:#c62828; font-weight:900; text-decoration:none;">{{ item.ingreso.codigo_equipo }}</a>{% else %}<strong style="color:#c62828;">{{ item.ingreso.codigo_equipo }}</strong>{% endif %}
+                </td>
+                <td valign="top" style="padding:11px 14px;{% if not forloop.first %} border-top:1px solid #eadfd8;{% endif %}">
+                    <strong>{{ item.ingreso.cliente.nombres }}</strong><br>
+                    <span style="color:#687180;">{{ item.ingreso.tipo_equipo_display }} {{ item.ingreso.marca }}{% if item.estado %} · {{ item.estado }}{% endif %}{% if mostrar_tecnico and item.ingreso.tecnico_encargado %} · Téc.: {{ item.ingreso.tecnico_encargado.get_full_name|default:item.ingreso.tecnico_encargado.username }}{% endif %}{% if 'monto' in item %} · Bodegaje {{ item.monto|dinero_signo }}{% endif %}</span>
+                </td>
+                <td valign="top" align="right" style="padding:11px 14px;{% if not forloop.first %} border-top:1px solid #eadfd8;{% endif %} color:#c62828; font-weight:900; white-space:nowrap;">{{ item.dias }} días</td>
+            </tr>
+            {% endfor %}
+        </table>
+    </td>
+</tr>
+{% endif %}

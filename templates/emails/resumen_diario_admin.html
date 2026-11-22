@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="es">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Resumen diario Econotec {{ hoy|date:"d/m/Y" }}</title>
+</head>
+<body style="margin:0; padding:0; background:#f4eee9; color:#202936; font-family:Arial,Helvetica,sans-serif;">
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="width:100%; background:#f4eee9;">
+        <tr>
+            <td align="center" style="padding:28px 12px;">
+                <table role="presentation" width="640" cellspacing="0" cellpadding="0" border="0" style="width:100%; max-width:640px; background:#ffffff; border-radius:18px; overflow:hidden;">
+                    <tr>
+                        <td style="padding:25px 30px; background:#202936; border-bottom:5px solid #f97618; color:#ffffff; font-size:23px; font-weight:800;">ECONOTEC</td>
+                    </tr>
+                    <tr>
+                        <td style="padding:28px 30px 20px;">
+                            <div style="color:#f36a0b; font-size:12px; font-weight:900; letter-spacing:1.1px; text-transform:uppercase;">Resumen diario · {{ hoy|date:"d/m/Y" }}</div>
+                            <h1 style="margin:8px 0 10px; color:#202936; font-size:25px; line-height:1.2;">{{ total }} equipo{{ total|pluralize }} por revisar</h1>
+                            <p style="margin:0; color:#5f6875; font-size:15px; line-height:1.6;">Hola, {{ destinatario }}. Esto es lo que necesita seguimiento hoy.</p>
+                        </td>
+                    </tr>
+                    {% include "emails/_tarea_diaria_seccion.html" with titulo=titulos.diagnostico items=diagnostico mostrar_tecnico=True %}
+                    {% include "emails/_tarea_diaria_seccion.html" with titulo=titulos.reparacion items=reparacion mostrar_tecnico=True %}
+                    {% include "emails/_tarea_diaria_seccion.html" with titulo=titulos.bodegaje items=bodegaje %}
+                    {% include "emails/_tarea_diaria_seccion.html" with titulo=titulos.prueba items=prueba %}
+                    {% if url_inicio %}
+                    <tr>
+                        <td align="center" style="padding:4px 30px 28px;">
+                            <a href="{{ url_inicio }}" style="display:inline-block; padding:12px 22px; background:#f97618; color:#ffffff; border-radius:10px; font-weight:800; text-decoration:none;">Abrir Econotec</a>
+                        </td>
+                    </tr>
+                    {% endif %}
+                    <tr>
+                        <td align="center" style="padding:20px 30px; background:#202936; color:#cdd2d9; font-size:11px; line-height:1.65;">
+                            Mensaje automático diario del sistema Econotec. Los equipos en «No molestar» no se incluyen.
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>

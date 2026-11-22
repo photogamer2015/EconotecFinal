@@ -234,6 +234,23 @@ El script trae los cambios desde `origin/main`, instala dependencias, aplica
 migraciones, ejecuta `collectstatic`, recrea los roles base y reinicia el
 servicio `systemd` si existe.
 
+### Tareas diarias automáticas
+
+Al desplegar, el script también instala un cron que cada día a las **7:00
+(Guayaquil)** envía:
+
+- **Resumen diario al admin**: un correo a cada superusuario activo con correo,
+  con los equipos sin diagnosticar (4+ días), en reparación (10+ días), con
+  bodegaje vencido y los Equipos de prueba con 5+ días.
+- **Recordatorio al técnico**: un correo a cada técnico activo con correo, solo
+  con sus equipos sin diagnosticar (4+ días) o en reparación (5+ días).
+
+Si no hay nada atrasado no se envía correo, y los equipos en «No molestar» no
+se incluyen. Variables opcionales del `.env`: `TAREAS_DIARIAS_HORA` (por
+defecto `7`) y `SISTEMA_URL` (por defecto `https://econosystem.cc`, para los
+enlaces de los correos). Para enviarlo en el momento:
+`python manage.py tareas_diarias --forzar`.
+
 ---
 
 ## 📞 Contacto Econotec
