@@ -155,11 +155,14 @@
     function explicarIOS() {
         aviso(
             'Notificaciones en iPhone',
-            'En iPhone las notificaciones solo funcionan con Econotec instalado:<br><br>' +
-            '1. Abre esta página en <b>Safari</b>.<br>' +
-            '2. Toca <b>Compartir</b> (el cuadrado con la flecha ↑).<br>' +
-            '3. Elige <b>Añadir a pantalla de inicio</b>.<br>' +
-            '4. Abre Econotec desde el ícono nuevo y toca <b>Activar notificaciones</b>.',
+            '<div style="text-align:left">' +
+            'En iPhone las notificaciones solo funcionan con Econotec instalado (iOS 16.4 o más nuevo):<br><br>' +
+            '1. Toca <b>Compartir</b> (el cuadrado con la flecha ↑):<br>' +
+            '&nbsp;&nbsp;• En <b>Safari</b>: está en la barra de abajo.<br>' +
+            '&nbsp;&nbsp;• En <b>Chrome</b>: está junto a la dirección, arriba a la derecha.<br>' +
+            '2. Elige <b>Añadir a pantalla de inicio</b> (si no aparece, desliza hacia abajo en la lista).<br>' +
+            '3. Abre Econotec desde el ícono nuevo y toca <b>Activar notificaciones</b>.' +
+            '</div>',
         );
     }
 
