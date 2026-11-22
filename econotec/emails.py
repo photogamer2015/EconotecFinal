@@ -7,6 +7,7 @@ from decimal import Decimal
 from django.conf import settings
 from django.core.mail import EmailMultiAlternatives
 from django.template.loader import render_to_string
+from django.utils import timezone
 
 from .alertas import COSTO_BODEGAJE_DIA, UMBRAL_DIAS_BODEGAJE
 from .models import Abono, IngresoEquipo, NotificacionTecnico, SalidaEquipo
@@ -460,7 +461,14 @@ def enviar_correo_bodegaje(salida):
             pdf,
             'application/pdf',
         )
-    return bool(correo.send(fail_silently=False))
+    enviado = bool(correo.send(fail_silently=False))
+    if enviado:
+        # Manual o automático: reinicia los días hasta el próximo aviso.
+        salida.bodegaje_correo_enviado_en = timezone.now()
+        SalidaEquipo.objects.filter(pk=salida.pk).update(
+            bodegaje_correo_enviado_en=salida.bodegaje_correo_enviado_en,
+        )
+    return enviado
 
 
 def enviar_correo_bodegaje_seguro(salida_pk):

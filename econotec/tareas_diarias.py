@@ -16,7 +16,7 @@ Si no hay nada que avisar, no se envía correo. Los equipos en "No molestar"
 no se incluyen, igual que en el inicio.
 """
 import logging
-from datetime import date
+from datetime import date, timedelta
 
 from django.conf import settings
 from django.contrib.auth.models import User
@@ -35,6 +35,7 @@ from .alertas import (
     equipos_reparacion_demorada_qs,
     salidas_bodegaje_qs,
 )
+from .emails import enviar_correo_bodegaje_seguro
 from .permisos import GRUPOS_TECNICO
 
 
@@ -180,4 +181,30 @@ def enviar_recordatorios_tecnicos(hoy=None):
                 enviados += 1
         except Exception:
             logger.exception('No se pudo enviar el recordatorio al técnico %s', tecnico.username)
+    return enviados
+
+
+DIAS_ENTRE_AVISOS_BODEGAJE = 7
+
+
+def bodegajes_por_avisar_qs(hoy=None):
+    """Bodegajes vencidos con cliente con correo, sin aviso en los últimos 7 días."""
+    hoy = hoy or date.today()
+    limite = hoy - timedelta(days=DIAS_ENTRE_AVISOS_BODEGAJE - 1)
+    return (
+        salidas_bodegaje_qs(usuario=None)
+        .exclude(ingreso__cliente__correo='')
+        .exclude(ingreso__cliente__correo__isnull=True)
+        .exclude(bodegaje_correo_enviado_en__date__gte=limite)
+    )
+
+
+def enviar_avisos_bodegaje_clientes(hoy=None):
+    """Devuelve cuántos clientes recibieron el aviso de bodegaje."""
+    if not getattr(settings, 'AVISO_BODEGAJE_AUTOMATICO', True):
+        return 0
+    enviados = 0
+    for pk in list(bodegajes_por_avisar_qs(hoy).values_list('pk', flat=True)):
+        if enviar_correo_bodegaje_seguro(pk):
+            enviados += 1
     return enviados

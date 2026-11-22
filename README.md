@@ -245,6 +245,11 @@ Al desplegar, el script también instala un cron que cada día a las **7:00
 - **Recordatorio al técnico**: un correo a cada técnico activo con correo, con
   las mismas 3 advertencias pero solo de sus equipos (los que tiene encargados
   y los bodegajes de los que él reparó).
+- **Aviso de bodegaje al cliente**: el mismo correo «Aviso importante de
+  retiro y bodegaje» del botón manual, a cada cliente con correo y bodegaje
+  vencido. Se repite cada 7 días mientras no retire (un envío manual reinicia
+  la cuenta) y se deja de enviar al retirar, chatarrizar o poner el equipo en
+  «No molestar». Se apaga con `AVISO_BODEGAJE_AUTOMATICO=False` en el `.env`.
 
 Si no hay nada atrasado no se envía correo, y los equipos en «No molestar» no
 se incluyen. Variables opcionales del `.env`: `TAREAS_DIARIAS_HORA` (por
