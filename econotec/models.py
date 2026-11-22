@@ -2199,6 +2199,12 @@ class SalidaEquipo(RetencionFactura):
         help_text='Si está activo, este equipo no aparecerá en la alerta de bodegaje '
                   'del dashboard (pero el bodegaje sigue acumulándose).',
     )
+    bodegaje_correo_enviado_en = models.DateTimeField(
+        null=True, blank=True,
+        verbose_name='Último aviso de bodegaje por correo',
+        help_text='Se llena al enviar al cliente el aviso de retiro y bodegaje, '
+                  'a mano o automático; el automático se repite cada 7 días.',
+    )
 
     # ── Auditoría ────────────────────────────────────────
     registrado_por = models.ForeignKey(

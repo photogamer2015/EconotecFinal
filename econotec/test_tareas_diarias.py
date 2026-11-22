@@ -21,7 +21,12 @@ from django.test import TestCase, override_settings
 from django.utils import timezone
 
 from .models import Cliente, IngresoEquipo, SalidaEquipo
-from .tareas_diarias import enviar_recordatorios_tecnicos, enviar_resumen_admin
+from .emails import enviar_correo_bodegaje_seguro
+from .tareas_diarias import (
+    enviar_avisos_bodegaje_clientes,
+    enviar_recordatorios_tecnicos,
+    enviar_resumen_admin,
+)
 
 
 @override_settings(
@@ -189,3 +194,99 @@ class TareasDiariasTests(TestCase):
         with self._a_las(15):
             call_command('tareas_diarias', '--forzar', stdout=StringIO())
         self.assertEqual(len(mail.outbox), 2)
+
+
+@override_settings(
+    EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend',
+    EQUIPO_EMAIL_ADJUNTAR_PDF=False,
+    AVISO_BODEGAJE_AUTOMATICO=True,
+)
+class AvisoBodegajeClienteTests(TestCase):
+    """El aviso de bodegaje vencido llega solo al cliente y se repite cada 7 días."""
+
+    def setUp(self):
+        User = get_user_model()
+        self.admin = User.objects.create_superuser(username='root', email='', password='x')
+        self.tecnico = User.objects.create_user(username='victor', first_name='Victor', email='')
+        self.cliente = Cliente.objects.create(
+            cedula='0912345678', nombres='Cesar Sandoya', whatsapp='0991234567', correo='cesar@example.com',
+        )
+
+    def bodegaje(self, dias=8, cliente=None, **salida):
+        ingreso = IngresoEquipo.objects.create(
+            sede='guayaquil', fecha_ingreso=date.today() - timedelta(days=dias + 3),
+            cliente=cliente or self.cliente, tipo_equipo='laptop', marca='Lenovo', modelo_serie='X1',
+            problema_reportado='No enciende', valor_acordado=Decimal('25.00'),
+            tecnico_encargado=self.tecnico, registrado_por=self.admin,
+            estado='en_reparacion', subestado_reparacion='en_reparacion',
+        )
+        datos = {
+            'ingreso': ingreso, 'fecha_salida': date.today() - timedelta(days=dias),
+            'estado_reparacion': 'pendiente_retiro', 'tecnico_reparo': self.tecnico,
+            'valor_final_cobrado': Decimal('0.00'), 'metodo_pago_final': 'sin_pago',
+        }
+        datos.update(salida)
+        return SalidaEquipo.objects.create(**datos)
+
+    def test_cliente_con_bodegaje_vencido_recibe_el_aviso(self):
+        salida = self.bodegaje(dias=8)
+
+        self.assertEqual(enviar_avisos_bodegaje_clientes(), 1)
+
+        self.assertEqual(mail.outbox[0].to, ['cesar@example.com'])
+        self.assertIn('Aviso importante de retiro y bodegaje', mail.outbox[0].subject)
+        salida.refresh_from_db()
+        self.assertIsNotNone(salida.bodegaje_correo_enviado_en)
+
+    def test_tambien_los_que_ya_llevan_muchos_dias(self):
+        self.bodegaje(dias=116)
+        self.assertEqual(enviar_avisos_bodegaje_clientes(), 1)
+
+    def test_se_repite_cada_7_dias(self):
+        salida = self.bodegaje(dias=20)
+        self.assertEqual(enviar_avisos_bodegaje_clientes(), 1)
+        self.assertEqual(enviar_avisos_bodegaje_clientes(), 0)
+
+        SalidaEquipo.objects.filter(pk=salida.pk).update(
+            bodegaje_correo_enviado_en=timezone.now() - timedelta(days=6),
+        )
+        self.assertEqual(enviar_avisos_bodegaje_clientes(), 0)
+
+        SalidaEquipo.objects.filter(pk=salida.pk).update(
+            bodegaje_correo_enviado_en=timezone.now() - timedelta(days=7),
+        )
+        self.assertEqual(enviar_avisos_bodegaje_clientes(), 1)
+        self.assertEqual(len(mail.outbox), 2)
+
+    def test_envio_manual_reinicia_los_7_dias(self):
+        salida = self.bodegaje(dias=8)
+        self.assertTrue(enviar_correo_bodegaje_seguro(salida.pk))
+
+        self.assertEqual(enviar_avisos_bodegaje_clientes(), 0)
+        self.assertEqual(len(mail.outbox), 1)
+
+    def test_no_se_envia_si_no_corresponde(self):
+        sin_correo = Cliente.objects.create(cedula='0911111111', nombres='Sin Correo', correo='')
+        self.bodegaje(dias=8, cliente=sin_correo)
+        self.bodegaje(dias=4)  # todavía en días de gracia
+        self.bodegaje(dias=30, fecha_retiro_real=date.today())  # ya retiró
+        self.bodegaje(dias=30, estado_reparacion='chatarrerizacion')
+        self.bodegaje(dias=30, bodegaje_silenciado=True)  # No molestar
+
+        self.assertEqual(enviar_avisos_bodegaje_clientes(), 0)
+        self.assertEqual(mail.outbox, [])
+
+    @override_settings(AVISO_BODEGAJE_AUTOMATICO=False)
+    def test_se_puede_apagar(self):
+        self.bodegaje(dias=8)
+        self.assertEqual(enviar_avisos_bodegaje_clientes(), 0)
+
+    @override_settings(TAREAS_DIARIAS_HORA=7)
+    def test_comando_envia_el_aviso_a_las_7(self):
+        self.bodegaje(dias=8)
+        momento = timezone.make_aware(datetime.combine(date.today(), datetime.min.time()).replace(hour=7))
+        salida = StringIO()
+        with mock.patch('econotec.management.commands.tareas_diarias.timezone.localtime', return_value=momento):
+            call_command('tareas_diarias', stdout=salida)
+        self.assertIn('Bodegaje: 1 aviso(s) a clientes', salida.getvalue())
+        self.assertEqual(mail.outbox[-1].to, ['cesar@example.com'])

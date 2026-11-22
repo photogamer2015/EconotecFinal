@@ -52,6 +52,8 @@ EQUIPO_EMAIL_ADJUNTAR_PDF = env.bool('EQUIPO_EMAIL_ADJUNTAR_PDF', default=True)
 # y hora (Guayaquil) a la que se envían el resumen del admin y los recordatorios.
 SISTEMA_URL = env('SISTEMA_URL', default='https://econosystem.cc')
 TAREAS_DIARIAS_HORA = env.int('TAREAS_DIARIAS_HORA', default=7)
+# Aviso de bodegaje vencido al cliente cada 7 días (False para apagarlo).
+AVISO_BODEGAJE_AUTOMATICO = env.bool('AVISO_BODEGAJE_AUTOMATICO', default=True)
 EMAIL_BACKEND = env('EMAIL_BACKEND', default='')
 if not EMAIL_BACKEND:
     EMAIL_BACKEND = (

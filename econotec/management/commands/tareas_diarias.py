@@ -16,11 +16,18 @@ from django.conf import settings
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 
-from econotec.tareas_diarias import enviar_recordatorios_tecnicos, enviar_resumen_admin
+from econotec.tareas_diarias import (
+    enviar_avisos_bodegaje_clientes,
+    enviar_recordatorios_tecnicos,
+    enviar_resumen_admin,
+)
 
 
 class Command(BaseCommand):
-    help = 'Envía el resumen diario al admin y el recordatorio de equipos atrasados a cada técnico.'
+    help = (
+        'Envía el resumen diario al admin, el recordatorio de equipos atrasados a cada técnico '
+        'y el aviso de bodegaje vencido a los clientes.'
+    )
 
     def add_arguments(self, parser):
         parser.add_argument(
@@ -38,7 +45,9 @@ class Command(BaseCommand):
         hoy = ahora.date()
         admins = enviar_resumen_admin(hoy)
         tecnicos = enviar_recordatorios_tecnicos(hoy)
+        clientes = enviar_avisos_bodegaje_clientes(hoy)
         self.stdout.write(self.style.SUCCESS(
             f'{ahora:%Y-%m-%d %H:%M} · Resumen diario: {admins} correo(s) a admins · '
-            f'Recordatorios: {tecnicos} correo(s) a técnicos.'
+            f'Recordatorios: {tecnicos} correo(s) a técnicos · '
+            f'Bodegaje: {clientes} aviso(s) a clientes.'
         ))
