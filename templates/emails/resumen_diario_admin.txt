@@ -1,7 +1,7 @@
 RESUMEN DIARIO ECONOTEC · {{ hoy|date:"d/m/Y" }}
 
 Hola, {{ destinatario }}. Hay {{ total }} equipo{{ total|pluralize }} por revisar hoy.
-{% include "emails/_tarea_diaria_seccion.txt" with titulo=titulos.diagnostico items=diagnostico mostrar_tecnico=True %}{% include "emails/_tarea_diaria_seccion.txt" with titulo=titulos.reparacion items=reparacion mostrar_tecnico=True %}{% include "emails/_tarea_diaria_seccion.txt" with titulo=titulos.bodegaje items=bodegaje %}{% include "emails/_tarea_diaria_seccion.txt" with titulo=titulos.prueba items=prueba %}{% if url_inicio %}
+{% include "emails/_tarea_diaria_seccion.txt" with titulo=titulos.diagnostico items=diagnostico mostrar_tecnico=True %}{% include "emails/_tarea_diaria_seccion.txt" with titulo=titulos.reparacion items=reparacion mostrar_tecnico=True %}{% include "emails/_tarea_diaria_seccion.txt" with titulo=titulos.bodegaje items=bodegaje %}{% if url_inicio %}
 Abrir Econotec: {{ url_inicio }}
 {% endif %}
 Mensaje automático diario del sistema Econotec. Los equipos en «No molestar» no se incluyen.

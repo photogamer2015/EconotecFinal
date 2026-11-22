@@ -1,7 +1,10 @@
 """Tareas diarias por cron: resumen al admin y recordatorio a cada técnico.
 
+Solo las 3 advertencias del inicio: sin diagnosticar 4+ días, en reparación
+10+ días y bodegaje vencido.
 - El admin (superusuario con correo) recibe un correo con lo atrasado de todos.
-- Cada técnico con correo recibe solo SUS equipos atrasados.
+- Cada técnico con correo recibe solo SUS equipos atrasados (los que tiene
+  encargados y los bodegajes de los que él reparó).
 - Si no hay nada atrasado no se envía correo.
 - El comando solo envía a la hora configurada, salvo con --forzar.
 """
@@ -17,7 +20,7 @@ from django.core.management import call_command
 from django.test import TestCase, override_settings
 from django.utils import timezone
 
-from .models import Cliente, IngresoEquipo
+from .models import Cliente, IngresoEquipo, SalidaEquipo
 from .tareas_diarias import enviar_recordatorios_tecnicos, enviar_resumen_admin
 
 
@@ -65,30 +68,45 @@ class TareasDiariasTests(TestCase):
         )
         return ingreso
 
+    def con_bodegaje(self, tecnico, dias):
+        ingreso = self.crear(tecnico, estado='en_reparacion', subestado_reparacion='en_reparacion')
+        SalidaEquipo.objects.create(
+            ingreso=ingreso, fecha_salida=date.today() - timedelta(days=dias),
+            estado_reparacion='pendiente_retiro', tecnico_reparo=tecnico,
+            valor_final_cobrado=Decimal('0.00'), metodo_pago_final='sin_pago',
+        )
+        return ingreso
+
     def correos_para(self, email):
         return [m for m in mail.outbox if email in m.to]
 
     # ── Recordatorio al técnico ────────────────────────────────────
 
-    def test_tecnico_recibe_solo_sus_equipos_atrasados(self):
+    def test_tecnico_recibe_solo_sus_3_advertencias(self):
         propio_diag = self.sin_diagnosticar(self.tec1, 4)
-        propio_rep = self.en_reparacion(self.tec1, 5)
-        ajeno = self.en_reparacion(self.tec2, 6)
+        propio_rep = self.en_reparacion(self.tec1, 10)
+        propio_bod = self.con_bodegaje(self.tec1, 8)
+        ajeno = self.en_reparacion(self.tec2, 12)
+        ajeno_bod = self.con_bodegaje(self.tec2, 8)
 
         enviados = enviar_recordatorios_tecnicos()
 
         self.assertEqual(enviados, 2)
         correo = self.correos_para('victor@example.com')[0]
-        self.assertIn('2 equipos atrasados', correo.subject)
+        self.assertIn('3 equipos atrasados', correo.subject)
         self.assertIn(propio_diag.codigo_equipo, correo.body)
         self.assertIn(propio_rep.codigo_equipo, correo.body)
+        self.assertIn(propio_bod.codigo_equipo, correo.body)
+        self.assertIn('BODEGAJE VENCIDO', correo.body)
         self.assertNotIn(ajeno.codigo_equipo, correo.body)
+        self.assertNotIn(ajeno_bod.codigo_equipo, correo.body)
         html = correo.alternatives[0][0]
         self.assertIn(f'https://econosystem.cc/ingresos/{propio_rep.pk}/', html)
 
     def test_tecnico_sin_atrasos_no_recibe_correo(self):
         self.sin_diagnosticar(self.tec1, 3)
-        self.en_reparacion(self.tec1, 4)
+        self.en_reparacion(self.tec1, 9)
+        self.con_bodegaje(self.tec1, 4)
 
         self.assertEqual(enviar_recordatorios_tecnicos(), 0)
         self.assertEqual(mail.outbox, [])
@@ -109,23 +127,38 @@ class TareasDiariasTests(TestCase):
 
     # ── Resumen diario al admin ────────────────────────────────────
 
-    def test_admin_recibe_resumen_de_todos_con_umbral_de_diez_dias(self):
+    def test_admin_recibe_las_3_advertencias_de_todos(self):
         diag = self.sin_diagnosticar(self.tec1, 4)
         rep_10 = self.en_reparacion(self.tec2, 10)
         rep_9 = self.en_reparacion(self.tec2, 9)
+        bod = self.con_bodegaje(self.tec1, 8)
 
         self.assertEqual(enviar_resumen_admin(), 1)
 
         correo = self.correos_para('admin@example.com')[0]
-        self.assertIn('2 equipos por revisar', correo.subject)
+        self.assertIn('3 equipos por revisar', correo.subject)
         self.assertIn(diag.codigo_equipo, correo.body)
         self.assertIn(rep_10.codigo_equipo, correo.body)
         self.assertNotIn(rep_9.codigo_equipo, correo.body)
+        self.assertIn(bod.codigo_equipo, correo.body)
         self.assertIn('Téc.: Randy', correo.body)
-        self.assertNotIn('Bodegaje $', correo.body)
+        self.assertIn('Bodegaje $', correo.body)
+
+    def test_resumen_admin_no_incluye_equipos_de_prueba(self):
+        ingreso = self.crear(self.tec1, estado='en_reparacion', subestado_reparacion='en_reparacion')
+        salida = SalidaEquipo.objects.create(
+            ingreso=ingreso, fecha_salida=date.today() - timedelta(days=8),
+            estado_reparacion='revision', subestado_revision='equipo_prueba', tecnico_reparo=self.tec1,
+            valor_final_cobrado=Decimal('0.00'), metodo_pago_final='sin_pago',
+        )
+        SalidaEquipo.objects.filter(pk=salida.pk).update(
+            fecha_subestado_revision=timezone.now() - timedelta(days=8),
+        )
+
+        self.assertEqual(enviar_resumen_admin(), 0)
 
     def test_admin_sin_pendientes_no_recibe_correo(self):
-        self.en_reparacion(self.tec1, 6)
+        self.en_reparacion(self.tec1, 9)
 
         self.assertEqual(enviar_resumen_admin(), 0)
         self.assertEqual(mail.outbox, [])
