@@ -1,8 +1,8 @@
 TUS EQUIPOS ATRASADOS · {{ hoy|date:"d/m/Y" }}
 
 Hola, {{ tecnico_nombre }}. Tienes {{ total }} equipo{{ total|pluralize }} que necesita{{ total|pluralize:"n" }} avance hoy.
-{% include "emails/_tarea_diaria_seccion.txt" with titulo=titulos.diagnostico items=diagnostico %}{% include "emails/_tarea_diaria_seccion.txt" with titulo=titulos.reparacion items=reparacion %}
-Al cambiar el estado del equipo deja de aparecer en este recordatorio.{% if url_inicio %}
+{% include "emails/_tarea_diaria_seccion.txt" with titulo=titulos.diagnostico items=diagnostico %}{% include "emails/_tarea_diaria_seccion.txt" with titulo=titulos.reparacion items=reparacion %}{% include "emails/_tarea_diaria_seccion.txt" with titulo=titulos.bodegaje items=bodegaje %}
+Al cambiar el estado del equipo, o al retirarlo el cliente, deja de aparecer en este recordatorio.{% if url_inicio %}
 Abrir Econotec: {{ url_inicio }}{% endif %}
 
 Mensaje automático diario del sistema Econotec.

@@ -240,10 +240,11 @@ Al desplegar, el script también instala un cron que cada día a las **7:00
 (Guayaquil)** envía:
 
 - **Resumen diario al admin**: un correo a cada superusuario activo con correo,
-  con los equipos sin diagnosticar (4+ días), en reparación (10+ días), con
-  bodegaje vencido y los Equipos de prueba con 5+ días.
-- **Recordatorio al técnico**: un correo a cada técnico activo con correo, solo
-  con sus equipos sin diagnosticar (4+ días) o en reparación (5+ días).
+  con las 3 advertencias del inicio: equipos sin diagnosticar (4+ días), en
+  reparación (10+ días) y con bodegaje vencido.
+- **Recordatorio al técnico**: un correo a cada técnico activo con correo, con
+  las mismas 3 advertencias pero solo de sus equipos (los que tiene encargados
+  y los bodegajes de los que él reparó).
 
 Si no hay nada atrasado no se envía correo, y los equipos en «No molestar» no
 se incluyen. Variables opcionales del `.env`: `TAREAS_DIARIAS_HORA` (por

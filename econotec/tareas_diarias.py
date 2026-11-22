@@ -1,14 +1,16 @@
 """
 Tareas diarias automáticas (las corre el cron con `manage.py tareas_diarias`).
 
-1. Resumen diario al admin: un correo a cada superusuario activo con correo,
-   con lo mismo que ve en su inicio:
+Solo las 3 advertencias del inicio:
    - equipos sin diagnosticar hace 4 días o más,
    - equipos con 10 días o más en reparación / espera de cliente / repuesto,
-   - equipos con bodegaje vencido,
-   - Equipos de prueba con 5 días o más.
-2. Recordatorio al técnico: un correo a cada técnico activo con correo,
-   solo con SUS equipos sin diagnosticar (4+ días) o en reparación (5+ días).
+   - equipos con bodegaje vencido.
+
+1. Resumen diario al admin: un correo a cada superusuario activo con correo,
+   con las 3 advertencias de todos los equipos.
+2. Recordatorio al técnico: un correo a cada técnico activo con correo, con
+   las mismas 3 pero solo de SUS equipos (los que tiene encargados y los
+   bodegajes de los que él reparó).
 
 Si no hay nada que avisar, no se envía correo. Los equipos en "No molestar"
 no se incluyen, igual que en el inicio.
@@ -26,7 +28,6 @@ from .alertas import (
     UMBRAL_DIAS_BODEGAJE,
     UMBRAL_DIAS_DIAGNOSTICO,
     UMBRAL_DIAS_REPARACION_ADMIN,
-    UMBRAL_DIAS_REPARACION_TECNICO,
     dias_desde_inicio_bodegaje,
     dias_en_estado_reparacion,
     dias_en_taller,
@@ -34,7 +35,6 @@ from .alertas import (
     equipos_reparacion_demorada_qs,
     salidas_bodegaje_qs,
 )
-from .avisos_revision import DIAS_ALERTA_EQUIPO_PRUEBA, dias_en_subestado, equipos_prueba_demorados_qs
 from .permisos import GRUPOS_TECNICO
 
 
@@ -75,60 +75,53 @@ def _items_reparacion(qs, hoy):
     ]
 
 
-def datos_resumen_admin(hoy=None):
-    hoy = hoy or date.today()
-    bodegajes = []
-    for sal in salidas_bodegaje_qs(usuario=None):
+def _items_bodegaje(qs, hoy):
+    items = []
+    for sal in qs:
         bod = sal.calcular_bodegaje(hoy=hoy)
-        bodegajes.append({
+        items.append({
             'salida': sal,
             'ingreso': sal.ingreso,
             'dias': dias_desde_inicio_bodegaje(sal, hoy=hoy),
             'monto': bod['monto'],
             'url': _url('econotec:ingreso_detalle', sal.ingreso.pk),
         })
-    prueba = [
-        {
-            'salida': sal,
-            'ingreso': sal.ingreso,
-            'dias': dias_en_subestado(sal, hoy),
-            'url': _url('econotec:ingreso_detalle', sal.ingreso.pk),
-        }
-        for sal in equipos_prueba_demorados_qs(hoy)
-    ]
+    return items
+
+
+TITULOS = {
+    'diagnostico': f'Sin diagnosticar hace {UMBRAL_DIAS_DIAGNOSTICO} días o más',
+    'reparacion': f'En reparación hace {UMBRAL_DIAS_REPARACION_ADMIN} días o más',
+    'bodegaje': f'Bodegaje vencido ({UMBRAL_DIAS_BODEGAJE} días o más sin retirar)',
+}
+
+
+def _secciones(usuario, hoy):
+    """Las 3 advertencias del inicio. Con `usuario`, solo las de ese técnico:
+    los equipos que tiene encargados y los bodegajes de los que él reparó."""
     return {
-        'hoy': hoy,
-        'diagnostico': _items_diagnostico(equipos_demorados_qs(usuario=None), hoy),
+        'diagnostico': _items_diagnostico(equipos_demorados_qs(usuario=usuario), hoy),
         'reparacion': _items_reparacion(
-            equipos_reparacion_demorada_qs(usuario=None, umbral_dias=UMBRAL_DIAS_REPARACION_ADMIN), hoy,
+            equipos_reparacion_demorada_qs(usuario=usuario, umbral_dias=UMBRAL_DIAS_REPARACION_ADMIN), hoy,
         ),
-        'bodegaje': bodegajes,
-        'prueba': prueba,
-        'titulos': {
-            'diagnostico': f'Sin diagnosticar hace {UMBRAL_DIAS_DIAGNOSTICO} días o más',
-            'reparacion': f'En reparación hace {UMBRAL_DIAS_REPARACION_ADMIN} días o más',
-            'bodegaje': f'Bodegaje vencido (más de {UMBRAL_DIAS_BODEGAJE} días sin retirar)',
-            'prueba': f'Equipos de prueba con {DIAS_ALERTA_EQUIPO_PRUEBA} días o más',
-        },
+        'bodegaje': _items_bodegaje(salidas_bodegaje_qs(usuario=usuario), hoy),
+        'titulos': TITULOS,
         'url_inicio': _url('econotec:bienvenida'),
     }
+
+
+def datos_resumen_admin(hoy=None):
+    hoy = hoy or date.today()
+    return {'hoy': hoy, **_secciones(None, hoy)}
 
 
 def datos_recordatorio_tecnico(tecnico, hoy=None):
     hoy = hoy or date.today()
-    return {
-        'hoy': hoy,
-        'tecnico_nombre': _nombre(tecnico),
-        'diagnostico': _items_diagnostico(equipos_demorados_qs(usuario=tecnico), hoy),
-        'reparacion': _items_reparacion(
-            equipos_reparacion_demorada_qs(usuario=tecnico, umbral_dias=UMBRAL_DIAS_REPARACION_TECNICO), hoy,
-        ),
-        'titulos': {
-            'diagnostico': f'Sin diagnosticar hace {UMBRAL_DIAS_DIAGNOSTICO} días o más',
-            'reparacion': f'En reparación hace {UMBRAL_DIAS_REPARACION_TECNICO} días o más',
-        },
-        'url_inicio': _url('econotec:bienvenida'),
-    }
+    return {'hoy': hoy, 'tecnico_nombre': _nombre(tecnico), **_secciones(tecnico, hoy)}
+
+
+def _total(datos):
+    return sum(len(datos[k]) for k in ('diagnostico', 'reparacion', 'bodegaje'))
 
 
 def _enviar(destinos, asunto, plantilla, contexto):
@@ -158,7 +151,7 @@ def tecnicos_con_correo():
 def enviar_resumen_admin(hoy=None):
     """Devuelve cuántos correos se enviaron (0 si no hay nada que avisar)."""
     datos = datos_resumen_admin(hoy)
-    total = sum(len(datos[k]) for k in ('diagnostico', 'reparacion', 'bodegaje', 'prueba'))
+    total = _total(datos)
     if not total:
         return 0
     asunto = f'Resumen diario Econotec {datos["hoy"]:%d/%m/%Y}: {total} equipo{"s" if total != 1 else ""} por revisar'
@@ -178,7 +171,7 @@ def enviar_recordatorios_tecnicos(hoy=None):
     enviados = 0
     for tecnico in tecnicos_con_correo():
         datos = datos_recordatorio_tecnico(tecnico, hoy)
-        total = len(datos['diagnostico']) + len(datos['reparacion'])
+        total = _total(datos)
         if not total:
             continue
         asunto = f'Tienes {total} equipo{"s" if total != 1 else ""} atrasado{"s" if total != 1 else ""} | Econotec'

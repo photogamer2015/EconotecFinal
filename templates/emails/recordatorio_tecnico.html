@@ -17,11 +17,12 @@
                         <td style="padding:28px 30px 20px;">
                             <div style="color:#f36a0b; font-size:12px; font-weight:900; letter-spacing:1.1px; text-transform:uppercase;">Recordatorio diario · {{ hoy|date:"d/m/Y" }}</div>
                             <h1 style="margin:8px 0 10px; color:#202936; font-size:25px; line-height:1.2;">Tienes {{ total }} equipo{{ total|pluralize }} atrasado{{ total|pluralize }}</h1>
-                            <p style="margin:0; color:#5f6875; font-size:15px; line-height:1.6;">Hola, {{ tecnico_nombre }}. Al cambiar el estado del equipo deja de aparecer en este recordatorio.</p>
+                            <p style="margin:0; color:#5f6875; font-size:15px; line-height:1.6;">Hola, {{ tecnico_nombre }}. Al cambiar el estado del equipo, o al retirarlo el cliente, deja de aparecer en este recordatorio.</p>
                         </td>
                     </tr>
                     {% include "emails/_tarea_diaria_seccion.html" with titulo=titulos.diagnostico items=diagnostico %}
                     {% include "emails/_tarea_diaria_seccion.html" with titulo=titulos.reparacion items=reparacion %}
+                    {% include "emails/_tarea_diaria_seccion.html" with titulo=titulos.bodegaje items=bodegaje %}
                     {% if url_inicio %}
                     <tr>
                         <td align="center" style="padding:4px 30px 28px;">
