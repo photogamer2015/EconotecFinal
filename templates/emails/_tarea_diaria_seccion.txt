@@ -1,0 +1,5 @@
+{% load econotec_extras %}{% if items %}
+{{ titulo|upper }} ({{ items|length }})
+{% for item in items %}- {{ item.ingreso.codigo_equipo }} · {{ item.ingreso.cliente.nombres }} · {{ item.ingreso.tipo_equipo_display }} {{ item.ingreso.marca }}{% if item.estado %} · {{ item.estado }}{% endif %}{% if mostrar_tecnico and item.ingreso.tecnico_encargado %} · Téc.: {{ item.ingreso.tecnico_encargado.get_full_name|default:item.ingreso.tecnico_encargado.username }}{% endif %}{% if 'monto' in item %} · Bodegaje {{ item.monto|dinero_signo }}{% endif %} · {{ item.dias }} días{% if item.url %}
+  {{ item.url }}{% endif %}
+{% endfor %}{% endif %}

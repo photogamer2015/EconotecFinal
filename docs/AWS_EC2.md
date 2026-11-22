@@ -183,6 +183,26 @@ workflow**. Ahí mismo se ve el registro completo del despliegue.
 Ojo: el script se detiene si el servidor tiene cambios locales en archivos
 versionados (`git status` sucio). Es a propósito, para no pisar nada.
 
+## Tareas diarias (cron automático)
+
+`scripts/aws_update.sh` instala solo, en el crontab del usuario que despliega,
+esta línea (la reemplaza en cada despliegue, nunca la duplica):
+
+```cron
+0 * * * * cd "/var/www/EconotecFinal" && "/var/www/EconotecFinal/.venv/bin/python" manage.py tareas_diarias >> "/var/www/EconotecFinal/tareas_diarias.log" 2>&1 # econotec-tareas-diarias
+```
+
+Corre cada hora, pero el comando solo envía cuando en Guayaquil son las
+`TAREAS_DIARIAS_HORA` (7 por defecto), así que no importa la zona horaria del
+servidor. Necesita el correo SMTP configurado (`EMAIL_HOST`, etc.). Para
+probarlo sin esperar:
+
+```bash
+cd /var/www/EconotecFinal
+.venv/bin/python manage.py tareas_diarias --forzar
+tail -n 20 tareas_diarias.log
+```
+
 ## Backup opcional a S3
 
 Si usas SQLite, Econotec incluye un comando de backup a S3:

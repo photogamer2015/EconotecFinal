@@ -52,6 +52,19 @@ fi
 "$VENV_DIR/bin/python" manage.py setup_roles
 "$VENV_DIR/bin/python" manage.py check
 
+# Tareas diarias (resumen al admin y recordatorio a técnicos). El cron corre
+# cada hora y el comando solo envía a la hora configurada en Guayaquil.
+# Se reemplaza la línea marcada para no duplicarla en cada despliegue.
+CRON_MARCA="# econotec-tareas-diarias"
+if command -v crontab >/dev/null 2>&1; then
+    cron_linea="0 * * * * cd \"$PROJECT_DIR\" && \"$VENV_DIR/bin/python\" manage.py tareas_diarias >> \"$PROJECT_DIR/tareas_diarias.log\" 2>&1 $CRON_MARCA"
+    cron_actual="$(crontab -l 2>/dev/null | grep -vF "$CRON_MARCA" || true)"
+    { if [ -n "$cron_actual" ]; then printf '%s\n' "$cron_actual"; fi; echo "$cron_linea"; } | crontab -
+    echo "Cron de tareas diarias instalado."
+else
+    echo "Aviso: crontab no esta disponible; las tareas diarias no se programaron."
+fi
+
 if [ -n "$SERVICE_NAME" ]; then
     if command -v systemctl >/dev/null 2>&1 && systemctl list-unit-files --type=service --no-pager | awk '{print $1}' | grep -Fxq "${SERVICE_NAME}.service"; then
         service_workdir="$(systemctl show "${SERVICE_NAME}.service" -p WorkingDirectory --value 2>/dev/null || true)"
