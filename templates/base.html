@@ -1856,7 +1856,7 @@
                                     <a href="{% url 'econotec:notificaciones_asesora' %}" class="noti-item">
                                         <div class="noti-item-title">
                                             <span>{{ notificacion.ingreso.codigo_equipo }} — {{ notificacion.ingreso.cliente.nombres|truncatechars:24 }}</span>
-                                            <span class="noti-item-value">${{ notificacion.valor_acordado|floatformat:2 }}</span>
+                                            <span class="noti-item-value">{% if notificacion.tipo == 'factura_pendiente' %}🧾 Factura{% else %}${{ notificacion.valor_acordado|floatformat:2 }}{% endif %}</span>
                                         </div>
                                         <div class="noti-item-meta">
                                             Notificó {{ notificacion.creado_por.get_full_name|default:notificacion.creado_por.username|default:"el técnico" }}

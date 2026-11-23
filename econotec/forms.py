@@ -1582,6 +1582,13 @@ class SalidaEquipoForm(RetencionFacturaFormMixin, forms.ModelForm):
         }),
         label='Mensaje para la asesora',
     )
+    asesora_factura = forms.ModelChoiceField(
+        queryset=User.objects.none(),
+        required=False,
+        widget=forms.Select(attrs={'class': 'form-input', 'id': 'id_asesora_factura'}),
+        label='Notificar a la asesora',
+        empty_label='— Selecciona la asesora —',
+    )
 
     class Meta:
         model = SalidaEquipo
@@ -1672,6 +1679,9 @@ class SalidaEquipoForm(RetencionFacturaFormMixin, forms.ModelForm):
         )
         # Solo el formulario de Finalizar equipo ofrece los estados a domicilio.
         permitir_estados_domicilio = kwargs.pop('estados_domicilio', False)
+        # Finalizar / Editar finalización: con factura Sí se elige la asesora
+        # a la que se avisa para realizar la factura (obligatorio).
+        self.pedir_asesora_factura = kwargs.pop('pedir_asesora_factura', False)
         super().__init__(*args, **kwargs)
         self._domicilio_elegido = ''
         self._era_domicilio = bool(self.instance and self.instance.finalizado_a_domicilio)
@@ -1767,6 +1777,15 @@ class SalidaEquipoForm(RetencionFacturaFormMixin, forms.ModelForm):
                 or u.username
             )
         )
+        if self.pedir_asesora_factura:
+            self.fields['asesora_factura'].queryset = _queryset_asesores()
+            self.fields['asesora_factura'].label_from_instance = (
+                self.fields['asesora_notificacion'].label_from_instance
+            )
+            if self.instance and self.instance.pk and self.instance.factura_asesora_id:
+                self.initial.setdefault('asesora_factura', self.instance.factura_asesora_id)
+        else:
+            del self.fields['asesora_factura']
 
         choices = list(self.fields['estado_reparacion'].choices)
         
@@ -2113,7 +2132,17 @@ class SalidaEquipoForm(RetencionFacturaFormMixin, forms.ModelForm):
         # Cortesía y demás cierres sin factura llegan con factura "no" y la
         # retención queda limpia; el valor lo calcula la pantalla sobre el saldo.
         self._limpiar_retencion(cleaned)
+        self._clean_asesora_factura(cleaned)
         return cleaned
+
+    def _clean_asesora_factura(self, cleaned):
+        if 'asesora_factura' not in self.fields:
+            return
+        if cleaned.get('factura_realizada') != 'si':
+            cleaned['asesora_factura'] = None
+            return
+        if not cleaned.get('asesora_factura') and 'asesora_factura' not in self.errors:
+            self.add_error('asesora_factura', 'Elige la asesora que realizará la factura.')
 
     def _clean_adicional_tras_salida(self, cleaned):
         """

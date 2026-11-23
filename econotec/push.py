@@ -218,8 +218,9 @@ def push_tecnico(aviso):
 
 
 def push_asesora(aviso):
+    icono = '🧾' if aviso.tipo == aviso.TIPO_FACTURA else '🔔'
     enviar_push(
-        [aviso.asesora_id], f'🔔 {aviso.get_tipo_display()} · {aviso.ingreso.codigo_equipo}', aviso.mensaje,
+        [aviso.asesora_id], f'{icono} {aviso.get_tipo_display()} · {aviso.ingreso.codigo_equipo}', aviso.mensaje,
         url=reverse('econotec:notificaciones_asesora'),
         etiqueta=f'asesora-{aviso.salida_id}-{aviso.tipo}',
     )

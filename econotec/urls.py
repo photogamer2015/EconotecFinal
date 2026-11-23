@@ -166,6 +166,8 @@ urlpatterns = [
     path('ingresos/<int:ingreso_pk>/salida/registrar/',
          views.salida_registrar, name='salida_registrar'),
     path('salidas/<int:pk>/editar/', views.salida_editar, name='salida_editar'),
+    path('salidas/<int:pk>/notificar-factura/', views.salida_notificar_factura,
+         name='salida_notificar_factura'),
     path('salidas/<int:pk>/eliminar/', views.salida_eliminar, name='salida_eliminar'),
     path('salidas/<int:pk>/imprimir/', views_print.salida_imprimir, name='salida_imprimir'),
     path('salidas/<int:pk>/pdf/', views_print.salida_pdf, name='salida_pdf'),

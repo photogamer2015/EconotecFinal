@@ -15,6 +15,19 @@
         text-decoration: none;
     }
     .wa-mini:hover { background: #1da851; }
+    /* Campanita del aviso de factura a la asesora (una vez cada 24 horas). */
+    .factura-bell-form { display: inline-block; margin: 0; }
+    .factura-bell {
+        display: inline-flex; align-items: center; justify-content: center;
+        min-width: 32px; padding: 4px 8px; border-radius: 5px;
+        border: 1px solid #f97618; background: #f97618; color: #fff;
+        font-size: 13px; line-height: 1.2; cursor: pointer;
+    }
+    .factura-bell:hover { background: #e0640c; }
+    .factura-bell.is-espera {
+        background: transparent; color: var(--text-muted); border-color: var(--border-color, #cbd5e1);
+        opacity: .55; cursor: not-allowed; filter: grayscale(1);
+    }
     .ret-pill {
         background: #2e7d32; color: white;
         display: inline-flex; align-items: center;
@@ -494,6 +507,9 @@
             min-height: 42px;
             white-space: normal;
         }
+        .salidas-table .factura-bell-form { flex: 0 0 46px; display: flex; }
+        .salidas-table .factura-bell-form .factura-bell,
+        .salidas-table .factura-bell.is-espera { flex: 0 0 46px; width: 100%; font-size: 17px; }
         .salidas-table .wa-mini {
             display: inline-flex;
             align-items: center;
@@ -773,6 +789,23 @@
                         <a href="{% url 'econotec:salida_listo_aviso' pk=s.pk %}" class="wa-mini" title="Enviar PDF y WhatsApp del servicio a domicilio">💬</a>
                     {% elif s.pendiente_de_retiro_fisico and not s.cliente_ya_retiro %}
                         <a href="{% url 'econotec:salida_listo_aviso' pk=s.pk %}" class="wa-mini" title="Avisar por WhatsApp">💬</a>
+                    {% endif %}
+                    {% if s.muestra_aviso_factura %}
+                        {% with asesora_factura=s.factura_asesora.get_full_name|default:s.factura_asesora.username %}
+                        {% if s.puede_reavisar_factura %}
+                        <form method="post" action="{% url 'econotec:salida_notificar_factura' pk=s.pk %}" class="factura-bell-form">
+                            {% csrf_token %}
+                            <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                            <button type="submit" class="factura-bell"
+                                    title="Avisar a {{ asesora_factura }} para realizar la factura"
+                                    aria-label="Avisar a {{ asesora_factura }} para realizar la factura del equipo {{ s.ingreso.codigo_equipo }}">🔔</button>
+                        </form>
+                        {% else %}
+                        <span class="factura-bell is-espera" role="img"
+                              title="Ya se avisó a {{ asesora_factura }} de la factura. Podrás volver a avisarle desde el {{ s.aviso_factura_disponible_en|date:'d/m/Y H:i' }}"
+                              aria-label="Aviso de factura enviado a {{ asesora_factura }}. Disponible de nuevo el {{ s.aviso_factura_disponible_en|date:'d/m/Y H:i' }}">🔔</span>
+                        {% endif %}
+                        {% endwith %}
                     {% endif %}
                     <a href="{% url 'econotec:ingreso_abonos' pk=s.ingreso.pk %}" class="btn btn-sm btn-secondary">Ver Abonos / Pagos</a>
                     <a href="{% url 'econotec:salida_editar' pk=s.pk %}" class="btn btn-sm btn-secondary">Editar finalización</a>

@@ -258,7 +258,7 @@
     {% if notificaciones %}
     <div class="noti-list">
         {% for notificacion in notificaciones %}
-        <div class="noti-card {% if notificacion.ingreso.diferencia <= 0 %}hecha{% endif %} {% if notificacion.leida %}leida{% endif %}">
+        <div class="noti-card {% if notificacion.tipo != 'factura_pendiente' and notificacion.ingreso.diferencia <= 0 %}hecha{% endif %} {% if notificacion.leida %}leida{% endif %}">
             <div class="noti-title">
                 <div>
                     <strong>{{ notificacion.ingreso.codigo_equipo }} — {{ notificacion.ingreso.cliente.nombres }}</strong>
@@ -269,11 +269,16 @@
                     </div>
                 </div>
                 <div class="noti-side">
+                    {% if notificacion.tipo == 'factura_pendiente' %}
+                    <div class="noti-valor">🧾 Factura</div>
+                    {% if notificacion.valor_acordado > 0 %}<small>{{ notificacion.valor_acordado|dinero_signo }}</small>{% endif %}
+                    {% else %}
                     <div class="noti-valor {% if notificacion.ingreso.diferencia <= 0 %}pagado{% endif %}">
                         {{ notificacion.valor_acordado|dinero_signo }}
                     </div>
                     {% if notificacion.ingreso.diferencia <= 0 %}
                         <span class="noti-status-done">Hecho</span>
+                    {% endif %}
                     {% endif %}
                 </div>
             </div>
@@ -282,9 +287,13 @@
 
             <div class="noti-actions">
                 <a class="btn btn-secondary" href="{% url 'econotec:ingreso_detalle' pk=notificacion.ingreso.pk %}">Ver equipo</a>
+                {% if notificacion.tipo == 'factura_pendiente' %}
+                <a class="btn btn-primary" href="{% url 'econotec:salida_editar' pk=notificacion.salida_id %}">Ver datos de factura</a>
+                {% else %}
                 <a class="btn btn-primary" href="{% url 'econotec:ingreso_abonos' pk=notificacion.ingreso.pk %}">
                     {% if admin_notificaciones %}Responder / gestionar pago{% else %}Ir a pagos{% endif %}
                 </a>
+                {% endif %}
                 {% if not notificacion.leida %}
                 <form method="post" action="{% url 'econotec:notificacion_asesora_marcar_vista' pk=notificacion.pk %}">
                     {% csrf_token %}

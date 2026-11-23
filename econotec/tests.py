@@ -11814,6 +11814,7 @@ class VentasTests(TestCase):
                 factura_correo='factura@example.com',
                 aplica_retencion='si',
                 valor_con_retencion='44.72',
+                asesora_factura=str(self.vendedor.pk),
             ),
         )
 
