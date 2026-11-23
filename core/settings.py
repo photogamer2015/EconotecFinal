@@ -59,6 +59,13 @@ AVISO_BODEGAJE_AUTOMATICO = env.bool('AVISO_BODEGAJE_AUTOMATICO', default=True)
 PUSH_ACTIVO = env.bool('PUSH_ACTIVO', default=True)
 VAPID_PUBLIC_KEY = env('VAPID_PUBLIC_KEY', default='')
 VAPID_PRIVATE_KEY = env('VAPID_PRIVATE_KEY', default='')
+# App de Android (movil/android): paquete y huella SHA-256 de su firma, para
+# que abra econosystem.cc a pantalla completa (/.well-known/assetlinks.json).
+ANDROID_APP_PAQUETE = env('ANDROID_APP_PAQUETE', default='cc.econosystem.app')
+ANDROID_APP_SHA256 = env(
+    'ANDROID_APP_SHA256',
+    default='AE:AC:23:98:F0:34:FB:BB:EE:2A:51:29:92:9E:1A:D0:D0:FA:A0:2D:DC:95:AF:D8:32:A6:C1:00:CC:53:52:FC',
+)
 EMAIL_BACKEND = env('EMAIL_BACKEND', default='')
 if not EMAIL_BACKEND:
     EMAIL_BACKEND = (

@@ -1,6 +1,7 @@
 """App instalable (manifest y service worker) y suscripción a notificaciones push."""
 import json
 
+from django.conf import settings
 from django.contrib.auth.decorators import login_required
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import render
@@ -38,6 +39,23 @@ def manifest(request):
         json.dumps(datos, ensure_ascii=False),
         content_type='application/manifest+json; charset=utf-8',
     )
+    respuesta['Cache-Control'] = 'public, max-age=3600'
+    return respuesta
+
+
+def assetlinks(request):
+    """Vincula la app de Android con econosystem.cc para que abra a pantalla
+    completa (sin barra de dirección). Público: lo revisan Android y Chrome."""
+    huellas = [h.strip() for h in settings.ANDROID_APP_SHA256.split(',') if h.strip()]
+    datos = [{
+        'relation': ['delegate_permission/common.handle_all_urls'],
+        'target': {
+            'namespace': 'android_app',
+            'package_name': settings.ANDROID_APP_PAQUETE,
+            'sha256_cert_fingerprints': huellas,
+        },
+    }]
+    respuesta = JsonResponse(datos, safe=False)
     respuesta['Cache-Control'] = 'public, max-age=3600'
     return respuesta
 

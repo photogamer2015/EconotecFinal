@@ -7,6 +7,7 @@ urlpatterns = [
     # ── App instalable y notificaciones push ───────────────
     path('manifest.webmanifest', views_push.manifest, name='pwa_manifest'),
     path('service-worker.js', views_push.service_worker, name='pwa_service_worker'),
+    path('.well-known/assetlinks.json', views_push.assetlinks, name='android_assetlinks'),
     path('push/clave/', views_push.push_clave, name='push_clave'),
     path('push/suscribir/', views_push.push_suscribir, name='push_suscribir'),
     path('push/desuscribir/', views_push.push_desuscribir, name='push_desuscribir'),

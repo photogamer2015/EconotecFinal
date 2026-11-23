@@ -1,0 +1,46 @@
+// App de Econotec para Android: abre https://econosystem.cc a pantalla completa
+// (Trusted Web Activity con Chrome), con ícono propio y notificaciones push.
+plugins {
+    id 'com.android.application'
+}
+
+def propiedadesFirma = new Properties()
+def archivoFirma = rootProject.file('keystore.properties')
+if (archivoFirma.exists()) {
+    archivoFirma.withInputStream { propiedadesFirma.load(it) }
+}
+
+android {
+    namespace 'cc.econosystem.app'
+    compileSdk 36
+
+    defaultConfig {
+        applicationId 'cc.econosystem.app'
+        minSdk 24
+        targetSdk 36
+        versionCode 1
+        versionName '1.0'
+    }
+
+    signingConfigs {
+        release {
+            if (archivoFirma.exists()) {
+                storeFile rootProject.file(propiedadesFirma['storeFile'])
+                storePassword propiedadesFirma['storePassword']
+                keyAlias propiedadesFirma['keyAlias']
+                keyPassword propiedadesFirma['keyPassword']
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig signingConfigs.release
+        }
+    }
+}
+
+dependencies {
+    implementation 'com.google.androidbrowserhelper:androidbrowserhelper:2.7.4'
+}
