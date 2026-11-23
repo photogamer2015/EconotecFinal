@@ -8,7 +8,7 @@ Mapea fielmente la hoja "SOLICITUD DE INGRESO" de Econotec:
 - Diagnóstico / Valores / Abono / Diferencia
 - Y suma una "Salida de equipo" con estado del trabajo realizado
 """
-from datetime import date, time
+from datetime import date, time, timedelta
 from decimal import Decimal, ROUND_HALF_UP
 import uuid
 
@@ -1325,7 +1325,9 @@ class IngresoEquipo(RetencionFactura):
         if self.reparacion_cancelada:
             if salida and salida.tiene_valor_acordado_adicional:
                 return _q2(salida.valor_acordado_adicional)
-            if salida:
+            # Sin pk (finalización aún no guardada, p. ej. al volver a mostrar
+            # el formulario con errores) todavía no hay avisos que consultar.
+            if salida and salida.pk:
                 revision_pendiente = (
                     salida.notificaciones_asesora
                     .filter(tipo='revision_pendiente')
@@ -2154,6 +2156,18 @@ class SalidaEquipo(RetencionFactura):
     factura_correo = models.EmailField(
         blank=True, verbose_name='Correo electrónico',
     )
+    # Aviso a la asesora para que realice la factura (ver aviso_factura.py).
+    factura_asesora = models.ForeignKey(
+        'auth.User',
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='salidas_factura_asesora',
+        verbose_name='Asesora notificada para la factura',
+    )
+    factura_notificada_en = models.DateTimeField(
+        null=True, blank=True,
+        verbose_name='Último aviso de factura a la asesora',
+    )
 
     # ── Conformidad del cliente ──────────────────────────
     cliente_recibe_conforme = models.CharField(
@@ -2220,6 +2234,28 @@ class SalidaEquipo(RetencionFactura):
         verbose_name = 'Equipo finalizado'
         verbose_name_plural = 'Equipos finalizados'
         ordering = ['-fecha_salida', '-creado']
+
+    ESPERA_AVISO_FACTURA = timedelta(hours=24)
+
+    @property
+    def aviso_factura_disponible_en(self):
+        """Desde cuándo se puede volver a avisar a la asesora de la factura."""
+        if not self.factura_notificada_en:
+            return None
+        return self.factura_notificada_en + self.ESPERA_AVISO_FACTURA
+
+    @property
+    def muestra_aviso_factura(self):
+        """La campanita de factura sale con factura Sí y una asesora asignada."""
+        return self.factura_realizada == 'si' and bool(self.factura_asesora_id)
+
+    @property
+    def puede_reavisar_factura(self):
+        """Se puede volver a avisar una vez cada 24 horas."""
+        if not self.muestra_aviso_factura:
+            return False
+        disponible = self.aviso_factura_disponible_en
+        return disponible is None or timezone.now() >= disponible
 
     @property
     def pago_mixto_partes(self):
@@ -3360,11 +3396,13 @@ class NotificacionAsesora(models.Model):
     TIPO_REVISION_PENDIENTE = 'revision_pendiente'
     TIPO_SALDO_RETIRO = 'saldo_retiro'
     TIPO_COBRO_ADICIONAL = 'cobro_adicional'
+    TIPO_FACTURA = 'factura_pendiente'
     TIPOS = [
         (TIPO_FALLOS_ADICIONALES, 'Garantía con fallos adicionales'),
         (TIPO_REVISION_PENDIENTE, 'Revisión pendiente de pago'),
         (TIPO_SALDO_RETIRO, 'Equipo listo con saldo pendiente'),
         (TIPO_COBRO_ADICIONAL, 'Cobro adicional pendiente'),
+        (TIPO_FACTURA, 'Factura por realizar'),
     ]
 
     tipo = models.CharField(

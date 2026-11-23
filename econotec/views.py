@@ -58,6 +58,7 @@ from .emails import (
 )
 from .pagination import paginar_resultados
 from . import salida_asesora
+from . import aviso_factura
 from .sonidos import programar_sonido
 from .permisos import (
     admin_requerido, tecnico_requerido, es_admin, es_asesor, es_tecnico,
@@ -145,6 +146,34 @@ def _sincronizar_notificacion_asesora(form, salida, user):
             'leida_en': None,
         }
     )
+
+
+def _sincronizar_aviso_factura(request, form, salida):
+    """Avisa a la asesora elegida para realizar la factura (si corresponde)."""
+    asesora = form.cleaned_data.get('asesora_factura')
+    if aviso_factura.sincronizar_desde_formulario(salida, asesora, request.user):
+        messages.info(
+            request,
+            f'Se avisó a {aviso_factura.nombre_usuario(asesora)} para realizar la factura '
+            f'del equipo {salida.ingreso.codigo_equipo}.',
+        )
+
+
+@tecnico_requerido
+@require_POST
+def salida_notificar_factura(request, pk):
+    """Campanita 🔔 de la tabla: vuelve a avisar a la asesora (una vez cada 24 h)."""
+    get_object_or_404(SalidaEquipo, pk=pk)
+    ok, mensaje = aviso_factura.reavisar(pk, request.user)
+    (messages.success if ok else messages.warning)(request, mensaje)
+    next_url = request.POST.get('next') or ''
+    if next_url and url_has_allowed_host_and_scheme(
+        next_url,
+        allowed_hosts={request.get_host()},
+        require_https=request.is_secure(),
+    ):
+        return redirect(next_url)
+    return redirect('econotec:salida_lista')
 
 
 def _normalizar_comparacion(valor):
@@ -4179,7 +4208,7 @@ def salida_lista(request, solo_fuera_oficina=False):
     qs = filtrar_alcance_domicilio(
         SalidaEquipo.objects.select_related(
             'ingreso', 'ingreso__cliente', 'registrado_por', 'tecnico_reparo',
-            'retiro_confirmado_por',
+            'retiro_confirmado_por', 'factura_asesora',
         ),
         alcance,
         campo='ingreso__a_domicilio',
@@ -4387,12 +4416,13 @@ def salida_registrar(request, ingreso_pk):
 
     if request.method == 'POST':
         salida_inst = SalidaEquipo(ingreso=ingreso)
-        form = SalidaEquipoForm(request.POST, instance=salida_inst, estados_domicilio=True)
+        form = SalidaEquipoForm(request.POST, instance=salida_inst, estados_domicilio=True, pedir_asesora_factura=True)
         if form.is_valid():
             salida = form.save(commit=False)
             salida.registrado_por = request.user
             salida.save()
             _sincronizar_notificacion_asesora(form, salida, request.user)
+            _sincronizar_aviso_factura(request, form, salida)
             avisos_revision.avisar_subcategoria(salida, request.user)
             registrar_bitacora(
                 request.user,
@@ -4421,7 +4451,7 @@ def salida_registrar(request, ingreso_pk):
             estado_salida_inicial = 'revision:cliente_no_acepta'
         metodo_salida_inicial = 'cortesia' if ingreso.estado == 'cortesia' else 'efectivo'
         salida_inst = SalidaEquipo(ingreso=ingreso)
-        form = SalidaEquipoForm(instance=salida_inst, estados_domicilio=True, initial={
+        form = SalidaEquipoForm(instance=salida_inst, estados_domicilio=True, pedir_asesora_factura=True, initial={
             'fecha_salida': date.today(),
             'estado_reparacion': estado_salida_inicial,
             'metodo_pago_final': metodo_salida_inicial,
@@ -4449,10 +4479,11 @@ def salida_editar(request, pk):
         subestado_revision_anterior = salida.subestado_revision
         tecnico_anterior = salida.tecnico_reparo_id
         valor_anterior = salida.valor_final_cobrado
-        form = SalidaEquipoForm(request.POST, instance=salida, estados_domicilio=True)
+        form = SalidaEquipoForm(request.POST, instance=salida, estados_domicilio=True, pedir_asesora_factura=True)
         if form.is_valid():
             salida = form.save()
             _sincronizar_notificacion_asesora(form, salida, request.user)
+            _sincronizar_aviso_factura(request, form, salida)
             if (
                 salida.estado_reparacion != estado_anterior
                 or salida.subestado_revision != subestado_revision_anterior
@@ -4475,7 +4506,7 @@ def salida_editar(request, pk):
             request.session['confirmar_ubicacion_salida_id'] = salida.pk
             return redirect('econotec:salida_listo_aviso', pk=salida.pk)
     else:
-        form = SalidaEquipoForm(instance=salida, estados_domicilio=True)
+        form = SalidaEquipoForm(instance=salida, estados_domicilio=True, pedir_asesora_factura=True)
     return render(request, 'salidas/form.html', {
         'form': form,
         'ingreso': salida.ingreso,

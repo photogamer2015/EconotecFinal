@@ -461,6 +461,18 @@ class SalidaDomicilioTests(TestCase):
             self.client.get(reverse('econotec:ranking_asesoras_salidas')).context['sin_registro'], 0,
         )
 
+    def test_factura_si_sin_asesora_vuelve_al_formulario_sin_caerse(self):
+        ingreso = self.crear_ingreso()
+        respuesta = self.registrar(
+            ingreso, 'domicilio:cliente_no_acepta',
+            pago_domicilio='ahora', valor_final_cobrado='10.00', metodo_pago_final='efectivo',
+            factura_realizada='si', factura_nombres='Ana', factura_cedula='0912345678',
+            factura_correo='ana@example.com',
+        )
+        self.assertEqual(respuesta.status_code, 200)
+        self.assertIn('asesora_factura', respuesta.context['form'].errors)
+        self.assertFalse(SalidaEquipo.objects.filter(ingreso=ingreso).exists())
+
     # ── PDF ───────────────────────────────────────────────────────────
     def test_pdf_a_domicilio_se_genera_para_cada_estado(self):
         for estado, extra in (
@@ -470,7 +482,8 @@ class SalidaDomicilioTests(TestCase):
             ('domicilio:cliente_no_acepta', {'pago_domicilio': 'ahora', 'valor_final_cobrado': '10.00',
                                              'metodo_pago_final': 'efectivo', 'factura_realizada': 'si',
                                              'factura_nombres': 'Ana', 'factura_cedula': '0912345678',
-                                             'factura_correo': 'ana@example.com'}),
+                                             'factura_correo': 'ana@example.com',
+                                             'asesora_factura': str(self.asesora.pk)}),
         ):
             with self.subTest(estado=estado):
                 ingreso = self.crear_ingreso()

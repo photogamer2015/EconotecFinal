@@ -706,6 +706,33 @@
             </div>
         </div>
         {% include 'includes/retencion_factura.html' with ret_id='salida' nombre_aplica=form.aplica_retencion.html_name nombre_valor=form.valor_con_retencion.html_name aplica=form.aplica_retencion.value valor=form.valor_con_retencion.value errores_aplica=form.aplica_retencion.errors errores_valor=form.valor_con_retencion.errors %}
+        {% if 'asesora_factura' in form.fields %}
+        <div id="factura-asesora" class="factura-asesora" style="display:none;">
+            <label class="form-label" for="id_asesora_factura">🔔 Notificar a la asesora (factura) *</label>
+            {{ form.asesora_factura }}
+            {{ form.asesora_factura.errors }}
+            <small class="factura-asesora-ayuda">
+                La asesora recibirá un aviso para realizar la factura. Desde la tabla de finalizados
+                podrás volver a avisarle con la campanita 🔔, una vez cada 24 horas.
+            </small>
+            {% if salida and salida.factura_notificada_en %}
+            <small class="factura-asesora-ultimo">
+                Último aviso: {{ salida.factura_notificada_en|date:"d/m/Y H:i" }}{% if salida.factura_asesora %} a {{ salida.factura_asesora.get_full_name|default:salida.factura_asesora.username }}{% endif %}.
+                Si eliges otra asesora, se le avisa al guardar.
+            </small>
+            {% endif %}
+        </div>
+        <style>
+            .factura-asesora {
+                margin-top: 14px; padding: 14px; border-radius: 10px;
+                border: 1px solid rgba(249, 118, 24, 0.35); background: var(--card-bg);
+            }
+            .factura-asesora-ayuda, .factura-asesora-ultimo {
+                display: block; margin-top: 6px; color: var(--text-muted); font-size: 11px; line-height: 1.4;
+            }
+            .factura-asesora-ultimo { font-weight: 700; }
+        </style>
+        {% endif %}
     </div>
     {% endif %}
 
@@ -1381,6 +1408,10 @@
             document.getElementById('id_factura_cedula'),
             document.getElementById('id_factura_correo')
         ];
+        // Asesora que realizará la factura (obligatoria con factura Sí).
+        const wrapAsesoraFactura = document.getElementById('factura-asesora');
+        const selAsesoraFactura = document.getElementById('id_asesora_factura');
+        if (selAsesoraFactura) camposFactura.push(selAsesoraFactura);
 
         function setRequired(input, requerido) {
             if (!input) return;
@@ -1512,6 +1543,7 @@
             if (!factura) return;
             const req = factura.value === 'si';
             wrapFactura.style.display = req ? 'block' : 'none';
+            if (wrapAsesoraFactura) wrapAsesoraFactura.style.display = req ? 'block' : 'none';
             camposFactura.forEach(function(inp) {
                 setRequired(inp, req);
             });
@@ -1536,6 +1568,7 @@
         if (bancoOtro) bancoOtro.addEventListener('input', window.__checkRequired);
         if (tarjetaApp) tarjetaApp.addEventListener('change', window.__checkRequired);
         if (factura) factura.addEventListener('change', actualizarFactura);
+        if (selAsesoraFactura) selAsesoraFactura.addEventListener('change', window.__checkRequired);
         
         if (inputValorCobrado) inputValorCobrado.addEventListener('input', window.__checkRequired);
         if (inputMonto1) inputMonto1.addEventListener('input', window.__checkRequired);
