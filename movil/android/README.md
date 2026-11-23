@@ -14,6 +14,13 @@ gradle assembleRelease
 Sale en `app/build/outputs/apk/release/app-release.apk`.
 Para una actualización, sube `versionCode` en `app/build.gradle`.
 
+Para que se descargue desde el sistema (tarjeta «App para el celular» del
+inicio), cópialo en `econotec/descargas/econotec.apk` y súbelo a GitHub:
+
+```bash
+cp app/build/outputs/apk/release/app-release.apk ../../econotec/descargas/econotec.apk
+```
+
 ## Firma (muy importante)
 
 `econotec-release.keystore` y `keystore.properties` **no se suben a GitHub**.

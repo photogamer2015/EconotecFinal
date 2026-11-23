@@ -99,6 +99,26 @@ class PushTests(TestCase):
         self.assertEqual(destino['package_name'], 'cc.econosystem.app')
         self.assertEqual(len(destino['sha256_cert_fingerprints'][0].split(':')), 32)
 
+    def test_descarga_directa_del_apk_de_android(self):
+        url = reverse('econotec:app_android_descargar')
+        self.assertEqual(self.client.get(url).status_code, 302)  # pide iniciar sesión
+
+        self.client.force_login(self.asesora)
+        r = self.client.get(url)
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r['Content-Type'], 'application/vnd.android.package-archive')
+        self.assertIn('attachment', r['Content-Disposition'])
+        self.assertIn('Econotec.apk', r['Content-Disposition'])
+        contenido = b''.join(r.streaming_content)
+        self.assertTrue(contenido.startswith(b'PK'))  # un APK es un ZIP
+
+    def test_inicio_tiene_la_tarjeta_de_la_app(self):
+        self.client.force_login(self.tecnico)
+        html = self.client.get(reverse('econotec:bienvenida')).content.decode()
+        self.assertIn('App para el celular', html)
+        self.assertIn(reverse('econotec:app_android_descargar'), html)
+        self.assertIn('data-app-iphone', html)
+
     def test_base_tiene_manifest_y_boton_solo_para_roles(self):
         self.client.force_login(self.tecnico)
         html = self.client.get(reverse('econotec:bienvenida')).content.decode()

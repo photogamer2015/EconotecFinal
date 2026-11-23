@@ -1,9 +1,10 @@
 """App instalable (manifest y service worker) y suscripción a notificaciones push."""
 import json
+from pathlib import Path
 
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
-from django.http import HttpResponse, JsonResponse
+from django.http import FileResponse, Http404, HttpResponse, JsonResponse
 from django.shortcuts import render
 from django.templatetags.static import static
 from django.views.decorators.http import require_POST
@@ -57,6 +58,25 @@ def assetlinks(request):
     }]
     respuesta = JsonResponse(datos, safe=False)
     respuesta['Cache-Control'] = 'public, max-age=3600'
+    return respuesta
+
+
+APK_ANDROID = Path(settings.BASE_DIR) / 'econotec' / 'descargas' / 'econotec.apk'
+
+
+@login_required
+def descargar_app_android(request):
+    """Descarga directa de la app de Android (APK) desde el sistema.
+    El APK se genera en movil/android y se copia en econotec/descargas/."""
+    if not APK_ANDROID.is_file():
+        raise Http404('La app de Android todavía no está disponible.')
+    respuesta = FileResponse(
+        APK_ANDROID.open('rb'),
+        as_attachment=True,
+        filename='Econotec.apk',
+        content_type='application/vnd.android.package-archive',
+    )
+    respuesta['Cache-Control'] = 'no-cache'
     return respuesta
 
 
