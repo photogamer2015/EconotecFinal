@@ -983,6 +983,15 @@ class IngresoEquipo(RetencionFactura):
     def estado_visual_display(self):
         salida = self._salida_relacionada()
         if salida is not None and salida.cliente_ya_retiro:
+            # A domicilio el equipo nunca estuvo en la oficina: se dice cómo
+            # terminó en casa del cliente.
+            clave_domicilio = salida.estado_domicilio_key
+            if clave_domicilio == 'reparado':
+                return 'Finalizado a domicilio'
+            if clave_domicilio == 'no_reparable':
+                return 'No se pudo reparar'
+            if clave_domicilio == 'cliente_no_acepta':
+                return 'No quiso repararlo'
             return 'Salió de la oficina'
         if self.pendiente_retiro_visual:
             return 'Pendiente de retiro'
@@ -1038,6 +1047,10 @@ class IngresoEquipo(RetencionFactura):
     def subestado_visual_display(self):
         salida = self._salida_relacionada()
         if salida is not None and salida.cliente_ya_retiro:
+            if salida.estado_domicilio_key == 'reparado':
+                return 'Equipo finalizado en el domicilio del cliente'
+            if salida.estado_domicilio_key:
+                return 'Atendido en el domicilio del cliente'
             return 'Salida de la oficina confirmada'
         if self.pendiente_retiro_visual:
             return 'Reparado - pendiente de retiro'

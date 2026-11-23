@@ -311,6 +311,34 @@ class SalidaDomicilioTests(TestCase):
         self.assertContains(menu, 'Lista de Equipos a Domicilio')
         self.assertContains(menu, '?alcance=domicilio')
 
+    def test_estado_en_la_lista_dice_a_domicilio_y_no_salio_de_la_oficina(self):
+        casos = (
+            ('domicilio:reparado', 'Finalizado a domicilio', 'Equipo finalizado en el domicilio del cliente'),
+            ('domicilio:no_reparable', 'No se pudo reparar', 'Atendido en el domicilio del cliente'),
+            ('domicilio:cliente_no_acepta', 'No quiso repararlo', 'Atendido en el domicilio del cliente'),
+        )
+        for estado, titulo, detalle in casos:
+            with self.subTest(estado=estado):
+                ingreso = self.crear_ingreso()
+                self.registrar(ingreso, estado, pago_domicilio='despues')
+                ingreso = IngresoEquipo.objects.get(pk=ingreso.pk)
+                self.assertEqual(ingreso.estado_visual_display, titulo)
+                self.assertEqual(ingreso.subestado_visual_display, detalle)
+
+        lista = self.client.get(reverse('econotec:ingreso_lista'), {'sede': 'todas', 'alcance': 'domicilio'})
+        self.assertContains(lista, 'Equipo finalizado en el domicilio del cliente')
+        self.assertNotContains(lista, 'Salió de la oficina')
+        self.assertNotContains(lista, 'Salida de la oficina confirmada')
+
+    def test_salida_de_la_oficina_sigue_igual_fuera_de_domicilio(self):
+        ingreso = self.crear_ingreso(a_domicilio='no')
+        self.registrar(ingreso, 'pendiente_retiro', asesora_notificacion=str(self.asesora.pk))
+        SalidaEquipo.objects.filter(ingreso=ingreso).update(fecha_retiro_real=date.today())
+
+        ingreso = IngresoEquipo.objects.get(pk=ingreso.pk)
+        self.assertEqual(ingreso.estado_visual_display, 'Salió de la oficina')
+        self.assertEqual(ingreso.subestado_visual_display, 'Salida de la oficina confirmada')
+
     def test_equipos_finalizados_separa_los_de_a_domicilio(self):
         normal = self.crear_ingreso(a_domicilio='no')
         en_casa = self.crear_ingreso()
