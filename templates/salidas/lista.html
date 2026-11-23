@@ -26,8 +26,9 @@
     .factura-bell:hover { background: #e0640c; }
     .factura-bell.is-espera {
         background: transparent; color: var(--text-muted); border-color: var(--border-color, #cbd5e1);
-        opacity: .55; cursor: not-allowed; filter: grayscale(1);
+        opacity: .55; cursor: help; filter: grayscale(1);
     }
+    .factura-bell.is-espera:hover { background: transparent; opacity: .8; }
     .ret-pill {
         background: #2e7d32; color: white;
         display: inline-flex; align-items: center;
@@ -801,9 +802,14 @@
                                     aria-label="Avisar a {{ asesora_factura }} para realizar la factura del equipo {{ s.ingreso.codigo_equipo }}">🔔</button>
                         </form>
                         {% else %}
-                        <span class="factura-bell is-espera" role="img"
-                              title="Ya se avisó a {{ asesora_factura }} de la factura. Podrás volver a avisarle desde el {{ s.aviso_factura_disponible_en|date:'d/m/Y H:i' }}"
-                              aria-label="Aviso de factura enviado a {{ asesora_factura }}. Disponible de nuevo el {{ s.aviso_factura_disponible_en|date:'d/m/Y H:i' }}">🔔</span>
+                        <button type="button" class="factura-bell is-espera" data-factura-espera
+                                data-asesora="{{ asesora_factura }}"
+                                data-codigo="{{ s.ingreso.codigo_equipo }}"
+                                data-avisado="{{ s.factura_notificada_en|date:'d/m/Y' }} a las {{ s.factura_notificada_en|date:'H:i' }}"
+                                data-disponible="{{ s.aviso_factura_disponible_en|date:'d/m/Y' }} a las {{ s.aviso_factura_disponible_en|date:'H:i' }}"
+                                data-disponible-iso="{{ s.aviso_factura_disponible_en|date:'c' }}"
+                                title="Ya se avisó a {{ asesora_factura }} de la factura. Podrás volver a avisarle desde el {{ s.aviso_factura_disponible_en|date:'d/m/Y H:i' }}"
+                                aria-label="Aviso de factura enviado a {{ asesora_factura }}. Toca para ver cuándo se puede volver a avisar.">🔔</button>
                         {% endif %}
                         {% endwith %}
                     {% endif %}
@@ -838,4 +844,47 @@
     {% else %}
         {% include 'includes/paginacion.html' with page_obj=page_obj querystring=querystring page_param='pagina' aria_label='Paginación de equipos finalizados' %}
     {% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+/* Campanita de factura en espera: al tocarla explica por qué aún no se puede volver a avisar. */
+(function () {
+    'use strict';
+    function faltan(iso) {
+        const ms = new Date(iso).getTime() - Date.now();
+        if (!(ms > 0)) return '';
+        const min = Math.ceil(ms / 60000);
+        const h = Math.floor(min / 60);
+        const m = min % 60;
+        if (h && m) return h + ' h ' + m + ' min';
+        return h ? h + ' h' : m + ' min';
+    }
+    function esc(t) {
+        const d = document.createElement('div');
+        d.textContent = t || '';
+        return d.innerHTML;
+    }
+    document.querySelectorAll('[data-factura-espera]').forEach(function (b) {
+        b.addEventListener('click', function () {
+            const d = b.dataset;
+            const resta = faltan(d.disponibleIso);
+            const titulo = 'Aviso de factura ya enviado';
+            const html =
+                '<div style="text-align:left">' +
+                'A <b>' + esc(d.asesora) + '</b> ya se le avisó que realice la factura del equipo <b>' + esc(d.codigo) + '</b> ' +
+                'el <b>' + esc(d.avisado) + '</b>.<br><br>' +
+                'Para no repetir el aviso, la campanita se puede usar <b>una vez cada 24 horas</b>.<br><br>' +
+                'Podrás volver a avisarle desde el <b>' + esc(d.disponible) + '</b>' +
+                (resta ? ' (faltan ' + resta + ').' : '. Vuelve a cargar la página para habilitarla.') +
+                '</div>';
+            if (window.Swal) {
+                window.Swal.fire({ title: titulo, html: html, icon: 'info', confirmButtonText: 'Entendido', confirmButtonColor: '#f97618' });
+            } else {
+                window.alert(titulo + '\n\n' + html.replace(/<br>/g, '\n').replace(/<[^>]+>/g, ''));
+            }
+        });
+    });
+})();
+</script>
 {% endblock %}

@@ -231,6 +231,12 @@ class AvisoFacturaTests(TestCase):
         html = self.client.get(url, {'sede': 'todas'}).content.decode()
         self.assertIn('factura-bell is-espera', html)
         self.assertNotIn(reverse('econotec:salida_notificar_factura', kwargs={'pk': salida.pk}), html)
+        # La campanita en espera se puede tocar y explica por qué y hasta cuándo.
+        disponible = timezone.localtime(salida.aviso_factura_disponible_en)
+        self.assertIn('<button type="button" class="factura-bell is-espera" data-factura-espera', html)
+        self.assertIn(f'data-disponible="{disponible:%d/%m/%Y} a las {disponible:%H:%M}"', html)
+        self.assertIn('Aviso de factura ya enviado', html)
+        self.assertIn('una vez cada 24 horas', html)
 
         self.pasar_horas(salida, 25)
         html = self.client.get(url, {'sede': 'todas'}).content.decode()
