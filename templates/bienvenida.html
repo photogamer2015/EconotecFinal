@@ -1768,6 +1768,48 @@
   .card-box:hover .card-footer > span:last-child {
     color: var(--primary-dark);
   }
+  /* App para el celular: dos botones (Android / iPhone). */
+  .card-box-app:hover { transform: none; }
+  .app-movil-botones {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+    margin: 14px 0 16px;
+  }
+  .app-movil-btn {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 54px;
+    padding: 10px 12px;
+    border-radius: 12px;
+    border: 1px solid var(--border-color);
+    background: var(--hover-bg, transparent);
+    color: var(--text-main);
+    font: inherit;
+    text-align: left;
+    text-decoration: none;
+    cursor: pointer;
+    transition: border-color 0.18s ease, background 0.18s ease, color 0.18s ease;
+  }
+  .app-movil-btn:hover,
+  .app-movil-btn:focus-visible {
+    border-color: var(--primary);
+    outline: none;
+  }
+  .app-movil-btn.es-tu-celular {
+    background: var(--primary);
+    border-color: var(--primary);
+    color: #fff;
+  }
+  .app-movil-btn.es-tu-celular small { color: rgba(255, 255, 255, 0.88); }
+  .app-movil-btn-icono { font-size: 22px; line-height: 1; flex: 0 0 auto; }
+  .app-movil-btn-texto { display: flex; flex-direction: column; min-width: 0; line-height: 1.25; }
+  .app-movil-btn-texto strong { font-size: 14px; }
+  .app-movil-btn-texto small { font-size: 12px; color: var(--text-muted); }
+  @media (max-width: 380px) {
+    .app-movil-botones { grid-template-columns: 1fr; }
+  }
   .status-ok,
   .status-admin,
   .status-info,
@@ -3593,6 +3635,31 @@
     </div>
   </a>
   {% endif %}
+
+  {# ── APP PARA EL CELULAR: APK de Android y pasos para iPhone ── #}
+  {% if puede_gestionar_equipos or puede_gestionar_pagos %}
+  <div class="card-box card-box-app" data-app-movil>
+    <div class="card-header">
+      <div class="card-title">App para el celular</div>
+      <div class="card-icon">📲</div>
+    </div>
+    <div class="card-desc">Instala Econotec en tu celular, con su ícono y las notificaciones.</div>
+    <div class="app-movil-botones">
+      <a class="app-movil-btn" href="{% url 'econotec:app_android_descargar' %}" download="Econotec.apk" data-app-android>
+        <span class="app-movil-btn-icono" aria-hidden="true">🤖</span>
+        <span class="app-movil-btn-texto"><strong>Android</strong><small>Descargar APK</small></span>
+      </a>
+      <button type="button" class="app-movil-btn" data-app-iphone>
+        <span class="app-movil-btn-icono" aria-hidden="true">🍎</span>
+        <span class="app-movil-btn-texto"><strong>iPhone</strong><small>Cómo instalar</small></span>
+      </button>
+    </div>
+    <div class="card-footer">
+      <span class="status-ok">Disponible</span>
+      <span>Android · iPhone</span>
+    </div>
+  </div>
+  {% endif %}
 </div>
 
 <!-- Estructura del Modal Flotante -->
@@ -3604,6 +3671,65 @@
 </div>
 
 {% block extra_js %}
+<script>
+  // App para el celular: resalta el botón del celular que se está usando y
+  // explica cómo instalar (APK en Android, pantalla de inicio en iPhone).
+  (function () {
+    var tarjeta = document.querySelector('[data-app-movil]');
+    if (!tarjeta) return;
+    var btnAndroid = tarjeta.querySelector('[data-app-android]');
+    var btnIphone = tarjeta.querySelector('[data-app-iphone]');
+    var ua = navigator.userAgent || '';
+    var esAndroid = /Android/i.test(ua);
+    var esIOS = !esAndroid && (/iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1));
+    var instalada = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+    if (esAndroid && btnAndroid) btnAndroid.classList.add('es-tu-celular');
+    if (esIOS && btnIphone) btnIphone.classList.add('es-tu-celular');
+
+    function aviso(titulo, html, icono) {
+      if (window.Swal) {
+        window.Swal.fire({ title: titulo, html: '<div style="text-align:left">' + html + '</div>', icon: icono || 'info', confirmButtonColor: '#f97618' });
+      } else {
+        window.alert(titulo + '\n\n' + html.replace(/<br>/g, '\n').replace(/<[^>]+>/g, ''));
+      }
+    }
+
+    if (btnAndroid) {
+      btnAndroid.addEventListener('click', function () {
+        // La descarga sigue sola; mientras, se explica cómo instalarla.
+        setTimeout(function () {
+          aviso(
+            'Instalar en Android',
+            '1. Abre el archivo <b>Econotec.apk</b> que se descargó (en la notificación o en <b>Descargas</b>).<br>' +
+            '2. Si Android lo pide, toca <b>Configuración</b> y activa <b>Permitir de esta fuente</b>.<br>' +
+            '3. Toca <b>Instalar</b> y abre <b>Econotec</b> desde el ícono nuevo.<br><br>' +
+            '<small>Si ya la tenías instalada, se actualiza encima sin perder nada.</small>',
+            'success'
+          );
+        }, 400);
+      });
+    }
+
+    if (btnIphone) {
+      btnIphone.addEventListener('click', function () {
+        if (esIOS && instalada) {
+          aviso('Ya la tienes instalada', 'Estás usando Econotec como app en este iPhone. 👍', 'success');
+          return;
+        }
+        aviso(
+          'Instalar en iPhone',
+          'En iPhone la app se instala desde el navegador (iOS 16.4 o más nuevo):<br><br>' +
+          '1. Abre <b>econosystem.cc</b> en el iPhone y toca <b>Compartir</b> (el cuadrado con la flecha ↑):<br>' +
+          '&nbsp;&nbsp;• En <b>Safari</b>: está en la barra de abajo.<br>' +
+          '&nbsp;&nbsp;• En <b>Chrome</b>: está junto a la dirección, arriba a la derecha.<br>' +
+          '2. Elige <b>Añadir a pantalla de inicio</b> (si no aparece, desliza hacia abajo en la lista).<br>' +
+          '3. Abre Econotec desde el ícono nuevo y toca <b>Activar notificaciones</b>.<br><br>' +
+          '<small>Apple no permite descargar apps fuera de la App Store, por eso en iPhone no hay archivo para descargar.</small>'
+        );
+      });
+    }
+  })();
+</script>
 <script>
   function toggleDashboardSilenciados(event) {
     // Evitar activar si el click se hizo dentro de un formulario o botón de reactivar
