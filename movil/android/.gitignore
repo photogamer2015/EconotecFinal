@@ -1,0 +1,11 @@
+# Firma de la app: NUNCA subir a GitHub (guárdala con copia de seguridad).
+*.keystore
+*.jks
+keystore.properties
+# Compilación
+.gradle/
+build/
+app/build/
+local.properties
+*.apk
+*.aab

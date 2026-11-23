@@ -90,6 +90,15 @@ class PushTests(TestCase):
         self.assertIn('javascript', r['Content-Type'])
         self.assertIn("addEventListener('push'", r.content.decode())
 
+    def test_assetlinks_vincula_la_app_de_android(self):
+        r = self.client.get('/.well-known/assetlinks.json')
+        self.assertEqual(r.status_code, 200)
+        self.assertIn('application/json', r['Content-Type'])
+        destino = r.json()[0]['target']
+        self.assertEqual(destino['namespace'], 'android_app')
+        self.assertEqual(destino['package_name'], 'cc.econosystem.app')
+        self.assertEqual(len(destino['sha256_cert_fingerprints'][0].split(':')), 32)
+
     def test_base_tiene_manifest_y_boton_solo_para_roles(self):
         self.client.force_login(self.tecnico)
         html = self.client.get(reverse('econotec:bienvenida')).content.decode()
