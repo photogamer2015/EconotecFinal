@@ -117,7 +117,8 @@ class PushTests(TestCase):
         html = self.client.get(reverse('econotec:bienvenida')).content.decode()
         self.assertIn('App para el celular', html)
         self.assertIn(reverse('econotec:app_android_descargar'), html)
-        self.assertIn('data-app-iphone', html)
+        self.assertIn('Descargar para', html)
+        self.assertIn('pwa/android-robot.png', html)
 
     def test_base_tiene_manifest_y_boton_solo_para_roles(self):
         self.client.force_login(self.tecnico)

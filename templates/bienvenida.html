@@ -1768,47 +1768,52 @@
   .card-box:hover .card-footer > span:last-child {
     color: var(--primary-dark);
   }
-  /* App para el celular: dos botones (Android / iPhone). */
+  /* App para el celular: botón de descarga para Android. */
   .card-box-app:hover { transform: none; }
-  .app-movil-botones {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 10px;
-    margin: 14px 0 16px;
-  }
-  .app-movil-btn {
+  .app-android-btn {
     display: flex;
     align-items: center;
-    gap: 10px;
-    min-height: 54px;
-    padding: 10px 12px;
-    border-radius: 12px;
-    border: 1px solid var(--border-color);
-    background: var(--hover-bg, transparent);
-    color: var(--text-main);
-    font: inherit;
-    text-align: left;
+    gap: 14px;
+    margin: 16px 0 18px;
+    padding: 12px 18px;
+    min-height: 64px;
+    border-radius: 14px;
+    background: #111827;
+    border: 1px solid #111827;
+    color: #fff;
     text-decoration: none;
-    cursor: pointer;
-    transition: border-color 0.18s ease, background 0.18s ease, color 0.18s ease;
+    box-shadow: 0 6px 16px rgba(17, 24, 39, 0.18);
+    transition: transform 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
   }
-  .app-movil-btn:hover,
-  .app-movil-btn:focus-visible {
-    border-color: var(--primary);
+  .app-android-btn:hover,
+  .app-android-btn:focus-visible {
+    background: #000;
+    transform: translateY(-1px);
+    box-shadow: 0 10px 22px rgba(17, 24, 39, 0.26);
     outline: none;
   }
-  .app-movil-btn.es-tu-celular {
-    background: var(--primary);
-    border-color: var(--primary);
-    color: #fff;
+  .app-android-btn:focus-visible { box-shadow: 0 0 0 3px rgba(61, 220, 132, 0.55); }
+  .app-android-logo {
+    width: 52px;
+    height: auto;
+    flex: 0 0 auto;
+    display: block;
   }
-  .app-movil-btn.es-tu-celular small { color: rgba(255, 255, 255, 0.88); }
-  .app-movil-btn-icono { font-size: 22px; line-height: 1; flex: 0 0 auto; }
-  .app-movil-btn-texto { display: flex; flex-direction: column; min-width: 0; line-height: 1.25; }
-  .app-movil-btn-texto strong { font-size: 14px; }
-  .app-movil-btn-texto small { font-size: 12px; color: var(--text-muted); }
-  @media (max-width: 380px) {
-    .app-movil-botones { grid-template-columns: 1fr; }
+  .app-android-texto { display: flex; flex-direction: column; line-height: 1.1; min-width: 0; }
+  .app-android-texto small {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    white-space: nowrap;
+    color: rgba(255, 255, 255, 0.72);
+  }
+  .app-android-texto strong { font-size: 22px; font-weight: 700; letter-spacing: -0.01em; color: #fff; }
+  .app-android-flecha { margin-left: auto; font-size: 20px; color: #3ddc84; flex: 0 0 auto; }
+  html[data-theme="dark"] .app-android-btn,
+  body.dark-mode .app-android-btn {
+    background: #0b0f14;
+    border-color: rgba(255, 255, 255, 0.14);
   }
   .status-ok,
   .status-admin,
@@ -3636,27 +3641,24 @@
   </a>
   {% endif %}
 
-  {# ── APP PARA EL CELULAR: APK de Android y pasos para iPhone ── #}
+  {# ── APP PARA EL CELULAR: descarga directa del APK de Android ── #}
   {% if puede_gestionar_equipos or puede_gestionar_pagos %}
   <div class="card-box card-box-app" data-app-movil>
     <div class="card-header">
       <div class="card-title">App para el celular</div>
       <div class="card-icon">📲</div>
     </div>
-    <div class="card-desc">Instala Econotec en tu celular, con su ícono y las notificaciones.</div>
-    <div class="app-movil-botones">
-      <a class="app-movil-btn" href="{% url 'econotec:app_android_descargar' %}" download="Econotec.apk" data-app-android>
-        <span class="app-movil-btn-icono" aria-hidden="true">🤖</span>
-        <span class="app-movil-btn-texto"><strong>Android</strong><small>Descargar APK</small></span>
-      </a>
-      <button type="button" class="app-movil-btn" data-app-iphone>
-        <span class="app-movil-btn-icono" aria-hidden="true">🍎</span>
-        <span class="app-movil-btn-texto"><strong>iPhone</strong><small>Cómo instalar</small></span>
-      </button>
-    </div>
+    <div class="card-desc">Descarga la app de Econotec para tu Android, con su ícono y las notificaciones.</div>
+    {# El robot de Android es obra de Google, usado según la licencia Creative Commons Atribución 3.0. #}
+    <a class="app-android-btn" href="{% url 'econotec:app_android_descargar' %}" download="Econotec.apk" data-app-android
+       aria-label="Descargar la app de Econotec para Android">
+      <img class="app-android-logo" src="{% static 'pwa/android-robot.png' %}" alt="" width="52" height="32" decoding="async">
+      <span class="app-android-texto"><small>Descargar para</small><strong>Android</strong></span>
+      <span class="app-android-flecha" aria-hidden="true">⬇</span>
+    </a>
     <div class="card-footer">
       <span class="status-ok">Disponible</span>
-      <span>Android · iPhone</span>
+      <span>Android 7 o más</span>
     </div>
   </div>
   {% endif %}
@@ -3672,62 +3674,25 @@
 
 {% block extra_js %}
 <script>
-  // App para el celular: resalta el botón del celular que se está usando y
-  // explica cómo instalar (APK en Android, pantalla de inicio en iPhone).
+  // App para el celular: al descargar el APK se explica cómo instalarlo.
   (function () {
-    var tarjeta = document.querySelector('[data-app-movil]');
-    if (!tarjeta) return;
-    var btnAndroid = tarjeta.querySelector('[data-app-android]');
-    var btnIphone = tarjeta.querySelector('[data-app-iphone]');
-    var ua = navigator.userAgent || '';
-    var esAndroid = /Android/i.test(ua);
-    var esIOS = !esAndroid && (/iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1));
-    var instalada = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
-    if (esAndroid && btnAndroid) btnAndroid.classList.add('es-tu-celular');
-    if (esIOS && btnIphone) btnIphone.classList.add('es-tu-celular');
-
-    function aviso(titulo, html, icono) {
-      if (window.Swal) {
-        window.Swal.fire({ title: titulo, html: '<div style="text-align:left">' + html + '</div>', icon: icono || 'info', confirmButtonColor: '#f97618' });
-      } else {
-        window.alert(titulo + '\n\n' + html.replace(/<br>/g, '\n').replace(/<[^>]+>/g, ''));
-      }
-    }
-
-    if (btnAndroid) {
-      btnAndroid.addEventListener('click', function () {
-        // La descarga sigue sola; mientras, se explica cómo instalarla.
-        setTimeout(function () {
-          aviso(
-            'Instalar en Android',
-            '1. Abre el archivo <b>Econotec.apk</b> que se descargó (en la notificación o en <b>Descargas</b>).<br>' +
-            '2. Si Android lo pide, toca <b>Configuración</b> y activa <b>Permitir de esta fuente</b>.<br>' +
-            '3. Toca <b>Instalar</b> y abre <b>Econotec</b> desde el ícono nuevo.<br><br>' +
-            '<small>Si ya la tenías instalada, se actualiza encima sin perder nada.</small>',
-            'success'
-          );
-        }, 400);
-      });
-    }
-
-    if (btnIphone) {
-      btnIphone.addEventListener('click', function () {
-        if (esIOS && instalada) {
-          aviso('Ya la tienes instalada', 'Estás usando Econotec como app en este iPhone. 👍', 'success');
-          return;
+    var btnAndroid = document.querySelector('[data-app-android]');
+    if (!btnAndroid) return;
+    btnAndroid.addEventListener('click', function () {
+      // La descarga sigue sola; mientras, se muestran los pasos.
+      setTimeout(function () {
+        var pasos =
+          '1. Abre el archivo <b>Econotec.apk</b> que se descargó (en la notificación o en <b>Descargas</b>).<br>' +
+          '2. Si Android lo pide, toca <b>Configuración</b> y activa <b>Permitir de esta fuente</b>.<br>' +
+          '3. Toca <b>Instalar</b> y abre <b>Econotec</b> desde el ícono nuevo.<br><br>' +
+          '<small>Si ya la tenías instalada, se actualiza encima sin perder nada.</small>';
+        if (window.Swal) {
+          window.Swal.fire({ title: 'Instalar en Android', html: '<div style="text-align:left">' + pasos + '</div>', icon: 'success', confirmButtonColor: '#f97618' });
+        } else {
+          window.alert('Instalar en Android\n\n' + pasos.replace(/<br>/g, '\n').replace(/<[^>]+>/g, ''));
         }
-        aviso(
-          'Instalar en iPhone',
-          'En iPhone la app se instala desde el navegador (iOS 16.4 o más nuevo):<br><br>' +
-          '1. Abre <b>econosystem.cc</b> en el iPhone y toca <b>Compartir</b> (el cuadrado con la flecha ↑):<br>' +
-          '&nbsp;&nbsp;• En <b>Safari</b>: está en la barra de abajo.<br>' +
-          '&nbsp;&nbsp;• En <b>Chrome</b>: está junto a la dirección, arriba a la derecha.<br>' +
-          '2. Elige <b>Añadir a pantalla de inicio</b> (si no aparece, desliza hacia abajo en la lista).<br>' +
-          '3. Abre Econotec desde el ícono nuevo y toca <b>Activar notificaciones</b>.<br><br>' +
-          '<small>Apple no permite descargar apps fuera de la App Store, por eso en iPhone no hay archivo para descargar.</small>'
-        );
-      });
-    }
+      }, 400);
+    });
   })();
 </script>
 <script>
