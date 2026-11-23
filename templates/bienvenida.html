@@ -1768,13 +1768,13 @@
   .card-box:hover .card-footer > span:last-child {
     color: var(--primary-dark);
   }
-  /* App para el celular: botón de descarga para Android. */
-  .card-box-app:hover { transform: none; }
+  /* App para el celular: botón de descarga para Android (solo el botón). */
   .app-android-btn {
     display: flex;
     align-items: center;
+    align-self: start;
     gap: 14px;
-    margin: 16px 0 18px;
+    margin: 0;
     padding: 12px 18px;
     min-height: 64px;
     border-radius: 14px;
@@ -3641,26 +3641,15 @@
   </a>
   {% endif %}
 
-  {# ── APP PARA EL CELULAR: descarga directa del APK de Android ── #}
+  {# ── APP PARA EL CELULAR: botón de descarga directa del APK de Android ── #}
   {% if puede_gestionar_equipos or puede_gestionar_pagos %}
-  <div class="card-box card-box-app" data-app-movil>
-    <div class="card-header">
-      <div class="card-title">App para el celular</div>
-      <div class="card-icon">📲</div>
-    </div>
-    <div class="card-desc">Descarga la app de Econotec para tu Android, con su ícono y las notificaciones.</div>
-    {# El robot de Android es obra de Google, usado según la licencia Creative Commons Atribución 3.0. #}
-    <a class="app-android-btn" href="{% url 'econotec:app_android_descargar' %}" download="Econotec.apk" data-app-android
-       aria-label="Descargar la app de Econotec para Android">
-      <img class="app-android-logo" src="{% static 'pwa/android-robot.png' %}" alt="" width="52" height="32" decoding="async">
-      <span class="app-android-texto"><small>Descargar para</small><strong>Android</strong></span>
-      <span class="app-android-flecha" aria-hidden="true">⬇</span>
-    </a>
-    <div class="card-footer">
-      <span class="status-ok">Disponible</span>
-      <span>Android 7 o más</span>
-    </div>
-  </div>
+  {# El robot de Android es obra de Google, usado según la licencia Creative Commons Atribución 3.0. #}
+  <a class="app-android-btn" href="{% url 'econotec:app_android_descargar' %}" download="Econotec.apk" data-app-android
+     aria-label="Descargar la app de Econotec para Android">
+    <img class="app-android-logo" src="{% static 'pwa/android-robot.png' %}" alt="" width="52" height="32" decoding="async">
+    <span class="app-android-texto"><small>Descargar para</small><strong>Android</strong></span>
+    <span class="app-android-flecha" aria-hidden="true">⬇</span>
+  </a>
   {% endif %}
 </div>
 
