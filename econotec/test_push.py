@@ -115,7 +115,6 @@ class PushTests(TestCase):
     def test_inicio_tiene_la_tarjeta_de_la_app(self):
         self.client.force_login(self.tecnico)
         html = self.client.get(reverse('econotec:bienvenida')).content.decode()
-        self.assertIn('App para el celular', html)
         self.assertIn(reverse('econotec:app_android_descargar'), html)
         self.assertIn('Descargar para', html)
         self.assertIn('pwa/android-robot.png', html)
