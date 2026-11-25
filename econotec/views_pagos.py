@@ -186,19 +186,27 @@ def pagos_lista(request):
     base_qs = IngresoEquipo.objects.exclude(sede='ventas')
     context = _construir_contexto_pagos(request, base_qs)
     context['modo'] = 'reparaciones'
-    context['resumen_pagos_dia'] = _resumen_pagos_dia()
-    # El dinero cobrado por día solo lo ven quienes ven Seguimiento de pago;
-    # los demás ven únicamente cuántos pagos hubo.
-    context['resumen_pagos_con_dinero'] = puede_ver_seguimiento_pago(request.user)
+    _agregar_resumen_pagos_dia(request, context, EQUIPO)
     return render(request, 'pagos/lista.html', context)
 
 
-def _resumen_pagos_dia():
-    """Apartado «Hoy / Ayer / Este mes» de Pagos (reparaciones).
+def _agregar_resumen_pagos_dia(request, context, tipo):
+    """Apartado «Hoy / Ayer / Este mes»: equipos en Pagos, productos en Ventas.
 
-    Lo cobrado en cada período (anticipos, diagnósticos, abonos y pagos al
-    finalizar), sin depender de los filtros de la tabla. «Hoy» arranca en cero
-    cada día y «Este mes» va del día 1 a hoy, así se reinicia al cambiar de mes.
+    El dinero cobrado por día solo lo ven quienes ven Seguimiento de pago;
+    los demás ven únicamente cuántos pagos hubo.
+    """
+    context['resumen_pagos_dia'] = _resumen_pagos_dia(tipo)
+    context['resumen_pagos_con_dinero'] = puede_ver_seguimiento_pago(request.user)
+
+
+def _resumen_pagos_dia(tipo=EQUIPO):
+    """Lo cobrado hoy, ayer y este mes de equipos (`EQUIPO`) o ventas (`PRODUCTO`).
+
+    Anticipos, diagnósticos, abonos y pagos al finalizar (en ventas, el pago o
+    abono inicial y sus abonos), sin depender de los filtros de la tabla. «Hoy»
+    arranca en cero cada día y «Este mes» va del día 1 a hoy, así se reinicia
+    al cambiar de mes.
     """
     hoy = timezone.localdate()
     ayer = hoy - timedelta(days=1)
@@ -208,7 +216,7 @@ def _resumen_pagos_dia():
         ('Este mes', hoy.replace(day=1), hoy, f'{MESES_ES[hoy.month]} {hoy.year}'),
     )
     return [
-        {'etiqueta': etiqueta, 'periodo': texto, **cobros_del_periodo(desde, hasta, tipo=EQUIPO)}
+        {'etiqueta': etiqueta, 'periodo': texto, **cobros_del_periodo(desde, hasta, tipo=tipo)}
         for etiqueta, desde, hasta, texto in periodos
     ]
 
@@ -262,6 +270,9 @@ def _render_pagos_ventas_lista(request, filtro_ventas_pago=''):
         filtro_ventas_pago=filtro_ventas_pago,
     )
     context['modo'] = 'ventas'
+    # Las tres listas de ventas (todas, completas y parciales) muestran lo
+    # cobrado de todas las ventas de producto, igual que Seguimiento de pago.
+    _agregar_resumen_pagos_dia(request, context, PRODUCTO)
     return render(request, 'pagos/lista.html', context)
 
 
