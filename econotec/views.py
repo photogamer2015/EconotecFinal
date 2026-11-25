@@ -750,7 +750,8 @@ def dashboard_details(request, tipo):
             estado_reparacion='pendiente_retiro',
             fecha_retiro_real__isnull=True,
         ))
-        columnas = ['Código', 'Cliente', 'Equipo', 'Fase', 'Estado', 'Acción']
+        # La fecha de ingreso dice desde cuándo está el equipo en el taller.
+        columnas = ['Código', 'Cliente', 'Equipo', 'Fecha Ingreso', 'Fase', 'Estado', 'Acción']
 
         for eq in ingresos:
             btn = boton_modal(
@@ -764,6 +765,7 @@ def dashboard_details(request, tipo):
                     eq.codigo_equipo,
                     eq.cliente.nombres,
                     eq.tipo_equipo_display,
+                    eq.fecha_ingreso.strftime('%d/%m/%Y'),
                     'En proceso',
                     estado,
                     btn,
@@ -789,6 +791,7 @@ def dashboard_details(request, tipo):
                     eq.codigo_equipo,
                     eq.cliente.nombres,
                     eq.tipo_equipo_display,
+                    eq.fecha_ingreso.strftime('%d/%m/%Y'),
                     'Terminado',
                     'Listo (pendiente de retiro)',
                     btn,
