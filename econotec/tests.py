@@ -5380,7 +5380,38 @@ class VentasTests(TestCase):
                     rf'data-label="Ingreso · Días en taller">\s*'
                     rf'<span class="dash-ingreso-dias">'
                     rf'<span class="dash-ingreso-fecha">{fecha}</span>'
-                    rf'<span class="dash-dias-taller"[^>]*>{dias} días</span>',
+                    rf'<span class="dash-dias-taller[^"]*"[^>]*>{dias} días</span>',
+                )
+
+    def test_dashboard_modal_pendientes_colores_por_dias(self):
+        casos = (
+            (7, 'dash-dias-taller'),
+            (8, 'dash-dias-taller dash-dias-taller--ambar'),
+            (14, 'dash-dias-taller dash-dias-taller--ambar'),
+            (15, 'dash-dias-taller dash-dias-taller--rojo'),
+        )
+        ingresos = [
+            (
+                self.crear_ingreso_reparacion(
+                    fecha_ingreso=date.today() - timedelta(days=dias)
+                ),
+                dias,
+                clase,
+            )
+            for dias, clase in casos
+        ]
+
+        response = self.client.get(
+            reverse('econotec:dashboard_details', kwargs={'tipo': 'pendientes'})
+        )
+        html = response.content.decode()
+
+        for ingreso, dias, clase in ingresos:
+            with self.subTest(dias=dias):
+                self.assertRegex(
+                    html,
+                    rf'data-orden-codigo="{ingreso.codigo_equipo}"[\s\S]*?'
+                    rf'<span class="{clase}" title="[^"]*">{dias} días</span>',
                 )
 
     def test_dashboard_modal_pendientes_dias_hoy_y_un_dia(self):
