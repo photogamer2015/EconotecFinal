@@ -541,6 +541,38 @@ def totales_por_semana(sede='', tipo=EQUIPO):
     }
 
 
+def cobros_del_periodo(desde, hasta, sede='', tipo=EQUIPO):
+    """{'total', 'pagos'} de lo cobrado entre `desde` y `hasta` (incluidos).
+
+    Mismas reglas que `hoja_semana`: cada anticipo, diagnóstico inmediato,
+    abono y pago al finalizar cuenta como un pago en la fecha en que se hizo,
+    así las cifras cuadran con Seguimiento de pago.
+    """
+    total = CERO
+    pagos = 0
+    base = ingresos_de_seguimiento(sede, tipo)
+    montos = []
+    for anticipo, inmediato, diagnostico in base.filter(
+        fecha_ingreso__range=(desde, hasta),
+    ).values_list('abono_anticipo', 'diagnostico_inmediato', 'valor_diagnostico'):
+        montos.append(anticipo)
+        if inmediato == 'si':
+            montos.append(diagnostico)
+    montos.extend(
+        Abono.objects.filter(ingreso__in=base, fecha__range=(desde, hasta))
+        .values_list('monto', flat=True)
+    )
+    montos.extend(
+        SalidaEquipo.objects.filter(ingreso__in=base, fecha_salida__range=(desde, hasta))
+        .values_list('valor_final_cobrado', flat=True)
+    )
+    for monto in montos:
+        if monto and monto > 0:
+            total += monto
+            pagos += 1
+    return {'total': total, 'pagos': pagos}
+
+
 def pestanas_semanas(totales, actual, seleccionada, tipo=EQUIPO):
     """Una pestaña por semana con pagos (más la actual y la abierta), de la más
     nueva a la más antigua, y las mismas agrupadas por mes para el menú."""
