@@ -754,6 +754,10 @@ def dashboard_details(request, tipo):
         # y la cuenta de días, cuánto tiempo lleva ahí hasta hoy.
         columnas = ['Código', 'Cliente', 'Equipo', 'Ingreso · Días en taller', 'Fase', 'Estado', 'Acción']
 
+        # Desde cuántos días la etiqueta se pinta en ámbar y en rojo.
+        dias_alerta_ambar = 8
+        dias_alerta_rojo = 15
+
         def ingreso_con_dias(fecha):
             dias = max((hoy - fecha).days, 0)
             if dias == 0:
@@ -762,12 +766,19 @@ def dashboard_details(request, tipo):
                 texto_dias = '1 día'
             else:
                 texto_dias = f'{dias} días'
+            if dias >= dias_alerta_rojo:
+                clase_color = ' dash-dias-taller--rojo'
+            elif dias >= dias_alerta_ambar:
+                clase_color = ' dash-dias-taller--ambar'
+            else:
+                clase_color = ''
             return format_html(
                 '<span class="dash-ingreso-dias">'
                 '<span class="dash-ingreso-fecha">{}</span>'
-                '<span class="dash-dias-taller" title="{}">{}</span>'
+                '<span class="dash-dias-taller{}" title="{}">{}</span>'
                 '</span>',
                 fecha.strftime('%d/%m/%Y'),
+                clase_color,
                 f'Ingresó hace {dias} día{"" if dias == 1 else "s"}' if dias else 'Ingresó hoy',
                 texto_dias,
             )
