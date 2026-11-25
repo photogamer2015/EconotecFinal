@@ -750,8 +750,27 @@ def dashboard_details(request, tipo):
             estado_reparacion='pendiente_retiro',
             fecha_retiro_real__isnull=True,
         ))
-        # La fecha de ingreso dice desde cuándo está el equipo en el taller.
-        columnas = ['Código', 'Cliente', 'Equipo', 'Fecha Ingreso', 'Fase', 'Estado', 'Acción']
+        # La fecha de ingreso dice desde cuándo está el equipo en el taller,
+        # y la cuenta de días, cuánto tiempo lleva ahí hasta hoy.
+        columnas = ['Código', 'Cliente', 'Equipo', 'Ingreso · Días en taller', 'Fase', 'Estado', 'Acción']
+
+        def ingreso_con_dias(fecha):
+            dias = max((hoy - fecha).days, 0)
+            if dias == 0:
+                texto_dias = 'Hoy'
+            elif dias == 1:
+                texto_dias = '1 día'
+            else:
+                texto_dias = f'{dias} días'
+            return format_html(
+                '<span class="dash-ingreso-dias">'
+                '<span class="dash-ingreso-fecha">{}</span>'
+                '<span class="dash-dias-taller" title="{}">{}</span>'
+                '</span>',
+                fecha.strftime('%d/%m/%Y'),
+                f'Ingresó hace {dias} día{"" if dias == 1 else "s"}' if dias else 'Ingresó hoy',
+                texto_dias,
+            )
 
         for eq in ingresos:
             btn = boton_modal(
@@ -765,7 +784,7 @@ def dashboard_details(request, tipo):
                     eq.codigo_equipo,
                     eq.cliente.nombres,
                     eq.tipo_equipo_display,
-                    eq.fecha_ingreso.strftime('%d/%m/%Y'),
+                    ingreso_con_dias(eq.fecha_ingreso),
                     'En proceso',
                     estado,
                     btn,
@@ -791,7 +810,7 @@ def dashboard_details(request, tipo):
                     eq.codigo_equipo,
                     eq.cliente.nombres,
                     eq.tipo_equipo_display,
-                    eq.fecha_ingreso.strftime('%d/%m/%Y'),
+                    ingreso_con_dias(eq.fecha_ingreso),
                     'Terminado',
                     'Listo (pendiente de retiro)',
                     btn,

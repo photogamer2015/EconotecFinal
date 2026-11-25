@@ -5366,15 +5366,40 @@ class VentasTests(TestCase):
             reverse('econotec:dashboard_details', kwargs={'tipo': 'pendientes'})
         )
 
-        self.assertContains(response, 'Fecha Ingreso')
-        # En proceso y listo para retirar: los dos con su fecha de ingreso.
-        for ingreso, fecha in ((en_taller, '03/07/2026'), (listo, '25/06/2026')):
+        self.assertContains(response, 'Ingreso · Días en taller')
+        # En proceso y listo para retirar: los dos con su fecha de ingreso
+        # y los días que llevan en el taller hasta hoy.
+        for ingreso in (en_taller, listo):
             with self.subTest(codigo=ingreso.codigo_equipo):
+                fecha = ingreso.fecha_ingreso.strftime('%d/%m/%Y')
+                dias = (date.today() - ingreso.fecha_ingreso).days
                 self.assertContains(response, ingreso.codigo_equipo)
                 self.assertRegex(
                     response.content.decode(),
                     rf'data-orden-codigo="{ingreso.codigo_equipo}"[\s\S]*?'
-                    rf'data-label="Fecha Ingreso">\s*{fecha}\s*</td>',
+                    rf'data-label="Ingreso · Días en taller">\s*'
+                    rf'<span class="dash-ingreso-dias">'
+                    rf'<span class="dash-ingreso-fecha">{fecha}</span>'
+                    rf'<span class="dash-dias-taller"[^>]*>{dias} días</span>',
+                )
+
+    def test_dashboard_modal_pendientes_dias_hoy_y_un_dia(self):
+        hoy = self.crear_ingreso_reparacion(fecha_ingreso=date.today())
+        ayer = self.crear_ingreso_reparacion(
+            fecha_ingreso=date.today() - timedelta(days=1)
+        )
+
+        response = self.client.get(
+            reverse('econotec:dashboard_details', kwargs={'tipo': 'pendientes'})
+        )
+        html = response.content.decode()
+
+        for ingreso, texto in ((hoy, 'Hoy'), (ayer, '1 día')):
+            with self.subTest(codigo=ingreso.codigo_equipo):
+                self.assertRegex(
+                    html,
+                    rf'data-orden-codigo="{ingreso.codigo_equipo}"[\s\S]*?'
+                    rf'<span class="dash-dias-taller"[^>]*>{texto}</span>',
                 )
 
     def test_dashboard_total_equipos_no_mezcla_ventas_producto(self):
