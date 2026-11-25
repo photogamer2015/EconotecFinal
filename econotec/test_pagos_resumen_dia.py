@@ -113,7 +113,48 @@ class ResumenPagosDiaTests(TestCase):
                 self.assertNotContains(respuesta, '$75,00')
                 self.assertNotContains(respuesta, '$150,00')
 
-    def test_no_aparece_en_pagos_de_ventas(self):
-        self.client.force_login(self.admin)
-        respuesta = self.client.get(reverse('econotec:pagos_ventas_lista'))
-        self.assertNotContains(respuesta, 'Pagos cobrados')
+    def abrir_ventas(self, usuario, nombre='pagos_ventas_lista', dia=HOY):
+        self.client.force_login(usuario)
+        with patch('econotec.views_pagos.timezone.localdate', return_value=dia):
+            return self.client.get(reverse(f'econotec:{nombre}'))
+
+    def test_ventas_suman_solo_ventas_de_producto(self):
+        # Venta de ayer pagada con un abono inicial de $30 y un abono de hoy de $20.
+        venta = self.crear_ingreso(
+            sede='ventas', fecha_ingreso=AYER, tipo_equipo='otro', marca='N/A', modelo_serie='N/A',
+            valor_acordado=Decimal('50.00'), abono_anticipo=Decimal('30.00'), anticipo_metodo='efectivo',
+            estado='entregado', subestado_reparacion='', subestado_entregado='con_solucion',
+        )
+        self.abonar(venta, HOY, '20.00')
+        resumen = self.abrir_ventas(self.admin).context['resumen_pagos_dia']
+        self.assertEqual([d['etiqueta'] for d in resumen], ['Hoy', 'Ayer', 'Este mes'])
+        # Hoy: $500 de la venta del setUp + $20 del abono; nada de reparaciones.
+        self.assertEqual([d['total'] for d in resumen], [Decimal('520.00'), Decimal('30.00'), Decimal('550.00')])
+        self.assertEqual([d['pagos'] for d in resumen], [2, 1, 3])
+        # Reparaciones no se mezclan con las ventas.
+        self.assertEqual(self.abrir(self.admin).context['resumen_pagos_dia'][0]['total'], Decimal('75.00'))
+
+    def test_ventas_cuadra_con_seguimiento_de_productos(self):
+        semana = hoja_semana(inicio_semana(HOY), tipo='producto')
+        dias = cobros_del_periodo(semana['lunes'], semana['domingo'], tipo='producto')
+        self.assertEqual(dias['total'], semana['total'])
+        self.assertEqual(dias['pagos'], semana['pagos'])
+
+    def test_ventas_en_sus_tres_listas(self):
+        for nombre in ('pagos_ventas_lista', 'pagos_ventas_completos', 'pagos_ventas_parciales'):
+            with self.subTest(lista=nombre):
+                respuesta = self.abrir_ventas(self.admin, nombre)
+                self.assertContains(respuesta, 'Pagos cobrados')
+                self.assertContains(respuesta, 'Pagos y abonos de todas las ventas de producto.')
+                self.assertEqual(respuesta.context['resumen_pagos_dia'][0]['total'], Decimal('500.00'))
+
+    def test_ventas_dinero_solo_para_admin_y_caja(self):
+        for usuario in (self.admin, self.asistente):
+            with self.subTest(usuario=usuario.username):
+                self.assertContains(self.abrir_ventas(usuario), '1 pago<')
+        for usuario in (self.asesora, self.tecnico):
+            with self.subTest(usuario=usuario.username):
+                respuesta = self.abrir_ventas(usuario)
+                self.assertContains(respuesta, 'Pagos cobrados')
+                self.assertFalse(respuesta.context['resumen_pagos_con_dinero'])
+                self.assertNotContains(respuesta, 'pay-day-value">$')

@@ -103,13 +103,13 @@
 {% endif %}
 
 {% if resumen_pagos_dia %}
-{# Lo cobrado hoy, ayer y este mes (reparaciones), sin depender de los filtros. El dinero solo para admin y caja. #}
+{# Lo cobrado hoy, ayer y este mes (reparaciones o ventas), sin depender de los filtros. El dinero solo para admin y caja. #}
 <section class="pay-summary" aria-label="Pagos cobrados: hoy, ayer y este mes">
     <header class="pay-summary-head">
         <span class="pay-summary-icon" aria-hidden="true">💵</span>
         <div>
             <h3>Pagos cobrados</h3>
-            <p>Anticipos, abonos y pagos al finalizar de reparaciones. «Hoy» empieza en cero cada día y el mes se reinicia el día 1.</p>
+            <p>{% if modo == 'ventas' %}Pagos y abonos de todas las ventas de producto.{% else %}Anticipos, abonos y pagos al finalizar de reparaciones.{% endif %} «Hoy» empieza en cero cada día y el mes se reinicia el día 1.</p>
         </div>
     </header>
     <div class="pay-day-summary">
