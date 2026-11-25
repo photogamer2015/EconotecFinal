@@ -25,6 +25,43 @@
         margin-top: 2px;
     }
     [data-theme="dark"] .bod-detalle { color: #fbbf73; }
+    /* Apartado «Hoy / Ayer / Este mes»: mismo formato que las tarjetas de
+       Salidas, en naranja (el color de Pagos). */
+    .pay-summary { margin: 0 0 18px; max-width: 960px; }
+    .pay-summary-head { display: flex; align-items: center; gap: 11px; margin: 0 0 10px; }
+    .pay-summary-icon {
+        display: inline-flex; align-items: center; justify-content: center;
+        flex: 0 0 38px; width: 38px; height: 38px; border-radius: 11px;
+        background: #fbe5d4; color: #a4410c; font-size: 19px;
+    }
+    .pay-summary-head h3 { margin: 0; color: var(--text-main); font-size: 15px; line-height: 1.2; }
+    .pay-summary-head p { margin: 2px 0 0; color: var(--text-muted); font-size: 12px; line-height: 1.4; }
+    .pay-day-summary {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr));
+        gap: 12px;
+    }
+    .pay-day-card {
+        background: var(--card-bg);
+        border: 1px solid var(--border-color);
+        border-left: 4px solid var(--primary);
+        border-radius: 12px;
+        box-shadow: var(--shadow);
+        display: flex; flex-direction: column; gap: 4px;
+        padding: 14px 16px;
+    }
+    .pay-day-label {
+        color: var(--text-muted); font-size: 12px; font-weight: 900;
+        letter-spacing: .04em; margin: 0; text-transform: uppercase;
+    }
+    .pay-day-value {
+        color: var(--text-main); font-size: 30px; font-variant-numeric: tabular-nums;
+        font-weight: 900; letter-spacing: -.03em; line-height: 1.1; margin: 0;
+    }
+    .pay-day-count { color: var(--primary); font-size: 12px; font-weight: 800; margin: 2px 0 0; }
+    [data-theme="dark"] .pay-summary-icon { background: #6b4426; color: #ffc496; }
+    [data-theme="dark"] .pay-day-card { background: #334645; border-color: #4d615e; border-left-color: var(--primary); }
+    [data-theme="dark"] .pay-day-label { color: #b9c8c3; }
 </style>
 
 <div class="crumb">
@@ -63,6 +100,33 @@
 <div style="margin: 4px 0 18px;">
     <a href="{% url 'econotec:pagos_ventas_menu' %}" class="btn btn-sm btn-success">🛒 Ver pagos de ventas de producto</a>
 </div>
+{% endif %}
+
+{% if resumen_pagos_dia %}
+{# Lo cobrado hoy, ayer y este mes (reparaciones), sin depender de los filtros. El dinero solo para admin y caja. #}
+<section class="pay-summary" aria-label="Pagos cobrados: hoy, ayer y este mes">
+    <header class="pay-summary-head">
+        <span class="pay-summary-icon" aria-hidden="true">💵</span>
+        <div>
+            <h3>Pagos cobrados</h3>
+            <p>Anticipos, abonos y pagos al finalizar de reparaciones. «Hoy» empieza en cero cada día y el mes se reinicia el día 1.</p>
+        </div>
+    </header>
+    <div class="pay-day-summary">
+        {% for dia in resumen_pagos_dia %}
+        <article class="pay-day-card">
+            <p class="pay-day-label">{{ dia.etiqueta }} · {{ dia.periodo }}</p>
+            {% if resumen_pagos_con_dinero %}
+            <p class="pay-day-value">{{ dia.total|dinero_signo }}</p>
+            <p class="pay-day-count">{{ dia.pagos }} pago{{ dia.pagos|pluralize }}</p>
+            {% else %}
+            <p class="pay-day-value">{{ dia.pagos }}</p>
+            <p class="pay-day-count">pago{{ dia.pagos|pluralize }}</p>
+            {% endif %}
+        </article>
+        {% endfor %}
+    </div>
+</section>
 {% endif %}
 
 

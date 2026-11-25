@@ -27,10 +27,11 @@ from .pagination import paginar_resultados
 from . import salida_asesora
 from .permisos import (
     admin_requerido, asesor_requerido, es_asesor, puede_confirmar_salida_fisica,
-    seguimiento_pago_requerido, tecnico_requerido,
+    puede_ver_seguimiento_pago, seguimiento_pago_requerido, tecnico_requerido,
 )
 from .seguimiento_pago import (
-    EQUIPO, FORMAS_PAGO, PRODUCTO, TOTAL, TIPOS, etiqueta_semana, fecha_larga, fin_semana, hoja_semana,
+    EQUIPO, FORMAS_PAGO, PRODUCTO, TOTAL, TIPOS, cobros_del_periodo, etiqueta_semana, fecha_larga,
+    fin_semana, hoja_semana,
     inicio_semana, pestanas_semanas, saldo_semana, texto_cantidades, titulo_semana,
     totales_por_semana,
 )
@@ -185,7 +186,31 @@ def pagos_lista(request):
     base_qs = IngresoEquipo.objects.exclude(sede='ventas')
     context = _construir_contexto_pagos(request, base_qs)
     context['modo'] = 'reparaciones'
+    context['resumen_pagos_dia'] = _resumen_pagos_dia()
+    # El dinero cobrado por día solo lo ven quienes ven Seguimiento de pago;
+    # los demás ven únicamente cuántos pagos hubo.
+    context['resumen_pagos_con_dinero'] = puede_ver_seguimiento_pago(request.user)
     return render(request, 'pagos/lista.html', context)
+
+
+def _resumen_pagos_dia():
+    """Apartado «Hoy / Ayer / Este mes» de Pagos (reparaciones).
+
+    Lo cobrado en cada período (anticipos, diagnósticos, abonos y pagos al
+    finalizar), sin depender de los filtros de la tabla. «Hoy» arranca en cero
+    cada día y «Este mes» va del día 1 a hoy, así se reinicia al cambiar de mes.
+    """
+    hoy = timezone.localdate()
+    ayer = hoy - timedelta(days=1)
+    periodos = (
+        ('Hoy', hoy, hoy, hoy.strftime('%d/%m/%Y')),
+        ('Ayer', ayer, ayer, ayer.strftime('%d/%m/%Y')),
+        ('Este mes', hoy.replace(day=1), hoy, f'{MESES_ES[hoy.month]} {hoy.year}'),
+    )
+    return [
+        {'etiqueta': etiqueta, 'periodo': texto, **cobros_del_periodo(desde, hasta, tipo=EQUIPO)}
+        for etiqueta, desde, hasta, texto in periodos
+    ]
 
 
 @asesor_requerido
