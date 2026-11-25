@@ -5414,6 +5414,73 @@ class VentasTests(TestCase):
                     rf'<span class="{clase}" title="[^"]*">{dias} días</span>',
                 )
 
+    def test_lista_equipos_dias_en_taller_solo_para_pendientes(self):
+        hoy = date.today()
+        en_reparacion = self.crear_ingreso_reparacion(
+            fecha_ingreso=hoy - timedelta(days=10),
+        )
+        listo = self.crear_ingreso_reparacion(
+            fecha_ingreso=hoy - timedelta(days=20),
+        )
+        SalidaEquipo.objects.create(
+            ingreso=listo,
+            fecha_salida=hoy - timedelta(days=2),
+            estado_reparacion='pendiente_retiro',
+            valor_final_cobrado=Decimal('0.00'),
+            metodo_pago_final='sin_pago',
+            registrado_por=self.usuario,
+        )
+        retirado = self.crear_ingreso_reparacion(
+            fecha_ingreso=hoy - timedelta(days=30),
+        )
+        SalidaEquipo.objects.create(
+            ingreso=retirado,
+            fecha_salida=hoy - timedelta(days=25),
+            estado_reparacion='pendiente_retiro',
+            fecha_retiro_real=hoy - timedelta(days=24),
+            valor_final_cobrado=Decimal('0.00'),
+            metodo_pago_final='sin_pago',
+            registrado_por=self.usuario,
+        )
+        entregado = self.crear_ingreso_reparacion(
+            fecha_ingreso=hoy - timedelta(days=40),
+            estado='entregado',
+            subestado_reparacion='',
+        )
+
+        response = self.client.get(
+            reverse('econotec:ingreso_lista'), {'sede': 'todas', 'alcance': 'todos'}
+        )
+        html = response.content.decode()
+
+        def celda_fecha(ingreso):
+            match = re.search(
+                rf'{ingreso.codigo_equipo}</strong>.*?</td>\s*<td>(.*?)</td>',
+                html,
+                re.S,
+            )
+            self.assertIsNotNone(match, ingreso.codigo_equipo)
+            return match.group(1)
+
+        # Siguen en el taller: fecha + días, con su color.
+        self.assertIn(
+            '<span class="dash-dias-taller dash-dias-taller--ambar" '
+            'title="Ingresó hace 10 días">10 días</span>',
+            celda_fecha(en_reparacion),
+        )
+        self.assertIn(
+            '<span class="dash-dias-taller dash-dias-taller--rojo" '
+            'title="Ingresó hace 20 días">20 días</span>',
+            celda_fecha(listo),
+        )
+        # Ya salieron del taller: solo la fecha.
+        for ingreso in (retirado, entregado):
+            with self.subTest(codigo=ingreso.codigo_equipo):
+                self.assertEqual(
+                    celda_fecha(ingreso).strip(),
+                    ingreso.fecha_ingreso.strftime('%d/%m/%Y'),
+                )
+
     def test_dashboard_modal_pendientes_dias_hoy_y_un_dia(self):
         hoy = self.crear_ingreso_reparacion(fecha_ingreso=date.today())
         ayer = self.crear_ingreso_reparacion(

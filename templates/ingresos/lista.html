@@ -261,7 +261,7 @@
         {% for i in ingresos %}
             <tr>
                 <td><strong style="color: var(--primary);">{{ i.codigo_equipo }}</strong>{% if alcance == 'todos' and i.a_domicilio == 'si' %}<br><span class="domicilio-badge">🏠 A domicilio</span>{% endif %}</td>
-                <td>{{ i.fecha_ingreso|date:"d/m/Y" }}</td>
+                <td>{% if i.fecha_con_dias_taller %}{{ i.fecha_con_dias_taller }}{% else %}{{ i.fecha_ingreso|date:"d/m/Y" }}{% endif %}</td>
                 <td>{{ i.cliente.nombres }}</td>
                 <td>{{ i.cliente.cedula }}</td>
                 <td>{{ i.tipo_equipo_display }}</td>

@@ -302,6 +302,55 @@ def ingresos_operativos_qs():
     )
 
 
+# Días que lleva un equipo en el taller: la etiqueta se pinta en ámbar desde
+# DIAS_TALLER_AMBAR días y en rojo desde DIAS_TALLER_ROJO.
+DIAS_TALLER_AMBAR = 8
+DIAS_TALLER_ROJO = 15
+
+
+def sigue_en_taller(ingreso):
+    """¿El equipo sigue en el taller?
+
+    Mismo criterio que la ventana «Equipos Pendientes en Taller»: en
+    diagnóstico o en reparación sin salida, o reparado y pendiente de retiro.
+    """
+    salida = getattr(ingreso, 'salida', None)
+    if salida is None:
+        return ingreso.estado in ('ingresado', 'en_reparacion')
+    return (
+        salida.estado_reparacion == 'pendiente_retiro'
+        and salida.fecha_retiro_real is None
+    )
+
+
+def fecha_ingreso_con_dias(fecha, hoy=None):
+    """Fecha de ingreso con una etiqueta de los días que lleva en el taller."""
+    hoy = hoy or date.today()
+    dias = max((hoy - fecha).days, 0)
+    if dias == 0:
+        texto_dias, titulo = 'Hoy', 'Ingresó hoy'
+    elif dias == 1:
+        texto_dias, titulo = '1 día', 'Ingresó hace 1 día'
+    else:
+        texto_dias, titulo = f'{dias} días', f'Ingresó hace {dias} días'
+    if dias >= DIAS_TALLER_ROJO:
+        clase_color = ' dash-dias-taller--rojo'
+    elif dias >= DIAS_TALLER_AMBAR:
+        clase_color = ' dash-dias-taller--ambar'
+    else:
+        clase_color = ''
+    return format_html(
+        '<span class="dash-ingreso-dias">'
+        '<span class="dash-ingreso-fecha">{}</span>'
+        '<span class="dash-dias-taller{}" title="{}">{}</span>'
+        '</span>',
+        fecha.strftime('%d/%m/%Y'),
+        clase_color,
+        titulo,
+        texto_dias,
+    )
+
+
 # Los equipos «A domicilio: Sí» van en su propia lista. La lista normal no los
 # muestra; «todos» la usan los enlaces del ranking, perfiles y panel, que
 # cuentan todos los equipos y deben cuadrar con lo que abren.
@@ -754,35 +803,6 @@ def dashboard_details(request, tipo):
         # y la cuenta de días, cuánto tiempo lleva ahí hasta hoy.
         columnas = ['Código', 'Cliente', 'Equipo', 'Ingreso · Días en taller', 'Fase', 'Estado', 'Acción']
 
-        # Desde cuántos días la etiqueta se pinta en ámbar y en rojo.
-        dias_alerta_ambar = 8
-        dias_alerta_rojo = 15
-
-        def ingreso_con_dias(fecha):
-            dias = max((hoy - fecha).days, 0)
-            if dias == 0:
-                texto_dias = 'Hoy'
-            elif dias == 1:
-                texto_dias = '1 día'
-            else:
-                texto_dias = f'{dias} días'
-            if dias >= dias_alerta_rojo:
-                clase_color = ' dash-dias-taller--rojo'
-            elif dias >= dias_alerta_ambar:
-                clase_color = ' dash-dias-taller--ambar'
-            else:
-                clase_color = ''
-            return format_html(
-                '<span class="dash-ingreso-dias">'
-                '<span class="dash-ingreso-fecha">{}</span>'
-                '<span class="dash-dias-taller{}" title="{}">{}</span>'
-                '</span>',
-                fecha.strftime('%d/%m/%Y'),
-                clase_color,
-                f'Ingresó hace {dias} día{"" if dias == 1 else "s"}' if dias else 'Ingresó hoy',
-                texto_dias,
-            )
-
         for eq in ingresos:
             btn = boton_modal(
                 reverse('econotec:ingreso_detalle', kwargs={'pk': eq.pk}),
@@ -795,7 +815,7 @@ def dashboard_details(request, tipo):
                     eq.codigo_equipo,
                     eq.cliente.nombres,
                     eq.tipo_equipo_display,
-                    ingreso_con_dias(eq.fecha_ingreso),
+                    fecha_ingreso_con_dias(eq.fecha_ingreso, hoy),
                     'En proceso',
                     estado,
                     btn,
@@ -821,7 +841,7 @@ def dashboard_details(request, tipo):
                     eq.codigo_equipo,
                     eq.cliente.nombres,
                     eq.tipo_equipo_display,
-                    ingreso_con_dias(eq.fecha_ingreso),
+                    fecha_ingreso_con_dias(eq.fecha_ingreso, hoy),
                     'Terminado',
                     'Listo (pendiente de retiro)',
                     btn,
@@ -2687,8 +2707,18 @@ def ingreso_lista(request):
     total = total_resultados(qs)
     page_obj, querystring = paginar_resultados(request, qs)
 
+    # Los equipos que siguen en el taller llevan los días que llevan ahí;
+    # los ya entregados o finalizados muestran solo su fecha.
+    hoy = date.today()
+    ingresos = list(page_obj.object_list)
+    for ingreso in ingresos:
+        ingreso.fecha_con_dias_taller = (
+            fecha_ingreso_con_dias(ingreso.fecha_ingreso, hoy)
+            if sigue_en_taller(ingreso) else None
+        )
+
     context = {
-        'ingresos': page_obj.object_list,
+        'ingresos': ingresos,
         'page_obj': page_obj,
         'querystring': querystring,
         'q': q,
