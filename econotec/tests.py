@@ -5350,6 +5350,33 @@ class VentasTests(TestCase):
         self.assertContains(response, 'Pendiente de retiro')
         self.assertNotContains(response, 'Entregado al cliente')
 
+    def test_dashboard_modal_pendientes_muestra_fecha_de_ingreso(self):
+        en_taller = self.crear_ingreso_reparacion(fecha_ingreso=date(2026, 7, 3))
+        listo = self.crear_ingreso_reparacion(fecha_ingreso=date(2026, 6, 25))
+        SalidaEquipo.objects.create(
+            ingreso=listo,
+            fecha_salida=date(2026, 7, 9),
+            estado_reparacion='pendiente_retiro',
+            valor_final_cobrado=Decimal('0.00'),
+            metodo_pago_final='sin_pago',
+            registrado_por=self.usuario,
+        )
+
+        response = self.client.get(
+            reverse('econotec:dashboard_details', kwargs={'tipo': 'pendientes'})
+        )
+
+        self.assertContains(response, 'Fecha Ingreso')
+        # En proceso y listo para retirar: los dos con su fecha de ingreso.
+        for ingreso, fecha in ((en_taller, '03/07/2026'), (listo, '25/06/2026')):
+            with self.subTest(codigo=ingreso.codigo_equipo):
+                self.assertContains(response, ingreso.codigo_equipo)
+                self.assertRegex(
+                    response.content.decode(),
+                    rf'data-orden-codigo="{ingreso.codigo_equipo}"[\s\S]*?'
+                    rf'data-label="Fecha Ingreso">\s*{fecha}\s*</td>',
+                )
+
     def test_dashboard_total_equipos_no_mezcla_ventas_producto(self):
         ingreso = self.crear_ingreso_reparacion(fecha_ingreso=date.today())
         venta = self.crear_venta_producto()
