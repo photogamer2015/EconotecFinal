@@ -63,6 +63,8 @@ urlpatterns = [
     path('econobot/estado/', views_econobot.econobot_estado, name='econobot_estado'),
     path('econobot/reporte-dia/', views_econobot.econobot_reporte_dia, name='econobot_reporte_dia'),
     path('econobot/reporte-dia/pdf/', views_econobot.econobot_reporte_dia_pdf, name='econobot_reporte_dia_pdf'),
+    path('econobot/reporte-personal/pdf/', views_econobot.econobot_reporte_personal_pdf,
+         name='econobot_reporte_personal_pdf'),
 
     # ── Alertas y Bot ──────────────────────────────────────────
     path('alertas/demoras/', views.alertas_demora, name='alertas_demora'),

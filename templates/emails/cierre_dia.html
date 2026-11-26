@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="es">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Tu cierre del día {{ fecha|date:"d/m/Y" }}</title>
+</head>
+<body style="margin:0; padding:0; background:#f4eee9; color:#202936; font-family:Arial,Helvetica,sans-serif;">
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="width:100%; background:#f4eee9;">
+        <tr>
+            <td align="center" style="padding:28px 12px;">
+                <table role="presentation" width="640" cellspacing="0" cellpadding="0" border="0" style="width:100%; max-width:640px; background:#ffffff; border-radius:18px; overflow:hidden;">
+                    <tr>
+                        <td style="padding:25px 30px; background:#202936; border-bottom:5px solid #f97618; color:#ffffff; font-size:23px; font-weight:800;">ECONOTEC</td>
+                    </tr>
+                    <tr>
+                        <td style="padding:28px 30px 12px;">
+                            <div style="color:#f36a0b; font-size:12px; font-weight:900; letter-spacing:1.1px; text-transform:uppercase;">Cierre del día · {{ fecha|date:"d/m/Y" }}</div>
+                            <h1 style="margin:8px 0 10px; color:#202936; font-size:25px; line-height:1.2;">Hola, {{ nombre }}</h1>
+                            <p style="margin:0; color:#5f6875; font-size:15px; line-height:1.6;">{{ resumen }}. El detalle completo está en el PDF adjunto.</p>
+                        </td>
+                    </tr>
+                    {% if registrados %}
+                    <tr><td style="padding:14px 30px 4px; color:#202936; font-size:15px; font-weight:800;">📥 Equipos que registraste ({{ registrados|length }})</td></tr>
+                    <tr><td style="padding:0 30px 8px; color:#202936; font-size:14px; line-height:1.7;">
+                        {% for i in registrados %}<div><strong>{{ i.codigo_equipo }}</strong> · {{ i.cliente.nombres }} · <span style="color:#5f6875;">{{ i.estado_visual_display }}</span></div>{% endfor %}
+                    </td></tr>
+                    {% endif %}
+                    {% if finalizados %}
+                    <tr><td style="padding:14px 30px 4px; color:#202936; font-size:15px; font-weight:800;">🔧 Equipos que finalizaste ({{ finalizados|length }})</td></tr>
+                    <tr><td style="padding:0 30px 8px; color:#202936; font-size:14px; line-height:1.7;">
+                        {% for i in finalizados %}<div><strong>{{ i.codigo_equipo }}</strong> · {{ i.cliente.nombres }} · <span style="color:#5f6875;">{{ i.estado_visual_display }}</span></div>{% endfor %}
+                    </td></tr>
+                    {% endif %}
+                    {% if cobros %}
+                    <tr><td style="padding:14px 30px 4px; color:#202936; font-size:15px; font-weight:800;">💵 Cobros que registraste ({{ cobros|length }}) · ${{ total_cobrado|floatformat:2 }}</td></tr>
+                    <tr><td style="padding:0 30px 8px; color:#202936; font-size:14px; line-height:1.7;">
+                        {% for c in cobros %}<div><strong>{{ c.codigo }}</strong> · {{ c.concepto }} · ${{ c.monto|floatformat:2 }} · <span style="color:#5f6875;">{{ c.metodo }}</span></div>{% endfor %}
+                        <div style="margin-top:6px; font-weight:800;">Por método: {{ metodos }}</div>
+                    </td></tr>
+                    {% endif %}
+                    {% if url_pdf %}
+                    <tr>
+                        <td align="center" style="padding:14px 30px 28px;">
+                            <a href="{{ url_pdf }}" style="display:inline-block; padding:12px 22px; background:#f97618; color:#ffffff; border-radius:10px; font-weight:800; text-decoration:none;">Ver el PDF en Econotec</a>
+                        </td>
+                    </tr>
+                    {% endif %}
+                    <tr>
+                        <td align="center" style="padding:20px 30px; background:#202936; color:#cdd2d9; font-size:11px; line-height:1.65;">
+                            Mensaje automático del cierre del día del sistema Econotec.
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>

@@ -7,6 +7,7 @@
      data-hoy="{% now 'Y-m-d' %}"
      data-csrf="{{ csrf_token }}"
      data-usuario="{{ user.pk }}"
+     data-admin="{% if es_admin %}1{% endif %}"
      data-nombre="{{ user.first_name|default:user.username }}">
     <button type="button" class="econobot-launcher" id="econobot-launcher"
             aria-controls="econobot-panel" aria-expanded="false" title="Abrir EconoBot">
@@ -85,4 +86,4 @@
         <p class="econobot-pie">Nada se guarda sin tu confirmación.</p>
     </section>
 </div>
-<script src="{% static 'econobot/econobot.js' %}?v=20261126-2" defer></script>
+<script src="{% static 'econobot/econobot.js' %}?v=20261126-3" defer></script>

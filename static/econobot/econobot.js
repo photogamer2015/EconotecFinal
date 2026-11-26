@@ -13,6 +13,7 @@
     var endpointEstado = raiz.getAttribute('data-estado');
     var endpointReporte = raiz.getAttribute('data-reporte');
     var usuario = raiz.getAttribute('data-usuario') || '0';
+    var esAdmin = raiz.getAttribute('data-admin') === '1';
     var nombre = (raiz.getAttribute('data-nombre') || '').split(' ')[0];
 
     var lanzador = document.getElementById('econobot-launcher');
@@ -245,15 +246,17 @@
     }
 
     function opcionesInicio() {
+        var personal = esAdmin ? [{ label: '👥 Reporte del personal', value: 'reporte del personal' }] : [];
         return [
-            { label: '📋 Mi reporte de hoy', value: 'mi reporte de hoy' },
+            { label: '📋 Mi reporte de hoy', value: 'mi reporte de hoy' }
+        ].concat(personal, [
             { label: '📥 Registrar equipo', value: 'registrar equipo' },
             { label: '✅ Finalizar equipo', value: 'finalizar equipo' },
             { label: '📦 Finalizados en oficina', value: 'equipos finalizados' },
             { label: '🔧 Equipos en taller', value: 'equipos en taller' },
             { label: '👤 Buscar cliente', value: 'buscar cliente' },
             { label: '❓ ¿Qué más puedes hacer?', value: 'ayuda' }
-        ];
+        ]);
     }
 
     function bienvenida() {

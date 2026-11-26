@@ -3,7 +3,8 @@
 - POST /econobot/mensaje/ recibe {message, signature?, request_id} y responde JSON.
 - GET  /econobot/estado/  indica si hay un registro en curso para retomarlo.
 - GET  /econobot/reporte-dia/ saludo con los equipos que el usuario registró hoy.
-- GET  /econobot/reporte-dia/pdf/ el mismo reporte en PDF.
+- GET  /econobot/reporte-dia/pdf/ el mismo reporte en PDF (?fecha= para otro día).
+- GET  /econobot/reporte-personal/pdf/ reporte de todo el personal (solo admin).
 
 Solo lo usan personas con acceso a equipos o pagos. Cada mensaje corre en una
 transacción: si algo falla, no queda nada guardado a medias.
@@ -20,7 +21,7 @@ from django.views.decorators.http import require_GET, require_POST
 
 from .econobot import reporte_dia
 from .econobot.motor import estado_actual, responder
-from .permisos import puede_gestionar_equipos, puede_gestionar_pagos
+from .permisos import es_admin, puede_gestionar_equipos, puede_gestionar_pagos
 
 logger = logging.getLogger(__name__)
 
@@ -117,18 +118,36 @@ def econobot_reporte_dia(request):
     return JsonResponse(datos)
 
 
+def _pdf(contenido, nombre):
+    response = HttpResponse(contenido, content_type='application/pdf')
+    response['Content-Disposition'] = f'inline; filename="{nombre}"'
+    response['Cache-Control'] = 'no-store'
+    return response
+
+
 @require_GET
 def econobot_reporte_dia_pdf(request):
-    """PDF con los equipos que el usuario registró hoy y su estado actual."""
+    """PDF con lo que el usuario hizo en el día (hoy o ?fecha=AAAA-MM-DD): solo sus propios datos."""
     from .views_print import generar_reporte_dia_pdf_bytes
 
     if not request.user.is_authenticated:
         return redirect_to_login(request.get_full_path())
     if not _autorizado(request.user):
         raise PermissionDenied
-    fecha = reporte_dia.hoy()
-    pdf = generar_reporte_dia_pdf_bytes(request.user, reporte_dia.registrados_hoy(request.user, fecha), fecha)
-    response = HttpResponse(pdf, content_type='application/pdf')
-    response['Content-Disposition'] = f'inline; filename="reporte_del_dia_{fecha:%Y-%m-%d}.pdf"'
-    response['Cache-Control'] = 'no-store'
-    return response
+    fecha = reporte_dia.fecha_de_texto(request.GET.get('fecha'))
+    pdf = generar_reporte_dia_pdf_bytes(reporte_dia.datos_dia(request.user, fecha))
+    return _pdf(pdf, f'reporte_del_dia_{fecha:%Y-%m-%d}.pdf')
+
+
+@require_GET
+def econobot_reporte_personal_pdf(request):
+    """PDF del reporte del personal del día (solo admin)."""
+    from .views_print import generar_reporte_personal_pdf_bytes
+
+    if not request.user.is_authenticated:
+        return redirect_to_login(request.get_full_path())
+    if not es_admin(request.user):
+        raise PermissionDenied
+    fecha = reporte_dia.fecha_de_texto(request.GET.get('fecha'))
+    pdf = generar_reporte_personal_pdf_bytes(reporte_dia.datos_personal(fecha))
+    return _pdf(pdf, f'reporte_del_personal_{fecha:%Y-%m-%d}.pdf')
