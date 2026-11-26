@@ -198,6 +198,7 @@ urlpatterns = [
     path('pagos/ventas/', views_pagos.pagos_ventas_lista, name='pagos_ventas_lista'),
     path('pagos/exportar/', views_pagos.pagos_export, name='pagos_export'),
     path('pagos/seguimiento/', views_pagos.seguimiento_pago, name='seguimiento_pago'),
+    path('pagos/arqueo/', views_pagos.arqueo_caja, name='arqueo_caja'),
     path('pagos/seguimiento/excel/', views_pagos.seguimiento_pago_excel, name='seguimiento_pago_excel'),
     path('pagos/seguimiento/saldo/', views_pagos.seguimiento_pago_saldo, name='seguimiento_pago_saldo'),
     path('pagos/seguimiento/equipo/', views_pagos.seguimiento_pago_equipo, name='seguimiento_pago_equipo'),

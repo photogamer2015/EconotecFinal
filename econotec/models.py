@@ -3623,3 +3623,50 @@ class ClavesPush(models.Model):
     class Meta:
         verbose_name = 'Claves de notificaciones push'
         verbose_name_plural = 'Claves de notificaciones push'
+
+
+class ArqueoCaja(models.Model):
+    """Arqueo del efectivo de una oficina al cerrar el día.
+
+    Se escribe el efectivo que hay físicamente en la caja y se compara con el
+    efectivo cobrado ese día según Pagos (mismas reglas que Seguimiento de
+    pago). Los egresos no se restan porque no tienen sede. Un arqueo por día y
+    oficina: si se vuelve a contar, se actualiza con quien lo hizo.
+    """
+
+    SEDES_ARQUEO = [(clave, nombre) for clave, nombre in SEDES if clave in SEDES_EQUIPOS]
+
+    fecha = models.DateField(verbose_name='Fecha')
+    sede = models.CharField(max_length=20, choices=SEDES_ARQUEO, verbose_name='Oficina')
+    efectivo_contado = models.DecimalField(
+        max_digits=10, decimal_places=2, validators=[MinValueValidator(Decimal('0.00'))],
+        verbose_name='Efectivo contado',
+    )
+    efectivo_sistema = models.DecimalField(
+        max_digits=10, decimal_places=2, default=Decimal('0.00'),
+        verbose_name='Efectivo según el sistema',
+        help_text='Efectivo cobrado ese día según Pagos, al momento de guardar el arqueo.',
+    )
+    observacion = models.TextField(blank=True, verbose_name='Observación')
+    registrado_por = models.ForeignKey(
+        'auth.User', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='arqueos_caja', verbose_name='Registrado por',
+    )
+    creado = models.DateTimeField(auto_now_add=True)
+    actualizado = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'Arqueo de caja'
+        verbose_name_plural = 'Arqueos de caja'
+        ordering = ['-fecha', 'sede']
+        constraints = [
+            models.UniqueConstraint(fields=['fecha', 'sede'], name='arqueo_caja_unico_por_dia_y_sede'),
+        ]
+
+    def __str__(self):
+        return f'Arqueo {self.get_sede_display()} {self.fecha:%d/%m/%Y}'
+
+    @property
+    def diferencia(self):
+        """Positivo: sobra efectivo. Negativo: falta."""
+        return self.efectivo_contado - self.efectivo_sistema

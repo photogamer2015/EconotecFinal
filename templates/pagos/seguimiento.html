@@ -662,6 +662,8 @@
         </nav>
         <a class="btn btn-success sp-excel" href="{% url 'econotec:seguimiento_pago_excel' %}?semana={{ lunes|date:'Y-m-d' }}{% if filtros_qs %}&amp;{{ filtros_qs }}{% endif %}"
            title="Descarga en Excel los pagos de esta semana con los filtros elegidos">📥 Descargar Excel de la semana</a>
+        <a class="btn btn-secondary" href="{% url 'econotec:arqueo_caja' %}{% if sede %}?sede={{ sede }}{% endif %}"
+           title="Cuenta el efectivo de la caja y compáralo con lo cobrado en efectivo">💰 Arqueo de caja</a>
     </div>
     {% if forma_pago %}
     <p class="sp-filtro-aviso">Mostrando solo los pagos en <strong>{{ forma_pago_nombre }}</strong>. De un pago mixto se muestra solo esa parte. <a href="?semana={{ lunes|date:'Y-m-d' }}&amp;tipo={{ tipo }}{% if sede %}&amp;sede={{ sede }}{% endif %}">Ver todas las formas de pago</a></p>

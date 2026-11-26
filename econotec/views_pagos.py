@@ -1244,3 +1244,89 @@ def historial_imprimir(request):
     return render(request, 'historial/imprimir.html', {
         'grupo': grupo,
     })
+
+
+# ─────────────────────────────────────────────────────────
+# Arqueo del efectivo
+# ─────────────────────────────────────────────────────────
+
+def _fecha_arqueo(valor, hoy):
+    try:
+        fecha = date.fromisoformat((valor or '').strip())
+    except ValueError:
+        return hoy
+    return min(fecha, hoy)
+
+
+@seguimiento_pago_requerido
+def arqueo_caja(request):
+    """
+    Arqueo del efectivo de una oficina (?sede=guayaquil|quito) en un día
+    (?fecha=AAAA-MM-DD, hoy si falta; no se aceptan fechas futuras).
+
+    Muestra el efectivo cobrado ese día según Pagos y, con POST, guarda lo que
+    se contó físicamente. Un arqueo por día y oficina: volver a contar lo
+    actualiza. Los egresos no se restan porque no tienen sede.
+    """
+    from .arqueo import efectivo_del_dia
+    from .models import ArqueoCaja
+
+    hoy = timezone.localdate()
+    datos = request.POST if request.method == 'POST' else request.GET
+    fecha = _fecha_arqueo(datos.get('fecha'), hoy)
+    sede = (datos.get('sede') or request.session.get('sede_actual') or '').strip().lower()
+    if sede not in SEDES_EQUIPOS:
+        sede = 'guayaquil'
+    url = f"{reverse('econotec:arqueo_caja')}?{urlencode({'fecha': fecha.isoformat(), 'sede': sede})}"
+
+    sistema = efectivo_del_dia(fecha, sede)
+    arqueo = ArqueoCaja.objects.filter(fecha=fecha, sede=sede).select_related('registrado_por').first()
+    error = ''
+    contado_texto = ''
+
+    if request.method == 'POST':
+        contado_texto = (request.POST.get('efectivo_contado') or '').strip().replace('$', '').replace(',', '.')
+        observacion = (request.POST.get('observacion') or '').strip()[:1000]
+        try:
+            contado = Decimal(contado_texto).quantize(Decimal('0.01'))
+        except Exception:
+            contado = None
+        if contado is None or not contado.is_finite() or contado < 0 or contado >= Decimal('100000000'):
+            error = 'Escribe el efectivo contado como un valor de 0 o más, por ejemplo 125.50.'
+        else:
+            with transaction.atomic():
+                arqueo, _creado = ArqueoCaja.objects.select_for_update().get_or_create(
+                    fecha=fecha, sede=sede,
+                    defaults={'efectivo_contado': contado, 'efectivo_sistema': sistema['efectivo']},
+                )
+                arqueo.efectivo_contado = contado
+                arqueo.efectivo_sistema = sistema['efectivo']
+                arqueo.observacion = observacion
+                arqueo.registrado_por = request.user
+                arqueo.save()
+            diferencia = arqueo.diferencia
+            if diferencia == 0:
+                messages.success(request, f'Arqueo guardado: la caja cuadra ({dinero_signo(contado)}).')
+            elif diferencia > 0:
+                messages.warning(request, f'Arqueo guardado: sobran {dinero_signo(diferencia)} en la caja.')
+            else:
+                messages.warning(request, f'Arqueo guardado: faltan {dinero_signo(-diferencia)} en la caja.')
+            return redirect(url)
+
+    historial = list(
+        ArqueoCaja.objects.filter(sede=sede).select_related('registrado_por').order_by('-fecha')[:15]
+    )
+    return render(request, 'pagos/arqueo.html', {
+        'fecha': fecha,
+        'hoy': hoy,
+        'es_hoy': fecha == hoy,
+        'sede': sede,
+        'sedes': [(clave, nombre) for clave, nombre in ArqueoCaja.SEDES_ARQUEO],
+        'sistema': sistema,
+        'arqueo': arqueo,
+        'sistema_cambio': arqueo is not None and arqueo.efectivo_sistema != sistema['efectivo'],
+        'historial': historial,
+        'error': error,
+        'contado_texto': contado_texto,
+        'fecha_texto': fecha_larga(fecha),
+    })

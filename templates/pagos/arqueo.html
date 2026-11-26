@@ -1,0 +1,154 @@
+{% extends 'base.html' %}
+{% load econotec_extras %}
+
+{% block title %}Arqueo de caja · {{ fecha|date:"d/m/Y" }} — Econotec{% endblock %}
+
+{% block extra_head %}
+<style>
+    .aq-filtros { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px; margin: 16px 0 20px; }
+    .aq-filtros label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; font-weight: 800; color: var(--text-muted); }
+    .aq-filtros input, .aq-filtros select { min-height: 40px; padding: 8px 10px; border: 1px solid var(--input-border); border-radius: var(--radius-sm); background: var(--card-bg); color: var(--text-main); font: inherit; }
+    .aq-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr)); gap: 16px; margin-bottom: 20px; }
+    .aq-caja { min-width: 0; padding: 18px 20px; border: 1px solid var(--border-color); border-radius: var(--radius-lg); background: var(--card-bg); box-shadow: var(--shadow); }
+    .aq-caja h3 { margin: 0 0 6px; font-size: 15px; }
+    .aq-monto { font-size: 30px; font-weight: 900; line-height: 1.15; color: var(--text-main); }
+    .aq-nota { margin: 6px 0 0; color: var(--text-muted); font-size: 13px; line-height: 1.5; }
+    .aq-metodos { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 10px; font-size: 13px; color: var(--text-soft); }
+    .aq-metodos b { color: var(--text-main); }
+    .aq-form { display: flex; flex-direction: column; gap: 10px; }
+    .aq-form label { font-size: 13px; font-weight: 800; color: var(--text-soft); }
+    .aq-form input, .aq-form textarea { width: 100%; box-sizing: border-box; padding: 10px 12px; border: 1px solid var(--input-border); border-radius: var(--radius-sm); background: var(--card-bg); color: var(--text-main); font: inherit; }
+    .aq-form input { font-size: 20px; font-weight: 800; }
+    .aq-error { padding: 10px 12px; border-radius: var(--radius-sm); background: var(--tint-red-bg); color: var(--tint-red-fg); font-weight: 700; font-size: 13px; }
+    .aq-resultado { display: inline-block; margin-top: 8px; padding: 4px 12px; border-radius: 999px; font-weight: 900; font-size: 14px; }
+    .aq-resultado.is-cuadra { background: var(--tint-green-bg); color: var(--tint-green-fg); }
+    .aq-resultado.is-sobra { background: var(--tint-amber-bg); color: var(--tint-amber-fg); }
+    .aq-resultado.is-falta { background: var(--tint-red-bg); color: var(--tint-red-fg); }
+    .aq-aviso { margin-top: 10px; padding: 10px 12px; border-radius: var(--radius-sm); background: var(--tint-amber-bg); color: var(--tint-amber-fg); font-size: 13px; font-weight: 700; }
+    .aq-seccion { margin: 22px 0 10px; font-size: 16px; }
+    .aq-dinero { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="crumb">
+    <a href="{% url 'econotec:bienvenida' %}">Inicio</a> &nbsp;›&nbsp;
+    <a href="{% url 'econotec:seguimiento_pago' %}">Seguimiento de pago</a> &nbsp;›&nbsp; Arqueo de caja
+</div>
+<h2 class="page-title">💰 Arqueo de <span class="accent">caja</span></h2>
+<p class="page-subtitle">
+    Cuenta el efectivo de la caja al cerrar el día y compáralo con lo cobrado en efectivo según Pagos.
+</p>
+
+<form method="get" class="aq-filtros" aria-label="Elegir día y oficina">
+    <label>Día
+        <input type="date" name="fecha" value="{{ fecha|date:'Y-m-d' }}" max="{{ hoy|date:'Y-m-d' }}">
+    </label>
+    <label>Oficina
+        <select name="sede">
+            {% for clave, nombre in sedes %}<option value="{{ clave }}"{% if clave == sede %} selected{% endif %}>{{ nombre }}</option>{% endfor %}
+        </select>
+    </label>
+    <button type="submit" class="btn btn-secondary">Ver</button>
+</form>
+
+<div class="aq-grid">
+    <section class="aq-caja" aria-labelledby="aq-sistema">
+        <h3 id="aq-sistema">🧾 Efectivo según el sistema</h3>
+        <div class="aq-monto">{{ sistema.efectivo|dinero_signo }}</div>
+        <p class="aq-nota">
+            Cobrado en efectivo el {{ fecha_texto }}{% if es_hoy %} (hoy){% endif %} en {% for clave, nombre in sedes %}{% if clave == sede %}{{ nombre }}{% endif %}{% endfor %}:
+            {{ sistema.cobros_efectivo|length }} cobro{{ sistema.cobros_efectivo|length|pluralize }} en efectivo.
+            Los egresos no se restan porque no tienen oficina.
+        </p>
+        <div class="aq-metodos" aria-label="Todo lo cobrado ese día por método">
+            {% for m in sistema.por_metodo %}<span>{{ m.nombre }}: <b>{{ m.monto|dinero_signo }}</b></span>{% endfor %}
+        </div>
+    </section>
+
+    <section class="aq-caja" aria-labelledby="aq-contado">
+        <h3 id="aq-contado">💵 Efectivo contado en la caja</h3>
+        {% if arqueo %}
+            <div class="aq-monto">{{ arqueo.efectivo_contado|dinero_signo }}</div>
+            {% if arqueo.diferencia == 0 %}
+                <span class="aq-resultado is-cuadra">✓ Cuadra</span>
+            {% elif arqueo.diferencia > 0 %}
+                <span class="aq-resultado is-sobra">Sobran {{ arqueo.diferencia|dinero_signo }}</span>
+            {% else %}
+                <span class="aq-resultado is-falta">Faltan {{ arqueo.diferencia|dinero_signo|cut:"-" }}</span>
+            {% endif %}
+            <p class="aq-nota">
+                Contado por {{ arqueo.registrado_por.get_full_name|default:arqueo.registrado_por.username|default:"—" }}
+                el {{ arqueo.actualizado|date:"d/m/Y" }} a las {{ arqueo.actualizado|date:"H:i" }},
+                contra {{ arqueo.efectivo_sistema|dinero_signo }} del sistema.
+                {% if arqueo.observacion %}<br><b>Observación:</b> {{ arqueo.observacion }}{% endif %}
+            </p>
+            {% if sistema_cambio %}
+            <div class="aq-aviso">
+                El efectivo del sistema cambió desde el arqueo: ahora es {{ sistema.efectivo|dinero_signo }}
+                (se registró o corrigió un pago después). Vuelve a contar para actualizarlo.
+            </div>
+            {% endif %}
+        {% endif %}
+        <form method="post" class="aq-form" style="margin-top:12px;">
+            {% csrf_token %}
+            <input type="hidden" name="fecha" value="{{ fecha|date:'Y-m-d' }}">
+            <input type="hidden" name="sede" value="{{ sede }}">
+            {% if error %}<div class="aq-error" role="alert">{{ error }}</div>{% endif %}
+            <label for="aq-efectivo">{% if arqueo %}Volver a contar{% else %}¿Cuánto efectivo hay en la caja?{% endif %}</label>
+            <input id="aq-efectivo" name="efectivo_contado" inputmode="decimal" autocomplete="off" required
+                   placeholder="0.00" value="{{ contado_texto }}">
+            <label for="aq-observacion">Observación (opcional)</label>
+            <textarea id="aq-observacion" name="observacion" rows="2" maxlength="1000"
+                      placeholder="Ej.: se dio cambio de $20 a un cliente">{% if arqueo and not error %}{{ arqueo.observacion }}{% endif %}</textarea>
+            <button type="submit" class="btn btn-primary">{% if arqueo %}Actualizar arqueo{% else %}Guardar arqueo{% endif %}</button>
+        </form>
+    </section>
+</div>
+
+<h3 class="aq-seccion">Cobros en efectivo del día</h3>
+{% if sistema.cobros_efectivo %}
+<div class="table-wrap">
+    <table>
+        <thead><tr><th>Hora</th><th>Equipo</th><th>Cliente</th><th>Concepto</th><th>Método</th><th class="aq-dinero">En efectivo</th></tr></thead>
+        <tbody>
+            {% for c in sistema.cobros_efectivo %}
+            <tr>
+                <td>{{ c.hora|date:"H:i"|default:"—" }}</td>
+                <td><strong>{{ c.codigo }}</strong></td>
+                <td>{{ c.cliente }}</td>
+                <td>{{ c.concepto }}</td>
+                <td>{{ c.metodo }}</td>
+                <td class="aq-dinero">{{ c.efectivo|dinero_signo }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<p class="aq-nota">No hay cobros en efectivo ese día en esta oficina.</p>
+{% endif %}
+
+<h3 class="aq-seccion">Últimos arqueos de esta oficina</h3>
+{% if historial %}
+<div class="table-wrap">
+    <table>
+        <thead><tr><th>Día</th><th class="aq-dinero">Sistema</th><th class="aq-dinero">Contado</th><th class="aq-dinero">Diferencia</th><th>Contó</th><th>Observación</th></tr></thead>
+        <tbody>
+            {% for a in historial %}
+            <tr>
+                <td><a href="?fecha={{ a.fecha|date:'Y-m-d' }}&amp;sede={{ a.sede }}">{{ a.fecha|date:"d/m/Y" }}</a></td>
+                <td class="aq-dinero">{{ a.efectivo_sistema|dinero_signo }}</td>
+                <td class="aq-dinero">{{ a.efectivo_contado|dinero_signo }}</td>
+                <td class="aq-dinero">{% if a.diferencia == 0 %}<span class="aq-resultado is-cuadra">Cuadra</span>{% elif a.diferencia > 0 %}<span class="aq-resultado is-sobra">+{{ a.diferencia|dinero_signo }}</span>{% else %}<span class="aq-resultado is-falta">−{{ a.diferencia|dinero_signo|cut:"-" }}</span>{% endif %}</td>
+                <td>{{ a.registrado_por.get_full_name|default:a.registrado_por.username|default:"—" }}</td>
+                <td>{{ a.observacion|default:"—"|truncatechars:60 }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<p class="aq-nota">Todavía no hay arqueos guardados en esta oficina.</p>
+{% endif %}
+{% endblock %}
