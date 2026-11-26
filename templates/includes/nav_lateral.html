@@ -248,6 +248,9 @@
         <a href="{% url 'econotec:seguimiento_pago' %}" class="nav-lateral-item{% if ruta|empieza_con:'/pagos/seguimiento' %} activa{% endif %}" data-seccion="seguimiento" title="Seguimiento de pago">
             <span class="nav-lateral-icono" aria-hidden="true">📆</span><span class="nav-lateral-texto">Seguimiento</span>
         </a>
+        <a href="{% url 'econotec:arqueo_caja' %}" class="nav-lateral-item{% if ruta|empieza_con:'/pagos/arqueo' %} activa{% endif %}" data-seccion="arqueo" title="Arqueo de caja">
+            <span class="nav-lateral-icono" aria-hidden="true">💰</span><span class="nav-lateral-texto">Arqueo de caja</span>
+        </a>
         {% endif %}
         {% if es_admin %}
         <a href="{% url 'econotec:admin_dashboard' %}" class="nav-lateral-item{% if ruta|empieza_con:'/admin-panel/' and not ruta|empieza_con:'/admin-panel/activos-bodegaje' and not ruta|empieza_con:'/admin-panel/equipos-administrativos' %} activa{% endif %}" data-seccion="registro" title="Registro Administrativo">
