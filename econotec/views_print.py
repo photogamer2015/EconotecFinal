@@ -2381,3 +2381,96 @@ def equipo_administrativo_pdf(request, pk):
         f'attachment; filename="{prefijo}_{ingreso.codigo_equipo}.pdf"'
     )
     return response
+
+
+def generar_reporte_dia_pdf_bytes(usuario, ingresos, fecha):
+    """Reporte del día de EconoBot: equipos que el usuario registró en la fecha."""
+    from reportlab.lib.colors import Color, black
+    from reportlab.lib.utils import simpleSplit
+
+    from .econobot.equipos import descripcion_equipo
+    from .econobot.reporte_dia import estado_texto, fecha_larga, hora_registro
+
+    naranja = Color(*ECO_NARANJA)
+    gris = Color(0.38, 0.38, 0.38)
+    fondo = Color(0.97, 0.94, 0.90)
+    margen = 40
+    ancho = 515
+    limite_inferior = 60
+    font_size = 8.5
+    leading = 10.5
+    columnas = (
+        ('N°', 22), ('Código', 50), ('Hora', 36), ('Cliente', 115), ('Equipo', 137), ('Estado', 155),
+    )
+
+    buf = BytesIO()
+    c, width, height = _setup_pdf(buf, title=f'Reporte del día {fecha:%d/%m/%Y}')
+
+    def encabezado_tabla(y):
+        c.setFillColor(fondo)
+        c.rect(margen, y - 5, ancho, 16, fill=1, stroke=0)
+        c.setFillColor(naranja)
+        c.setFont('Helvetica-Bold', 8.5)
+        x = margen + 4
+        for titulo, ancho_col in columnas:
+            c.drawString(x, y, titulo)
+            x += ancho_col
+        return y - 18
+
+    def nueva_pagina():
+        c.showPage()
+        c.setFillColor(gris)
+        c.setFont('Helvetica', 8)
+        c.drawString(margen, height - 40, f'Reporte del día · {_usuario_nombre(usuario)} · {fecha:%d/%m/%Y}')
+        return encabezado_tabla(height - 62)
+
+    y = _draw_header_econotec(c, width, height, 'REPORTE DEL DÍA')
+    y -= 6
+    total = len(ingresos)
+    for etiqueta, valor in (
+        ('Usuario:', _usuario_nombre(usuario)),
+        ('Fecha:', fecha_larga(fecha).capitalize()),
+        ('Equipos registrados:', str(total)),
+    ):
+        _draw_label_value(c, margen, y, etiqueta, valor, label_w=110)
+        y -= 16
+    c.setFillColor(gris)
+    c.setFont('Helvetica-Oblique', 7.5)
+    c.drawString(margen, y - 2, 'Ingresos de equipo registrados por este usuario hoy, con su estado al '
+                                f'{timezone.localtime():%d/%m/%Y %H:%M}.')
+    y -= 22
+
+    if not ingresos:
+        c.setFillColor(black)
+        c.setFont('Helvetica', 10)
+        c.drawString(margen, y, 'No registraste equipos en esta fecha.')
+    else:
+        y = encabezado_tabla(y)
+        for numero, ingreso in enumerate(ingresos, 1):
+            textos = (
+                str(numero), ingreso.codigo_equipo, hora_registro(ingreso), ingreso.cliente.nombres,
+                descripcion_equipo(ingreso) or '—', estado_texto(ingreso),
+            )
+            celdas = [
+                simpleSplit(texto or '—', 'Helvetica', font_size, ancho_col - 6)[:3] or ['—']
+                for texto, (_titulo, ancho_col) in zip(textos, columnas)
+            ]
+            alto = max(len(lineas) for lineas in celdas) * leading + 5
+            if y - alto < limite_inferior:
+                y = nueva_pagina()
+            c.setFillColor(black)
+            c.setFont('Helvetica', font_size)
+            x = margen + 4
+            for lineas, (_titulo, ancho_col) in zip(celdas, columnas):
+                for indice, linea in enumerate(lineas):
+                    c.drawString(x, y - indice * leading, linea)
+                x += ancho_col
+            c.setStrokeColor(Color(0.88, 0.88, 0.88))
+            c.line(margen, y - alto + 8, margen + ancho, y - alto + 8)
+            y -= alto
+
+    c.showPage()
+    c.save()
+    pdf = buf.getvalue()
+    buf.close()
+    return pdf

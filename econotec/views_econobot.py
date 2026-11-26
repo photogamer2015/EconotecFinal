@@ -2,6 +2,8 @@
 
 - POST /econobot/mensaje/ recibe {message, signature?, request_id} y responde JSON.
 - GET  /econobot/estado/  indica si hay un registro en curso para retomarlo.
+- GET  /econobot/reporte-dia/ saludo con los equipos que el usuario registró hoy.
+- GET  /econobot/reporte-dia/pdf/ el mismo reporte en PDF.
 
 Solo lo usan personas con acceso a equipos o pagos. Cada mensaje corre en una
 transacción: si algo falla, no queda nada guardado a medias.
@@ -12,9 +14,11 @@ import logging
 from django.contrib.auth import get_user_model
 from django.core.exceptions import PermissionDenied
 from django.db import transaction
-from django.http import Http404, JsonResponse
+from django.contrib.auth.views import redirect_to_login
+from django.http import Http404, HttpResponse, JsonResponse
 from django.views.decorators.http import require_GET, require_POST
 
+from .econobot import reporte_dia
 from .econobot.motor import estado_actual, responder
 from .permisos import puede_gestionar_equipos, puede_gestionar_pagos
 
@@ -101,3 +105,30 @@ def econobot_estado(request):
     if not _autorizado(request.user):
         return _negado(request)
     return JsonResponse(estado_actual(request))
+
+
+@require_GET
+def econobot_reporte_dia(request):
+    """Saludo del día: lo pide el chat la primera vez que se abre cada día."""
+    if not _autorizado(request.user):
+        return _negado(request)
+    datos = reporte_dia.resumen(request.user, presentar=request.GET.get('presentar') == '1')
+    datos['date'] = reporte_dia.hoy().isoformat()
+    return JsonResponse(datos)
+
+
+@require_GET
+def econobot_reporte_dia_pdf(request):
+    """PDF con los equipos que el usuario registró hoy y su estado actual."""
+    from .views_print import generar_reporte_dia_pdf_bytes
+
+    if not request.user.is_authenticated:
+        return redirect_to_login(request.get_full_path())
+    if not _autorizado(request.user):
+        raise PermissionDenied
+    fecha = reporte_dia.hoy()
+    pdf = generar_reporte_dia_pdf_bytes(request.user, reporte_dia.registrados_hoy(request.user, fecha), fecha)
+    response = HttpResponse(pdf, content_type='application/pdf')
+    response['Content-Disposition'] = f'inline; filename="reporte_del_dia_{fecha:%Y-%m-%d}.pdf"'
+    response['Cache-Control'] = 'no-store'
+    return response

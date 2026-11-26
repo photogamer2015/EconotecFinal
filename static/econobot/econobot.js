@@ -11,6 +11,7 @@
 
     var endpoint = raiz.getAttribute('data-endpoint');
     var endpointEstado = raiz.getAttribute('data-estado');
+    var endpointReporte = raiz.getAttribute('data-reporte');
     var usuario = raiz.getAttribute('data-usuario') || '0';
     var nombre = (raiz.getAttribute('data-nombre') || '').split(' ')[0];
 
@@ -39,6 +40,8 @@
     var CLAVE_VOZ = 'econobot:v1:voz:' + usuario;
     var CLAVE_ABIERTO = 'econobot:v1:abierto:' + usuario;
     var CLAVE_PENDIENTE = 'econobot:v1:pendiente:' + usuario;
+    // Último día (hora de Ecuador) en que se mostró el reporte del día.
+    var CLAVE_REPORTE_DIA = 'econobot:v1:reporte-dia:' + usuario;
     var MAX_HISTORIAL = 80;
     var MOVIL = window.matchMedia('(max-width: 600px)');
 
@@ -49,6 +52,7 @@
     var abierto = false;
     var elementoPrevio = null;
     var indicadorEscribiendo = null;
+    var pidiendoReporte = false;
 
     // ── Almacenamiento local (puede no estar disponible) ─────────────
     function leer(clave) {
@@ -240,22 +244,64 @@
         guardar(CLAVE_PENDIENTE, pendiente ? (flujo || 'Registro') : '');
     }
 
+    function opcionesInicio() {
+        return [
+            { label: '📋 Mi reporte de hoy', value: 'mi reporte de hoy' },
+            { label: '📥 Registrar equipo', value: 'registrar equipo' },
+            { label: '✅ Finalizar equipo', value: 'finalizar equipo' },
+            { label: '📦 Finalizados en oficina', value: 'equipos finalizados' },
+            { label: '🔧 Equipos en taller', value: 'equipos en taller' },
+            { label: '👤 Buscar cliente', value: 'buscar cliente' },
+            { label: '❓ ¿Qué más puedes hacer?', value: 'ayuda' }
+        ];
+    }
+
     function bienvenida() {
         agregar({
             rol: 'bot',
             texto: '¡Hola' + (nombre ? ', ' + nombre : '') + '! 👋 Soy EconoBot, tu asistente de Econotec.\n' +
                 'Puedo registrar equipos, finalizarlos, confirmar salidas y mostrarte clientes, equipos y alertas. ' +
                 'Escribe lo que necesitas o un código como G1031.',
-            opciones: [
-                { label: '📥 Registrar equipo', value: 'registrar equipo' },
-                { label: '✅ Finalizar equipo', value: 'finalizar equipo' },
-                { label: '📦 Finalizados en oficina', value: 'equipos finalizados' },
-                { label: '🔧 Equipos en taller', value: 'equipos en taller' },
-                { label: '👤 Buscar cliente', value: 'buscar cliente' },
-                { label: '❓ ¿Qué más puedes hacer?', value: 'ayuda' }
-            ]
+            opciones: opcionesInicio()
         });
         pintarOpciones(historial[historial.length - 1].opciones);
+    }
+
+    // ── Reporte del día (la primera vez que se abre cada día) ────────
+    function hoyEcuador() {
+        try {
+            // en-CA da la fecha como AAAA-MM-DD.
+            return new Intl.DateTimeFormat('en-CA', {
+                timeZone: 'America/Guayaquil', year: 'numeric', month: '2-digit', day: '2-digit'
+            }).format(new Date());
+        } catch (e) {
+            return raiz.getAttribute('data-hoy') || '';
+        }
+    }
+
+    function tocaReporteDelDia() {
+        return !!(endpointReporte && window.fetch && leer(CLAVE_REPORTE_DIA) !== hoyEcuador());
+    }
+
+    function reporteDelDia(vacio) {
+        pidiendoReporte = true;
+        var ultimo = historial.length ? historial[historial.length - 1] : null;
+        // Con un chat en curso se mantienen los botones que ya estaban.
+        var opciones = vacio ? opcionesInicio() : ((ultimo && ultimo.rol === 'bot' && ultimo.opciones) || opcionesInicio());
+        var url = endpointReporte + (vacio ? '?presentar=1' : '');
+        return fetch(url, { credentials: 'same-origin', headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+            .then(function (r) { return r.ok ? r.json() : null; })
+            .catch(function () { return null; })
+            .then(function (datos) {
+                pidiendoReporte = false;
+                if (!datos || !datos.reply) {
+                    if (vacio) bienvenida();
+                    return;
+                }
+                guardar(CLAVE_REPORTE_DIA, datos.date || hoyEcuador());
+                agregar({ rol: 'bot', texto: datos.reply, enlaces: datos.links || [], opciones: opciones });
+                if (!enviando) pintarOpciones(opciones);
+            });
     }
 
     // ── Comunicación con el servidor ─────────────────────────────────
@@ -378,9 +424,16 @@
         guardar(CLAVE_ABIERTO, 'si');
         var vacio = !historial.length;
         pintarHistorial();
-        if (vacio) bienvenida();
-        // Sincroniza el aviso de registro en curso (otra pestaña o recarga).
-        sincronizarEstado(vacio);
+        if (pidiendoReporte) {
+            // El saludo del día ya viene en camino.
+        } else if (tocaReporteDelDia()) {
+            // Primero el saludo con el reporte; después, si hay, el registro en curso.
+            reporteDelDia(vacio).then(function () { sincronizarEstado(vacio); });
+        } else {
+            if (vacio) bienvenida();
+            // Sincroniza el aviso de registro en curso (otra pestaña o recarga).
+            sincronizarEstado(vacio);
+        }
         ajustarTextarea();
         if (!opciones.sinFoco && !MOVIL.matches) window.setTimeout(function () { entrada.focus(); }, 60);
     }
