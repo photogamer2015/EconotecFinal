@@ -195,6 +195,10 @@
         <div class="value">{% if efectividad_global is None %}—{% else %}{{ efectividad_global|floatformat:1 }}%{% endif %}</div>
         {% include 'includes/guia_efectividad.html' with guia_id='guia-efectividad-total' nombre='todos los técnicos' resumen=resumen_salidas %}
     </div>
+    <div class="stat-card">
+        <div class="label" title="Promedio de días desde que entró cada equipo hasta que se finalizó, en el período elegido.">⏱️ Días promedio hasta finalizar</div>
+        <div class="value">{% if dias_promedio_global is None %}—{% else %}{{ dias_promedio_global|floatformat:1 }}{% endif %}</div>
+    </div>
 </div>
 {% if mostrar_valores_monetarios %}
 {% include 'includes/ranking_admin_estilos.html' %}

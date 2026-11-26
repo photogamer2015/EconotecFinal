@@ -5204,6 +5204,8 @@ def _registros_salidas_ranking(desde, hasta, mostrar_valores_monetarios):
             # cliente o llevados a la oficina), igual que en sus listas.
             'a_domicilio': salida.ingreso.a_domicilio == 'si',
             'resultado': _RESULTADO_POR_ESTADO.get(_estado_ranking(salida)),
+            # Días desde que entró el equipo hasta que se finalizó.
+            'dias_hasta_finalizar': max((salida.fecha_salida - salida.ingreso.fecha_ingreso).days, 0),
         }
         if mostrar_valores_monetarios:
             registro.update(dinero_de_salida(salida))
@@ -5235,6 +5237,9 @@ def _resumir_salidas(registros, mostrar_valores_monetarios):
         'resultados': {clave: 0 for clave, *_ in _RESULTADOS_RANKING},
     }
     resumen['pendientes'] = resumen['num_equipos'] - resumen['entregados'] - resumen['a_domicilio']
+    # Tiempo promedio: días desde el ingreso hasta la finalización, de todas sus salidas.
+    dias = [registro['dias_hasta_finalizar'] for registro in registros if 'dias_hasta_finalizar' in registro]
+    resumen['dias_promedio'] = round(sum(dias) / len(dias), 1) if dias else None
     for registro in registros:
         if registro['resultado']:
             resumen['resultados'][registro['resultado']] += 1
@@ -5914,6 +5919,7 @@ def salida_totales(request):
         'total_salidas_global': resumen_salidas['num_equipos'],
         'total_positivas_global': resumen_salidas['salidas_positivas'],
         'efectividad_global': resumen_salidas['efectividad'],
+        'dias_promedio_global': resumen_salidas['dias_promedio'],
         'meses_resumen': meses_resumen,
         'resumen_salidas': resumen_salidas,
         'comprobaciones': comprobaciones,
