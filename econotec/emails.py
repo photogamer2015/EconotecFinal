@@ -204,6 +204,13 @@ def _contexto_correo_actualizacion(ingreso, *, tipo, abonos_evento, adjunto_incl
             'El trabajo técnico de tu equipo fue finalizado. '
             'A continuación encontrarás el estado, los valores y el historial registrado.'
         )
+    elif tipo == 'reparacion':
+        etiqueta = 'Equipo en reparación'
+        titulo = 'Tu equipo está en reparación'
+        introduccion = (
+            'Nuestro técnico ya revisó tu equipo y comenzó la reparación. '
+            'Te avisaremos cuando esté listo. Aquí tienes los datos, los valores y lo pagado hasta ahora.'
+        )
     elif tipo == 'salida':
         etiqueta = 'Salida física confirmada'
         titulo = 'Tu equipo salió de la oficina'
@@ -293,6 +300,8 @@ def _enviar_correo_actualizacion(ingreso, *, tipo, abonos_evento=()):
     )
     if tipo == 'finalizacion':
         asunto = f'Equipo {ingreso.codigo_equipo} finalizado | Econotec'
+    elif tipo == 'reparacion':
+        asunto = f'Tu equipo {ingreso.codigo_equipo} está en reparación | Econotec'
     elif tipo == 'salida':
         asunto = f'Salida de la oficina confirmada {ingreso.codigo_equipo} | Econotec'
     else:
@@ -336,6 +345,20 @@ def enviar_correo_finalizacion_seguro(salida_pk):
             'No se pudo enviar el correo de finalización para salida pk=%s.',
             salida_pk,
         )
+        return False
+
+
+def enviar_correo_reparacion_seguro(ingreso_pk):
+    """Avisa al cliente que su equipo pasó de diagnóstico a «En reparación»."""
+    try:
+        ingreso = IngresoEquipo.objects.select_related(
+            'cliente', 'tecnico_encargado', 'registrado_por',
+        ).prefetch_related('abonos').get(pk=ingreso_pk)
+        if ingreso.estado != 'en_reparacion':
+            return False
+        return _enviar_correo_actualizacion(ingreso, tipo='reparacion')
+    except Exception:
+        logger.exception('No se pudo enviar el correo de equipo en reparación pk=%s.', ingreso_pk)
         return False
 
 

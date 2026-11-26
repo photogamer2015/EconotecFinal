@@ -47,6 +47,8 @@ INGRESO_EMAIL_AUTOMATICO = env.bool('INGRESO_EMAIL_AUTOMATICO', default=True)
 INGRESO_EMAIL_ADJUNTAR_PDF = env.bool('INGRESO_EMAIL_ADJUNTAR_PDF', default=True)
 SALIDA_EMAIL_AUTOMATICO = env.bool('SALIDA_EMAIL_AUTOMATICO', default=True)
 PAGO_EMAIL_AUTOMATICO = env.bool('PAGO_EMAIL_AUTOMATICO', default=True)
+# Correo al cliente cuando su equipo pasa de diagnóstico a «En reparación».
+REPARACION_EMAIL_AUTOMATICO = env.bool('REPARACION_EMAIL_AUTOMATICO', default=True)
 EQUIPO_EMAIL_ADJUNTAR_PDF = env.bool('EQUIPO_EMAIL_ADJUNTAR_PDF', default=True)
 # Tareas diarias (cron): dirección del sistema para los enlaces de los correos
 # y hora (Guayaquil) a la que se envían el resumen del admin y los recordatorios.
