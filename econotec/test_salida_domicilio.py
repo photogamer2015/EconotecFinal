@@ -294,8 +294,16 @@ class SalidaDomicilioTests(TestCase):
         domicilio = self.crear_ingreso()
         url = reverse('econotec:ingreso_lista')
 
+        # «Lista de equipos» es el total y marca los que son a domicilio.
         lista = self.client.get(url, {'sede': 'todas'})
-        self.assertEqual(list(lista.context['ingresos']), [normal])
+        self.assertEqual(set(lista.context['ingresos']), {normal, domicilio})
+        self.assertContains(lista, '🏠 A domicilio</span>')
+        self.assertContains(lista, '?alcance=oficina')
+        # «En oficina» deja fuera los a domicilio.
+        oficina = self.client.get(url, {'sede': 'todas', 'alcance': 'oficina'})
+        self.assertEqual(list(oficina.context['ingresos']), [normal])
+        self.assertContains(oficina, 'Equipos <span class="accent">en Oficina</span>', html=False)
+        self.assertNotContains(oficina, '<span class="domicilio-badge">')
         lista_domicilio = self.client.get(url, {'sede': 'todas', 'alcance': 'domicilio'})
         self.assertEqual(list(lista_domicilio.context['ingresos']), [domicilio])
         self.assertContains(lista_domicilio, 'Equipos <span class="accent">a Domicilio</span>', html=False)
@@ -306,7 +314,7 @@ class SalidaDomicilioTests(TestCase):
         self.assertContains(todos, '🏠 A domicilio</span>')
 
         menu = self.client.get(reverse('econotec:ingreso_menu'))
-        self.assertEqual(menu.context['total'], 1)
+        self.assertEqual(menu.context['total'], 2)
         self.assertEqual(menu.context['total_domicilio'], 1)
         self.assertContains(menu, 'Lista de Equipos a Domicilio')
         self.assertContains(menu, '?alcance=domicilio')

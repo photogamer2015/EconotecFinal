@@ -356,6 +356,8 @@ def fecha_ingreso_con_dias(fecha, hoy=None):
 # cuentan todos los equipos y deben cuadrar con lo que abren.
 ALCANCE_DOMICILIO = 'domicilio'
 ALCANCE_TODOS = 'todos'
+# Solo la lista de ingresos: equipos que no son a domicilio.
+ALCANCE_OFICINA = 'oficina'
 
 
 def alcance_domicilio(request):
@@ -1798,7 +1800,8 @@ def ingreso_menu(request):
         ).count()
         return ingresos_equipos.count(), pendientes
 
-    total, pendientes = conteos('')
+    # La «Lista de equipos» ya incluye los a domicilio: el conteo debe cuadrar.
+    total, pendientes = conteos(ALCANCE_TODOS)
     total_domicilio, pendientes_domicilio = conteos(ALCANCE_DOMICILIO)
     pendientes_valor = _ingresos_pendientes_valor_qs().count()
     return render(request, 'ingresos/menu.html', {
@@ -2607,8 +2610,18 @@ def ingreso_lista(request):
     else:
         sede_filtro = sede_sesion
 
-    alcance = alcance_domicilio(request)
-    qs = (filtrar_alcance_domicilio(ingresos_operativos_qs(), alcance)
+    # «Lista de equipos» muestra todos (los a domicilio llevan su etiqueta);
+    # «En oficina» quita los a domicilio y «A domicilio» deja solo esos.
+    # El viejo ?alcance=todos de ranking, perfiles y panel es la lista completa.
+    alcance = (request.GET.get('alcance') or '').strip()
+    if alcance not in (ALCANCE_DOMICILIO, ALCANCE_OFICINA):
+        alcance = ''
+    qs = ingresos_operativos_qs()
+    if alcance == ALCANCE_DOMICILIO:
+        qs = qs.filter(a_domicilio='si')
+    elif alcance == ALCANCE_OFICINA:
+        qs = qs.exclude(a_domicilio='si')
+    qs = (qs
           .select_related('cliente', 'registrado_por', 'salida')
           .prefetch_related('abonos'))
     if es_admin(request.user):
