@@ -158,18 +158,20 @@
 
 <div class="crumb">
     <a href="{% url 'econotec:bienvenida' %}">Inicio</a> /
-    <a href="{% url 'econotec:ingreso_menu' %}">Ingreso de Equipo</a> / {% if alcance == 'domicilio' %}A domicilio{% else %}Lista{% endif %}
+    <a href="{% url 'econotec:ingreso_menu' %}">Ingreso de Equipo</a> / {% if alcance == 'domicilio' %}A domicilio{% elif alcance == 'oficina' %}En oficina{% else %}Lista{% endif %}
 </div>
 
 {% if valor_filtro == 'pendiente' %}
 <h2 class="page-title">Equipos <span class="accent">Pendientes de Valor</span></h2>
 {% elif alcance == 'domicilio' %}
 <h2 class="page-title">Equipos <span class="accent">a Domicilio</span></h2>
+{% elif alcance == 'oficina' %}
+<h2 class="page-title">Equipos <span class="accent">en Oficina</span></h2>
 {% else %}
 <h2 class="page-title">Equipos <span class="accent">Registrados</span></h2>
 {% endif %}
 <p class="page-subtitle">
-    {{ total }} equipos{% if alcance == 'domicilio' %} a domicilio{% endif %}
+    {{ total }} equipos{% if alcance == 'domicilio' %} a domicilio{% elif alcance == 'oficina' %} dentro de la oficina{% endif %}
     {% if sede_filtro == 'guayaquil' %}en sede Guayaquil
     {% elif sede_filtro == 'quito' %}en sede Quito
     {% else %}en total (todas las sedes)
@@ -179,13 +181,11 @@
 <div class="valor-filter-banner">⚠ Lista de equipos pendientes de valor acordado.</div>
 {% endif %}
 
-{# Los equipos a domicilio van en su propia lista; «todos» viene del ranking, perfiles o panel. #}
+{# «Lista de equipos» es el total (los a domicilio llevan etiqueta); «En oficina» quita los a domicilio. #}
 <nav class="alcance-tabs" aria-label="Lista de equipos">
     <a href="{% url 'econotec:ingreso_lista' %}" class="alcance-tab{% if not alcance %} activa{% endif %}">📋 Lista de equipos</a>
+    <a href="{% url 'econotec:ingreso_lista' %}?alcance=oficina" class="alcance-tab{% if alcance == 'oficina' %} activa{% endif %}">🏢 Equipos en oficina</a>
     <a href="{% url 'econotec:ingreso_lista' %}?alcance=domicilio" class="alcance-tab es-domicilio{% if alcance == 'domicilio' %} activa{% endif %}">🏠 A domicilio</a>
-    {% if alcance == 'todos' %}
-    <span class="alcance-tab activa">Todos (oficina y a domicilio)</span>
-    {% endif %}
 </nav>
 
 <div class="toolbar ingresos-filters">
@@ -260,7 +260,7 @@
         <tbody>
         {% for i in ingresos %}
             <tr>
-                <td><strong style="color: var(--primary);">{{ i.codigo_equipo }}</strong>{% if alcance == 'todos' and i.a_domicilio == 'si' %}<br><span class="domicilio-badge">🏠 A domicilio</span>{% endif %}</td>
+                <td><strong style="color: var(--primary);">{{ i.codigo_equipo }}</strong>{% if not alcance and i.a_domicilio == 'si' %}<br><span class="domicilio-badge">🏠 A domicilio</span>{% endif %}</td>
                 <td>{% if i.fecha_con_dias_taller %}{{ i.fecha_con_dias_taller }}{% else %}{{ i.fecha_ingreso|date:"d/m/Y" }}{% endif %}</td>
                 <td>{{ i.cliente.nombres }}</td>
                 <td>{{ i.cliente.cedula }}</td>
