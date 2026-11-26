@@ -58,6 +58,16 @@
                             {% endif %}
                         {% endif %}
                     </div>
+                    <div class="kpi">
+                        <span class="kpi-label" title="Promedio de días desde que entró el equipo hasta que este técnico lo finalizó, en el período elegido.">⏱️ Días promedio</span>
+                        {% if r.dias_promedio is None %}
+                            <span class="kpi-value vacio">—</span>
+                            <span class="trend same">Sin equipos finalizados</span>
+                        {% else %}
+                            <span class="kpi-value">{{ r.dias_promedio|floatformat:1 }}</span>
+                            <span class="trend same">del ingreso a la finalización</span>
+                        {% endif %}
+                    </div>
                 </div>
             </div>
 
