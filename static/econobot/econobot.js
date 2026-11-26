@@ -285,6 +285,7 @@
 
     function reporteDelDia(vacio) {
         pidiendoReporte = true;
+        var mensajesAlPedir = historial.length;
         var ultimo = historial.length ? historial[historial.length - 1] : null;
         // Con un chat en curso se mantienen los botones que ya estaban.
         var opciones = vacio ? opcionesInicio() : ((ultimo && ultimo.rol === 'bot' && ultimo.opciones) || opcionesInicio());
@@ -294,6 +295,10 @@
             .catch(function () { return null; })
             .then(function (datos) {
                 pidiendoReporte = false;
+                // Si mientras tanto se escribió algo o se reinició el chat, el saludo
+                // llegaría desordenado y taparía los botones nuevos: se deja para la
+                // próxima vez que se abra.
+                if (historial.length !== mensajesAlPedir) return;
                 if (!datos || !datos.reply) {
                     if (vacio) bienvenida();
                     return;
