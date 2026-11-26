@@ -251,6 +251,13 @@ Al desplegar, el script también instala un cron que cada día a las **7:00
   la cuenta) y se deja de enviar al retirar, chatarrizar o poner el equipo en
   «No molestar». Se apaga con `AVISO_BODEGAJE_AUTOMATICO=False` en el `.env`.
 
+- **Cierre del día (18:00)**: a cada usuario que ese día registró equipos,
+  finalizó equipos o registró cobros le llega su reporte del día: una
+  notificación en el celular (si las activó) y un correo con el PDF adjunto.
+  Quien no hizo nada no recibe nada. Se cambia la hora con `CIERRE_DIA_HORA`
+  y se apaga con `CIERRE_DIA_AUTOMATICO=False` en el `.env`. Para enviarlo en
+  el momento: `python manage.py tareas_diarias --cierre`.
+
 Si no hay nada atrasado no se envía correo, y los equipos en «No molestar» no
 se incluyen. Variables opcionales del `.env`: `TAREAS_DIARIAS_HORA` (por
 defecto `7`) y `SISTEMA_URL` (por defecto `https://econosystem.cc`, para los

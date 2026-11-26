@@ -52,6 +52,10 @@ EQUIPO_EMAIL_ADJUNTAR_PDF = env.bool('EQUIPO_EMAIL_ADJUNTAR_PDF', default=True)
 # y hora (Guayaquil) a la que se envían el resumen del admin y los recordatorios.
 SISTEMA_URL = env('SISTEMA_URL', default='https://econosystem.cc')
 TAREAS_DIARIAS_HORA = env.int('TAREAS_DIARIAS_HORA', default=7)
+# Cierre del día: a esta hora (Guayaquil) cada usuario recibe su reporte del día
+# por notificación y correo, si hizo algo. CIERRE_DIA_AUTOMATICO=False lo apaga.
+CIERRE_DIA_HORA = env.int('CIERRE_DIA_HORA', default=18)
+CIERRE_DIA_AUTOMATICO = env.bool('CIERRE_DIA_AUTOMATICO', default=True)
 # Aviso de bodegaje vencido al cliente cada 7 días (False para apagarlo).
 AVISO_BODEGAJE_AUTOMATICO = env.bool('AVISO_BODEGAJE_AUTOMATICO', default=True)
 # Notificaciones push al celular (avisos de las campanitas). Las claves VAPID

@@ -2383,94 +2383,203 @@ def equipo_administrativo_pdf(request, pk):
     return response
 
 
-def generar_reporte_dia_pdf_bytes(usuario, ingresos, fecha):
-    """Reporte del día de EconoBot: equipos que el usuario registró en la fecha."""
-    from reportlab.lib.colors import Color, black
-    from reportlab.lib.utils import simpleSplit
+class _ReportePdf:
+    """Páginas del reporte del día y del personal: cabezal, datos y tablas."""
 
-    from .econobot.equipos import descripcion_equipo
-    from .econobot.reporte_dia import estado_texto, fecha_larga, hora_registro
-
-    naranja = Color(*ECO_NARANJA)
-    gris = Color(0.38, 0.38, 0.38)
-    fondo = Color(0.97, 0.94, 0.90)
     margen = 40
     ancho = 515
     limite_inferior = 60
     font_size = 8.5
     leading = 10.5
-    columnas = (
-        ('N°', 22), ('Código', 50), ('Hora', 36), ('Cliente', 115), ('Equipo', 137), ('Estado', 155),
-    )
 
-    buf = BytesIO()
-    c, width, height = _setup_pdf(buf, title=f'Reporte del día {fecha:%d/%m/%Y}')
+    def __init__(self, titulo_documento, titulo_cabezal, pie):
+        from reportlab.lib.colors import Color
 
-    def encabezado_tabla(y):
-        c.setFillColor(fondo)
-        c.rect(margen, y - 5, ancho, 16, fill=1, stroke=0)
-        c.setFillColor(naranja)
-        c.setFont('Helvetica-Bold', 8.5)
-        x = margen + 4
+        self.naranja = Color(*ECO_NARANJA)
+        self.gris = Color(0.38, 0.38, 0.38)
+        self.fondo = Color(0.97, 0.94, 0.90)
+        self.linea = Color(0.88, 0.88, 0.88)
+        self.pie = pie
+        self.buf = BytesIO()
+        self.c, self.width, self.height = _setup_pdf(self.buf, title=titulo_documento)
+        self.y = _draw_header_econotec(self.c, self.width, self.height, titulo_cabezal) - 6
+
+    def nueva_pagina(self):
+        self.c.showPage()
+        self.c.setFillColor(self.gris)
+        self.c.setFont('Helvetica', 8)
+        self.c.drawString(self.margen, self.height - 40, self.pie)
+        self.y = self.height - 58
+
+    def espacio(self, alto):
+        if self.y - alto < self.limite_inferior:
+            self.nueva_pagina()
+
+    def datos(self, filas, label_w=120):
+        for etiqueta, valor in filas:
+            self.espacio(16)
+            _draw_label_value(self.c, self.margen, self.y, etiqueta, valor, label_w=label_w)
+            self.y -= 16
+
+    def nota(self, texto):
+        self.espacio(14)
+        self.c.setFillColor(self.gris)
+        self.c.setFont('Helvetica-Oblique', 7.5)
+        self.c.drawString(self.margen, self.y - 2, texto)
+        self.y -= 14
+
+    def subtitulo(self, texto):
+        self.espacio(40)
+        self.y -= 8
+        self.c.setFillColor(self.naranja)
+        self.c.setFont('Helvetica-Bold', 11)
+        self.c.drawString(self.margen, self.y, texto)
+        self.y -= 16
+
+    def texto(self, texto, negrita=False):
+        from reportlab.lib.colors import black
+
+        self.espacio(14)
+        self.c.setFillColor(black)
+        self.c.setFont('Helvetica-Bold' if negrita else 'Helvetica', 9)
+        self.c.drawString(self.margen, self.y, texto)
+        self.y -= 14
+
+    def _encabezado(self, columnas):
+        self.c.setFillColor(self.fondo)
+        self.c.rect(self.margen, self.y - 5, self.ancho, 16, fill=1, stroke=0)
+        self.c.setFillColor(self.naranja)
+        self.c.setFont('Helvetica-Bold', 8.5)
+        x = self.margen + 4
         for titulo, ancho_col in columnas:
-            c.drawString(x, y, titulo)
+            self.c.drawString(x, self.y, titulo)
             x += ancho_col
-        return y - 18
+        self.y -= 18
 
-    def nueva_pagina():
-        c.showPage()
-        c.setFillColor(gris)
-        c.setFont('Helvetica', 8)
-        c.drawString(margen, height - 40, f'Reporte del día · {_usuario_nombre(usuario)} · {fecha:%d/%m/%Y}')
-        return encabezado_tabla(height - 62)
+    def tabla(self, columnas, filas):
+        """columnas: [(título, ancho)]; filas: [[texto por columna]]. Se parte en páginas."""
+        from reportlab.lib.colors import black
+        from reportlab.lib.utils import simpleSplit
 
-    y = _draw_header_econotec(c, width, height, 'REPORTE DEL DÍA')
-    y -= 6
-    total = len(ingresos)
-    for etiqueta, valor in (
-        ('Usuario:', _usuario_nombre(usuario)),
-        ('Fecha:', fecha_larga(fecha).capitalize()),
-        ('Equipos registrados:', str(total)),
-    ):
-        _draw_label_value(c, margen, y, etiqueta, valor, label_w=110)
-        y -= 16
-    c.setFillColor(gris)
-    c.setFont('Helvetica-Oblique', 7.5)
-    c.drawString(margen, y - 2, 'Ingresos de equipo registrados por este usuario hoy, con su estado al '
-                                f'{timezone.localtime():%d/%m/%Y %H:%M}.')
-    y -= 22
-
-    if not ingresos:
-        c.setFillColor(black)
-        c.setFont('Helvetica', 10)
-        c.drawString(margen, y, 'No registraste equipos en esta fecha.')
-    else:
-        y = encabezado_tabla(y)
-        for numero, ingreso in enumerate(ingresos, 1):
-            textos = (
-                str(numero), ingreso.codigo_equipo, hora_registro(ingreso), ingreso.cliente.nombres,
-                descripcion_equipo(ingreso) or '—', estado_texto(ingreso),
-            )
+        self.espacio(40)
+        self._encabezado(columnas)
+        for fila in filas:
             celdas = [
-                simpleSplit(texto or '—', 'Helvetica', font_size, ancho_col - 6)[:3] or ['—']
-                for texto, (_titulo, ancho_col) in zip(textos, columnas)
+                simpleSplit(str(texto or '—'), 'Helvetica', self.font_size, ancho_col - 6)[:3] or ['—']
+                for texto, (_titulo, ancho_col) in zip(fila, columnas)
             ]
-            alto = max(len(lineas) for lineas in celdas) * leading + 5
-            if y - alto < limite_inferior:
-                y = nueva_pagina()
-            c.setFillColor(black)
-            c.setFont('Helvetica', font_size)
-            x = margen + 4
+            alto = max(len(lineas) for lineas in celdas) * self.leading + 5
+            if self.y - alto < self.limite_inferior:
+                self.nueva_pagina()
+                self._encabezado(columnas)
+            self.c.setFillColor(black)
+            self.c.setFont('Helvetica', self.font_size)
+            x = self.margen + 4
             for lineas, (_titulo, ancho_col) in zip(celdas, columnas):
                 for indice, linea in enumerate(lineas):
-                    c.drawString(x, y - indice * leading, linea)
+                    self.c.drawString(x, self.y - indice * self.leading, linea)
                 x += ancho_col
-            c.setStrokeColor(Color(0.88, 0.88, 0.88))
-            c.line(margen, y - alto + 8, margen + ancho, y - alto + 8)
-            y -= alto
+            self.c.setStrokeColor(self.linea)
+            self.c.line(self.margen, self.y - alto + 8, self.margen + self.ancho, self.y - alto + 8)
+            self.y -= alto
 
-    c.showPage()
-    c.save()
-    pdf = buf.getvalue()
-    buf.close()
-    return pdf
+    def terminar(self):
+        self.c.showPage()
+        self.c.save()
+        pdf = self.buf.getvalue()
+        self.buf.close()
+        return pdf
+
+
+COLUMNAS_REGISTRADOS = (('N°', 22), ('Código', 50), ('Hora', 36), ('Cliente', 115), ('Equipo', 137), ('Estado', 155))
+COLUMNAS_FINALIZADOS = (('N°', 22), ('Código', 50), ('Ingresó', 52), ('Cliente', 115), ('Equipo', 121), ('Estado', 155))
+COLUMNAS_COBROS = (('N°', 22), ('Hora', 36), ('Código', 50), ('Cliente', 110), ('Concepto', 88), ('Método', 137),
+                   ('Monto', 72))
+
+
+def _secciones_reporte_dia(pdf, datos):
+    """Las tres tablas de una persona: registrados, finalizados y cobros."""
+    from .econobot.equipos import descripcion_equipo
+    from .econobot.reporte_dia import dinero, estado_texto, hora_registro, texto_metodos
+
+    if datos['registrados']:
+        pdf.subtitulo(f'Equipos registrados ({len(datos["registrados"])})')
+        pdf.tabla(COLUMNAS_REGISTRADOS, [
+            [str(n), i.codigo_equipo, hora_registro(i), i.cliente.nombres, descripcion_equipo(i), estado_texto(i)]
+            for n, i in enumerate(datos['registrados'], 1)
+        ])
+    if datos['finalizados']:
+        pdf.subtitulo(f'Equipos finalizados como técnico que reparó ({len(datos["finalizados"])})')
+        pdf.tabla(COLUMNAS_FINALIZADOS, [
+            [str(n), i.codigo_equipo, f'{i.fecha_ingreso:%d/%m/%Y}', i.cliente.nombres, descripcion_equipo(i),
+             estado_texto(i)]
+            for n, i in enumerate(datos['finalizados'], 1)
+        ])
+    if datos['cobros']:
+        pdf.subtitulo(f'Cobros registrados ({len(datos["cobros"])}) · {dinero(datos["total_cobrado"])}')
+        pdf.tabla(COLUMNAS_COBROS, [
+            [str(n), c['hora'] or '—', c['codigo'], c['cliente'], c['concepto'], c['metodo'], dinero(c['monto'])]
+            for n, c in enumerate(datos['cobros'], 1)
+        ])
+        pdf.y -= 4
+        pdf.texto(f'Por método: {texto_metodos(datos["por_metodo"])}', negrita=True)
+
+
+def generar_reporte_dia_pdf_bytes(datos):
+    """Reporte del día de una persona (datos de `reporte_dia.datos_dia`)."""
+    from .econobot.reporte_dia import dinero, fecha_larga, tiene_movimientos
+
+    usuario, fecha = datos['usuario'], datos['fecha']
+    pdf = _ReportePdf(f'Reporte del día {fecha:%d/%m/%Y}', 'REPORTE DEL DÍA',
+                      f'Reporte del día · {_usuario_nombre(usuario)} · {fecha:%d/%m/%Y}')
+    pdf.datos([
+        ('Usuario:', _usuario_nombre(usuario)),
+        ('Fecha:', fecha_larga(fecha).capitalize()),
+        ('Equipos registrados:', str(len(datos['registrados']))),
+        ('Equipos finalizados:', str(len(datos['finalizados']))),
+        ('Cobrado:', f'{dinero(datos["total_cobrado"])} en {len(datos["cobros"])} cobro(s)'),
+    ])
+    pdf.nota(f'Estados al {timezone.localtime():%d/%m/%Y %H:%M}. Los cobros siguen las reglas de Seguimiento de pago.')
+    if not tiene_movimientos(datos):
+        pdf.texto('No registraste equipos, ni finalizaste, ni cobraste en esta fecha.')
+    else:
+        _secciones_reporte_dia(pdf, datos)
+    return pdf.terminar()
+
+
+def generar_reporte_personal_pdf_bytes(datos):
+    """Reporte del personal (datos de `reporte_dia.datos_personal`): resumen y detalle por persona."""
+    from .econobot.reporte_dia import dinero, fecha_larga, nombre_completo, texto_metodos
+
+    fecha = datos['fecha']
+    pdf = _ReportePdf(f'Reporte del personal {fecha:%d/%m/%Y}', 'REPORTE DEL PERSONAL',
+                      f'Reporte del personal · {fecha:%d/%m/%Y}')
+    pdf.datos([
+        ('Fecha:', fecha_larga(fecha).capitalize()),
+        ('Personas con movimientos:', str(len(datos['personas']))),
+        ('Equipos registrados:', str(datos['registrados'])),
+        ('Equipos finalizados:', str(datos['finalizados'])),
+        ('Cobrado:', f'{dinero(datos["total_cobrado"])} en {datos["cobros"]} cobro(s)'),
+    ], label_w=140)
+    if datos['por_metodo']:
+        pdf.texto(f'Por método: {texto_metodos(datos["por_metodo"])}', negrita=True)
+    pdf.nota(f'Estados al {timezone.localtime():%d/%m/%Y %H:%M}. Los cobros siguen las reglas de Seguimiento de pago.')
+    if not datos['personas']:
+        pdf.texto('Nadie registró, finalizó ni cobró equipos en esta fecha.')
+        return pdf.terminar()
+
+    pdf.subtitulo('Resumen por persona')
+    pdf.tabla((('Persona', 175), ('Registró', 70), ('Finalizó', 70), ('Cobros', 60), ('Cobrado', 140)), [
+        [nombre_completo(p['usuario']), str(len(p['registrados'])), str(len(p['finalizados'])), str(len(p['cobros'])),
+         dinero(p['total_cobrado'])]
+        for p in datos['personas']
+    ])
+    for persona in datos['personas']:
+        pdf.espacio(80)
+        pdf.y -= 10
+        pdf.c.setFillColor(pdf.naranja)
+        pdf.c.setFont('Helvetica-Bold', 13)
+        pdf.c.drawString(pdf.margen, pdf.y, nombre_completo(persona['usuario']))
+        pdf.y -= 6
+        _secciones_reporte_dia(pdf, persona)
+    return pdf.terminar()

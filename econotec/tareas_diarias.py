@@ -23,6 +23,7 @@ from django.contrib.auth.models import User
 from django.core.mail import EmailMultiAlternatives
 from django.template.loader import render_to_string
 from django.urls import reverse
+from django.utils import timezone
 
 from .alertas import (
     UMBRAL_DIAS_BODEGAJE,
@@ -208,3 +209,71 @@ def enviar_avisos_bodegaje_clientes(hoy=None):
         if enviar_correo_bodegaje_seguro(pk):
             enviados += 1
     return enviados
+
+
+# ─────────────────────────────────────────────────────────
+# Cierre del día (CIERRE_DIA_HORA): el reporte de cada usuario
+# ─────────────────────────────────────────────────────────
+
+def _url_absoluta(ruta):
+    base = (getattr(settings, 'SISTEMA_URL', '') or '').rstrip('/')
+    return base + ruta if base else ''
+
+
+def _enviar_cierre(usuario, datos, resumen):
+    from .econobot import reporte_dia
+    from .views_print import generar_reporte_dia_pdf_bytes
+
+    hoy = datos['fecha']
+    contexto = {
+        **datos,
+        'nombre': reporte_dia.nombre_corto(usuario),
+        'resumen': resumen,
+        'metodos': reporte_dia.texto_metodos(datos['por_metodo']),
+        'url_pdf': _url_absoluta(reporte_dia.url_pdf_dia(hoy)),
+    }
+    correo = EmailMultiAlternatives(
+        subject=f'Tu cierre del día {hoy:%d/%m/%Y} | Econotec',
+        body=render_to_string('emails/cierre_dia.txt', contexto),
+        from_email=settings.DEFAULT_FROM_EMAIL,
+        to=[usuario.email.strip()],
+    )
+    correo.attach_alternative(render_to_string('emails/cierre_dia.html', contexto), 'text/html')
+    correo.attach(f'reporte_del_dia_{hoy:%Y-%m-%d}.pdf', generar_reporte_dia_pdf_bytes(datos), 'application/pdf')
+    return bool(correo.send(fail_silently=False))
+
+
+def enviar_cierres_del_dia(hoy=None):
+    """Reporte del día a cada usuario que hizo algo: notificación push y correo con el PDF.
+
+    Devuelve (correos, notificaciones) enviados. Quien no registró, finalizó ni
+    cobró nada ese día no recibe nada.
+    """
+    from .econobot import reporte_dia
+    from .permisos import puede_gestionar_equipos, puede_gestionar_pagos
+    from .push import enviar_push_ahora
+
+    hoy = hoy or timezone.localdate()
+    correos = notificaciones = 0
+    for usuario in reporte_dia.usuarios_del_dia(hoy):
+        if not usuario.is_active or not (puede_gestionar_equipos(usuario) or puede_gestionar_pagos(usuario)):
+            continue
+        datos = reporte_dia.datos_dia(usuario, hoy)
+        if not reporte_dia.tiene_movimientos(datos):
+            continue
+        resumen = reporte_dia.texto_corto(datos)
+        try:
+            notificaciones += enviar_push_ahora(
+                [usuario.pk], f'📋 Tu cierre del día {hoy:%d/%m}', f'{resumen}. Toca para ver el PDF.',
+                reporte_dia.url_pdf_dia(hoy), etiqueta=f'cierre-dia-{hoy.isoformat()}',
+            )
+        except Exception:
+            logger.exception('No se pudo enviar la notificación del cierre del día a %s', usuario.username)
+        if (usuario.email or '').strip():
+            try:
+                if _enviar_cierre(usuario, datos, resumen):
+                    correos += 1
+            except Exception:
+                logger.exception('No se pudo enviar el cierre del día a %s', usuario.username)
+    return correos, notificaciones
+

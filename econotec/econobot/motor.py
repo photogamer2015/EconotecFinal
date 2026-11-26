@@ -12,7 +12,7 @@ import re
 
 from .. import views as vistas
 from ..models import Cliente, IngresoEquipo
-from ..permisos import puede_confirmar_salida_fisica
+from ..permisos import es_admin, puede_confirmar_salida_fisica
 from . import consultas, conocimiento, reporte_dia
 from . import texto as tx
 from .acciones import (
@@ -81,9 +81,12 @@ RESULTADOS_TEXTO = [
 
 LISTAS = [
     # Antes que «ingresos de hoy» y «reporte del dia», que son de todo el taller.
-    (re.compile(r'\b(?:mi reporte|mi resumen|mis ingresos de hoy|mis registros de hoy|lo que (?:he hecho|hice) hoy|'
-                r'que (?:he hecho|hice|registre) hoy|registre hoy)\b'),
-     lambda request, m: reporte_dia.resumen(request.user, saludo=False)),
+    # «Reporte del equipo» ya significa el reporte técnico de un equipo: por eso «personal».
+    (re.compile(r'\b(?:(?:reporte|resumen) (?:del|de todo el) personal|reporte de todos|reporte del equipo de trabajo)\b'),
+     lambda request, m: _reporte_personal(request, m)),
+    (re.compile(r'\b(?:mi reporte|mi resumen|mis ingresos de (?:hoy|ayer)|mis registros de (?:hoy|ayer)|'
+                r'lo que (?:he hecho|hice) (?:hoy|ayer)|que (?:he hecho|hice|registre) (?:hoy|ayer)|registre (?:hoy|ayer))\b'),
+     lambda request, m: reporte_dia.resumen(request.user, saludo=False, fecha=_fecha_mencionada(m))),
     (re.compile(r'\b(?:mis equipos|mis pendientes|asignados a mi|mis reparaciones|mi taller)\b'),
      lambda request, m: consultas.en_taller(request, m, solo_mios=True)),
     (re.compile(r'\b(?:salidas? fisicas?|retirados|ya retiraron|se llevaron|salieron de la oficina)\b'),
@@ -104,6 +107,19 @@ LISTAS = [
     (re.compile(r'\b(?:resumen|estadisticas?|como vamos|numeros del dia|reporte del dia|cuantos equipos)\b'),
      lambda request, m: consultas.estadisticas(request)),
 ]
+
+
+def _fecha_mencionada(mensaje):
+    """«… de ayer» → ayer; si no, hoy."""
+    return reporte_dia.ayer() if re.search(r'\bayer\b', tx.limpiar(mensaje)) else reporte_dia.hoy()
+
+
+def _reporte_personal(request, mensaje):
+    if not es_admin(request.user):
+        return respuesta('El reporte del personal es solo para el administrador. '
+                         'Tu propio reporte lo ves con «mi reporte de hoy».',
+                         opciones=[opcion('📋 Mi reporte de hoy', 'mi reporte de hoy')])
+    return reporte_dia.resumen_personal(_fecha_mencionada(mensaje))
 
 
 # ─────────────────────────────────────────────────────────────────────

@@ -1,0 +1,18 @@
+TU CIERRE DEL DÍA · {{ fecha|date:"d/m/Y" }}
+
+Hola, {{ nombre }}. {{ resumen }}.
+{% if registrados %}
+EQUIPOS QUE REGISTRASTE ({{ registrados|length }})
+{% for i in registrados %}- {{ i.codigo_equipo }} · {{ i.cliente.nombres }} · {{ i.estado_visual_display }}
+{% endfor %}{% endif %}{% if finalizados %}
+EQUIPOS QUE FINALIZASTE ({{ finalizados|length }})
+{% for i in finalizados %}- {{ i.codigo_equipo }} · {{ i.cliente.nombres }} · {{ i.estado_visual_display }}
+{% endfor %}{% endif %}{% if cobros %}
+COBROS QUE REGISTRASTE ({{ cobros|length }}) · ${{ total_cobrado|floatformat:2 }}
+{% for c in cobros %}- {{ c.codigo }} · {{ c.concepto }} · ${{ c.monto|floatformat:2 }} · {{ c.metodo }}
+{% endfor %}Por método: {{ metodos }}
+{% endif %}
+El detalle completo está en el PDF adjunto.{% if url_pdf %}
+Ver el PDF en el sistema: {{ url_pdf }}{% endif %}
+
+Mensaje automático del cierre del día del sistema Econotec.
