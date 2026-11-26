@@ -3,6 +3,8 @@
 <div id="econobot" class="econobot no-print"
      data-endpoint="{% url 'econotec:econobot_mensaje' %}"
      data-estado="{% url 'econotec:econobot_estado' %}"
+     data-reporte="{% url 'econotec:econobot_reporte_dia' %}"
+     data-hoy="{% now 'Y-m-d' %}"
      data-csrf="{{ csrf_token }}"
      data-usuario="{{ user.pk }}"
      data-nombre="{{ user.first_name|default:user.username }}">
@@ -83,4 +85,4 @@
         <p class="econobot-pie">Nada se guarda sin tu confirmación.</p>
     </section>
 </div>
-<script src="{% static 'econobot/econobot.js' %}?v=20261025-2" defer></script>
+<script src="{% static 'econobot/econobot.js' %}?v=20261126-1" defer></script>

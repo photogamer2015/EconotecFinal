@@ -13,7 +13,7 @@ import re
 from .. import views as vistas
 from ..models import Cliente, IngresoEquipo
 from ..permisos import puede_confirmar_salida_fisica
-from . import consultas, conocimiento
+from . import consultas, conocimiento, reporte_dia
 from . import texto as tx
 from .acciones import (
     FlujoEstado, FlujoRetiro, FlujoValor, motivo_sin_cambio_estado, motivo_sin_retiro, motivo_sin_valor,
@@ -80,6 +80,10 @@ RESULTADOS_TEXTO = [
 ]
 
 LISTAS = [
+    # Antes que «ingresos de hoy» y «reporte del dia», que son de todo el taller.
+    (re.compile(r'\b(?:mi reporte|mi resumen|mis ingresos de hoy|mis registros de hoy|lo que (?:he hecho|hice) hoy|'
+                r'que (?:he hecho|hice|registre) hoy|registre hoy)\b'),
+     lambda request, m: reporte_dia.resumen(request.user, saludo=False)),
     (re.compile(r'\b(?:mis equipos|mis pendientes|asignados a mi|mis reparaciones|mi taller)\b'),
      lambda request, m: consultas.en_taller(request, m, solo_mios=True)),
     (re.compile(r'\b(?:salidas? fisicas?|retirados|ya retiraron|se llevaron|salieron de la oficina)\b'),
