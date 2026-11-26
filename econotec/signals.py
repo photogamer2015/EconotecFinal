@@ -1,10 +1,19 @@
-"""Al crearse un aviso de campanita, se envía también como notificación push."""
+"""Señales del sistema.
+
+- Al crearse un aviso de campanita, se envía también como notificación push.
+- Cuando un equipo pasa de diagnóstico («Ingresado») a «En reparación», se
+  avisa al cliente por correo, venga el cambio de donde venga.
+"""
+from django.conf import settings
 from django.contrib.auth.signals import user_logged_out
+from django.db import transaction
 from django.db.models.signals import post_save, pre_save
 from django.dispatch import receiver
 
 from . import push
 from .models import (
+    SEDES_EQUIPOS,
+    IngresoEquipo,
     NotificacionAsesora,
     NotificacionCambioAdmin,
     NotificacionInventarioAdmin,
@@ -64,3 +73,32 @@ def _quitar_push_al_salir(sender, request, user, **kwargs):
     if endpoint and user is not None:
         from .models import SuscripcionPush
         SuscripcionPush.objects.filter(endpoint=endpoint, usuario=user).delete()
+
+
+# ── Correo al cliente: el equipo pasó a «En reparación» ───────────────
+
+@receiver(pre_save, sender=IngresoEquipo)
+def _ingreso_estado_antes(sender, instance, raw=False, update_fields=None, **kwargs):
+    instance._estado_anterior = None
+    if raw or not instance.pk or (update_fields is not None and 'estado' not in update_fields):
+        return
+    instance._estado_anterior = (
+        IngresoEquipo.objects.filter(pk=instance.pk).values_list('estado', flat=True).first()
+    )
+
+
+@receiver(post_save, sender=IngresoEquipo)
+def _correo_en_reparacion(sender, instance, created, raw=False, **kwargs):
+    # Solo de diagnóstico a reparación: volver a «En reparación» al eliminar una
+    # finalización, o cambiar el detalle dentro de reparación, no avisa.
+    if raw or created or getattr(instance, '_estado_anterior', None) != 'ingresado':
+        return
+    if instance.estado != 'en_reparacion' or instance.sede not in SEDES_EQUIPOS:
+        return
+    if not getattr(settings, 'REPARACION_EMAIL_AUTOMATICO', True):
+        return
+    if not (instance.cliente.correo or '').strip():
+        return
+    from .emails import enviar_correo_reparacion_seguro
+
+    transaction.on_commit(lambda pk=instance.pk: enviar_correo_reparacion_seguro(pk))

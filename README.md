@@ -175,6 +175,7 @@ INGRESO_EMAIL_AUTOMATICO=True
 INGRESO_EMAIL_ADJUNTAR_PDF=True
 SALIDA_EMAIL_AUTOMATICO=True
 PAGO_EMAIL_AUTOMATICO=True
+REPARACION_EMAIL_AUTOMATICO=True
 EQUIPO_EMAIL_ADJUNTAR_PDF=True
 ```
 
@@ -186,7 +187,9 @@ no se revierte ni se pierde.
 Al confirmar que un equipo fue finalizado, el sistema también puede enviar el
 acta de finalización con el saldo y la regla de bodegaje. Cada nuevo abono envía
 un comprobante actualizado con el valor recibido, el historial completo, el
-saldo restante y el PDF vigente. El botón **Registrar Abono y Dar Salida del
+saldo restante y el PDF vigente. Cuando un equipo pasa de diagnóstico
+(«Ingresado») a **En reparación**, el cliente recibe un aviso con los datos y
+lo pagado hasta ahora (se apaga con `REPARACION_EMAIL_AUTOMATICO=False`). El botón **Registrar Abono y Dar Salida del
 Equipo** (solo asesoras y administrador) usa el mismo flujo, pide a qué asesora
 pertenece la salida y comunica además el cierre de la salida.
 
