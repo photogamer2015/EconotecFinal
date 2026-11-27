@@ -63,6 +63,7 @@ from .sonidos import programar_sonido
 from .permisos import (
     admin_requerido, tecnico_requerido, es_admin, es_asesor, es_tecnico,
     puede_confirmar_salida_fisica, puede_gestionar_inventario,
+    puede_ver_reparacion_demorada,
 )
 from .gamificacion import (
     PUNTOS_EQUIPO_REACONDICIONADO,
@@ -508,7 +509,7 @@ def bienvenida(request):
         )
 
     reparacion_admin_qs = IngresoEquipo.objects.none()
-    if es_admin_user:
+    if puede_ver_reparacion_demorada(request.user):  # admin y asistente de caja
         reparacion_admin_qs = equipos_reparacion_demorada_qs(
             usuario=None,
             umbral_dias=UMBRAL_DIAS_REPARACION_ADMIN,
@@ -3001,10 +3002,17 @@ def ingreso_observacion_agregar(request, pk):
     return redirect('econotec:ingreso_detalle', pk=ingreso.pk)
 
 
-@admin_requerido
+@login_required
 @require_GET
 def ingreso_observaciones(request, pk):
-    """Admin: historial de observaciones de un equipo (se abre en una ventana)."""
+    """Admin o asistente de caja: historial de observaciones de un equipo (se abre en una ventana)."""
+    if not puede_ver_reparacion_demorada(request.user):
+        messages.error(
+            request,
+            'No tienes permiso para esta acción. '
+            'Solo los administradores y la asistente de caja pueden ver este historial.'
+        )
+        return redirect('econotec:bienvenida')
     ingreso = get_object_or_404(
         IngresoEquipo.objects.select_related('cliente', 'tecnico_encargado'),
         pk=pk,
