@@ -458,6 +458,7 @@ def _volver_al_historico(request, **extra):
 
 def _historico_registro(request, year, month):
     """Lo que se ve al abrir el Histórico mensual: por mes y por año."""
+    from .arqueo import arqueos_por_dia
     movimientos = movimientos_de_dinero()
     hoy = timezone.localdate()
     meses = historico_mensual(movimientos, hoy)
@@ -491,11 +492,14 @@ def _historico_registro(request, year, month):
             'dias': dinero_por_dia(movimientos),
             # Los egresos se restan de lo que entró: «− Egresos · Queda» en cada caja.
             'egresos': egresos_por_dia(),
+            # Arqueo guardado de cada día y oficina (solo efectivo) para la Mini caja.
+            'arqueos': arqueos_por_dia(),
             'hoy': hoy.isoformat(),
             'cierra_en': max(0, int(request.session.get('caja_abierta_hasta', 0) - timezone.now().timestamp())),
             'abierta_hasta': int(request.session.get('caja_abierta_hasta', 0)),
         },
         'caja_fuerte_contado': timezone.localtime(),
+        'caja_fuerte_oficinas': ArqueoCaja.SEDES_ARQUEO,
     }
 
 
