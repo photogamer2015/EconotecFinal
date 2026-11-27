@@ -36,7 +36,7 @@ from .date_filters import aplicar_rango_fecha, contexto_rango_fecha, obtener_ran
 from .alertas import whatsapp_link_equipo_donado_comprado
 from .emails import enviar_correo_bodegaje_seguro
 from .models import (
-    IngresoEquipo, SalidaEquipo, Abono, CajaGrande, Egreso, CategoriaEgreso, Cliente,
+    ArqueoCaja, IngresoEquipo, SalidaEquipo, Abono, CajaGrande, Egreso, CategoriaEgreso, Cliente,
     AvisoPanel, BitacoraTecnico, HorarioTecnico, InventarioItem,
     NotificacionCambioAdmin, SEDES_EQUIPOS, VentaInventarioItem,
 )
@@ -722,6 +722,17 @@ def admin_dashboard(request):
 
     horarios_tecnicos, avisos_laborales_hoy, avisos_fuera_laboral_hoy = _horarios_tecnicos_dashboard()
 
+    # Arqueo de caja: el mismo cálculo de la página de Arqueo, para hoy en cada
+    # oficina, y los arqueos guardados en el mes elegido.
+    from .arqueo import estado_arqueo
+    hoy_caja = timezone.localdate()
+    arqueos_hoy = [estado_arqueo(hoy_caja, sede) for sede, _nombre in ArqueoCaja.SEDES_ARQUEO]
+    arqueos_mes = list(
+        ArqueoCaja.objects.filter(fecha__year=year, fecha__month=month)
+        .select_related('registrado_por')
+        .order_by('-fecha', 'sede')
+    )
+
     # La Caja y el resumen del Ranking son solo del administrador puro: una
     # cuenta que además sea técnico o asesor tampoco los ve aquí.
     mostrar_valores_monetarios = puede_ver_valores_ranking(request.user)
@@ -738,6 +749,9 @@ def admin_dashboard(request):
         **contexto_ranking,
         **(_historico_registro(request, year, month) if caja_abierta else {}),
         'caja_abierta': caja_abierta,
+        'arqueos_hoy': arqueos_hoy,
+        'arqueos_mes': arqueos_mes,
+        'arqueo_hoy_fecha': hoy_caja,
         'caja_minutos': CAJA_ABIERTA_SEGUNDOS // 60,
         'caja_intentos': CAJA_INTENTOS,
         'mostrar_valores_monetarios': mostrar_valores_monetarios,

@@ -926,39 +926,72 @@
             width: 100%;
         }
     }
+
+    /* ── Orden del Registro Administrativo ───────────────────────── */
+    .adm-cabecera { display: flex; justify-content: space-between; align-items: flex-end; flex-wrap: wrap; gap: 14px; margin-bottom: 14px; }
+    .adm-cabecera .filter-bar { margin-bottom: 0; padding: 12px 16px; }
+    .adm-indice { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 18px; padding: 10px 12px; border: 1px solid var(--border-color); border-radius: 12px; background: var(--card-bg); }
+    .adm-indice a { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 999px; border: 1px solid var(--border-color); color: var(--text-main); font-size: 13px; font-weight: 700; text-decoration: none; }
+    .adm-indice a:hover, .adm-indice a:focus-visible { border-color: var(--primary); color: var(--primary); }
+    .adm-indice .adm-num { width: 20px; height: 20px; font-size: 11px; }
+    .adm-accesos { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr)); gap: 14px; margin-bottom: 30px; }
+    .adm-grupo { padding: 14px 16px; border: 1px solid var(--border-color); border-radius: 12px; background: var(--card-bg); box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
+    .adm-grupo h3 { margin: 0 0 10px; font-size: 13px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; color: var(--text-muted); }
+    .adm-grupo ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+    .adm-grupo li a { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 10px; border-radius: 8px; color: var(--text-main); font-size: 14px; font-weight: 600; text-decoration: none; background: rgba(127,127,127,0.06); }
+    .adm-grupo li a::after { content: '›'; color: var(--text-muted); font-weight: 800; }
+    .adm-grupo li a:hover, .adm-grupo li a:focus-visible { background: rgba(249,118,24,0.12); color: var(--primary); }
+    .adm-grupo li a.adm-principal { background: var(--primary); color: #fff; }
+    .adm-grupo li a.adm-principal::after { color: #fff; }
+    .adm-seccion { margin: 0 0 40px; scroll-margin-top: 90px; }
+    .adm-seccion-head { display: flex; align-items: flex-start; gap: 12px; margin: 0 0 16px; padding-bottom: 10px; border-bottom: 2px solid var(--border-color); }
+    .adm-seccion-head h2 { margin: 0; font-size: 22px; font-weight: 800; color: var(--text-main); }
+    .adm-seccion-head p { margin: 2px 0 0; font-size: 13px; color: var(--text-muted); }
+    .adm-num { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; border-radius: 50%; background: var(--primary); color: #fff; font-size: 14px; font-weight: 800; }
+    .adm-seccion > .breakdown-grid + .breakdown-grid { margin-top: 22px; }
+    .adm-seccion .productivity-panel { margin-top: 22px; }
+    /* Arqueo dentro de la Caja */
+    .adm-arqueo { margin-bottom: 22px; padding: 18px 20px; border: 1px solid var(--border-color); border-radius: 12px; background: var(--card-bg); box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
+    .adm-arqueo-head { display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 10px; margin-bottom: 14px; }
+    .adm-arqueo-head h3 { margin: 0; font-size: 17px; }
+    .adm-arqueo-head p { margin: 4px 0 0; font-size: 13px; color: var(--text-muted); }
+    .adm-arqueo-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr)); gap: 14px; }
+    .adm-oficina { padding: 14px 16px; border: 1px solid var(--border-color); border-radius: 10px; }
+    .adm-oficina-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 8px; }
+    .adm-oficina-top strong { font-size: 15px; }
+    .adm-filas { margin: 0; display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; font-size: 13px; }
+    .adm-filas dt { color: var(--text-muted); }
+    .adm-filas dd { margin: 0; text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; }
+    .adm-filas .adm-total { padding-top: 6px; border-top: 1px solid var(--border-color); color: var(--text-main); font-weight: 800; }
+    .adm-filas dd.adm-total { font-size: 16px; }
+    .adm-estado { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 800; white-space: nowrap; }
+    .adm-estado.is-cuadra { background: var(--tint-green-bg); color: var(--tint-green-fg); }
+    .adm-estado.is-sobra { background: var(--tint-amber-bg); color: var(--tint-amber-fg); }
+    .adm-estado.is-falta { background: var(--tint-red-bg); color: var(--tint-red-fg); }
+    .adm-estado.is-pendiente { background: rgba(127,127,127,0.14); color: var(--text-muted); }
+    .adm-aviso { margin-top: 10px; padding: 8px 10px; border-radius: 8px; background: var(--tint-amber-bg); color: var(--tint-amber-fg); font-size: 12px; font-weight: 700; }
+    .adm-oficina .btn { margin-top: 12px; width: 100%; justify-content: center; text-align: center; }
+    .adm-arqueo details { margin-top: 16px; }
+    .adm-arqueo summary { cursor: pointer; font-weight: 800; font-size: 14px; }
+    .adm-dinero { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+    /* Zona de mantenimiento: visible en tema claro y oscuro */
+    .adm-mantenimiento { padding: 24px; border: 2px dashed #dc2626; border-radius: 12px; background: var(--tint-red-bg); }
+    .adm-mantenimiento-fila { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px; }
+    .adm-mantenimiento h3 { margin: 0 0 8px; font-size: 20px; color: var(--tint-red-fg); }
+    .adm-mantenimiento p { margin: 0; font-size: 14px; color: var(--tint-red-fg); }
+    .adm-mantenimiento .btn { background: #dc2626; color: #fff; border: none; padding: 12px 20px; border-radius: 8px; font-weight: 700; }
 </style>
 
 <div class="crumb">
     <a href="{% url 'econotec:bienvenida' %}">Inicio</a> / Registro Administrativo
 </div>
 
-<div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 14px;">
+<div class="adm-cabecera">
     <div>
         <h2 class="page-title">Registro <span class="accent">Administrativo</span></h2>
         <p class="page-subtitle">Balance financiero — {{ mes_nombre }} {{ year }}</p>
     </div>
-    <div class="admin-acciones">
-        {% if mostrar_valores_monetarios %}
-        <a href="#historico-mensual" class="btn btn-secondary">🔐 Caja</a>
-        <a href="#ranking-admin" class="btn btn-secondary">🏆 Ranking de Técnicos</a>
-        {% endif %}
-        <a href="{% url 'econotec:admin_egresos_lista' %}" class="btn btn-secondary">Ver Egresos</a>
-        <a href="{% url 'econotec:admin_equipos_administrativos' %}" class="btn btn-secondary" style="background:#0f766e; color:#fff; border-color:#0f766e;">🎁 Donados / Compras</a>
-        <a href="{% url 'econotec:admin_equipos_cortesia' %}?ano={{ year }}&mes={{ month }}" class="btn btn-secondary" style="background:#0369a1; color:#fff; border-color:#0369a1;">Equipos de cortesía</a>
-        <a href="{% url 'econotec:salida_retiros_lista' %}?fecha_desde={{ ingresos_tecnicos_desde|date:'Y-m-d' }}&fecha_hasta={{ ingresos_tecnicos_hasta|date:'Y-m-d' }}&alcance=todos" class="btn btn-secondary" style="background:#6d28d9; color:#fff; border-color:#6d28d9;">🚚 Salidas físicas confirmadas</a>
-        <a href="{% url 'econotec:ranking_asesoras_salidas' %}" class="btn btn-secondary">🏅 Ranking asesoras — Salidas de retiro</a>
-        <a href="{% url 'econotec:admin_bitacoras_tecnicos' %}" class="btn btn-secondary">Bitácoras Técnicos</a>
-        <a href="{% url 'econotec:admin_ventas_inventario' %}?ano={{ year }}&mes={{ month }}" class="btn btn-secondary" style="background:#0f766e; color:#fff; border-color:#0f766e;">Ventas e Inventario</a>
-        <a href="{% url 'econotec:salida_facturas_lista' %}?ano={{ year }}&mes={{ month }}" class="btn btn-secondary">Facturas Salidas</a>
-        <a href="{% url 'econotec:admin_retenciones_lista' %}?ano={{ year }}&mes={{ month }}" class="btn btn-secondary" style="background:#b45309; color:#fff; border-color:#b45309;">Retenciones Facturas</a>
-        <a href="{% url 'econotec:admin_bodegajes' %}?ano={{ year }}&mes={{ month }}" class="btn btn-secondary">Historial Bodegajes</a>
-        <a href="{% url 'econotec:admin_activos_bodegaje' %}" class="btn btn-success">Bodegaje / Chatarrización</a>
-        <a href="{% url 'econotec:admin_egreso_crear' %}" class="btn btn-primary">+ Nuevo Egreso</a>
-    </div>
-</div>
-
-<!-- Filtro de mes/año -->
-<form method="get" class="filter-bar">
+<form method="get" class="filter-bar" aria-label="Elegir mes">
     <div>
         <label class="form-label">Año</label>
         <select name="ano" class="form-input" style="min-width: 120px;">
@@ -988,22 +1021,407 @@
     <button type="submit" class="btn btn-primary">Ver mes</button>
     <a href="{% url 'econotec:admin_export_reporte' %}?ano={{ year }}&mes={{ month }}" class="btn btn-success">📊 Reporte mes</a>
 </form>
+</div>
 
-<!-- Caja fuerte: al inicio, debajo del filtro del mes -->
-{% if mostrar_valores_monetarios %}{% include 'includes/historico_mensual.html' %}{% endif %}
+<nav class="adm-indice" aria-label="Secciones del Registro Administrativo">
+    <a href="#seccion-dinero"><span class="adm-num" aria-hidden="true">1</span> Dinero del mes</a>
+    <a href="#seccion-caja"><span class="adm-num" aria-hidden="true">2</span> Caja</a>
+    <a href="#seccion-equipos"><span class="adm-num" aria-hidden="true">3</span> Equipos del mes</a>
+    <a href="#seccion-tecnicos"><span class="adm-num" aria-hidden="true">4</span> Técnicos</a>
+    <a href="#seccion-personal"><span class="adm-num" aria-hidden="true">5</span> Personal</a>
+    <a href="#seccion-mantenimiento"><span class="adm-num" aria-hidden="true">6</span> Mantenimiento</a>
+</nav>
 
-<!-- Productividad de salidas y perfiles -->
-<div class="productivity-panel">
-    <div>
-        <h3>🏆 Ranking de Productividad (Gamificación)</h3>
-        <p>El puntaje de los equipos finalizados corresponde al técnico que terminó la reparación. Los ingresos asignados se muestran por separado abajo.</p>
+<!-- Accesos a las demás páginas, agrupados por tema -->
+<nav class="adm-accesos" aria-label="Accesos del administrador">
+    <div class="adm-grupo">
+        <h3>💵 Dinero</h3>
+        <ul>
+            <li><a href="{% url 'econotec:admin_egreso_crear' %}" class="adm-principal">+ Nuevo egreso</a></li>
+            <li><a href="{% url 'econotec:admin_egresos_lista' %}">Ver egresos</a></li>
+            <li><a href="{% url 'econotec:arqueo_caja' %}">💰 Arqueo de caja</a></li>
+            <li><a href="{% url 'econotec:salida_facturas_lista' %}?ano={{ year }}&mes={{ month }}">Facturas de salidas</a></li>
+            <li><a href="{% url 'econotec:admin_retenciones_lista' %}?ano={{ year }}&mes={{ month }}">Retenciones de facturas</a></li>
+        </ul>
     </div>
-    <div class="productivity-actions">
-        <a href="{% url 'econotec:admin_perfiles_exportar' formato='pdf' %}" class="btn btn-secondary" style="background: #dc2626; color: white; border: none;">📄 Exportar PDF</a>
-        <a href="{% url 'econotec:admin_perfiles_exportar' formato='excel' %}" class="btn btn-secondary" style="background: #16a34a; color: white; border: none;">📊 Exportar Excel</a>
-        <button type="button" class="btn btn-primary" style="background: #111827; border: none; color: #fff;" onclick="confirmarReinicioPerfiles()">🔄 Reiniciar Perfiles</button>
+    <div class="adm-grupo">
+        <h3>📦 Equipos</h3>
+        <ul>
+            <li><a href="{% url 'econotec:salida_retiros_lista' %}?fecha_desde={{ ingresos_tecnicos_desde|date:'Y-m-d' }}&fecha_hasta={{ ingresos_tecnicos_hasta|date:'Y-m-d' }}&alcance=todos">🚚 Salidas físicas confirmadas</a></li>
+            <li><a href="{% url 'econotec:admin_equipos_administrativos' %}">🎁 Donados / Compras</a></li>
+            <li><a href="{% url 'econotec:admin_equipos_cortesia' %}?ano={{ year }}&mes={{ month }}">Equipos de cortesía</a></li>
+            <li><a href="{% url 'econotec:admin_ventas_inventario' %}?ano={{ year }}&mes={{ month }}">Ventas e inventario</a></li>
+            <li><a href="{% url 'econotec:admin_bodegajes' %}?ano={{ year }}&mes={{ month }}">Historial de bodegajes</a></li>
+            <li><a href="{% url 'econotec:admin_activos_bodegaje' %}">Bodegaje / Chatarrización</a></li>
+        </ul>
+    </div>
+    <div class="adm-grupo">
+        <h3>👥 Personal</h3>
+        <ul>
+            {% if mostrar_valores_monetarios %}<li><a href="#ranking-admin">🏆 Ranking de técnicos</a></li>{% endif %}
+            <li><a href="{% url 'econotec:ranking_asesoras_salidas' %}">🏅 Ranking asesoras — Salidas de retiro</a></li>
+            <li><a href="{% url 'econotec:admin_bitacoras_tecnicos' %}">Bitácoras de técnicos</a></li>
+        </ul>
+    </div>
+</nav>
+
+<section class="adm-seccion" id="seccion-dinero" aria-labelledby="seccion-dinero-titulo">
+<header class="adm-seccion-head">
+    <span class="adm-num" aria-hidden="true">1</span>
+    <div>
+        <h2 id="seccion-dinero-titulo">Dinero del mes</h2>
+        <p>Lo que entró, lo que salió y la utilidad de {{ mes_nombre }} {{ year }}.</p>
+    </div>
+</header>
+
+<!-- Balance principal -->
+<div class="balance-grid">
+    <div class="balance-card income">
+        <div class="lbl">Dinero Recibido (Total)</div>
+        <div class="val">{{ dinero_in.total|dinero_signo }}</div>
+        <div class="sub">Reparaciones + Ventas + Extras</div>
+    </div>
+    <div class="balance-card" style="border-top-color: #00bcd4;">
+        <div class="lbl">Venta de Producto / Equipo</div>
+        <div class="val" style="color: #0097a7;">{{ dinero_in.cobros_ventas|dinero_signo }}</div>
+        <div class="sub">Lo que entró por ventas</div>
+    </div>
+    <div class="balance-card expense">
+        <div class="lbl">Egresos del Mes</div>
+        <div class="val">{{ egresos_total|dinero_signo }}</div>
+        <div class="sub">Gastos del taller</div>
+    </div>
+    <div class="balance-card utility">
+        <div class="lbl">Utilidad del Mes</div>
+        <div class="val">{{ utilidad|dinero_signo }}</div>
+        <div class="sub">Ingresos − Egresos</div>
+    </div>
+    <div class="balance-card">
+        <div class="lbl">Equipos del Mes</div>
+        <div class="val">{{ equipos_ingresados }}</div>
+        <div class="sub">{{ equipos_entregados }} entregados</div>
+    </div>
+    <a href="{% url 'econotec:admin_bodegajes' %}?ano={{ year }}&mes={{ month }}#cobrados" class="balance-card bodegaje cobrado card-link">
+        <div class="lbl">Bodegaje Cobrado</div>
+        <div class="val">{{ bodegaje_cobrado|dinero_signo }}</div>
+        <div class="sub">Casos: {{ bodegaje_cobrado_count }}</div>
+    </a>
+    <div class="balance-card" style="border-top-color: #f39c12;">
+        <div class="lbl">Diagnósticos Rápidos</div>
+        <div class="val" style="color: #f39c12;">{{ dinero_in.diagnosticos_rapidos|dinero_signo }}</div>
+        <div class="sub">Adicionales cobrados</div>
+    </div>
+    <a href="{% url 'econotec:admin_bodegajes' %}?ano={{ year }}&mes={{ month }}#no-cobrados" class="balance-card bodegaje no-cobrado card-link">
+        <div class="lbl">Bodegaje No Cobrado</div>
+        <div class="val">{{ bodegaje_perdonado|dinero_signo }}</div>
+        <div class="sub">Casos: {{ bodegaje_perdonado_count }}</div>
+    </a>
+    <a href="{% url 'econotec:salida_facturas_lista' %}?ano={{ year }}&mes={{ month }}" class="balance-card card-link" style="border-top-color:#0d47a1;">
+        <div class="lbl">Facturas en Salida</div>
+        <div class="val val-facturas">{{ facturas_si_count }}</div>
+        <div class="sub">Salidas con factura realizada</div>
+    </a>
+</div>
+
+<!-- Desglose detallado -->
+<div class="breakdown-grid">
+    <div class="breakdown-card">
+        <h3><span class="cat-emoji">💵</span> Desglose de Dinero Recibido</h3>
+        <div class="row-item">
+            <span class="name">Anticipos iniciales</span>
+            <span class="info">{{ dinero_in.anticipos|dinero_signo }}</span>
+        </div>
+        <div class="row-item">
+            <span class="name">Diagnósticos rápidos (adicionales)</span>
+            <span class="info">{{ dinero_in.diagnosticos_rapidos|dinero_signo }}</span>
+        </div>
+        <div class="row-item">
+            <span class="name">Abonos intermedios</span>
+            <span class="info">{{ dinero_in.abonos|dinero_signo }}</span>
+        </div>
+        <div class="row-item">
+            <span class="name">Cobros en salida (reparaciones)</span>
+            <span class="info">{{ dinero_in.cobros_finales|dinero_signo }}</span>
+        </div>
+        <div class="row-item">
+            <span class="name">Ventas de productos / equipos</span>
+            <span class="info">{{ dinero_in.cobros_ventas|dinero_signo }}</span>
+        </div>
+        <div class="row-item">
+            <span class="name">Cobros por diagnóstico (no reparado)</span>
+            <span class="info">{{ dinero_in.cobros_diagnostico|dinero_signo }}</span>
+        </div>
+        <div class="row-item">
+            <span class="name">Bodegaje cobrado (ya incluido en abonos)</span>
+            <span class="info">{{ bodegaje_cobrado|dinero_signo }}</span>
+        </div>
+        <div class="row-item">
+            <span class="name">Bodegaje no cobrado / perdonado (no suma)</span>
+            <span class="info">{{ bodegaje_perdonado|dinero_signo }}</span>
+        </div>
+        <div class="row-item" style="border-top: 2px solid var(--success); padding-top: 12px; margin-top: 8px;">
+            <span class="name" style="font-weight: 800;">TOTAL</span>
+            <span class="info" style="color: var(--success); font-size: 16px;">{{ dinero_in.total|dinero_signo }}</span>
+        </div>
+
+        <h3 style="margin-top: 24px;">📤 SALIDAS DEL MES</h3>
+        {% if salidas_resumen %}
+            {% for s in salidas_resumen %}
+            <div class="row-item">
+                <span class="name">{{ s.estado }} ({{ s.count }})</span>
+                <span class="info">{{ s.total|dinero_signo }}</span>
+            </div>
+            {% endfor %}
+        {% else %}
+            <p style="color:#888; padding: 12px 0;">Sin salidas este mes.</p>
+        {% endif %}
+    </div>
+
+    <div class="breakdown-card">
+        <h3>📋 EGRESOS POR CATEGORÍA</h3>
+        {% if egresos_por_cat %}
+            {% for e in egresos_por_cat %}
+            <div class="row-item">
+                <span class="name">
+                    {% if e.categoria__icono %}<span class="cat-emoji">{{ e.categoria__icono }}</span>{% endif %}
+                    {{ e.categoria__nombre }} ({{ e.count }})
+                </span>
+                <span class="info" style="color: var(--danger);">{{ e.total|dinero_signo }}</span>
+            </div>
+            {% endfor %}
+            <div class="row-item" style="border-top: 2px solid var(--danger); padding-top: 12px; margin-top: 8px;">
+                <span class="name" style="font-weight: 800;">TOTAL EGRESOS</span>
+                <span class="info" style="color: var(--danger); font-size: 16px;">{{ egresos_total|dinero_signo }}</span>
+            </div>
+        {% else %}
+            <p style="color:#888; padding: 12px 0;">Sin egresos registrados este mes.</p>
+            <a href="{% url 'econotec:admin_egreso_crear' %}" class="btn btn-primary">+ Registrar primer egreso</a>
+        {% endif %}
     </div>
 </div>
+
+<!-- Gráficos del dinero -->
+<div class="breakdown-grid" style="margin-top: 22px;">
+    <div class="breakdown-card">
+        <h3>📊 TENDENCIA ANUAL</h3>
+        <div style="height: 250px; position: relative;">
+            <canvas id="lineChart"></canvas>
+        </div>
+    </div>
+    <div class="breakdown-card">
+        <h3>💰 BALANCE FINANCIERO (ESTE MES)</h3>
+        <div style="height: 250px; position: relative;">
+            <canvas id="barChart"></canvas>
+        </div>
+    </div>
+</div>
+</section>
+
+<section class="adm-seccion" id="seccion-caja" aria-labelledby="seccion-caja-titulo">
+<header class="adm-seccion-head">
+    <span class="adm-num" aria-hidden="true">2</span>
+    <div>
+        <h2 id="seccion-caja-titulo">Caja</h2>
+        <p>Arqueo del efectivo de hoy en cada oficina{% if mostrar_valores_monetarios %} y la caja fuerte con el histórico{% endif %}.</p>
+    </div>
+</header>
+
+<!-- Arqueo de caja: mismos números que la página de Arqueo (econotec/arqueo.py) -->
+<div class="adm-arqueo" id="arqueo-admin">
+    <div class="adm-arqueo-head">
+        <div>
+            <h3>💰 Arqueo de caja de hoy</h3>
+            <p>{{ arqueo_hoy_fecha|date:"l j \d\e F" }}: efectivo cobrado según Pagos menos los egresos pagados en efectivo, contra lo que se contó en cada oficina.</p>
+        </div>
+        <a href="{% url 'econotec:arqueo_caja' %}" class="btn btn-secondary">Abrir arqueo de caja</a>
+    </div>
+    <div class="adm-arqueo-grid">
+        {% for oficina in arqueos_hoy %}
+        <article class="adm-oficina" aria-label="Arqueo de {{ oficina.nombre }}">
+            <div class="adm-oficina-top">
+                <strong>{{ oficina.nombre }}</strong>
+                {% if not oficina.arqueo %}
+                    <span class="adm-estado is-pendiente">Sin contar</span>
+                {% elif oficina.arqueo.diferencia == 0 %}
+                    <span class="adm-estado is-cuadra">✓ Cuadra</span>
+                {% elif oficina.arqueo.diferencia > 0 %}
+                    <span class="adm-estado is-sobra">Sobran {{ oficina.arqueo.diferencia|dinero_signo }}</span>
+                {% else %}
+                    <span class="adm-estado is-falta">Faltan {{ oficina.arqueo.diferencia|dinero_signo|cut:"-" }}</span>
+                {% endif %}
+            </div>
+            <dl class="adm-filas">
+                <dt>Cobrado en efectivo ({{ oficina.sistema.cobros_efectivo|length }})</dt>
+                <dd>{{ oficina.sistema.cobrado|dinero_signo }}</dd>
+                <dt>Egresos en efectivo ({{ oficina.sistema.egresos|length }})</dt>
+                <dd>− {{ oficina.sistema.egresos_total|dinero_signo }}</dd>
+                <dt class="adm-total">Debe haber en caja</dt>
+                <dd class="adm-total">{{ oficina.sistema.efectivo|dinero_signo }}</dd>
+                <dt>Contado</dt>
+                <dd>{% if oficina.arqueo %}{{ oficina.arqueo.efectivo_contado|dinero_signo }}{% else %}—{% endif %}</dd>
+            </dl>
+            {% if oficina.arqueo %}
+            <p class="rank-section-note" style="margin:8px 0 0;">Contó {{ oficina.arqueo.registrado_por.get_full_name|default:oficina.arqueo.registrado_por.username|default:"—" }} a las {{ oficina.arqueo.actualizado|date:"H:i" }}.</p>
+            {% endif %}
+            {% if oficina.sistema_cambio %}
+            <div class="adm-aviso">El efectivo del sistema cambió después del arqueo ({{ oficina.arqueo.efectivo_sistema|dinero_signo }} al contar). Hay que volver a contar.</div>
+            {% endif %}
+            <a href="{% url 'econotec:arqueo_caja' %}?fecha={{ arqueo_hoy_fecha|date:'Y-m-d' }}&sede={{ oficina.sede }}" class="btn {% if oficina.arqueo and not oficina.sistema_cambio %}btn-secondary{% else %}btn-primary{% endif %}">
+                {% if not oficina.arqueo %}Contar la caja de {{ oficina.nombre }}{% elif oficina.sistema_cambio %}Volver a contar{% else %}Ver arqueo{% endif %}
+            </a>
+        </article>
+        {% endfor %}
+    </div>
+    <details{% if arqueos_mes %} open{% endif %}>
+        <summary>Arqueos de {{ mes_nombre }} {{ year }} ({{ arqueos_mes|length }})</summary>
+        {% if arqueos_mes %}
+        <div class="table-wrap" style="margin-top:10px;">
+            <table>
+                <thead><tr><th>Día</th><th>Oficina</th><th class="adm-dinero">Sistema</th><th class="adm-dinero">Contado</th><th class="adm-dinero">Diferencia</th><th>Contó</th></tr></thead>
+                <tbody>
+                    {% for a in arqueos_mes %}
+                    <tr>
+                        <td><a href="{% url 'econotec:arqueo_caja' %}?fecha={{ a.fecha|date:'Y-m-d' }}&sede={{ a.sede }}">{{ a.fecha|date:"d/m/Y" }}</a></td>
+                        <td>{{ a.get_sede_display }}</td>
+                        <td class="adm-dinero">{{ a.efectivo_sistema|dinero_signo }}</td>
+                        <td class="adm-dinero">{{ a.efectivo_contado|dinero_signo }}</td>
+                        <td class="adm-dinero">
+                            {% if a.diferencia == 0 %}<span class="adm-estado is-cuadra">Cuadra</span>
+                            {% elif a.diferencia > 0 %}<span class="adm-estado is-sobra">Sobran {{ a.diferencia|dinero_signo }}</span>
+                            {% else %}<span class="adm-estado is-falta">Faltan {{ a.diferencia|dinero_signo|cut:"-" }}</span>{% endif %}
+                        </td>
+                        <td>{{ a.registrado_por.get_full_name|default:a.registrado_por.username|default:"—" }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="rank-section-note" style="margin:10px 0 0;">No se guardaron arqueos en {{ mes_nombre }} {{ year }}.</p>
+        {% endif %}
+    </details>
+</div>
+
+<!-- Caja fuerte: histórico mensual y anual -->
+{% if mostrar_valores_monetarios %}{% include 'includes/historico_mensual.html' %}{% endif %}
+</section>
+
+<section class="adm-seccion" id="seccion-equipos" aria-labelledby="seccion-equipos-titulo">
+<header class="adm-seccion-head">
+    <span class="adm-num" aria-hidden="true">3</span>
+    <div>
+        <h2 id="seccion-equipos-titulo">Equipos del mes</h2>
+        <p>Equipos ingresados y entregados en {{ mes_nombre }} {{ year }}.</p>
+    </div>
+</header>
+
+<!-- Resumen mensual de equipos -->
+<div class="equipos-mes-card" id="equipos-mes-resumen">
+    <div class="equipos-mes-head">
+        <div>
+            <h3>Resumen de Equipos del Mes</h3>
+            <p>{{ mes_nombre }} {{ year }} · se reinicia automáticamente al cambiar de mes y los meses anteriores quedan consultables con el filtro.</p>
+        </div>
+        <div class="equipos-mes-counts">
+            <span class="equipos-mes-count">{{ equipos_ingresados }} ingresados</span>
+            <span class="equipos-mes-count ok">{{ equipos_entregados }} entregados</span>
+        </div>
+    </div>
+    <details class="equipos-mes-details">
+        <summary class="equipos-mes-toggle">
+            <span>Ver detalle de equipos de {{ mes_nombre }} {{ year }}</span>
+            <span class="chev">⌄</span>
+        </summary>
+        <div class="equipos-mes-detail-body">
+            {% if equipos_mes_resumen %}
+            <div class="equipos-mes-table-wrap">
+                <table class="equipos-mes-table">
+                    <thead>
+                        <tr>
+                            <th>Código</th>
+                            <th>Ingreso</th>
+                            <th>Cliente</th>
+                            <th>Equipo</th>
+                            <th>Técnico asignado al ingresar</th>
+                            <th>Estado actual</th>
+                            <th>Entrega</th>
+                            <th>Valor</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in equipos_mes_resumen %}
+                        <tr>
+                            <td data-label="Código">
+                                <a href="{% url 'econotec:ingreso_detalle' item.ingreso.pk %}">{{ item.ingreso.codigo_equipo }}</a>
+                                <div class="mov-tags">
+                                    {% if item.ingresado_en_mes %}<span class="mov-tag in">Ingresó</span>{% endif %}
+                                    {% if item.entregado_en_mes %}<span class="mov-tag out">Entregado</span>{% endif %}
+                                </div>
+                            </td>
+                            <td data-label="Ingreso">{{ item.ingreso.fecha_ingreso|date:"d/m/Y" }}</td>
+                            <td data-label="Cliente">
+                                <strong>{{ item.ingreso.cliente.nombres }}</strong>
+                                <small>{{ item.ingreso.cliente.cedula }}</small>
+                            </td>
+                            <td data-label="Equipo">
+                                <strong>{{ item.ingreso.tipo_equipo_display }}</strong>
+                                <small>{{ item.ingreso.marca }} {{ item.ingreso.modelo_serie_detalle }}</small>
+                            </td>
+                            <td data-label="Técnico al ingreso">{{ item.tecnico_ingreso_nombre|default:"— Sin asignar —" }}</td>
+                            <td data-label="Estado actual">
+                                <span class="estado-chip pending">{{ item.ingreso.estado_visual_display }}</span>
+                            </td>
+                            <td data-label="Entrega">
+                                {% if item.salida %}
+                                    {% if item.entregado_en_mes %}
+                                        <span class="estado-chip ok">Entregado este mes</span>
+                                    {% else %}
+                                        <span class="estado-chip">Entregado otro mes</span>
+                                    {% endif %}
+                                    <small>{{ item.salida.fecha_salida|date:"d/m/Y" }} · {{ item.salida.get_estado_reparacion_display }}</small>
+                                {% else %}
+                                    <span class="estado-chip">Sin salida</span>
+                                {% endif %}
+                            </td>
+                            <td data-label="Valor">
+                                <strong>{{ item.ingreso.valor_acordado|dinero_signo:"—" }}</strong>
+                                {% if item.salida %}
+                                    <small>Salida: {{ item.salida.valor_final_cobrado|dinero_signo }}</small>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+                <div class="equipos-mes-empty">Sin equipos ingresados o entregados en {{ mes_nombre }} {{ year }}.</div>
+            {% endif %}
+            <div class="equipos-mes-actions">
+                <a href="{% url 'econotec:admin_equipos_mes_exportar' %}?ano={{ year }}&mes={{ month }}" class="btn btn-excel-month">Guardar Excel</a>
+                <form method="post" action="{% url 'econotec:admin_equipos_mes_borrar' %}" id="form-borrar-equipos-mes">
+                    {% csrf_token %}
+                    <input type="hidden" name="ano" value="{{ year }}">
+                    <input type="hidden" name="mes" value="{{ month }}">
+                    <input type="hidden" name="admin_password" id="equipos-mes-admin-password">
+                    <button type="button" class="btn btn-delete-month" onclick="confirmarBorradoEquiposMes('{{ mes_nombre|escapejs }}', '{{ year }}')">
+                        Borrar mes {{ mes_nombre }}
+                    </button>
+                </form>
+            </div>
+        </div>
+    </details>
+</div>
+</section>
+
+<section class="adm-seccion" id="seccion-tecnicos" aria-labelledby="seccion-tecnicos-titulo">
+<header class="adm-seccion-head">
+    <span class="adm-num" aria-hidden="true">4</span>
+    <div>
+        <h2 id="seccion-tecnicos-titulo">Técnicos</h2>
+        <p>Elige un técnico: el ranking, los ingresos asignados y las salidas físicas se filtran por él.</p>
+    </div>
+</header>
 
 <!-- Selector común para responsabilidades de ingreso y salida -->
 <section class="technician-filter-panel" id="resumen-tecnicos">
@@ -1254,244 +1672,8 @@
     </div>
 </section>
 
-<!-- Balance principal -->
-<div class="balance-grid">
-    <div class="balance-card income">
-        <div class="lbl">Dinero Recibido (Total)</div>
-        <div class="val">{{ dinero_in.total|dinero_signo }}</div>
-        <div class="sub">Reparaciones + Ventas + Extras</div>
-    </div>
-    <div class="balance-card" style="border-top-color: #00bcd4;">
-        <div class="lbl">Venta de Producto / Equipo</div>
-        <div class="val" style="color: #0097a7;">{{ dinero_in.cobros_ventas|dinero_signo }}</div>
-        <div class="sub">Lo que entró por ventas</div>
-    </div>
-    <div class="balance-card expense">
-        <div class="lbl">Egresos del Mes</div>
-        <div class="val">{{ egresos_total|dinero_signo }}</div>
-        <div class="sub">Gastos del taller</div>
-    </div>
-    <div class="balance-card utility">
-        <div class="lbl">Utilidad del Mes</div>
-        <div class="val">{{ utilidad|dinero_signo }}</div>
-        <div class="sub">Ingresos − Egresos</div>
-    </div>
-    <div class="balance-card">
-        <div class="lbl">Equipos del Mes</div>
-        <div class="val">{{ equipos_ingresados }}</div>
-        <div class="sub">{{ equipos_entregados }} entregados</div>
-    </div>
-    <a href="{% url 'econotec:admin_bodegajes' %}?ano={{ year }}&mes={{ month }}#cobrados" class="balance-card bodegaje cobrado card-link">
-        <div class="lbl">Bodegaje Cobrado</div>
-        <div class="val">{{ bodegaje_cobrado|dinero_signo }}</div>
-        <div class="sub">Casos: {{ bodegaje_cobrado_count }}</div>
-    </a>
-    <div class="balance-card" style="border-top-color: #f39c12;">
-        <div class="lbl">Diagnósticos Rápidos</div>
-        <div class="val" style="color: #f39c12;">{{ dinero_in.diagnosticos_rapidos|dinero_signo }}</div>
-        <div class="sub">Adicionales cobrados</div>
-    </div>
-    <a href="{% url 'econotec:admin_bodegajes' %}?ano={{ year }}&mes={{ month }}#no-cobrados" class="balance-card bodegaje no-cobrado card-link">
-        <div class="lbl">Bodegaje No Cobrado</div>
-        <div class="val">{{ bodegaje_perdonado|dinero_signo }}</div>
-        <div class="sub">Casos: {{ bodegaje_perdonado_count }}</div>
-    </a>
-    <a href="{% url 'econotec:salida_facturas_lista' %}?ano={{ year }}&mes={{ month }}" class="balance-card card-link" style="border-top-color:#0d47a1;">
-        <div class="lbl">Facturas en Salida</div>
-        <div class="val val-facturas">{{ facturas_si_count }}</div>
-        <div class="sub">Salidas con factura realizada</div>
-    </a>
-</div>
-
-<!-- Resumen mensual de equipos -->
-<div class="equipos-mes-card" id="equipos-mes-resumen">
-    <div class="equipos-mes-head">
-        <div>
-            <h3>Resumen de Equipos del Mes</h3>
-            <p>{{ mes_nombre }} {{ year }} · se reinicia automáticamente al cambiar de mes y los meses anteriores quedan consultables con el filtro.</p>
-        </div>
-        <div class="equipos-mes-counts">
-            <span class="equipos-mes-count">{{ equipos_ingresados }} ingresados</span>
-            <span class="equipos-mes-count ok">{{ equipos_entregados }} entregados</span>
-        </div>
-    </div>
-    <details class="equipos-mes-details">
-        <summary class="equipos-mes-toggle">
-            <span>Ver detalle de equipos de {{ mes_nombre }} {{ year }}</span>
-            <span class="chev">⌄</span>
-        </summary>
-        <div class="equipos-mes-detail-body">
-            {% if equipos_mes_resumen %}
-            <div class="equipos-mes-table-wrap">
-                <table class="equipos-mes-table">
-                    <thead>
-                        <tr>
-                            <th>Código</th>
-                            <th>Ingreso</th>
-                            <th>Cliente</th>
-                            <th>Equipo</th>
-                            <th>Técnico asignado al ingresar</th>
-                            <th>Estado actual</th>
-                            <th>Entrega</th>
-                            <th>Valor</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for item in equipos_mes_resumen %}
-                        <tr>
-                            <td data-label="Código">
-                                <a href="{% url 'econotec:ingreso_detalle' item.ingreso.pk %}">{{ item.ingreso.codigo_equipo }}</a>
-                                <div class="mov-tags">
-                                    {% if item.ingresado_en_mes %}<span class="mov-tag in">Ingresó</span>{% endif %}
-                                    {% if item.entregado_en_mes %}<span class="mov-tag out">Entregado</span>{% endif %}
-                                </div>
-                            </td>
-                            <td data-label="Ingreso">{{ item.ingreso.fecha_ingreso|date:"d/m/Y" }}</td>
-                            <td data-label="Cliente">
-                                <strong>{{ item.ingreso.cliente.nombres }}</strong>
-                                <small>{{ item.ingreso.cliente.cedula }}</small>
-                            </td>
-                            <td data-label="Equipo">
-                                <strong>{{ item.ingreso.tipo_equipo_display }}</strong>
-                                <small>{{ item.ingreso.marca }} {{ item.ingreso.modelo_serie_detalle }}</small>
-                            </td>
-                            <td data-label="Técnico al ingreso">{{ item.tecnico_ingreso_nombre|default:"— Sin asignar —" }}</td>
-                            <td data-label="Estado actual">
-                                <span class="estado-chip pending">{{ item.ingreso.estado_visual_display }}</span>
-                            </td>
-                            <td data-label="Entrega">
-                                {% if item.salida %}
-                                    {% if item.entregado_en_mes %}
-                                        <span class="estado-chip ok">Entregado este mes</span>
-                                    {% else %}
-                                        <span class="estado-chip">Entregado otro mes</span>
-                                    {% endif %}
-                                    <small>{{ item.salida.fecha_salida|date:"d/m/Y" }} · {{ item.salida.get_estado_reparacion_display }}</small>
-                                {% else %}
-                                    <span class="estado-chip">Sin salida</span>
-                                {% endif %}
-                            </td>
-                            <td data-label="Valor">
-                                <strong>{{ item.ingreso.valor_acordado|dinero_signo:"—" }}</strong>
-                                {% if item.salida %}
-                                    <small>Salida: {{ item.salida.valor_final_cobrado|dinero_signo }}</small>
-                                {% endif %}
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-            {% else %}
-                <div class="equipos-mes-empty">Sin equipos ingresados o entregados en {{ mes_nombre }} {{ year }}.</div>
-            {% endif %}
-            <div class="equipos-mes-actions">
-                <a href="{% url 'econotec:admin_equipos_mes_exportar' %}?ano={{ year }}&mes={{ month }}" class="btn btn-excel-month">Guardar Excel</a>
-                <form method="post" action="{% url 'econotec:admin_equipos_mes_borrar' %}" id="form-borrar-equipos-mes">
-                    {% csrf_token %}
-                    <input type="hidden" name="ano" value="{{ year }}">
-                    <input type="hidden" name="mes" value="{{ month }}">
-                    <input type="hidden" name="admin_password" id="equipos-mes-admin-password">
-                    <button type="button" class="btn btn-delete-month" onclick="confirmarBorradoEquiposMes('{{ mes_nombre|escapejs }}', '{{ year }}')">
-                        Borrar mes {{ mes_nombre }}
-                    </button>
-                </form>
-            </div>
-        </div>
-    </details>
-</div>
-
-<!-- Desglose detallado -->
-<div class="breakdown-grid">
-    <div class="breakdown-card">
-        <h3><span class="cat-emoji">💵</span> Desglose de Dinero Recibido</h3>
-        <div class="row-item">
-            <span class="name">Anticipos iniciales</span>
-            <span class="info">{{ dinero_in.anticipos|dinero_signo }}</span>
-        </div>
-        <div class="row-item">
-            <span class="name">Diagnósticos rápidos (adicionales)</span>
-            <span class="info">{{ dinero_in.diagnosticos_rapidos|dinero_signo }}</span>
-        </div>
-        <div class="row-item">
-            <span class="name">Abonos intermedios</span>
-            <span class="info">{{ dinero_in.abonos|dinero_signo }}</span>
-        </div>
-        <div class="row-item">
-            <span class="name">Cobros en salida (reparaciones)</span>
-            <span class="info">{{ dinero_in.cobros_finales|dinero_signo }}</span>
-        </div>
-        <div class="row-item">
-            <span class="name">Ventas de productos / equipos</span>
-            <span class="info">{{ dinero_in.cobros_ventas|dinero_signo }}</span>
-        </div>
-        <div class="row-item">
-            <span class="name">Cobros por diagnóstico (no reparado)</span>
-            <span class="info">{{ dinero_in.cobros_diagnostico|dinero_signo }}</span>
-        </div>
-        <div class="row-item">
-            <span class="name">Bodegaje cobrado (ya incluido en abonos)</span>
-            <span class="info">{{ bodegaje_cobrado|dinero_signo }}</span>
-        </div>
-        <div class="row-item">
-            <span class="name">Bodegaje no cobrado / perdonado (no suma)</span>
-            <span class="info">{{ bodegaje_perdonado|dinero_signo }}</span>
-        </div>
-        <div class="row-item" style="border-top: 2px solid var(--success); padding-top: 12px; margin-top: 8px;">
-            <span class="name" style="font-weight: 800;">TOTAL</span>
-            <span class="info" style="color: var(--success); font-size: 16px;">{{ dinero_in.total|dinero_signo }}</span>
-        </div>
-
-        <h3 style="margin-top: 24px;">📤 SALIDAS DEL MES</h3>
-        {% if salidas_resumen %}
-            {% for s in salidas_resumen %}
-            <div class="row-item">
-                <span class="name">{{ s.estado }} ({{ s.count }})</span>
-                <span class="info">{{ s.total|dinero_signo }}</span>
-            </div>
-            {% endfor %}
-        {% else %}
-            <p style="color:#888; padding: 12px 0;">Sin salidas este mes.</p>
-        {% endif %}
-    </div>
-
-    <div class="breakdown-card">
-        <h3>📋 EGRESOS POR CATEGORÍA</h3>
-        {% if egresos_por_cat %}
-            {% for e in egresos_por_cat %}
-            <div class="row-item">
-                <span class="name">
-                    {% if e.categoria__icono %}<span class="cat-emoji">{{ e.categoria__icono }}</span>{% endif %}
-                    {{ e.categoria__nombre }} ({{ e.count }})
-                </span>
-                <span class="info" style="color: var(--danger);">{{ e.total|dinero_signo }}</span>
-            </div>
-            {% endfor %}
-            <div class="row-item" style="border-top: 2px solid var(--danger); padding-top: 12px; margin-top: 8px;">
-                <span class="name" style="font-weight: 800;">TOTAL EGRESOS</span>
-                <span class="info" style="color: var(--danger); font-size: 16px;">{{ egresos_total|dinero_signo }}</span>
-            </div>
-        {% else %}
-            <p style="color:#888; padding: 12px 0;">Sin egresos registrados este mes.</p>
-            <a href="{% url 'econotec:admin_egreso_crear' %}" class="btn btn-primary">+ Registrar primer egreso</a>
-        {% endif %}
-    </div>
-</div>
-
-<!-- Gráficos -->
+<!-- Ganancia por técnico -->
 <div class="breakdown-grid" style="margin-top: 22px;">
-    <div class="breakdown-card">
-        <h3>📊 TENDENCIA ANUAL</h3>
-        <div style="height: 250px; position: relative;">
-            <canvas id="lineChart"></canvas>
-        </div>
-    </div>
-    <div class="breakdown-card">
-        <h3>💰 BALANCE FINANCIERO (ESTE MES)</h3>
-        <div style="height: 250px; position: relative;">
-            <canvas id="barChart"></canvas>
-        </div>
-    </div>
     <div class="breakdown-card" style="grid-column: 1 / -1; max-width: 600px; margin: 0 auto; width: 100%;">
         <h3>👨‍🔧 GANANCIA POR TÉCNICO (Módulo Salidas)</h3>
         <div style="height: 300px; position: relative;">
@@ -1500,6 +1682,28 @@
     </div>
 </div>
 
+<!-- Productividad de salidas y perfiles -->
+<div class="productivity-panel">
+    <div>
+        <h3>🏆 Ranking de Productividad (Gamificación)</h3>
+        <p>El puntaje de los equipos finalizados corresponde al técnico que terminó la reparación. Los ingresos asignados se muestran por separado abajo.</p>
+    </div>
+    <div class="productivity-actions">
+        <a href="{% url 'econotec:admin_perfiles_exportar' formato='pdf' %}" class="btn btn-secondary" style="background: #dc2626; color: white; border: none;">📄 Exportar PDF</a>
+        <a href="{% url 'econotec:admin_perfiles_exportar' formato='excel' %}" class="btn btn-secondary" style="background: #16a34a; color: white; border: none;">📊 Exportar Excel</a>
+        <button type="button" class="btn btn-primary" style="background: #111827; border: none; color: #fff;" onclick="confirmarReinicioPerfiles()">🔄 Reiniciar Perfiles</button>
+    </div>
+</div>
+</section>
+
+<section class="adm-seccion" id="seccion-personal" aria-labelledby="seccion-personal-titulo">
+<header class="adm-seccion-head">
+    <span class="adm-num" aria-hidden="true">5</span>
+    <div>
+        <h2 id="seccion-personal-titulo">Personal</h2>
+        <p>Quién está conectado y los horarios laborales de los técnicos.</p>
+    </div>
+</header>
 
 <!-- USUARIOS EN LÍNEA -->
 <div class="breakdown-grid" style="margin-top: 22px;">
@@ -1607,23 +1811,27 @@
         </div>
     </div>
 </div>
+</section>
 
-<!-- ZONA DE MANTENIMIENTO -->
-<div style="margin-top: 40px; padding: 24px; border: 2px dashed #dc2626; border-radius: 12px; background: #fef2f2; position: relative;">
-    <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px;">
+<section class="adm-seccion" id="seccion-mantenimiento" aria-labelledby="seccion-mantenimiento-titulo">
+<header class="adm-seccion-head">
+    <span class="adm-num" aria-hidden="true">6</span>
+    <div>
+        <h2 id="seccion-mantenimiento-titulo">Mantenimiento</h2>
+        <p>Acciones que borran datos. Úsalas con cuidado.</p>
+    </div>
+</header>
+
+<div class="adm-mantenimiento">
+    <div class="adm-mantenimiento-fila">
         <div>
-            <h3 style="color: #b91c1c; margin: 0 0 8px 0; font-size: 20px; display: flex; align-items: center; gap: 8px;">
-                <span>⚠️</span> Zona de mantenimiento
-            </h3>
-            <p style="margin: 0; color: #7f1d1d; font-size: 14px;">Reinicia los datos transaccionales y deja el numerador de órdenes en #1. <strong>Acción irreversible.</strong></p>
+            <h3>⚠️ Zona de mantenimiento</h3>
+            <p>Reinicia los datos transaccionales y deja el numerador de órdenes en #1. <strong>Acción irreversible.</strong></p>
         </div>
-        <div>
-            <a href="{% url 'econotec:admin_mantenimiento_reset' %}" class="btn" style="background: #dc2626; color: white; border: none; padding: 12px 20px; border-radius: 8px; font-weight: 700; text-decoration: none; display: inline-block;">
-                <span>🗑️</span> Reiniciar TODO (incluye clientes)
-            </a>
-        </div>
+        <a href="{% url 'econotec:admin_mantenimiento_reset' %}" class="btn">🗑️ Reiniciar TODO (incluye clientes)</a>
     </div>
 </div>
+</section>
 
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 <script>

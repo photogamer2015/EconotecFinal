@@ -1271,7 +1271,7 @@ def arqueo_caja(request):
     se contó físicamente. Un arqueo por día y oficina: volver a contar lo
     actualiza. Se restan los egresos pagados en efectivo desde esa oficina.
     """
-    from .arqueo import efectivo_del_dia
+    from .arqueo import estado_arqueo
     from .models import ArqueoCaja
 
     hoy = timezone.localdate()
@@ -1282,8 +1282,9 @@ def arqueo_caja(request):
         sede = 'guayaquil'
     url = f"{reverse('econotec:arqueo_caja')}?{urlencode({'fecha': fecha.isoformat(), 'sede': sede})}"
 
-    sistema = efectivo_del_dia(fecha, sede)
-    arqueo = ArqueoCaja.objects.filter(fecha=fecha, sede=sede).select_related('registrado_por').first()
+    estado = estado_arqueo(fecha, sede)
+    sistema = estado['sistema']
+    arqueo = estado['arqueo']
     error = ''
     contado_texto = ''
 
@@ -1327,7 +1328,7 @@ def arqueo_caja(request):
         'sedes': [(clave, nombre) for clave, nombre in ArqueoCaja.SEDES_ARQUEO],
         'sistema': sistema,
         'arqueo': arqueo,
-        'sistema_cambio': arqueo is not None and arqueo.efectivo_sistema != sistema['efectivo'],
+        'sistema_cambio': estado['sistema_cambio'],
         'historial': historial,
         'error': error,
         'contado_texto': contado_texto,
