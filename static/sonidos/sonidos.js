@@ -1,7 +1,7 @@
 /*
- * Reproduce una sola vez el clip corto (tema de Tetris) que dejó el servidor
- * al registrar un equipo. El clip ya viene recortado, con volumen bajo y
- * desvanecido, así que aquí solo se le da play.
+ * Reproduce una sola vez el sonido corto (moneda) que dejó el servidor al
+ * registrar un equipo o un producto en inventario. El clip ya viene con
+ * volumen bajo, así que aquí solo se le da play.
  *
  * Si el navegador bloquea el audio automático (Safari, Firefox), suena con la
  * primera interacción del usuario, siempre que sea poco después de cargar.
