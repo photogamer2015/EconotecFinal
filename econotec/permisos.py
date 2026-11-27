@@ -117,6 +117,13 @@ def puede_ver_seguimiento_pago(user):
     return es_admin(user) or es_asistente_caja(user)
 
 
+def puede_ver_reparacion_demorada(user):
+    """Ve en su inicio la alerta «equipos superan 10 días en reparación» y el
+    historial de observaciones de esos equipos (solo lectura).
+    → Admin o Asesora - Asistente de caja."""
+    return es_admin(user) or es_asistente_caja(user)
+
+
 def puede_gestionar_inventario(user):
     """Puede editar, cambiar cantidades y eliminar en los inventarios (de
     producto y reacondicionado).

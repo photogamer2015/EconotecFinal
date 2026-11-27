@@ -12581,6 +12581,48 @@ class VentasTests(TestCase):
         )
         self.assertContains(response, 'id="obs-admin-modal"')
 
+    def _usuaria_con_grupo(self, username, grupo):
+        from django.contrib.auth.models import Group, User
+        usuaria = User.objects.create_user(username=username, password='x', first_name=username.title())
+        usuaria.groups.add(Group.objects.get_or_create(name=grupo)[0])
+        return usuaria
+
+    def test_asistente_de_caja_ve_alerta_mas_de_10_dias_con_observaciones(self):
+        from .permisos import GRUPO_ASISTENTE_CAJA
+        ingreso = self.crear_ingreso_reparacion()
+        IngresoEquipo.objects.filter(pk=ingreso.pk).update(
+            fecha_alerta_reparacion=date.today() - timedelta(days=12),
+        )
+        ObservacionEquipo.objects.create(ingreso=ingreso, texto='Sin repuesto', autor=self.usuario)
+        self.client.force_login(self._usuaria_con_grupo('karla', GRUPO_ASISTENTE_CAJA))
+
+        inicio = self.client.get(reverse('econotec:bienvenida'))
+        historial = self.client.get(
+            reverse('econotec:ingreso_observaciones', kwargs={'pk': ingreso.pk}),
+        )
+
+        self.assertEqual(inicio.context['reparacion_admin_total'], 1)
+        self.assertContains(inicio, 'Pide al técnico responsable una explicación')
+        self.assertContains(inicio, 'id="obs-admin-modal"')
+        self.assertEqual(historial.status_code, 200)
+        self.assertContains(historial, 'Sin repuesto')
+
+    def test_asesora_normal_no_ve_alerta_mas_de_10_dias(self):
+        ingreso = self.crear_ingreso_reparacion()
+        IngresoEquipo.objects.filter(pk=ingreso.pk).update(
+            fecha_alerta_reparacion=date.today() - timedelta(days=12),
+        )
+        self.client.force_login(self._usuaria_con_grupo('ana', 'Asesores'))
+
+        inicio = self.client.get(reverse('econotec:bienvenida'))
+        historial = self.client.get(
+            reverse('econotec:ingreso_observaciones', kwargs={'pk': ingreso.pk}),
+        )
+
+        self.assertEqual(inicio.context['reparacion_admin_total'], 0)
+        self.assertNotContains(inicio, 'Pide al técnico responsable una explicación')
+        self.assertRedirects(historial, reverse('econotec:bienvenida'), fetch_redirect_response=False)
+
     # ── Puntos del técnico (perfil y ranking) ──────────────────────
     def test_reglas_de_puntos_por_resultado(self):
         from .gamificacion import PUNTOS_POR_ESTADO_SALIDA, PUNTOS_VENTA_PRODUCTO, nivel_por_puntos
