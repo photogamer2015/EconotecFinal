@@ -8,7 +8,7 @@ from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
 
-from .arqueo import efectivo_del_dia
+from .arqueo import arqueos_por_dia, efectivo_del_dia
 from .models import Abono, ArqueoCaja, CategoriaEgreso, Cliente, Egreso, IngresoEquipo, SalidaEquipo
 from .permisos import GRUPO_ASISTENTE_CAJA
 
@@ -233,3 +233,54 @@ class ArqueoEnRegistroAdministrativoTests(TestCase):
         respuesta = self.dashboard()
         self.assertContains(respuesta, 'id="arqueo-admin"')
         self.assertNotContains(respuesta, 'id="historico-mensual"')
+
+
+class ArqueoEnMiniCajaTests(TestCase):
+    """La Mini caja de la Caja fuerte muestra el arqueo guardado del día, solo en efectivo y por oficina."""
+
+    setUp = ArqueoCajaTests.setUp
+    ingreso = ArqueoCajaTests.ingreso
+    escenario = ArqueoCajaTests.escenario
+
+    def caja_fuerte(self):
+        self.client.force_login(self.admin)
+        self.client.post(reverse('econotec:admin_caja_abrir'), {'password': 'x'})
+        respuesta = self.client.get(reverse('econotec:admin_dashboard'), {'ano': self.hoy.year, 'mes': self.hoy.month})
+        self.assertTrue(respuesta.context['caja_abierta'])
+        return respuesta
+
+    def test_arqueos_por_dia_en_centavos_y_solo_las_oficinas_que_contaron(self):
+        self.escenario()
+        self.client.force_login(self.caja)
+        self.client.post(self.url, {'fecha': self.hoy.isoformat(), 'sede': 'guayaquil', 'efectivo_contado': '40'})
+        ayer = self.hoy - timedelta(days=1)
+        self.client.post(self.url, {'fecha': ayer.isoformat(), 'sede': 'quito', 'efectivo_contado': '2'})
+        self.assertEqual(arqueos_por_dia(), {
+            ayer.isoformat(): {'quito': {'contado': 200, 'sistema': 0, 'diferencia': 200}},
+            self.hoy.isoformat(): {'guayaquil': {'contado': 4000, 'sistema': 4500, 'diferencia': -500}},
+        })
+
+    def test_caja_fuerte_abierta_lleva_los_arqueos_sin_cambiar_sus_totales(self):
+        self.escenario()
+        antes = self.caja_fuerte().context['caja_fuerte_datos']
+        self.assertEqual(antes['arqueos'], {})
+        self.client.post(self.url, {'fecha': self.hoy.isoformat(), 'sede': 'guayaquil', 'efectivo_contado': '40'})
+        respuesta = self.caja_fuerte()
+        datos = respuesta.context['caja_fuerte_datos']
+        self.assertEqual(datos['arqueos'], {self.hoy.isoformat(): {
+            'guayaquil': {'contado': 4000, 'sistema': 4500, 'diferencia': -500}}})
+        # El arqueo no toca lo que entró ni los egresos de la Caja fuerte.
+        self.assertEqual((datos['dias'], datos['egresos']), (antes['dias'], antes['egresos']))
+        self.assertContains(respuesta, 'Arqueo guardado · solo efectivo')
+        self.assertContains(respuesta, 'data-bf-arqueo="guayaquil"')
+        self.assertContains(respuesta, 'data-bf-arqueo="quito"')
+
+    def test_caja_fuerte_cerrada_no_muestra_el_arqueo(self):
+        self.escenario()
+        self.client.force_login(self.caja)
+        self.client.post(self.url, {'fecha': self.hoy.isoformat(), 'sede': 'guayaquil', 'efectivo_contado': '40'})
+        self.client.force_login(self.admin)
+        respuesta = self.client.get(reverse('econotec:admin_dashboard'))
+        self.assertFalse(respuesta.context['caja_abierta'])
+        self.assertNotContains(respuesta, 'data-bf-arqueo=')
+        self.assertNotIn('caja_fuerte_datos', respuesta.context)

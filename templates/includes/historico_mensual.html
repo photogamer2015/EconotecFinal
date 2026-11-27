@@ -266,6 +266,17 @@
     .bf-caja-egresos b, .bf-queda b { font-weight: 900; }
     .bf-caja-egresos [data-bf-egresos-monto], .bf-queda [data-bf-egresos-monto],
     .bf-caja-egresos b.negativo, .bf-queda b.negativo { color: var(--danger); }
+    /* Arqueo guardado del día elegido en la Mini caja: solo efectivo, una línea por oficina. */
+    .bf-arqueo { display: flex; flex-direction: column; gap: 6px; padding-top: 8px; border-top: 1px dashed currentColor; }
+    .bf-arqueo-titulo { font-size: 11.5px; font-weight: 900; letter-spacing: .3px; text-transform: uppercase; }
+    .bf-arqueo-fila { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 2px 8px; font-size: 12.5px; }
+    .bf-arqueo-oficina { font-weight: 900; }
+    .bf-arqueo-detalle { grid-column: 1 / -1; font-weight: 700; font-variant-numeric: tabular-nums; }
+    .bf-arqueo-fila.sin-arqueo .bf-arqueo-detalle { grid-column: auto; opacity: .7; }
+    .bf-arqueo-estado { padding: 1px 8px; border-radius: 999px; font-size: 11.5px; font-weight: 900; white-space: nowrap; }
+    .bf-arqueo-estado.cuadra { background: var(--tint-green-bg); color: var(--tint-green-fg); }
+    .bf-arqueo-estado.sobra { background: var(--tint-amber-bg); color: var(--tint-amber-fg); }
+    .bf-arqueo-estado.falta { background: var(--tint-red-bg); color: var(--tint-red-fg); }
     .bf-barra { height: 7px; overflow: hidden; border-radius: 999px; background: rgba(0, 0, 0, .08); }
     [data-theme="dark"] .bf-barra { background: rgba(255, 255, 255, .1); }
     .bf-barra span { display: block; width: 0; height: 100%; border-radius: inherit; background: currentColor; transition: width .9s cubic-bezier(.2, .8, .2, 1); }
@@ -496,6 +507,16 @@
                         <div class="bf-caja-rango" data-bf-rango="dia"></div>
                         <div class="bf-caja-pagos" data-bf-pagos="dia">0 pagos registrados</div>
                         <div class="bf-caja-egresos">− Egresos <b data-bf-egresos-monto="dia">$0,00</b> · Queda <b data-bf-queda="dia">$0,00</b></div>
+                        <div class="bf-arqueo" aria-live="polite">
+                            <div class="bf-arqueo-titulo">💵 Arqueo guardado · solo efectivo</div>
+                            {% for clave, nombre in caja_fuerte_oficinas %}
+                            <div class="bf-arqueo-fila sin-arqueo" data-bf-arqueo="{{ clave }}">
+                                <span class="bf-arqueo-oficina">{{ nombre }}</span>
+                                <span class="bf-arqueo-estado" data-bf-arqueo-estado hidden></span>
+                                <span class="bf-arqueo-detalle" data-bf-arqueo-detalle>Sin arqueo</span>
+                            </div>
+                            {% endfor %}
+                        </div>
                         <div class="bf-barra"><span data-bf-barra="dia"></span></div>
                         <div class="bf-caja-parte" data-bf-parte="dia">0% de la semana</div>
                     </article>
@@ -655,6 +676,8 @@ document.addEventListener('DOMContentLoaded', function () {
         var dias = datos.dias;
         // Egresos por día (centavos): se restan de lo que entró en cada caja.
         var egresos = datos.egresos || {};
+        // Arqueo guardado por día y oficina (centavos, solo efectivo).
+        var arqueos = datos.arqueos || {};
         var hoy = fecha(datos.hoy);
         var claves = Object.keys(dias).concat(Object.keys(egresos)).sort();
         var primero = claves.length ? fecha(claves[0]) : hoy;
@@ -780,6 +803,27 @@ document.addEventListener('DOMContentLoaded', function () {
             requestAnimationFrame(paso);
         }
 
+        // Mini caja: el arqueo que se guardó ese día en cada oficina. No es
+        // obligatorio, así que sin arqueo solo dice «Sin arqueo».
+        function pintarArqueo(d) {
+            var delDia = arqueos[iso(d)] || {};
+            renglon.querySelectorAll('[data-bf-arqueo]').forEach(function (fila) {
+                var arqueo = delDia[fila.getAttribute('data-bf-arqueo')];
+                var detalle = fila.querySelector('[data-bf-arqueo-detalle]');
+                var estado = fila.querySelector('[data-bf-arqueo-estado]');
+                fila.classList.toggle('sin-arqueo', !arqueo);
+                estado.hidden = !arqueo;
+                if (!arqueo) {
+                    detalle.textContent = 'Sin arqueo';
+                    return;
+                }
+                detalle.textContent = 'Contado ' + dinero(arqueo.contado) + ' · Esperado ' + dinero(arqueo.sistema);
+                var dif = arqueo.diferencia;
+                estado.className = 'bf-arqueo-estado ' + (dif === 0 ? 'cuadra' : dif > 0 ? 'sobra' : 'falta');
+                estado.textContent = dif === 0 ? '✓ Cuadra' : (dif > 0 ? 'Sobran ' : 'Faltan ') + dinero(Math.abs(dif));
+            });
+        }
+
         function pintar(clave, opciones) {
             opciones = opciones || {};
             var periodo = periodos[clave];
@@ -801,6 +845,7 @@ document.addEventListener('DOMContentLoaded', function () {
             campo('egresos-monto', clave).textContent = dinero(suma.egresos);
             campo('queda', clave).textContent = dinero(queda);
             campo('queda', clave).classList.toggle('negativo', queda < 0);
+            if (clave === 'dia') pintarArqueo(d);
 
             if (periodo.parte) {
                 var parte = periodo.parte(d, suma);

@@ -109,3 +109,21 @@ def estado_arqueo(fecha, sede):
         'arqueo': arqueo,
         'sistema_cambio': arqueo is not None and arqueo.efectivo_sistema != sistema['efectivo'],
     }
+
+
+def arqueos_por_dia():
+    """Arqueos guardados por día y oficina, en centavos, para la Mini caja de la Caja fuerte.
+
+    Solo efectivo: 'sistema' es lo que esperaba el sistema al guardar el arqueo
+    (cobrado en efectivo menos egresos en efectivo de la oficina), 'contado' lo
+    que se contó y 'diferencia' lo contado menos lo esperado. El arqueo no es
+    obligatorio: un día u oficina sin arqueo simplemente no aparece.
+    """
+    dias = {}
+    for arqueo in ArqueoCaja.objects.order_by('fecha', 'sede'):
+        dias.setdefault(arqueo.fecha.isoformat(), {})[arqueo.sede] = {
+            'contado': int(arqueo.efectivo_contado * 100),
+            'sistema': int(arqueo.efectivo_sistema * 100),
+            'diferencia': int(arqueo.diferencia * 100),
+        }
+    return dias
