@@ -284,3 +284,85 @@ class ArqueoEnMiniCajaTests(TestCase):
         self.assertFalse(respuesta.context['caja_abierta'])
         self.assertNotContains(respuesta, 'data-bf-arqueo=')
         self.assertNotIn('caja_fuerte_datos', respuesta.context)
+
+
+class DetalleCobrosHoyTests(TestCase):
+    """Detalle de las tarjetas de Pagos, franja «Hoy» de Seguimiento y Arqueo «Todas».
+
+    Hereda el escenario de hoy: Guayaquil $20 anticipo efectivo, $15 abono
+    efectivo, $30 transferencia y un mixto de $25 ($10 efectivo + $15 tarjeta);
+    Quito $40 anticipo efectivo. Total de hoy $130: efectivo $85, transferencia
+    $30 y tarjeta $15.
+    """
+    # Mismos datos que ArqueoCajaTests, sin volver a correr sus pruebas.
+    setUp = ArqueoCajaTests.setUp
+    ingreso = ArqueoCajaTests.ingreso
+    escenario = ArqueoCajaTests.escenario
+
+    def test_tarjeta_hoy_de_pagos_trae_el_detalle_que_suma_lo_mismo(self):
+        uno, _dos = self.escenario()
+        self.client.force_login(self.admin)
+
+        respuesta = self.client.get(reverse('econotec:pagos_lista'))
+
+        hoy, ayer, mes = respuesta.context['resumen_pagos_dia']
+        self.assertEqual((hoy['total'], hoy['pagos']), (Decimal('130.00'), 5))
+        self.assertEqual(sum((p['monto'] for p in hoy['detalle']), Decimal('0')), hoy['total'])
+        self.assertEqual(len(hoy['detalle']), hoy['pagos'])
+        self.assertEqual(
+            (hoy['metodos']['efectivo'], hoy['metodos']['transferencia'], hoy['metodos']['tarjeta']),
+            (Decimal('85.00'), Decimal('30.00'), Decimal('15.00')),
+        )
+        self.assertEqual({p['oficina'] for p in hoy['detalle']}, {'Guayaquil', 'Quito'})
+        # Ayer: el abono de $50 en efectivo.
+        self.assertEqual((ayer['total'], len(ayer['detalle'])), (Decimal('50.00'), 1))
+        self.assertEqual(sum((p['monto'] for p in mes['detalle']), Decimal('0')), mes['total'])
+        self.assertContains(respuesta, 'id="pay-detalle-hoy"')
+        self.assertContains(respuesta, reverse('econotec:ingreso_abonos', kwargs={'pk': uno.pk}))
+
+    def test_asesora_ve_el_detalle_sin_montos(self):
+        self.escenario()
+        asesora = get_user_model().objects.create_user(username='ana')
+        asesora.groups.add(Group.objects.get_or_create(name='Asesores')[0])
+        self.client.force_login(asesora)
+
+        respuesta = self.client.get(reverse('econotec:pagos_lista'))
+
+        self.assertContains(respuesta, 'id="pay-detalle-hoy"')
+        self.assertNotContains(respuesta, '$130,00')
+        self.assertNotContains(respuesta, 'Efectivo <b>')
+
+    def test_seguimiento_franja_hoy_por_forma_de_pago_y_oficina(self):
+        self.escenario()
+        self.client.force_login(self.caja)
+        url = reverse('econotec:seguimiento_pago')
+
+        todas = self.client.get(url).context['hoy_metodos']
+        quito = self.client.get(url, {'sede': 'quito'}).context['hoy_metodos']
+
+        self.assertEqual(
+            (todas['total'], todas['efectivo'], todas['transferencia'], todas['tarjeta'], todas['pagos']),
+            (Decimal('130.00'), Decimal('85.00'), Decimal('30.00'), Decimal('15.00'), 5),
+        )
+        self.assertEqual((quito['total'], quito['efectivo'], quito['pagos']), (Decimal('40.00'), Decimal('40.00'), 1))
+        self.assertContains(self.client.get(url), 'Ingresos de hoy')
+
+    def test_arqueo_todas_suma_las_dos_oficinas_y_no_guarda(self):
+        self.escenario()
+        self.client.force_login(self.caja)
+        self.client.post(self.url, {'sede': 'guayaquil', 'efectivo_contado': '45'})
+
+        respuesta = self.client.get(self.url, {'sede': 'todas'})
+
+        self.assertTrue(respuesta.context['es_todas'])
+        self.assertEqual(respuesta.context['sistema']['efectivo'], Decimal('85.00'))
+        self.assertEqual(len(respuesta.context['sistema']['cobros_efectivo']), 4)
+        self.assertContains(respuesta, 'Arqueo de cada oficina')
+        self.assertContains(respuesta, '✓ Cuadra')
+        self.assertContains(respuesta, 'Sin arqueo ese día.')
+        self.assertNotContains(respuesta, 'Guardar arqueo')
+
+        guardar = self.client.post(self.url, {'sede': 'todas', 'efectivo_contado': '85'})
+        self.assertEqual(guardar.status_code, 302)
+        self.assertFalse(ArqueoCaja.objects.filter(sede='todas').exists())
+        self.assertEqual(ArqueoCaja.objects.count(), 1)

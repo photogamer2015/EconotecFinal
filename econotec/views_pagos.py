@@ -30,8 +30,8 @@ from .permisos import (
     puede_ver_seguimiento_pago, seguimiento_pago_requerido, tecnico_requerido,
 )
 from .seguimiento_pago import (
-    EQUIPO, FORMAS_PAGO, PRODUCTO, TOTAL, TIPOS, cobros_del_periodo, etiqueta_semana, fecha_larga,
-    fin_semana, hoja_semana,
+    EQUIPO, FORMAS_PAGO, PRODUCTO, TOTAL, TIPOS, cobros_del_periodo, cobros_detallados, etiqueta_semana,
+    fecha_larga, fin_semana, hoja_semana, totales_por_metodo,
     inicio_semana, pestanas_semanas, saldo_semana, texto_cantidades, titulo_semana,
     totales_por_semana,
 )
@@ -186,27 +186,30 @@ def pagos_lista(request):
     base_qs = IngresoEquipo.objects.exclude(sede='ventas')
     context = _construir_contexto_pagos(request, base_qs)
     context['modo'] = 'reparaciones'
-    _agregar_resumen_pagos_dia(request, context, EQUIPO)
+    _agregar_resumen_pagos_dia(request, context, EQUIPO, con_detalle=True)
     return render(request, 'pagos/lista.html', context)
 
 
-def _agregar_resumen_pagos_dia(request, context, tipo):
+def _agregar_resumen_pagos_dia(request, context, tipo, con_detalle=False):
     """Apartado «Hoy / Ayer / Este mes»: equipos en Pagos, productos en Ventas.
 
     El dinero cobrado por día solo lo ven quienes ven Seguimiento de pago;
-    los demás ven únicamente cuántos pagos hubo.
+    los demás ven únicamente cuántos pagos hubo. `con_detalle` (Pagos de
+    reparaciones) deja tocar cada tarjeta para ver sus pagos uno por uno.
     """
-    context['resumen_pagos_dia'] = _resumen_pagos_dia(tipo)
+    context['resumen_pagos_dia'] = _resumen_pagos_dia(tipo, con_detalle=con_detalle)
     context['resumen_pagos_con_dinero'] = puede_ver_seguimiento_pago(request.user)
 
 
-def _resumen_pagos_dia(tipo=EQUIPO):
+def _resumen_pagos_dia(tipo=EQUIPO, con_detalle=False):
     """Lo cobrado hoy, ayer y este mes de equipos (`EQUIPO`) o ventas (`PRODUCTO`).
 
     Anticipos, diagnósticos, abonos y pagos al finalizar (en ventas, el pago o
     abono inicial y sus abonos), sin depender de los filtros de la tabla. «Hoy»
     arranca en cero cada día y «Este mes» va del día 1 a hoy, así se reinicia
-    al cambiar de mes.
+    al cambiar de mes. Con `con_detalle`, 'detalle' es cada pago del periodo (se
+    abre al tocar la tarjeta) para ver de qué equipo, oficina y forma de pago
+    sale el total, y 'metodos' lo separa por forma de pago.
     """
     hoy = timezone.localdate()
     ayer = hoy - timedelta(days=1)
@@ -215,10 +218,20 @@ def _resumen_pagos_dia(tipo=EQUIPO):
         ('Ayer', ayer, ayer, ayer.strftime('%d/%m/%Y')),
         ('Este mes', hoy.replace(day=1), hoy, f'{MESES_ES[hoy.month]} {hoy.year}'),
     )
-    return [
-        {'etiqueta': etiqueta, 'periodo': texto, **cobros_del_periodo(desde, hasta, tipo=tipo)}
-        for etiqueta, desde, hasta, texto in periodos
-    ]
+    resumen = []
+    for clave, (etiqueta, desde, hasta, texto) in zip(('hoy', 'ayer', 'mes'), periodos):
+        dia = {
+            'etiqueta': etiqueta,
+            'periodo': texto,
+            'clave': clave,
+            **cobros_del_periodo(desde, hasta, tipo=tipo),
+        }
+        if con_detalle:
+            detalle = cobros_detallados(desde, hasta, tipo=tipo)
+            dia['detalle'] = list(reversed(detalle))  # el más reciente primero
+            dia['metodos'] = totales_por_metodo(detalle)
+        resumen.append(dia)
+    return resumen
 
 
 @asesor_requerido
@@ -519,8 +532,16 @@ def seguimiento_pago(request):
             inicial['asesora'] = request.user.pk
         form_egreso = EgresoSeguimientoForm(initial=inicial, semana=lunes)
 
+    # Franja «Hoy»: lo cobrado hoy por forma de pago, con la oficina y la vista
+    # elegidas (no depende de la semana abierta ni del filtro de forma de pago).
+    # Vuelve a cero cada día.
+    hoy_metodos = totales_por_metodo(cobros_detallados(hoy, hoy, sede, tipo))
+
     return render(request, 'pagos/seguimiento.html', {
         **hoja,
+        'hoy': hoy,
+        'hoy_texto': fecha_larga(hoy),
+        'hoy_metodos': hoy_metodos,
         'tipo': tipo,
         'tipo_nombre': tipos[tipo],
         'tipos': TIPOS,
@@ -1253,6 +1274,10 @@ def historial_imprimir(request):
 # Arqueo del efectivo
 # ─────────────────────────────────────────────────────────
 
+# Opción del selector de oficina que junta Guayaquil y Quito (solo consulta).
+SEDE_ARQUEO_TODAS = 'todas'
+
+
 def _fecha_arqueo(valor, hoy):
     try:
         fecha = date.fromisoformat((valor or '').strip())
@@ -1270,17 +1295,42 @@ def arqueo_caja(request):
     Muestra el efectivo cobrado ese día según Pagos y, con POST, guarda lo que
     se contó físicamente. Un arqueo por día y oficina: volver a contar lo
     actualiza. Se restan los egresos pagados en efectivo desde esa oficina.
+
+    ?sede=todas junta Guayaquil y Quito solo para consultar: muestra el efectivo
+    del día de las dos y el arqueo guardado de cada una, pero no guarda.
     """
-    from .arqueo import estado_arqueo
+    from .arqueo import estado_arqueo, estado_arqueo_todas
     from .models import ArqueoCaja
 
     hoy = timezone.localdate()
     datos = request.POST if request.method == 'POST' else request.GET
     fecha = _fecha_arqueo(datos.get('fecha'), hoy)
     sede = (datos.get('sede') or request.session.get('sede_actual') or '').strip().lower()
-    if sede not in SEDES_EQUIPOS:
+    if sede not in SEDES_EQUIPOS and sede != SEDE_ARQUEO_TODAS:
         sede = 'guayaquil'
     url = f"{reverse('econotec:arqueo_caja')}?{urlencode({'fecha': fecha.isoformat(), 'sede': sede})}"
+    sedes = [(clave, nombre) for clave, nombre in ArqueoCaja.SEDES_ARQUEO]
+
+    if sede == SEDE_ARQUEO_TODAS:
+        if request.method == 'POST':
+            messages.error(request, 'Elige Guayaquil o Quito para guardar el arqueo: se cuenta por oficina.')
+            return redirect(url)
+        todas = estado_arqueo_todas(fecha)
+        return render(request, 'pagos/arqueo.html', {
+            'fecha': fecha,
+            'hoy': hoy,
+            'es_hoy': fecha == hoy,
+            'sede': sede,
+            'es_todas': True,
+            'sedes': sedes + [(SEDE_ARQUEO_TODAS, 'Todas')],
+            'sede_nombre': 'Guayaquil y Quito',
+            'sistema': todas['sistema'],
+            'oficinas': todas['oficinas'],
+            'historial': list(
+                ArqueoCaja.objects.select_related('registrado_por').order_by('-fecha', 'sede')[:15]
+            ),
+            'fecha_texto': fecha_larga(fecha),
+        })
 
     estado = estado_arqueo(fecha, sede)
     sistema = estado['sistema']
@@ -1325,7 +1375,9 @@ def arqueo_caja(request):
         'hoy': hoy,
         'es_hoy': fecha == hoy,
         'sede': sede,
-        'sedes': [(clave, nombre) for clave, nombre in ArqueoCaja.SEDES_ARQUEO],
+        'es_todas': False,
+        'sedes': sedes + [(SEDE_ARQUEO_TODAS, 'Todas')],
+        'sede_nombre': dict(sedes)[sede],
         'sistema': sistema,
         'arqueo': arqueo,
         'sistema_cambio': estado['sistema_cambio'],

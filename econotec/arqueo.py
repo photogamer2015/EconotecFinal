@@ -12,10 +12,8 @@ o sin oficina (los viejos) no salen de ninguna caja y no se restan.
 """
 from decimal import Decimal
 
-from django.db.models import Q
-
 from .models import ArqueoCaja, Egreso
-from .seguimiento_pago import TOTAL, _cobros_del_equipo, ingresos_de_seguimiento
+from .seguimiento_pago import TOTAL, cobros_detallados
 
 CERO = Decimal('0.00')
 NOMBRES_METODO = {
@@ -28,29 +26,9 @@ NOMBRES_METODO = {
 
 def cobros_del_dia(fecha, sede):
     """Cada pago del día en la oficina, con su parte en efectivo."""
-    base = ingresos_de_seguimiento(sede, TOTAL)
-    ingresos = (
-        base.filter(Q(fecha_ingreso=fecha) | Q(abonos__fecha=fecha) | Q(salida__fecha_salida=fecha))
-        .distinct()
-        .select_related('cliente', 'salida')
-        .prefetch_related('abonos')
-    )
-    filas = []
-    for ingreso in ingresos:
-        for cobro in _cobros_del_equipo(ingreso, fecha, fecha):
-            efectivo = sum((p['monto'] for p in cobro['partes'] if p['metodo'] == 'efectivo'), CERO)
-            filas.append({
-                'codigo': ingreso.codigo_equipo,
-                'cliente': ingreso.cliente.nombres,
-                'concepto': cobro['concepto'],
-                'hora': cobro['hora'],
-                'monto': cobro['monto'],
-                'efectivo': efectivo,
-                'partes': cobro['partes'],
-                'metodo': ' + '.join(p['etiqueta'] for p in cobro['partes']),
-                'orden': cobro['orden'],
-            })
-    filas.sort(key=lambda fila: fila['orden'])
+    filas = cobros_detallados(fecha, fecha, sede, TOTAL)
+    for fila in filas:
+        fila['efectivo'] = sum((p['monto'] for p in fila['partes'] if p['metodo'] == 'efectivo'), CERO)
     return filas
 
 
@@ -108,6 +86,43 @@ def estado_arqueo(fecha, sede):
         'sistema': sistema,
         'arqueo': arqueo,
         'sistema_cambio': arqueo is not None and arqueo.efectivo_sistema != sistema['efectivo'],
+    }
+
+
+def estado_arqueo_todas(fecha):
+    """Las dos oficinas juntas, solo para consultar (el arqueo se guarda por oficina).
+
+    'sistema' suma el efectivo, los cobros y los egresos de Guayaquil y Quito con
+    las mismas reglas de cada oficina; 'oficinas' es el `estado_arqueo` de cada una.
+    """
+    oficinas = [estado_arqueo(fecha, sede) for sede, _nombre in ArqueoCaja.SEDES_ARQUEO]
+    sistemas = [oficina['sistema'] for oficina in oficinas]
+    por_metodo = {clave: CERO for clave in NOMBRES_METODO}
+    for sistema in sistemas:
+        for metodo in sistema['por_metodo']:
+            por_metodo[metodo['clave']] += metodo['monto']
+    cobros_efectivo = [fila for sistema in sistemas for fila in sistema['cobros_efectivo']]
+    cobros_efectivo.sort(key=lambda fila: fila['orden'])
+    egresos = sorted(
+        (egreso for sistema in sistemas for egreso in sistema['egresos']),
+        key=lambda egreso: egreso.creado,
+    )
+    return {
+        'sistema': {
+            'efectivo': sum((s['efectivo'] for s in sistemas), CERO),
+            'cobrado': sum((s['cobrado'] for s in sistemas), CERO),
+            'egresos': egresos,
+            'egresos_total': sum((s['egresos_total'] for s in sistemas), CERO),
+            'cobros_efectivo': cobros_efectivo,
+            'por_metodo': [
+                {'clave': clave, 'nombre': nombre, 'monto': por_metodo[clave]}
+                for clave, nombre in NOMBRES_METODO.items()
+                if clave != 'otros' or por_metodo[clave]
+            ],
+            'total': sum((s['total'] for s in sistemas), CERO),
+            'cobros': sum((s['cobros'] for s in sistemas), 0),
+        },
+        'oficinas': oficinas,
     }
 
 
