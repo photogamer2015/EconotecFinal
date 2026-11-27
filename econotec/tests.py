@@ -8797,6 +8797,40 @@ class VentasTests(TestCase):
         self.assertFalse(SalidaEquipo.objects.filter(ingreso=ingreso).exists())
         self.assertIn('estado_reparacion', response.context['form'].errors)
 
+    def test_finalizar_equipo_suena_ninos_felices_una_sola_vez(self):
+        ingreso = self.crear_ingreso_reparacion(valor_acordado=Decimal('0.00'))
+
+        response = self.client.post(
+            reverse('econotec:salida_registrar', kwargs={'ingreso_pk': ingreso.pk}),
+            self.salida_post_data(metodo_pago_final='sin_pago'),
+        )
+
+        salida = SalidaEquipo.objects.get(ingreso=ingreso)
+        aviso_url = reverse('econotec:salida_listo_aviso', kwargs={'pk': salida.pk})
+        self.assertRedirects(response, aviso_url, fetch_redirect_response=False)
+        aviso = self.client.get(aviso_url)
+        self.assertContains(aviso, 'sonidos/finalizado-ninos.mp3')
+        recarga = self.client.get(aviso_url)
+        self.assertNotContains(recarga, 'sonidos/sonidos.js')
+
+    def test_editar_finalizacion_no_suena(self):
+        ingreso = self.crear_ingreso_reparacion(valor_acordado=Decimal('0.00'))
+        self.client.post(
+            reverse('econotec:salida_registrar', kwargs={'ingreso_pk': ingreso.pk}),
+            self.salida_post_data(metodo_pago_final='sin_pago'),
+        )
+        salida = SalidaEquipo.objects.get(ingreso=ingreso)
+        session = self.client.session
+        session.pop('sonido_pendiente', None)
+        session.save()
+
+        self.client.post(
+            reverse('econotec:salida_editar', kwargs={'pk': salida.pk}),
+            self.salida_post_data(metodo_pago_final='sin_pago', observaciones='Corrección'),
+        )
+
+        self.assertNotIn('sonido_pendiente', self.client.session)
+
     def test_edicion_conserva_resultado_negativo_existente(self):
         ingreso = self.crear_ingreso_reparacion(valor_acordado=Decimal('0.00'))
         salida = SalidaEquipo.objects.create(

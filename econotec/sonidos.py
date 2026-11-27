@@ -1,5 +1,6 @@
 """
-Sonido corto de moneda al registrar un equipo o un producto en inventario.
+Sonido corto de moneda al registrar un equipo o un producto en inventario,
+y el de niños felices al finalizar un equipo (equipo listo / finalizado).
 
 La vista que registra el equipo deja el clip pendiente en la sesión y
 base.html lo toma una sola vez en la página a la que se redirige: recargar
@@ -15,6 +16,7 @@ SONIDO_VIGENCIA_SEGUNDOS = 60
 CLIPS = {
     'registro_equipo': 'sonidos/moneda-registro.mp3',      # 1,7 s
     'registro_inventario': 'sonidos/moneda-registro.mp3',  # 1,7 s
+    'equipo_finalizado': 'sonidos/finalizado-ninos.mp3',   # 4,4 s
 }
 
 
