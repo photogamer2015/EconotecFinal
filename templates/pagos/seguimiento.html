@@ -810,6 +810,12 @@
                 {{ form_egreso.monto.errors }}
             </div>
             <div class="is-ancho">
+                <label for="{{ form_egreso.sede.id_for_label }}">{{ form_egreso.sede.label }} *</label>
+                {{ form_egreso.sede }}
+                <small class="sp-egreso-ayuda">Caja de la que salió el dinero. Si se pagó en efectivo, se resta en el arqueo de esa oficina.</small>
+                {{ form_egreso.sede.errors }}
+            </div>
+            <div class="is-ancho">
                 <label for="{{ form_egreso.concepto.id_for_label }}">{{ form_egreso.concepto.label }} *</label>
                 {{ form_egreso.concepto }}
                 {{ form_egreso.concepto.errors }}

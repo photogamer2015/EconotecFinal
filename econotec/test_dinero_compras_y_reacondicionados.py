@@ -121,6 +121,10 @@ class DineroComprasYReacondicionadosTests(TestCase):
         self.assertEqual(saldo_semana(HOY)['disponible'], Decimal('80.00'))
         self.assertEqual(venta.diferencia, Decimal('0.00'))
 
+    def test_egreso_de_compra_sale_de_la_caja_de_su_oficina(self):
+        compra = self.comprar()
+        self.assertEqual(Egreso.objects.get(ingreso_compra=compra).sede, 'guayaquil')
+
     def test_comprar_en_30_y_vender_en_80_deja_50(self):
         compra = self.comprar('30.00')
         # Reacondicionar la compra no mueve dinero.

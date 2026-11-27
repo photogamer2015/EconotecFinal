@@ -2794,9 +2794,21 @@ class Egreso(models.Model):
         ('tarjeta', 'Tarjeta de crédito / Débito'),
         ('mixto', 'Pago mixto (2 métodos)'),
     ]
+    # De qué caja salió el dinero. «General» es un gasto que no sale de la caja
+    # de ninguna oficina (sueldos, alquiler, etc.). Vacío solo en egresos viejos.
+    SEDES_EGRESO = [
+        ('guayaquil', 'Guayaquil'),
+        ('quito', 'Quito'),
+        ('general', 'General (no sale de ninguna caja)'),
+    ]
 
     fecha = models.DateField(
         help_text='Fecha en que se efectuó el gasto.'
+    )
+    sede = models.CharField(
+        max_length=20, choices=SEDES_EGRESO, blank=True,
+        verbose_name='Oficina',
+        help_text='Caja de la que salió el dinero. Los egresos en efectivo de una oficina se restan en su arqueo.',
     )
     categoria = models.ForeignKey(
         CategoriaEgreso, on_delete=models.PROTECT,
@@ -2942,6 +2954,17 @@ class Egreso(models.Model):
         verbose_name = 'Egreso'
         verbose_name_plural = 'Egresos'
         ordering = ['-fecha', '-creado']
+
+    @property
+    def monto_efectivo(self):
+        """Parte del egreso pagada en efectivo (en mixto, solo sus partes en efectivo)."""
+        cero = Decimal('0.00')
+        if self.metodo == 'efectivo':
+            return self.monto or cero
+        if self.metodo != 'mixto':
+            return cero
+        partes = ((self.monto_1, self.metodo_1), (self.monto_2, self.metodo_2))
+        return sum((monto or cero for monto, metodo in partes if metodo == 'efectivo'), cero)
 
     @property
     def pago_mixto_partes(self):
@@ -3630,8 +3653,9 @@ class ArqueoCaja(models.Model):
 
     Se escribe el efectivo que hay físicamente en la caja y se compara con el
     efectivo cobrado ese día según Pagos (mismas reglas que Seguimiento de
-    pago). Los egresos no se restan porque no tienen sede. Un arqueo por día y
-    oficina: si se vuelve a contar, se actualiza con quien lo hizo.
+    pago) menos los egresos pagados en efectivo desde esa oficina ese día. Un
+    arqueo por día y oficina: si se vuelve a contar, se actualiza con quien lo
+    hizo.
     """
 
     SEDES_ARQUEO = [(clave, nombre) for clave, nombre in SEDES if clave in SEDES_EQUIPOS]
@@ -3645,7 +3669,7 @@ class ArqueoCaja(models.Model):
     efectivo_sistema = models.DecimalField(
         max_digits=10, decimal_places=2, default=Decimal('0.00'),
         verbose_name='Efectivo según el sistema',
-        help_text='Efectivo cobrado ese día según Pagos, al momento de guardar el arqueo.',
+        help_text='Efectivo cobrado ese día según Pagos menos los egresos en efectivo de la oficina, al momento de guardar el arqueo.',
     )
     observacion = models.TextField(blank=True, verbose_name='Observación')
     registrado_por = models.ForeignKey(

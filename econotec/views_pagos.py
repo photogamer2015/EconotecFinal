@@ -511,6 +511,9 @@ def seguimiento_pago(request):
     if form_egreso is None:
         # Fecha sugerida: hoy si cae en la semana abierta; si no, el día más cercano de ella.
         inicial = {'fecha': min(max(hoy, lunes), fin_semana(lunes))}
+        if sede in SEDES_EQUIPOS:
+            # Se propone la oficina de la hoja abierta.
+            inicial['sede'] = sede
         if es_asesor(request.user):
             # La asistente de caja aplica sus propios egresos: se propone ella.
             inicial['asesora'] = request.user.pk
@@ -1266,7 +1269,7 @@ def arqueo_caja(request):
 
     Muestra el efectivo cobrado ese día según Pagos y, con POST, guarda lo que
     se contó físicamente. Un arqueo por día y oficina: volver a contar lo
-    actualiza. Los egresos no se restan porque no tienen sede.
+    actualiza. Se restan los egresos pagados en efectivo desde esa oficina.
     """
     from .arqueo import efectivo_del_dia
     from .models import ArqueoCaja

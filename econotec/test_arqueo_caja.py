@@ -9,7 +9,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from .arqueo import efectivo_del_dia
-from .models import Abono, ArqueoCaja, Cliente, IngresoEquipo, SalidaEquipo
+from .models import Abono, ArqueoCaja, CategoriaEgreso, Cliente, Egreso, IngresoEquipo, SalidaEquipo
 from .permisos import GRUPO_ASISTENTE_CAJA
 
 
@@ -119,3 +119,54 @@ class ArqueoCajaTests(TestCase):
         self.assertEqual(self.client.get(self.url).status_code, 200)
         respuesta = self.client.get(reverse('econotec:seguimiento_pago'))
         self.assertContains(respuesta, reverse('econotec:arqueo_caja'))
+
+
+class ArqueoEgresosTests(TestCase):
+    """Los egresos en efectivo de la oficina se restan del efectivo esperado."""
+
+    def setUp(self):
+        self.hoy = timezone.localdate()
+        self.categoria, _ = CategoriaEgreso.objects.get_or_create(nombre='Otros')
+        cliente = Cliente.objects.create(cedula='0911111111', nombres='Ana Paz')
+        IngresoEquipo.objects.create(
+            sede='guayaquil', asesor_comercial='K', fecha_ingreso=self.hoy, cliente=cliente,
+            tipo_equipo='laptop', marca='HP', modelo_serie='X', accesorios_entregados='-',
+            problema_reportado='-', valor_acordado=Decimal('100.00'), estado='ingresado',
+            abono_anticipo=Decimal('100.00'), anticipo_metodo='efectivo',
+        )
+
+    def egreso(self, monto, **datos):
+        base = {'fecha': self.hoy, 'categoria': self.categoria, 'concepto': 'Gasto', 'monto': Decimal(monto),
+                'sede': 'guayaquil', 'metodo': 'efectivo'}
+        base.update(datos)
+        return Egreso.objects.create(**base)
+
+    def test_resta_egresos_en_efectivo_de_la_oficina_y_del_dia(self):
+        self.egreso('15.00')
+        self.egreso('20.00', metodo='mixto', monto_1=Decimal('5.00'), metodo_1='efectivo',
+                    monto_2=Decimal('15.00'), metodo_2='transferencia')
+        # No se restan: transferencia, otra oficina, General, sin oficina (viejos) y otro día.
+        self.egreso('30.00', metodo='transferencia', banco='pichincha')
+        self.egreso('40.00', sede='quito')
+        self.egreso('50.00', sede='general')
+        self.egreso('60.00', sede='')
+        self.egreso('70.00', fecha=self.hoy - timedelta(days=1))
+
+        sistema = efectivo_del_dia(self.hoy, 'guayaquil')
+        self.assertEqual(sistema['cobrado'], Decimal('100.00'))
+        self.assertEqual(sistema['egresos_total'], Decimal('20.00'))
+        self.assertEqual(sistema['efectivo'], Decimal('80.00'))
+        self.assertEqual(len(sistema['egresos']), 2)
+        self.assertEqual(efectivo_del_dia(self.hoy, 'quito')['efectivo'], Decimal('-40.00'))
+
+    def test_arqueo_guardado_cuadra_con_el_egreso_restado(self):
+        self.egreso('15.00', concepto='Pasta térmica')
+        admin = get_user_model().objects.create_superuser(username='jefe', email='jefe@example.com', password='x')
+        self.client.force_login(admin)
+        url = reverse('econotec:arqueo_caja')
+        respuesta = self.client.get(url, {'fecha': self.hoy.isoformat(), 'sede': 'guayaquil'})
+        self.assertContains(respuesta, 'Pasta térmica')
+        self.client.post(url, {'fecha': self.hoy.isoformat(), 'sede': 'guayaquil', 'efectivo_contado': '85'})
+        arqueo = ArqueoCaja.objects.get(fecha=self.hoy, sede='guayaquil')
+        self.assertEqual(arqueo.efectivo_sistema, Decimal('85.00'))
+        self.assertEqual(arqueo.diferencia, Decimal('0.00'))
