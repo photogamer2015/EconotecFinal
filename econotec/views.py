@@ -1618,6 +1618,7 @@ def inventario_registrar(request, sede, categoria, tipo, linea='producto'):
                 codigo=item.codigo, url=reverse('econotec:inventario_detalle_item', args=[item.codigo]),
             )
             messages.success(request, f'Inventario registrado con código {item.codigo}.')
+            programar_sonido(request, 'registro_inventario')
             return redirect(inv_urls['tabla'])
     else:
         form = InventarioItemForm(

@@ -1769,6 +1769,32 @@ class VentasTests(TestCase):
         self.assertContains(tabla, reverse('econotec:inventario_editar', kwargs={'codigo': item.codigo}))
         self.assertContains(tabla, reverse('econotec:inventario_eliminar', kwargs={'codigo': item.codigo}))
 
+    def test_inventario_registrar_suena_moneda_una_sola_vez(self):
+        url = reverse('econotec:inventario_registrar', kwargs={
+            'sede': 'guayaquil',
+            'categoria': 'computadora',
+            'tipo': 'pc',
+        })
+
+        response = self.client.post(url, {
+            'producto': 'CPU completo',
+            'marca': 'HP',
+            'modelo': 'EliteDesk 800',
+            'serie': '',
+            'estado': 'disponible',
+            'causa_no_disponible': '',
+            'cantidad': '1',
+            'costo': '8.75',
+            'ubicacion': 'guayaquil_norte',
+            'observacion': '',
+        })
+
+        self.assertEqual(response.status_code, 302)
+        tabla = self.client.get(response.url)
+        self.assertContains(tabla, 'sonidos/moneda-registro.mp3')
+        recarga = self.client.get(response.url)
+        self.assertNotContains(recarga, 'sonidos/sonidos.js')
+
     def test_inventario_permite_registrar_nombre_marca_y_modelo_duplicados(self):
         existente = InventarioItem.objects.create(
             sede='guayaquil',
@@ -11514,7 +11540,7 @@ class VentasTests(TestCase):
         )
 
         menu = self.client.get(response.url)
-        self.assertContains(menu, 'sonidos/tetris-registro.mp3')
+        self.assertContains(menu, 'sonidos/moneda-registro.mp3')
 
         recarga = self.client.get(response.url)
         self.assertNotContains(recarga, 'sonidos/sonidos.js')
