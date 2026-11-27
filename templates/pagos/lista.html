@@ -59,6 +59,31 @@
         font-weight: 900; letter-spacing: -.03em; line-height: 1.1; margin: 0;
     }
     .pay-day-count { color: var(--primary); font-size: 12px; font-weight: 800; margin: 2px 0 0; }
+    button.pay-day-card { cursor: pointer; font: inherit; text-align: left; width: 100%; }
+    button.pay-day-card:hover { border-color: var(--primary); }
+    button.pay-day-card:focus-visible { outline: 3px solid var(--primary); outline-offset: 2px; }
+    button.pay-day-card[aria-expanded="true"] { border-color: var(--primary); background: #fff4ea; }
+    .pay-day-ver { color: var(--text-muted); font-size: 11.5px; font-weight: 700; margin-top: 4px; }
+    button.pay-day-card[aria-expanded="true"] .pay-day-ver { color: var(--primary); }
+    .pay-detalle {
+        background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 12px;
+        box-shadow: var(--shadow); margin-top: 12px; padding: 14px 16px;
+    }
+    .pay-detalle-head {
+        display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between;
+        gap: 6px 16px; margin-bottom: 10px; color: var(--text-main); font-size: 13.5px;
+    }
+    .pay-detalle-metodos { color: var(--text-muted); font-size: 12.5px; }
+    .pay-detalle-metodos b { color: var(--text-main); font-variant-numeric: tabular-nums; }
+    .pay-detalle-tabla { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .pay-detalle-tabla th, .pay-detalle-tabla td {
+        border-bottom: 1px solid var(--border-color); padding: 7px 8px; text-align: left; white-space: nowrap;
+    }
+    .pay-detalle-tabla th { color: var(--text-muted); font-size: 11.5px; text-transform: uppercase; letter-spacing: .03em; }
+    .pay-detalle-tabla .num { text-align: right; font-variant-numeric: tabular-nums; font-weight: 800; }
+    .pay-detalle-vacio { color: var(--text-muted); font-size: 13px; margin: 0; }
+    [data-theme="dark"] button.pay-day-card[aria-expanded="true"] { background: #3d4a45; }
+    [data-theme="dark"] .pay-detalle { background: #334645; border-color: #4d615e; }
     [data-theme="dark"] .pay-summary-icon { background: #6b4426; color: #ffc496; }
     [data-theme="dark"] .pay-day-card { background: #334645; border-color: #4d615e; border-left-color: var(--primary); }
     [data-theme="dark"] .pay-day-label { color: #b9c8c3; }
@@ -114,19 +139,96 @@
     </header>
     <div class="pay-day-summary">
         {% for dia in resumen_pagos_dia %}
+        {% if dia.metodos %}
+        <button type="button" class="pay-day-card" data-pay-detalle="pay-detalle-{{ dia.clave }}"
+                aria-expanded="false" aria-controls="pay-detalle-{{ dia.clave }}">
+        {% else %}
         <article class="pay-day-card">
-            <p class="pay-day-label">{{ dia.etiqueta }} · {{ dia.periodo }}</p>
+        {% endif %}
+            <span class="pay-day-label">{{ dia.etiqueta }} · {{ dia.periodo }}</span>
             {% if resumen_pagos_con_dinero %}
-            <p class="pay-day-value">{{ dia.total|dinero_signo }}</p>
-            <p class="pay-day-count">{{ dia.pagos }} pago{{ dia.pagos|pluralize }}</p>
+            <span class="pay-day-value">{{ dia.total|dinero_signo }}</span>
+            <span class="pay-day-count">{{ dia.pagos }} pago{{ dia.pagos|pluralize }}</span>
             {% else %}
-            <p class="pay-day-value">{{ dia.pagos }}</p>
-            <p class="pay-day-count">pago{{ dia.pagos|pluralize }}</p>
+            <span class="pay-day-value">{{ dia.pagos }}</span>
+            <span class="pay-day-count">pago{{ dia.pagos|pluralize }}</span>
             {% endif %}
+        {% if dia.metodos %}
+            <span class="pay-day-ver">Ver de dónde sale ▾</span>
+        </button>
+        {% else %}
         </article>
+        {% endif %}
         {% endfor %}
     </div>
+    {% for dia in resumen_pagos_dia %}{% if dia.metodos %}
+    {# Detalle de la tarjeta: cada pago del periodo, el más reciente primero. #}
+    <div class="pay-detalle" id="pay-detalle-{{ dia.clave }}" hidden>
+        <div class="pay-detalle-head">
+            <strong>{{ dia.etiqueta }} · {{ dia.periodo }} — {{ dia.pagos }} pago{{ dia.pagos|pluralize }}</strong>
+            {% if resumen_pagos_con_dinero %}
+            <span class="pay-detalle-metodos">
+                Efectivo <b>{{ dia.metodos.efectivo|dinero_signo }}</b>
+                · Transferencia <b>{{ dia.metodos.transferencia|dinero_signo }}</b>
+                · Tarjeta / Payphone <b>{{ dia.metodos.tarjeta|dinero_signo }}</b>
+                {% if dia.metodos.otros %}· Otros <b>{{ dia.metodos.otros|dinero_signo }}</b>{% endif %}
+            </span>
+            {% endif %}
+        </div>
+        {% if dia.detalle %}
+        <div class="table-wrap">
+        <table class="pay-detalle-tabla">
+            <thead>
+                <tr>
+                    <th>Fecha</th>
+                    <th>{% if modo == 'ventas' %}Venta{% else %}Equipo{% endif %}</th>
+                    <th>Cliente</th>
+                    <th>Oficina</th>
+                    <th>Concepto</th>
+                    <th>Forma de pago</th>
+                    {% if resumen_pagos_con_dinero %}<th class="num">Monto</th>{% endif %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for pago in dia.detalle %}
+                <tr>
+                    <td>{{ pago.dia }}{% if pago.hora %} · {{ pago.hora|time:"H:i" }}{% endif %}</td>
+                    <td><a href="{% url 'econotec:ingreso_abonos' pk=pago.ingreso_pk %}">{{ pago.codigo }}</a></td>
+                    <td>{{ pago.cliente }}</td>
+                    <td>{{ pago.oficina }}</td>
+                    <td>{{ pago.concepto }}</td>
+                    <td>{{ pago.metodo }}</td>
+                    {% if resumen_pagos_con_dinero %}<td class="num">{{ pago.monto|dinero_signo }}</td>{% endif %}
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        </div>
+        {% else %}
+        <p class="pay-detalle-vacio">No hay pagos en este periodo.</p>
+        {% endif %}
+    </div>
+    {% endif %}{% endfor %}
 </section>
+<script>
+(function () {
+    /* Al tocar una tarjeta se abre su detalle; tocarla otra vez lo cierra. */
+    var tarjetas = document.querySelectorAll('[data-pay-detalle]');
+    tarjetas.forEach(function (tarjeta) {
+        tarjeta.addEventListener('click', function () {
+            var abrir = tarjeta.getAttribute('aria-expanded') !== 'true';
+            tarjetas.forEach(function (otra) {
+                otra.setAttribute('aria-expanded', 'false');
+                document.getElementById(otra.getAttribute('data-pay-detalle')).hidden = true;
+            });
+            if (abrir) {
+                tarjeta.setAttribute('aria-expanded', 'true');
+                document.getElementById(tarjeta.getAttribute('data-pay-detalle')).hidden = false;
+            }
+        });
+    });
+})();
+</script>
 {% endif %}
 
 

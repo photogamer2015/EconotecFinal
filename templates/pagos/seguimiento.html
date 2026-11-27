@@ -104,6 +104,30 @@
     }
     .sp-filtro-aviso a { color: inherit; font-weight: 800; }
 
+    .sp-hoy {
+        display: flex; flex-wrap: wrap; align-items: stretch; gap: 10px;
+        margin: 14px 0 12px; padding: 12px 14px;
+        background: var(--card-bg); border: 1px solid var(--border-color);
+        border-left: 5px solid #f59e0b; border-radius: 12px; box-shadow: var(--shadow);
+    }
+    .sp-hoy-titulo { display: flex; flex-direction: column; justify-content: center; gap: 2px; margin-right: 8px; min-width: 170px; }
+    .sp-hoy-titulo strong { color: var(--text-main); font-size: 14px; }
+    .sp-hoy-titulo span { color: var(--text-muted); font-size: 12px; font-weight: 600; }
+    .sp-hoy-item {
+        display: flex; flex-direction: column; gap: 2px; flex: 1 1 130px;
+        padding: 6px 12px; border-radius: 10px; background: var(--bg-soft, rgba(0,0,0,.035));
+    }
+    .sp-hoy-item .lbl { color: var(--text-muted); font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .3px; }
+    .sp-hoy-item b { color: var(--text-main); font-size: 19px; font-weight: 800; font-variant-numeric: tabular-nums; }
+    .sp-hoy-item.is-total b { color: var(--success); }
+    .sp-hoy-item.is-efectivo b { color: #0f766e; }
+    .sp-hoy-item.is-transferencia b { color: #1565c0; }
+    .sp-hoy-item.is-tarjeta b { color: #7e22ce; }
+    [data-theme="dark"] .sp-hoy-item { background: rgba(255,255,255,.05); }
+    [data-theme="dark"] .sp-hoy-item.is-efectivo b { color: #5eead4; }
+    [data-theme="dark"] .sp-hoy-item.is-transferencia b { color: #93c5fd; }
+    [data-theme="dark"] .sp-hoy-item.is-tarjeta b { color: #d8b4fe; }
+
     .sp-resumen {
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
@@ -662,13 +686,28 @@
         </nav>
         <a class="btn btn-success sp-excel" href="{% url 'econotec:seguimiento_pago_excel' %}?semana={{ lunes|date:'Y-m-d' }}{% if filtros_qs %}&amp;{{ filtros_qs }}{% endif %}"
            title="Descarga en Excel los pagos de esta semana con los filtros elegidos">📥 Descargar Excel de la semana</a>
-        <a class="btn btn-secondary" href="{% url 'econotec:arqueo_caja' %}{% if sede %}?sede={{ sede }}{% endif %}"
+        <a class="btn btn-secondary" href="{% url 'econotec:arqueo_caja' %}?sede={% if sede %}{{ sede }}{% else %}todas{% endif %}"
            title="Cuenta el efectivo de la caja y compáralo con lo cobrado en efectivo">💰 Arqueo de caja</a>
     </div>
     {% if forma_pago %}
     <p class="sp-filtro-aviso">Mostrando solo los pagos en <strong>{{ forma_pago_nombre }}</strong>. De un pago mixto se muestra solo esa parte. <a href="?semana={{ lunes|date:'Y-m-d' }}&amp;tipo={{ tipo }}{% if sede %}&amp;sede={{ sede }}{% endif %}">Ver todas las formas de pago</a></p>
     {% endif %}
 </div>
+
+{# Franja «Hoy»: lo cobrado hoy, con la oficina y la vista elegidas. Vuelve a cero cada día. #}
+<section class="sp-hoy" aria-label="Ingresos de hoy">
+    <div class="sp-hoy-titulo">
+        <strong>☀️ Ingresos de hoy</strong>
+        <span>{{ hoy_texto|capfirst }}{% if sede %} · {% if sede == 'guayaquil' %}Guayaquil{% else %}Quito{% endif %}{% endif %} · {{ hoy_metodos.pagos }} pago{{ hoy_metodos.pagos|pluralize }}</span>
+    </div>
+    <div class="sp-hoy-item is-total"><span class="lbl">Total de hoy</span><b>{{ hoy_metodos.total|dinero_signo }}</b></div>
+    <div class="sp-hoy-item is-efectivo"><span class="lbl">💵 Efectivo</span><b>{{ hoy_metodos.efectivo|dinero_signo }}</b></div>
+    <div class="sp-hoy-item is-transferencia"><span class="lbl">🏦 Transferencia</span><b>{{ hoy_metodos.transferencia|dinero_signo }}</b></div>
+    <div class="sp-hoy-item is-tarjeta"><span class="lbl">💳 Tarjeta / Payphone</span><b>{{ hoy_metodos.tarjeta|dinero_signo }}</b></div>
+    {% if hoy_metodos.otros %}
+    <div class="sp-hoy-item is-otros"><span class="lbl">Otros</span><b>{{ hoy_metodos.otros|dinero_signo }}</b></div>
+    {% endif %}
+</section>
 
 <div class="sp-resumen">
     <div class="sp-card is-total">

@@ -573,6 +573,58 @@ def cobros_del_periodo(desde, hasta, sede='', tipo=EQUIPO):
     return {'total': total, 'pagos': pagos}
 
 
+def cobros_detallados(desde, hasta, sede='', tipo=EQUIPO):
+    """Cada pago entre `desde` y `hasta` (incluidos), del más antiguo al más nuevo.
+
+    Mismas reglas que `cobros_del_periodo`, así la lista suma lo mismo que la
+    tarjeta: sirve para ver de dónde sale cada valor. Cada fila trae el equipo
+    o venta, su oficina, el concepto, la forma de pago y sus partes (un mixto
+    se separa en sus dos métodos).
+    """
+    rango = (desde, hasta)
+    ingresos = (
+        ingresos_de_seguimiento(sede, tipo)
+        .filter(Q(fecha_ingreso__range=rango) | Q(abonos__fecha__range=rango) | Q(salida__fecha_salida__range=rango))
+        .distinct()
+        .select_related('cliente', 'salida')
+        .prefetch_related('abonos')
+    )
+    filas = []
+    for ingreso in ingresos:
+        es_venta = ingreso.sede == SEDE_VENTAS
+        for cobro in _cobros_del_equipo(ingreso, desde, hasta):
+            filas.append({
+                'ingreso_pk': ingreso.pk,
+                'codigo': ingreso.codigo_equipo,
+                'cliente': ingreso.cliente.nombres,
+                'es_venta': es_venta,
+                'sede': ingreso.sede,
+                'oficina': 'Venta de producto' if es_venta else ingreso.get_sede_display(),
+                'concepto': cobro['concepto'],
+                'fecha': cobro['fecha'],
+                'dia': cobro['dia'],
+                'hora': cobro['hora'],
+                'monto': cobro['monto'],
+                'partes': cobro['partes'],
+                'metodo': ' + '.join(p['etiqueta'] for p in cobro['partes']),
+                'orden': cobro['orden'],
+            })
+    filas.sort(key=lambda fila: fila['orden'])
+    return filas
+
+
+def totales_por_metodo(filas):
+    """{'total', 'pagos', 'efectivo', 'transferencia', 'tarjeta', 'otros'} de unas filas
+    de `cobros_detallados`; los mixtos suman cada parte en su método."""
+    totales = {'total': CERO, 'pagos': len(filas), 'efectivo': CERO, 'transferencia': CERO, 'tarjeta': CERO, OTROS: CERO}
+    for fila in filas:
+        totales['total'] += fila['monto']
+        for parte in fila['partes']:
+            clave = parte['metodo'] if parte['metodo'] in totales else OTROS
+            totales[clave] += parte['monto']
+    return totales
+
+
 def pestanas_semanas(totales, actual, seleccionada, tipo=EQUIPO):
     """Una pestaña por semana con pagos (más la actual y la abierta), de la más
     nueva a la más antigua, y las mismas agrupadas por mes para el menú."""

@@ -20,6 +20,10 @@
     .aq-form input, .aq-form textarea { width: 100%; box-sizing: border-box; padding: 10px 12px; border: 1px solid var(--input-border); border-radius: var(--radius-sm); background: var(--card-bg); color: var(--text-main); font: inherit; }
     .aq-form input { font-size: 20px; font-weight: 800; }
     .aq-error { padding: 10px 12px; border-radius: var(--radius-sm); background: var(--tint-red-bg); color: var(--tint-red-fg); font-weight: 700; font-size: 13px; }
+    .aq-oficinas { list-style: none; margin: 8px 0 10px; padding: 0; display: grid; gap: 10px; }
+    .aq-oficinas li { border: 1px solid var(--border-color); border-radius: 10px; padding: 10px 12px; display: grid; gap: 6px; }
+    .aq-oficina-cab { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+    .aq-oficinas .btn { justify-self: start; }
     .aq-resultado { display: inline-block; margin-top: 8px; padding: 4px 12px; border-radius: 999px; font-weight: 900; font-size: 14px; }
     .aq-resultado.is-cuadra { background: var(--tint-green-bg); color: var(--tint-green-fg); }
     .aq-resultado.is-sobra { background: var(--tint-amber-bg); color: var(--tint-amber-fg); }
@@ -57,7 +61,7 @@
         <h3 id="aq-sistema">🧾 Efectivo según el sistema</h3>
         <div class="aq-monto">{{ sistema.efectivo|dinero_signo }}</div>
         <p class="aq-nota">
-            Cobrado en efectivo el {{ fecha_texto }}{% if es_hoy %} (hoy){% endif %} en {% for clave, nombre in sedes %}{% if clave == sede %}{{ nombre }}{% endif %}{% endfor %}:
+            Cobrado en efectivo el {{ fecha_texto }}{% if es_hoy %} (hoy){% endif %} en {{ sede_nombre }}:
             {{ sistema.cobros_efectivo|length }} cobro{{ sistema.cobros_efectivo|length|pluralize }} en efectivo
             por {{ sistema.cobrado|dinero_signo }}, menos {{ sistema.egresos|length }} egreso{{ sistema.egresos|length|pluralize }}
             en efectivo por {{ sistema.egresos_total|dinero_signo }}.
@@ -67,6 +71,35 @@
         </div>
     </section>
 
+    {% if es_todas %}
+    {# «Todas»: solo consulta. El arqueo se cuenta y se guarda en cada oficina. #}
+    <section class="aq-caja" aria-labelledby="aq-oficinas">
+        <h3 id="aq-oficinas">💵 Arqueo de cada oficina</h3>
+        <ul class="aq-oficinas">
+            {% for o in oficinas %}
+            <li>
+                <div class="aq-oficina-cab">
+                    <strong>{{ o.nombre }}</strong>
+                    <span class="aq-nota">Sistema: <b>{{ o.sistema.efectivo|dinero_signo }}</b></span>
+                </div>
+                {% if o.arqueo %}
+                <div>
+                    Contado <b>{{ o.arqueo.efectivo_contado|dinero_signo }}</b>
+                    {% if o.arqueo.diferencia == 0 %}<span class="aq-resultado is-cuadra">✓ Cuadra</span>
+                    {% elif o.arqueo.diferencia > 0 %}<span class="aq-resultado is-sobra">Sobran {{ o.arqueo.diferencia|dinero_signo }}</span>
+                    {% else %}<span class="aq-resultado is-falta">Faltan {{ o.arqueo.diferencia|dinero_signo|cut:"-" }}</span>{% endif %}
+                    {% if o.sistema_cambio %}<div class="aq-aviso">El efectivo del sistema cambió desde el arqueo. Vuelve a contar en {{ o.nombre }}.</div>{% endif %}
+                </div>
+                {% else %}
+                <div class="aq-nota">Sin arqueo ese día.</div>
+                {% endif %}
+                <a class="btn btn-secondary btn-sm" href="?fecha={{ fecha|date:'Y-m-d' }}&amp;sede={{ o.sede }}">{% if o.arqueo %}Ver o volver a contar{% else %}Contar {{ o.nombre }}{% endif %}</a>
+            </li>
+            {% endfor %}
+        </ul>
+        <p class="aq-nota">El arqueo no es obligatorio. Para guardarlo, elige la oficina: cada caja se cuenta por separado.</p>
+    </section>
+    {% else %}
     <section class="aq-caja" aria-labelledby="aq-contado">
         <h3 id="aq-contado">💵 Efectivo contado en la caja</h3>
         {% if arqueo %}
@@ -105,19 +138,21 @@
             <button type="submit" class="btn btn-primary">{% if arqueo %}Actualizar arqueo{% else %}Guardar arqueo{% endif %}</button>
         </form>
     </section>
+    {% endif %}
 </div>
 
 <h3 class="aq-seccion">Cobros en efectivo del día</h3>
 {% if sistema.cobros_efectivo %}
 <div class="table-wrap">
     <table>
-        <thead><tr><th>Hora</th><th>Equipo</th><th>Cliente</th><th>Concepto</th><th>Método</th><th class="aq-dinero">En efectivo</th></tr></thead>
+        <thead><tr><th>Hora</th><th>Equipo</th><th>Cliente</th>{% if es_todas %}<th>Oficina</th>{% endif %}<th>Concepto</th><th>Método</th><th class="aq-dinero">En efectivo</th></tr></thead>
         <tbody>
             {% for c in sistema.cobros_efectivo %}
             <tr>
                 <td>{{ c.hora|date:"H:i"|default:"—" }}</td>
                 <td><strong>{{ c.codigo }}</strong></td>
                 <td>{{ c.cliente }}</td>
+                {% if es_todas %}<td>{{ c.oficina }}</td>{% endif %}
                 <td>{{ c.concepto }}</td>
                 <td>{{ c.metodo }}</td>
                 <td class="aq-dinero">{{ c.efectivo|dinero_signo }}</td>
@@ -127,18 +162,19 @@
     </table>
 </div>
 {% else %}
-<p class="aq-nota">No hay cobros en efectivo ese día en esta oficina.</p>
+<p class="aq-nota">No hay cobros en efectivo ese día en {% if es_todas %}ninguna oficina{% else %}esta oficina{% endif %}.</p>
 {% endif %}
 
 <h3 class="aq-seccion">Egresos en efectivo del día</h3>
 {% if sistema.egresos %}
 <div class="table-wrap">
     <table>
-        <thead><tr><th>Categoría</th><th>Concepto</th><th>Método</th><th class="aq-dinero">En efectivo</th></tr></thead>
+        <thead><tr><th>Categoría</th>{% if es_todas %}<th>Oficina</th>{% endif %}<th>Concepto</th><th>Método</th><th class="aq-dinero">En efectivo</th></tr></thead>
         <tbody>
             {% for e in sistema.egresos %}
             <tr>
                 <td>{{ e.categoria.icono }} {{ e.categoria.nombre }}</td>
+                {% if es_todas %}<td>{{ e.get_sede_display }}</td>{% endif %}
                 <td>{{ e.concepto }}</td>
                 <td>{{ e.forma_pago_texto }}</td>
                 <td class="aq-dinero">{{ e.monto_efectivo|dinero_signo }}</td>
@@ -148,18 +184,19 @@
     </table>
 </div>
 {% else %}
-<p class="aq-nota">No hay egresos en efectivo ese día en esta oficina. Los egresos «General» o sin oficina no se restan.</p>
+<p class="aq-nota">No hay egresos en efectivo ese día en {% if es_todas %}ninguna oficina{% else %}esta oficina{% endif %}. Los egresos «General» o sin oficina no se restan.</p>
 {% endif %}
 
-<h3 class="aq-seccion">Últimos arqueos de esta oficina</h3>
+<h3 class="aq-seccion">Últimos arqueos {% if es_todas %}de las dos oficinas{% else %}de esta oficina{% endif %}</h3>
 {% if historial %}
 <div class="table-wrap">
     <table>
-        <thead><tr><th>Día</th><th class="aq-dinero">Sistema</th><th class="aq-dinero">Contado</th><th class="aq-dinero">Diferencia</th><th>Contó</th><th>Observación</th></tr></thead>
+        <thead><tr><th>Día</th>{% if es_todas %}<th>Oficina</th>{% endif %}<th class="aq-dinero">Sistema</th><th class="aq-dinero">Contado</th><th class="aq-dinero">Diferencia</th><th>Contó</th><th>Observación</th></tr></thead>
         <tbody>
             {% for a in historial %}
             <tr>
                 <td><a href="?fecha={{ a.fecha|date:'Y-m-d' }}&amp;sede={{ a.sede }}">{{ a.fecha|date:"d/m/Y" }}</a></td>
+                {% if es_todas %}<td>{{ a.get_sede_display }}</td>{% endif %}
                 <td class="aq-dinero">{{ a.efectivo_sistema|dinero_signo }}</td>
                 <td class="aq-dinero">{{ a.efectivo_contado|dinero_signo }}</td>
                 <td class="aq-dinero">{% if a.diferencia == 0 %}<span class="aq-resultado is-cuadra">Cuadra</span>{% elif a.diferencia > 0 %}<span class="aq-resultado is-sobra">+{{ a.diferencia|dinero_signo }}</span>{% else %}<span class="aq-resultado is-falta">−{{ a.diferencia|dinero_signo|cut:"-" }}</span>{% endif %}</td>
@@ -171,6 +208,6 @@
     </table>
 </div>
 {% else %}
-<p class="aq-nota">Todavía no hay arqueos guardados en esta oficina.</p>
+<p class="aq-nota">Todavía no hay arqueos guardados {% if es_todas %}en ninguna oficina{% else %}en esta oficina{% endif %}.</p>
 {% endif %}
 {% endblock %}
