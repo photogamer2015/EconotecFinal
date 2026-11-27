@@ -170,3 +170,66 @@ class ArqueoEgresosTests(TestCase):
         arqueo = ArqueoCaja.objects.get(fecha=self.hoy, sede='guayaquil')
         self.assertEqual(arqueo.efectivo_sistema, Decimal('85.00'))
         self.assertEqual(arqueo.diferencia, Decimal('0.00'))
+
+
+class ArqueoEnRegistroAdministrativoTests(TestCase):
+    """El Registro Administrativo muestra el arqueo de hoy con los mismos números que la página de Arqueo."""
+
+    setUp = ArqueoCajaTests.setUp
+    ingreso = ArqueoCajaTests.ingreso
+    escenario = ArqueoCajaTests.escenario
+
+    def dashboard(self, usuario=None):
+        self.client.force_login(usuario or self.admin)
+        return self.client.get(reverse('econotec:admin_dashboard'),
+                               {'ano': self.hoy.year, 'mes': self.hoy.month})
+
+    def test_mismos_numeros_que_la_pagina_de_arqueo(self):
+        self.escenario()
+        Egreso.objects.create(fecha=self.hoy, categoria=CategoriaEgreso.objects.get_or_create(nombre='Otros')[0],
+                              concepto='Pasta', monto=Decimal('5.00'), sede='guayaquil', metodo='efectivo')
+        respuesta = self.dashboard()
+        oficinas = {o['sede']: o for o in respuesta.context['arqueos_hoy']}
+        self.assertEqual(list(oficinas), ['guayaquil', 'quito'])
+        pagina = self.client.get(self.url, {'fecha': self.hoy.isoformat(), 'sede': 'guayaquil'})
+        for sede, esperado in (('guayaquil', Decimal('40.00')), ('quito', Decimal('40.00'))):
+            with self.subTest(sede=sede):
+                self.assertEqual(oficinas[sede]['sistema']['efectivo'], esperado)
+                self.assertEqual(oficinas[sede]['sistema']['efectivo'], efectivo_del_dia(self.hoy, sede)['efectivo'])
+        self.assertEqual(oficinas['guayaquil']['sistema']['cobrado'], Decimal('45.00'))
+        self.assertEqual(oficinas['guayaquil']['sistema']['egresos_total'], Decimal('5.00'))
+        self.assertEqual(pagina.context['sistema']['efectivo'], oficinas['guayaquil']['sistema']['efectivo'])
+        self.assertContains(respuesta, 'Arqueo de caja de hoy')
+        self.assertContains(respuesta, 'Contar la caja de Guayaquil')
+        self.assertContains(respuesta, '$40,00')
+
+    def test_muestra_el_arqueo_guardado_y_el_aviso_si_cambio(self):
+        uno, _dos = self.escenario()
+        self.client.force_login(self.caja)
+        self.client.post(self.url, {'fecha': self.hoy.isoformat(), 'sede': 'guayaquil', 'efectivo_contado': '40'})
+        respuesta = self.dashboard()
+        self.assertContains(respuesta, 'Faltan $5,00')
+        self.assertEqual([a.sede for a in respuesta.context['arqueos_mes']], ['guayaquil'])
+        self.assertNotContains(respuesta, 'Hay que volver a contar')
+
+        Abono.objects.create(ingreso=uno, fecha=self.hoy, monto=Decimal('5.00'), metodo='efectivo')
+        respuesta = self.dashboard()
+        guayaquil = respuesta.context['arqueos_hoy'][0]
+        self.assertTrue(guayaquil['sistema_cambio'])
+        self.assertEqual(guayaquil['sistema']['efectivo'], Decimal('50.00'))
+        self.assertContains(respuesta, 'Hay que volver a contar')
+
+    def test_secciones_en_orden_y_arqueo_junto_a_la_caja_fuerte(self):
+        html = self.dashboard().content.decode()
+        orden = ['id="seccion-dinero"', 'id="seccion-caja"', 'id="arqueo-admin"', 'id="historico-mensual"',
+                 'id="seccion-equipos"', 'id="seccion-tecnicos"', 'id="resumen-tecnicos"', 'id="ranking-admin"',
+                 'id="ingresos-tecnicos"', 'id="salidas-fisicas-admin"', 'id="seccion-personal"',
+                 'id="seccion-mantenimiento"']
+        posiciones = [html.index(marca) for marca in orden]
+        self.assertEqual(posiciones, sorted(posiciones))
+
+    def test_admin_que_tambien_es_tecnico_ve_el_arqueo_pero_no_la_caja_fuerte(self):
+        self.admin.groups.add(Group.objects.get_or_create(name='Tecnicos')[0])
+        respuesta = self.dashboard()
+        self.assertContains(respuesta, 'id="arqueo-admin"')
+        self.assertNotContains(respuesta, 'id="historico-mensual"')

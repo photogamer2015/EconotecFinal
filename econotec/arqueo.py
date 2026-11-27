@@ -14,7 +14,7 @@ from decimal import Decimal
 
 from django.db.models import Q
 
-from .models import Egreso
+from .models import ArqueoCaja, Egreso
 from .seguimiento_pago import TOTAL, _cobros_del_equipo, ingresos_de_seguimiento
 
 CERO = Decimal('0.00')
@@ -91,4 +91,21 @@ def efectivo_del_dia(fecha, sede):
         ],
         'total': sum((fila['monto'] for fila in filas), CERO),
         'cobros': len(filas),
+    }
+
+
+def estado_arqueo(fecha, sede):
+    """Efectivo según el sistema y el arqueo guardado de una oficina ese día.
+
+    'sistema_cambio' avisa que un pago o egreso cambió después de contar.
+    Lo usan la página de Arqueo de caja y el Registro Administrativo.
+    """
+    sistema = efectivo_del_dia(fecha, sede)
+    arqueo = ArqueoCaja.objects.filter(fecha=fecha, sede=sede).select_related('registrado_por').first()
+    return {
+        'sede': sede,
+        'nombre': dict(ArqueoCaja.SEDES_ARQUEO).get(sede, sede.title()),
+        'sistema': sistema,
+        'arqueo': arqueo,
+        'sistema_cambio': arqueo is not None and arqueo.efectivo_sistema != sistema['efectivo'],
     }
