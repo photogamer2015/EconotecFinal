@@ -2678,7 +2678,7 @@ class EgresoForm(forms.ModelForm):
     class Meta:
         model = Egreso
         fields = [
-            'fecha', 'categoria', 'concepto', 'asesora', 'monto', 'notas',
+            'fecha', 'sede', 'categoria', 'concepto', 'asesora', 'monto', 'notas',
             'metodo', 'banco', 'banco_otro', 'tarjeta_app', 'comprobante_url', 'numero_recibo',
             'monto_1', 'metodo_1', 'banco_1', 'banco_otro_1', 'tarjeta_app_1',
             'monto_2', 'metodo_2', 'banco_2', 'banco_otro_2', 'tarjeta_app_2',
@@ -2686,6 +2686,7 @@ class EgresoForm(forms.ModelForm):
         ]
         widgets = {
             'fecha': forms.DateInput(attrs={'class': 'form-input', 'type': 'date'}),
+            'sede': forms.Select(attrs={'class': 'form-input'}),
             'categoria': forms.Select(attrs={'class': 'form-input'}),
             'concepto': forms.TextInput(attrs={
                 'class': 'form-input',
@@ -2738,6 +2739,7 @@ class EgresoForm(forms.ModelForm):
         self.fields['categoria'].empty_label = '— Selecciona categoría —'
         _campo_asesora(self.fields['asesora'], self.instance.asesora_id)
         self.fields['asesora'].empty_label = '— Ninguna —'
+        _campo_oficina(self.fields['sede'])
 
     def clean(self):
         cleaned = super().clean()
@@ -2815,6 +2817,16 @@ def _limpiar_pago_egreso(egreso):
             setattr(egreso, f'tarjeta_app_{n}', '')
 
 
+def _campo_oficina(campo):
+    """Oficina del egreso: obligatoria (Guayaquil, Quito o General).
+
+    En el modelo puede quedar vacía solo por los egresos viejos.
+    """
+    campo.required = True
+    campo.choices = [('', '— Selecciona la oficina —'), *Egreso.SEDES_EGRESO]
+    campo.error_messages['required'] = 'Elige la oficina de la que salió el dinero.'
+
+
 def _campo_asesora(campo, actual_id=None):
     """Lista de asesoras activas (y la ya guardada, aunque ya no esté activa)."""
     asesoras = Q(is_active=True, groups__name__in=GRUPOS_ASESOR_COMERCIAL)
@@ -2878,7 +2890,7 @@ class EgresoSeguimientoForm(forms.ModelForm):
     class Meta:
         model = Egreso
         fields = [
-            'fecha', 'concepto', 'asesora', 'categoria', 'monto',
+            'fecha', 'sede', 'concepto', 'asesora', 'categoria', 'monto',
             'compra_tipo_equipo', 'compra_tipo_equipo_otro',
             'metodo', 'banco', 'banco_otro', 'tarjeta_app', 'comprobante_url',
             'monto_1', 'metodo_1', 'banco_1', 'banco_otro_1', 'tarjeta_app_1',
@@ -2914,6 +2926,7 @@ class EgresoSeguimientoForm(forms.ModelForm):
         }
         widgets = {
             'fecha': forms.DateInput(attrs={'class': 'form-input', 'type': 'date'}, format='%Y-%m-%d'),
+            'sede': forms.Select(attrs={'class': 'form-input'}),
             'concepto': forms.TextInput(attrs={
                 'class': 'form-input', 'placeholder': 'Ej.: Pasta térmica, cable HDMI…', 'maxlength': 200,
             }),
@@ -2962,6 +2975,7 @@ class EgresoSeguimientoForm(forms.ModelForm):
         categorias = list(qs_categorias)
         self.fields['categoria'].queryset = qs_categorias
         self.fields['categoria'].empty_label = '— Selecciona categoría —'
+        _campo_oficina(self.fields['sede'])
         # Para mostrar los campos de cada categoría en el navegador.
         self.categorias_repuestos = [c.pk for c in categorias if c.es_repuestos]
         self.categorias_compra = [c.pk for c in categorias if c.es_compra_equipo]

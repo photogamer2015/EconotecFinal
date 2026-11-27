@@ -37,7 +37,7 @@
 </div>
 <h2 class="page-title">💰 Arqueo de <span class="accent">caja</span></h2>
 <p class="page-subtitle">
-    Cuenta el efectivo de la caja al cerrar el día y compáralo con lo cobrado en efectivo según Pagos.
+    Cuenta el efectivo de la caja al cerrar el día y compáralo con lo cobrado en efectivo según Pagos, menos los egresos pagados en efectivo.
 </p>
 
 <form method="get" class="aq-filtros" aria-label="Elegir día y oficina">
@@ -58,8 +58,9 @@
         <div class="aq-monto">{{ sistema.efectivo|dinero_signo }}</div>
         <p class="aq-nota">
             Cobrado en efectivo el {{ fecha_texto }}{% if es_hoy %} (hoy){% endif %} en {% for clave, nombre in sedes %}{% if clave == sede %}{{ nombre }}{% endif %}{% endfor %}:
-            {{ sistema.cobros_efectivo|length }} cobro{{ sistema.cobros_efectivo|length|pluralize }} en efectivo.
-            Los egresos no se restan porque no tienen oficina.
+            {{ sistema.cobros_efectivo|length }} cobro{{ sistema.cobros_efectivo|length|pluralize }} en efectivo
+            por {{ sistema.cobrado|dinero_signo }}, menos {{ sistema.egresos|length }} egreso{{ sistema.egresos|length|pluralize }}
+            en efectivo por {{ sistema.egresos_total|dinero_signo }}.
         </p>
         <div class="aq-metodos" aria-label="Todo lo cobrado ese día por método">
             {% for m in sistema.por_metodo %}<span>{{ m.nombre }}: <b>{{ m.monto|dinero_signo }}</b></span>{% endfor %}
@@ -86,7 +87,7 @@
             {% if sistema_cambio %}
             <div class="aq-aviso">
                 El efectivo del sistema cambió desde el arqueo: ahora es {{ sistema.efectivo|dinero_signo }}
-                (se registró o corrigió un pago después). Vuelve a contar para actualizarlo.
+                (se registró o corrigió un pago o un egreso después). Vuelve a contar para actualizarlo.
             </div>
             {% endif %}
         {% endif %}
@@ -127,6 +128,27 @@
 </div>
 {% else %}
 <p class="aq-nota">No hay cobros en efectivo ese día en esta oficina.</p>
+{% endif %}
+
+<h3 class="aq-seccion">Egresos en efectivo del día</h3>
+{% if sistema.egresos %}
+<div class="table-wrap">
+    <table>
+        <thead><tr><th>Categoría</th><th>Concepto</th><th>Método</th><th class="aq-dinero">En efectivo</th></tr></thead>
+        <tbody>
+            {% for e in sistema.egresos %}
+            <tr>
+                <td>{{ e.categoria.icono }} {{ e.categoria.nombre }}</td>
+                <td>{{ e.concepto }}</td>
+                <td>{{ e.forma_pago_texto }}</td>
+                <td class="aq-dinero">{{ e.monto_efectivo|dinero_signo }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<p class="aq-nota">No hay egresos en efectivo ese día en esta oficina. Los egresos «General» o sin oficina no se restan.</p>
 {% endif %}
 
 <h3 class="aq-seccion">Últimos arqueos de esta oficina</h3>

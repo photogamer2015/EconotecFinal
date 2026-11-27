@@ -136,6 +136,13 @@
     </div>
 
     <div style="margin-top: 14px;">
+        <label class="form-label always-req">Oficina <span class="req-star">*</span></label>
+        {{ form.sede }}
+        <small style="color: var(--text-muted);">Caja de la que salió el dinero. Los egresos en efectivo de Guayaquil o Quito se restan en el arqueo de esa oficina.</small>
+        {{ form.sede.errors }}
+    </div>
+
+    <div style="margin-top: 14px;">
         <label class="form-label always-req">Concepto <span class="req-star">*</span></label>
         {{ form.concepto }}
         {{ form.concepto.errors }}

@@ -667,7 +667,7 @@ class EgresoSeguimientoTests(TestCase):
     def registrar(self, url=None, **datos):
         datos = {
             'fecha': MIERCOLES.isoformat(), 'concepto': 'Pasta térmica', 'asesora': self.asesora.pk,
-            'categoria': self.categoria.pk, 'monto': '40.00', 'metodo': 'efectivo', **datos,
+            'categoria': self.categoria.pk, 'monto': '40.00', 'metodo': 'efectivo', 'sede': 'guayaquil', **datos,
         }
         with patch('econotec.views_pagos.timezone.localdate', return_value=MIERCOLES):
             return self.client.post(url or self.url(semana=MIERCOLES.isoformat()), datos)
@@ -722,6 +722,7 @@ class EgresoSeguimientoTests(TestCase):
         self.assertEqual(egreso.asesora, self.asesora)
         self.assertEqual(egreso.categoria, self.categoria)
         self.assertEqual(egreso.registrado_por, self.admin)
+        self.assertEqual(egreso.sede, 'guayaquil')
         # Abre la semana del egreso y conserva la vista.
         self.assertRedirects(
             response, self.url(semana=MIERCOLES.isoformat(), tipo='producto', sede='guayaquil') + '#egresos',
@@ -795,11 +796,16 @@ class EgresoSeguimientoTests(TestCase):
         self.registrar(url=reverse('econotec:seguimiento_pago'), fecha=LUNES.isoformat(), monto='5.00')
         self.assertEqual(Egreso.objects.filter(fecha__range=(LUNES, DOMINGO)).count(), 2)
 
+    def test_propone_la_oficina_de_la_hoja(self):
+        self.assertEqual(self.ver(sede='quito').context['form_egreso']['sede'].value(), 'quito')
+        self.assertIsNone(self.ver().context['form_egreso']['sede'].value())
+
     def test_datos_obligatorios(self):
-        response = self.registrar(concepto='  ', asesora='', categoria='', monto='0')
+        response = self.registrar(concepto='  ', asesora='', categoria='', monto='0', sede='')
 
         errores = response.context['form_egreso'].errors
         self.assertIn('Escribe el nombre del producto.', errores['concepto'])
+        self.assertIn('Elige la oficina de la que salió el dinero.', errores['sede'])
         self.assertIn('Selecciona la asesora que aplica el egreso.', errores['asesora'])
         self.assertIn('Selecciona la categoría.', errores['categoria'])
         self.assertIn('El monto debe ser mayor que cero.', errores['monto'])

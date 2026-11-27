@@ -106,7 +106,7 @@ class AsistenteCajaTests(TestCase):
 
         response = self.seguimiento('post', {
             'fecha': MIERCOLES.isoformat(), 'concepto': 'Cable HDMI', 'asesora': self.asistente.pk,
-            'categoria': self.categoria.pk, 'monto': '20.00', 'metodo': 'efectivo',
+            'categoria': self.categoria.pk, 'monto': '20.00', 'metodo': 'efectivo', 'sede': 'guayaquil',
         })
 
         self.assertEqual(response.status_code, 302)
@@ -130,7 +130,7 @@ class AsistenteCajaTests(TestCase):
         url = f"{reverse('econotec:seguimiento_pago')}?semana={MIERCOLES.isoformat()}&editar={egreso.pk}"
         datos = {
             'fecha': MIERCOLES.isoformat(), 'concepto': 'Cable HDMI', 'asesora': self.asistente.pk,
-            'categoria': self.categoria.pk, 'monto': '20.00', 'metodo': 'efectivo', **cambios,
+            'categoria': self.categoria.pk, 'monto': '20.00', 'metodo': 'efectivo', 'sede': 'guayaquil', **cambios,
         }
         with patch('econotec.views_pagos.timezone.localdate', return_value=MIERCOLES):
             return self.client.post(url, datos) if metodo == 'post' else self.client.get(url)

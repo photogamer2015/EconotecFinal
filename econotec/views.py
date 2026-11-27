@@ -1842,6 +1842,8 @@ def _sincronizar_egreso_compra(ingreso, usuario):
     )
     datos = {
         'fecha': ingreso.fecha_ingreso,
+        # Sale de la caja de la oficina que recibe el equipo.
+        'sede': ingreso.sede if ingreso.sede in SEDES_EQUIPOS else 'general',
         'categoria': categoria,
         'concepto': (
             f'Compra de equipo {ingreso.codigo_equipo} — '
