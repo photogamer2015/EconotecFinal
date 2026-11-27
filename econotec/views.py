@@ -4527,6 +4527,7 @@ def salida_registrar(request, ingreso_pk):
             # La pantalla siguiente confirma, una sola vez, si el equipo sigue
             # dentro de la oficina o si su salida física ya ocurrió.
             request.session['confirmar_ubicacion_salida_id'] = salida.pk
+            programar_sonido(request, 'equipo_finalizado')
             return redirect('econotec:salida_listo_aviso', pk=salida.pk)
     else:
         # Saldo pendiente sugerido como valor a cobrar

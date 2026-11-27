@@ -1,7 +1,8 @@
 /*
- * Reproduce una sola vez el sonido corto (moneda) que dejó el servidor al
- * registrar un equipo o un producto en inventario. El clip ya viene con
- * volumen bajo, así que aquí solo se le da play.
+ * Reproduce una sola vez el sonido corto que dejó el servidor: la moneda al
+ * registrar un equipo o un producto en inventario, y los niños felices al
+ * finalizar un equipo. Los clips ya vienen con volumen bajo, así que aquí
+ * solo se le da play.
  *
  * Si el navegador bloquea el audio automático (Safari, Firefox), suena con la
  * primera interacción del usuario, siempre que sea poco después de cargar.
