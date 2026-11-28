@@ -1470,6 +1470,34 @@
   .dashboard-logo:hover {
     transform: scale(1.04);
   }
+
+  /* Botón CRM: a la izquierda del logo del encabezado de bienvenida */
+  .container .dashboard-header.con-crm { padding-right: 250px; }
+  .dashboard-header .dashboard-crm-btn {
+    position: absolute; right: 124px; top: 50%; transform: translateY(-50%);
+    display: inline-flex; align-items: center; gap: 9px;
+    padding: 12px 20px; border-radius: 12px;
+    background: #f97618; color: #211c17; text-decoration: none;
+    font-weight: 800; font-size: 15px; letter-spacing: .12em;
+    box-shadow: 0 6px 18px -6px rgba(249, 118, 24, .65), 0 0 0 4px #ffffff0d;
+    transition: transform .15s ease, background .15s ease, box-shadow .15s ease;
+  }
+  .dashboard-header .dashboard-crm-btn svg {
+    width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 2;
+    stroke-linecap: round; stroke-linejoin: round;
+  }
+  .dashboard-header .dashboard-crm-btn:hover {
+    background: #ff8a33; transform: translateY(-50%) scale(1.04);
+    box-shadow: 0 10px 24px -8px rgba(249, 118, 24, .8), 0 0 0 4px #ffffff14;
+  }
+  .dashboard-header .dashboard-crm-btn:focus-visible { outline: 2px solid #ffffff; outline-offset: 3px; }
+  @media (max-width: 640px) {
+    .container .dashboard-header.con-crm { padding-right: 22px; }
+    .dashboard-header .dashboard-crm-btn {
+      position: static; transform: none; margin-top: 16px;
+    }
+    .dashboard-header .dashboard-crm-btn:hover { transform: scale(1.03); }
+  }
   .dashboard-header h2 {
     color: var(--text-main);
     font-size: clamp(24px, 2.6vw, 32px);
@@ -2715,8 +2743,14 @@
 </div>
 {% endif %}
 
-<div class="dashboard-header">
+<div class="dashboard-header{% if crm_acceso %} con-crm{% endif %}">
   <span class="dashboard-eyebrow">ECONOTEC / CENTRO DE OPERACIONES</span>
+  {% if crm_acceso %}
+  <a class="dashboard-crm-btn" href="{% url 'crm:dashboard' %}" title="CRM comercial: clientes, pipelines, etiquetas y WhatsApp">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="5" height="16" rx="1"/><rect x="10" y="4" width="5" height="11" rx="1"/><rect x="17" y="4" width="4" height="7" rx="1"/></svg>
+    <span>CRM</span>
+  </a>
+  {% endif %}
   <img
     id="logo-bienvenida"
     class="dashboard-logo"

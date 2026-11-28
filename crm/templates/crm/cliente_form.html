@@ -1,0 +1,72 @@
+{% extends "crm/base.html" %}
+{% load crm_tags %}
+{% block title %}Registrar cliente · CRM Econotec{% endblock %}
+{% block crumb %}<a href="{% url 'crm:clientes' %}">Clientes</a>{% endblock %}
+{% block h1 %}Registrar cliente{% endblock %}
+{% block content %}
+<form method="post" id="clienteForm" class="registro" novalidate
+      data-plantilla="{{ plantilla_raw }}" data-asesor="{{ asesor }}" data-horario="{{ horario }}">
+  {% csrf_token %}
+  {{ form.wa_texto }}
+  {% if form.non_field_errors %}<div class="flash"><div class="error">{{ form.non_field_errors|join:" " }}</div></div>{% endif %}
+
+  <div class="card">
+    <div class="card-h"><span class="paso">1</span><h3>¿Por dónde llegó el cliente?</h3></div>
+    <div class="canales" role="radiogroup" aria-label="Canal de origen">
+      {% for c in form.canal %}
+      <label class="canal-op">{{ c.tag }}<span><i class="dot ch-{{ c.data.value }}"></i>{{ c.choice_label }}</span></label>
+      {% endfor %}
+    </div>
+    {{ form.canal.errors }}
+  </div>
+
+  <div class="grid g2">
+    <div class="card">
+      <div class="card-h"><span class="paso">2</span><h3>Datos del cliente</h3></div>
+      <div class="campos">
+        {% for f in form %}{% if f.name in "nombre empresa ruc cargo telefono email ciudad direccion" %}
+        <div class="field{% if f.name == 'nombre' or f.name == 'direccion' %} ancho{% endif %}" id="campo-{{ f.name }}">
+          <label for="{{ f.id_for_label }}">{{ f.label }}{% if f.name == 'nombre' %} <b class="req">*</b>{% endif %}{% if f.name == 'telefono' %} <b class="req" id="telReq">*</b>{% endif %}</label>
+          {{ f }}
+          {% if f.name == 'telefono' %}<small class="help" id="telAyuda">Obligatorio si llegó por WhatsApp o llamada: con este número se abre el chat.</small>{% endif %}
+          {{ f.errors }}
+        </div>{% endif %}{% endfor %}
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-h"><span class="paso">3</span><h3>Oportunidad</h3></div>
+      <div class="campos">
+        <div class="field"><label for="{{ form.servicio.id_for_label }}">{{ form.servicio.label }} <b class="req">*</b></label>{{ form.servicio }}{{ form.servicio.errors }}</div>
+        <div class="field"><label for="{{ form.sede.id_for_label }}">{{ form.sede.label }} <b class="req">*</b></label>{{ form.sede }}{{ form.sede.errors }}</div>
+        <div class="field ancho"><label for="{{ form.equipo.id_for_label }}">{{ form.equipo.label }}</label>{{ form.equipo }}{{ form.equipo.errors }}</div>
+        <div class="field ancho"><span class="lbl">{{ form.etapa.label }} <b class="req">*</b></span>
+          <div class="etapa-pick">{% for v, n in form.fields.etapa.choices %}<label class="ep e-{{ v }}"><input type="radio" name="etapa" value="{{ v }}" {% if form.etapa.value == v %}checked{% endif %}><span>{{ n }}</span></label>{% endfor %}</div>
+          {{ form.etapa.errors }}</div>
+        <div class="field ancho" id="campo-motivo" hidden><label for="{{ form.motivo_perdida.id_for_label }}">{{ form.motivo_perdida.label }}</label>{{ form.motivo_perdida }}{{ form.motivo_perdida.errors }}</div>
+        <div class="field"><label for="{{ form.valor.id_for_label }}">{{ form.valor.label }}</label>{{ form.valor }}{{ form.valor.errors }}</div>
+        <div class="field"><label for="{{ form.cantidad.id_for_label }}">{{ form.cantidad.label }}</label>{{ form.cantidad }}{{ form.cantidad.errors }}</div>
+        {% if form.responsable %}<div class="field"><label for="{{ form.responsable.id_for_label }}">{{ form.responsable.label }}</label>{{ form.responsable }}</div>{% endif %}
+        <div class="field ancho"><span class="lbl">Etiquetas</span>
+          <div class="tag-pick">{% for c in form.etiquetas %}<label class="tag pick c-{{ c.data.value.instance.color|default:'gris' }}">{{ c.tag }}{{ c.choice_label }}</label>{% empty %}<span class="muted small">Aún no hay etiquetas. <a href="{% url 'crm:etiquetas' %}">Crear</a></span>{% endfor %}</div></div>
+        <div class="field ancho"><label for="{{ form.notas.id_for_label }}">{{ form.notas.label }}</label>{{ form.notas }}</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-h"><span class="paso">4</span><h3>Próximo paso (opcional)</h3></div>
+    <div class="campos tres">
+      <div class="field"><label for="{{ form.seguimiento.id_for_label }}">{{ form.seguimiento.label }}</label>{{ form.seguimiento }}{{ form.seguimiento.errors }}</div>
+      <div class="field"><label for="{{ form.seguimiento_tipo.id_for_label }}">{{ form.seguimiento_tipo.label }}</label>{{ form.seguimiento_tipo }}</div>
+    </div>
+  </div>
+
+  <div class="barra-acciones">
+    <a class="btn" href="{% url 'crm:clientes' %}">Cancelar</a>
+    <span class="grow"></span>
+    <button class="btn pri" type="submit">{% ico 'check' %}Guardar</button>
+    <button class="btn wa" type="submit" id="guardarWa" title="Guarda el cliente y abre su chat de WhatsApp con el mensaje predeterminado">{% wa_ico %}Guardar y abrir WhatsApp</button>
+  </div>
+</form>
+{% endblock %}

@@ -1,0 +1,31 @@
+{% extends "crm/base.html" %}
+{% block title %}{{ titulo }} · CRM Econotec{% endblock %}
+{% block h1 %}{{ titulo }}{% endblock %}
+{% block content %}
+<div class="card">
+  {% if intro %}<p class="intro">{{ intro }}</p>{% endif %}
+  <form method="post" class="form" novalidate>
+    {% csrf_token %}
+    {% if form.non_field_errors %}<div class="flash"><div class="error">{{ form.non_field_errors|join:" " }}</div></div>{% endif %}
+    {% for f in form %}
+      {% if f.widget_type == 'checkboxselectmultiple' %}
+      <div class="field"><span class="lbl">{{ f.label }}</span>
+        <div class="tag-pick">{% for c in f %}<label class="tag pick c-{{ c.data.value.instance.color|default:'gris' }}">{{ c.tag }}{{ c.choice_label }}</label>{% empty %}<span class="muted small">No hay opciones todavía.</span>{% endfor %}</div>{{ f.errors }}</div>
+      {% else %}
+      <div class="field{% if f.widget_type == 'checkbox' %} check{% endif %}">
+        {% if f.widget_type == 'checkbox' %}{{ f }}<label for="{{ f.id_for_label }}">{{ f.label }}</label>
+        {% else %}<label for="{{ f.id_for_label }}">{{ f.label }}</label>{{ f }}{% endif %}
+        {% if f.help_text %}<small class="help">{{ f.help_text }}</small>{% endif %}
+        {{ f.errors }}
+      </div>
+      {% endif %}
+    {% endfor %}
+    <div class="acts"><a class="btn" href="{% url volver %}">Cancelar</a><button class="btn pri">{{ boton|default:"Guardar" }}</button></div>
+  </form>
+  {% if borrar %}
+  <form method="post" action="{{ borrar }}" class="borrar" onsubmit="return confirm('¿Eliminar definitivamente? No se puede deshacer.')">{% csrf_token %}
+    <input type="hidden" name="accion" value="borrar"><button class="btn danger sm">Eliminar</button>
+  </form>
+  {% endif %}
+</div>
+{% endblock %}

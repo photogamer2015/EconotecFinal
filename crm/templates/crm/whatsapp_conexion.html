@@ -1,0 +1,64 @@
+{% extends "crm/base.html" %}
+{% load crm_tags %}
+{% block title %}Conectar WhatsApp · CRM Econotec{% endblock %}
+{% block crumb %}Administración{% endblock %}
+{% block h1 %}Conectar WhatsApp (código QR){% endblock %}
+{% block content %}
+{% if not activo %}
+<div class="card">
+  <h3>El bot de WhatsApp por QR está apagado</h3>
+  <p class="sub">En el archivo <code>.env</code> está <code>WA_QR_ACTIVO=False</code>. Bórralo (o ponlo en True) y reinicia Econotec para encenderlo.</p>
+</div>
+{% else %}
+<div class="grid g21">
+  <div class="card" id="conexion" data-estado="{% url 'crm:whatsapp_conexion_estado' %}">
+    <h3 id="c-titulo">Revisando…</h3>
+    <p class="sub" id="c-sub"></p>
+    <div id="c-qr" style="display:flex;justify-content:center;padding:12px"></div>
+  </div>
+  <div class="card">
+    <h3>Cómo vincular el número</h3>
+    <ol class="small" style="padding-left:18px;display:flex;flex-direction:column;gap:6px;margin:8px 0">
+      <li>En el celular de la empresa abre <b>WhatsApp</b> (o WhatsApp Business).</li>
+      <li>Toca <b>⋮ / Configuración → Dispositivos vinculados → Vincular un dispositivo</b>.</li>
+      <li>Escanea el código de la izquierda. Se hace <b>una sola vez</b>: la sesión queda guardada.</li>
+      <li>Listo: los mensajes que lleguen aparecen en <a href="{% url 'crm:bandeja' %}">Chats de WhatsApp</a> y el bot responde solo.</li>
+    </ol>
+    <h3 style="margin-top:16px">A tener en cuenta</h3>
+    <ul class="small">
+      <li>No es la API oficial de Meta: funciona como WhatsApp Web. Úsalo con pocos mensajes y solo respondiendo a quien escribe primero; WhatsApp puede bloquear números que envían mucho.</li>
+      <li>El servidor (o la Mac) donde corre debe estar encendido y el celular con internet.</li>
+      <li>El bot responde a <b>todos los chats individuales</b> de ese número (no a grupos). Lo ideal es un número solo para ventas.</li>
+      <li>Para cambiar de número: en el celular, cierra la sesión del dispositivo vinculado; aparecerá un QR nuevo.</li>
+    </ul>
+  </div>
+</div>
+{% endif %}
+{% endblock %}
+{% block scripts %}
+{% if activo %}
+<script>
+(function () {
+  const box = document.getElementById("conexion"), t = document.getElementById("c-titulo"),
+        sub = document.getElementById("c-sub"), qr = document.getElementById("c-qr");
+  const TXT = {
+    conectado: ["WhatsApp conectado", "El bot está respondiendo los mensajes que llegan."],
+    esperando_qr: ["Escanea el código QR", "Abre WhatsApp en el celular → Dispositivos vinculados → Vincular un dispositivo."],
+    iniciando: ["Iniciando WhatsApp…", "Espera unos segundos; aparecerá el código QR."],
+    desconectado: ["WhatsApp se desconectó", "Se está reconectando solo. Si no vuelve, reinicia el programa del QR."],
+    sin_conexion: ["El programa del QR no está abierto", "En la Mac: doble clic en whatsapp_qr/Iniciar WhatsApp.command. En el servidor: sudo systemctl restart econotec-whatsapp."],
+  };
+  async function revisar() {
+    try {
+      const j = await (await fetch(box.dataset.estado)).json();
+      const [a, b] = TXT[j.estado] || ["Estado: " + j.estado, ""];
+      t.textContent = a; sub.textContent = b + (j.numero ? " Número: +" + j.numero : "");
+      qr.innerHTML = j.estado === "esperando_qr" && j.qr ? '<img alt="Código QR de WhatsApp" width="280" height="280" src="' + j.qr + '">'
+        : j.estado === "conectado" ? '<span class="chip ok" style="font-size:15px;padding:8px 14px">Conectado</span>' : "";
+    } catch (e) { t.textContent = "No se pudo revisar el estado"; }
+  }
+  revisar(); setInterval(revisar, 3000);
+})();
+</script>
+{% endif %}
+{% endblock %}

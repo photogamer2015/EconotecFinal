@@ -1,0 +1,96 @@
+{% extends "crm/base.html" %}
+{% load crm_tags %}
+{% block title %}{{ op.contacto.empresa|default:op.contacto.nombre }} · CRM Econotec{% endblock %}
+{% block crumb %}<a href="{% url 'crm:clientes' %}">Clientes</a> · <a href="{% url 'crm:oportunidades' %}">Pipelines</a>{% endblock %}
+{% block h1 %}{{ op.contacto.empresa|default:op.contacto.nombre }} <span class="codigo-h">#{{ op.pk|stringformat:"04d" }}</span>{% endblock %}
+{% block acciones %}
+<a class="btn" href="{% url 'crm:actividad_nueva' %}?op={{ op.pk }}">{% ico 'log' %}Registrar actividad</a>
+<a class="btn" href="{% url 'crm:seguimiento_nuevo' %}?op={{ op.pk }}&next={% url 'crm:oportunidad' op.pk %}">{% ico 'cal' %}Agendar seguimiento</a>
+<a class="btn wa" href="#whatsapp">{% wa_ico %}Enviar por WhatsApp</a>
+{% endblock %}
+{% block content %}
+<div class="card ficha-top">
+  <div class="ficha-sub">{{ op.servicio }} — {{ op.contacto.nombre }}{% if op.contacto.telefono %} — {{ op.contacto.telefono|tel }}{% endif %} — llegó por {{ op.get_canal_display }}{% if op.equipo %} — {{ op.equipo }}{% endif %}{% if op.cantidad and op.cantidad > 1 %} — {{ op.cantidad }} equipos{% endif %} — sede {{ op.get_sede_display }}</div>
+  <div class="stepper" id="stepper" data-mover="{% url 'crm:oportunidad_mover' op.pk %}" aria-label="Etapa en el pipeline">
+    {% for v, n in etapas_flujo %}
+    <button type="button" class="step {% if op.etapa == v %}actual{% elif forloop.counter0 < orden_etapa and op.etapa != 'perdido' %}hecho{% endif %}" data-etapa="{{ v }}" {% if op.etapa == v %}aria-current="step"{% endif %}>
+      <span class="bola">{% if forloop.counter0 < orden_etapa and op.etapa != 'perdido' and op.etapa != v %}{% ico 'check' %}{% else %}{{ forloop.counter }}{% endif %}</span>{{ n }}</button>
+    <span class="linea"></span>
+    {% endfor %}
+    <button type="button" class="step final ganado {% if op.etapa == 'ganado' %}actual{% endif %}" data-etapa="ganado"><span class="bola">{% ico 'check' %}</span>Equipo ingresado</button>
+    <button type="button" class="step final perdido {% if op.etapa == 'perdido' %}actual{% endif %}" data-etapa="perdido"><span class="bola">×</span>Perdido</button>
+  </div>
+  <p class="muted small" style="margin:8px 0 0">Toca una etapa para mover al cliente en el pipeline. Cada cambio queda en el historial y avisa al administrador.{% if op.etapa == 'perdido' and op.motivo_perdida %} <b>Motivo de pérdida:</b> {{ op.motivo_perdida }}{% endif %}</p>
+</div>
+<div class="grid g21">
+  <div class="grid">
+    <div class="card" id="whatsapp">
+      <div class="card-h"><h3>{% wa_ico %} Enviar por WhatsApp</h3>{% if not wa_numero %}<span class="chip warn">El contacto no tiene teléfono</span>{% endif %}</div>
+      <p class="sub">Ya viene el mensaje predeterminado; puedes cambiarlo o elegir otro. Se abre el chat del cliente con el texto listo y queda en el historial.</p>
+      <form id="waForm" class="wa-form" data-wa="{{ wa_numero }}" data-log="{% url 'crm:oportunidad_whatsapp' op.pk %}">
+        {% if plantillas %}<select id="plantillas" aria-label="Mensaje predeterminado">{% for p in plantillas %}<option value="{{ p.id }}" {% if forloop.first %}selected{% endif %}>{{ p.titulo }}{% if p.predeterminada %} (predeterminado){% endif %}</option>{% endfor %}<option value="">Escribir otro mensaje…</option></select>{% endif %}
+        <textarea name="texto" rows="4" placeholder="Mensaje para {{ op.contacto.nombre }}…" aria-label="Mensaje" required>{% if plantillas %}{{ plantillas.0.texto }}{% endif %}</textarea>
+        <input type="hidden" name="respuesta" id="respId" value="{% if plantillas %}{{ plantillas.0.id }}{% endif %}">
+        <div class="acts"><button class="btn wa" type="submit">{% wa_ico %}Enviar por WhatsApp</button></div>
+      </form>
+    </div>
+    <div class="card"><h3>Historial</h3><p class="sub">Todo lo registrado con este cliente</p>
+      <div class="timeline">{% for a in actividades %}
+        <div class="tl"><span class="when">{{ a.fecha|date:"d M H:i" }}</span><span><span class="chip {{ a.resultado|clase_resultado }}">{{ a.get_tipo_display }}</span> {{ a.detalle }} <span class="muted">· {{ a.usuario|nombre }}</span></span></div>
+      {% empty %}<p class="muted">Sin actividades.</p>{% endfor %}</div>
+    </div>
+    <div class="card"><h3>Seguimientos</h3>
+      {% for s in seguimientos %}
+      <div class="rem {% if s.completado %}done{% endif %}"><button type="button" data-url="{% url 'crm:seguimiento_completar' s.pk %}" aria-label="Marcar como hecho"></button><div><div class="tx">{{ s.titulo }}</div><div class="w">{{ s.fecha_hora|date:"d M Y H:i" }} · {{ s.responsable|nombre }} {% if s.vencido %}<span class="chip bad">Vencido</span>{% endif %}</div></div></div>
+      {% empty %}<p class="muted">No hay seguimientos agendados.</p>{% endfor %}
+    </div>
+  </div>
+  <div class="grid">
+    <div class="card"><div class="card-h"><h3>Cliente</h3><span class="grow"></span><a class="btn sm" href="{% url 'crm:cliente_editar' op.pk %}">{% ico 'edit' %}Editar</a></div>
+      <dl class="datos">
+        <dt>Contacto</dt><dd><b>{{ op.contacto.nombre }}</b>{% if op.contacto.cargo %} · {{ op.contacto.cargo }}{% endif %}</dd>
+        {% if op.contacto.empresa %}<dt>Empresa</dt><dd>{{ op.contacto.empresa }}</dd>{% endif %}
+        {% if op.contacto.ruc %}<dt>Cédula / RUC</dt><dd>{{ op.contacto.ruc }}</dd>{% endif %}
+        <dt>WhatsApp</dt><dd>{% if op.contacto.telefono %}{{ op.contacto.telefono|tel }}{% else %}<span class="muted">—</span>{% endif %}</dd>
+        <dt>Correo</dt><dd>{{ op.contacto.email|default:"—" }}</dd>
+        {% if op.contacto.ciudad or op.contacto.direccion %}<dt>Ubicación</dt><dd>{{ op.contacto.direccion }}{% if op.contacto.direccion and op.contacto.ciudad %}, {% endif %}{{ op.contacto.ciudad }}</dd>{% endif %}
+      </dl>
+    </div>
+    <div class="card eco-card"><div class="card-h"><h3>{% ico 'monitor' %} En Econotec</h3><span class="grow"></span>
+      {% if cliente_eco %}<span class="chip ok">Cliente registrado</span>{% else %}<span class="chip">Aún no ingresa equipos</span>{% endif %}</div>
+      {% if cliente_eco %}
+        <p class="sub">{{ cliente_eco.nombres }} · {{ cliente_eco.cedula }} · {{ cliente_eco.ingresos.count }} equipo{{ cliente_eco.ingresos.count|pluralize }} en el sistema</p>
+        {% for e in equipos_eco %}
+        <a class="eco-eq" href="{% url 'econotec:ingreso_detalle' e.pk %}"><b>{{ e.codigo_equipo }}</b><span>{{ e.tipo_equipo_display }} {{ e.marca }} {{ e.modelo_serie|truncatechars:24 }}</span><span class="chip {% if e.estado == 'entregado' %}ok{% elif e.estado == 'en_reparacion' %}warn{% endif %}">{{ e.get_estado_display }}</span></a>
+        {% endfor %}
+        <div class="acts" style="margin-top:10px;justify-content:flex-start">
+          <a class="btn sm" href="{% url 'econotec:cliente_detalle' cliente_eco.pk %}">Ver cliente</a>
+          <a class="btn pri sm" href="{% url 'econotec:ingreso_registrar' %}">{% ico 'plus' %}Registrar ingreso</a>
+        </div>
+      {% else %}
+        <p class="sub">Cuando el cliente traiga su equipo, regístralo en Econotec con la misma cédula o WhatsApp: aquí se enlaza solo y verás sus equipos y su estado.</p>
+        <a class="btn pri sm" href="{% url 'econotec:ingreso_registrar' %}">{% ico 'plus' %}Registrar ingreso de equipo</a>
+      {% endif %}
+    </div>
+    <div class="card"><h3>{% ico 'tag' %} Etiquetas</h3><p class="sub">Márcalas o crea una nueva. <a href="{% url 'crm:etiquetas' %}">Administrar</a></p>
+      <form method="post">{% csrf_token %}<input type="hidden" name="accion" value="etiquetas">
+        <div class="tag-pick">
+          {% for e in etiquetas_todas %}<label class="tag c-{{ e.color }} pick"><input type="checkbox" name="etiquetas" value="{{ e.pk }}" {% if etiquetas_op|tiene:e.pk %}checked{% endif %}>{{ e.nombre }}</label>{% empty %}<span class="muted small">Aún no hay etiquetas.</span>{% endfor %}
+        </div>
+        <div class="toolbar" style="margin-top:10px">
+          <input name="nueva" maxlength="40" placeholder="Nueva etiqueta" aria-label="Nueva etiqueta" style="flex:1;min-width:120px">
+          <select name="color" aria-label="Color">{% for v, n in colores %}<option value="{{ v }}">{{ n }}</option>{% endfor %}</select>
+          <button class="btn pri sm">Guardar</button>
+        </div>
+      </form>
+    </div>
+    <div class="card"><h3>Datos de la oportunidad</h3><p class="sub">Origen: {{ op.get_canal_display }} · creada {{ op.creado|date:"d M Y" }}</p>
+      <form method="post" class="form">{% csrf_token %}
+        {% for f in form %}<div class="field"><label for="{{ f.id_for_label }}">{{ f.label }}</label>{{ f }}{{ f.errors }}</div>{% endfor %}
+        <div class="acts"><button class="btn pri">Guardar cambios</button></div>
+      </form>
+    </div>
+  </div>
+</div>
+{{ plantillas|json_script:"plantillas-data" }}
+{% endblock %}

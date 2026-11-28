@@ -1,0 +1,53 @@
+{% extends "crm/base.html" %}
+{% load crm_tags %}
+{% block title %}Clientes · CRM Econotec{% endblock %}
+{% block h1 %}Clientes{% endblock %}
+{% block acciones %}<a class="btn pri" href="{% url 'crm:cliente_nuevo' %}">{% ico 'user-plus' %}Registrar cliente</a>{% endblock %}
+{% block content %}
+<nav class="tabs" aria-label="Filtrar por etapa">
+  <a class="tab {% if not f.etapa %}on{% endif %}" href="?{{ params_sin_etapa }}">Todas<span class="n">{{ total }}</span></a>
+  {% for v, n, c in etapas %}<a class="tab {% if f.etapa == v %}on{% endif %}" href="?{{ params_sin_etapa }}{% if params_sin_etapa %}&{% endif %}etapa={{ v }}"><span class="etapa-dot e-{{ v }}"></span>{{ n }}<span class="n">{{ c }}</span></a>{% endfor %}
+</nav>
+<form class="toolbar" method="get">
+  {% if f.etapa %}<input type="hidden" name="etapa" value="{{ f.etapa }}">{% endif %}
+  <input name="q" value="{{ f.q }}" placeholder="Buscar nombre, empresa, teléfono, RUC o #código" aria-label="Buscar" style="min-width:260px">
+  <select name="canal" aria-label="Canal" onchange="this.form.submit()"><option value="">Todos los canales</option>{% for v, n in canales %}<option value="{{ v }}" {% if f.canal == v %}selected{% endif %}>{{ n }}</option>{% endfor %}</select>
+  <select name="categoria" aria-label="Categoría" onchange="this.form.submit()"><option value="">Todas las categorías</option>{% for c in categorias %}<option {% if f.categoria == c.nombre %}selected{% endif %}>{{ c.nombre }}</option>{% endfor %}</select>
+  <select name="etiqueta" aria-label="Etiqueta" onchange="this.form.submit()"><option value="">Todas las etiquetas</option>{% for e in etiquetas %}<option value="{{ e.pk }}" {% if f.etiqueta == e.pk|stringformat:"s" %}selected{% endif %}>{{ e.nombre }}</option>{% endfor %}</select>
+  <select name="sede" aria-label="Sede" onchange="this.form.submit()"><option value="">Ambas sedes</option>{% for v, n in sedes %}<option value="{{ v }}" {% if f.sede == v %}selected{% endif %}>{{ n }}</option>{% endfor %}</select>
+  <button class="btn">Buscar</button>{% if f.q or f.canal or f.categoria or f.etiqueta or f.sede %}<a class="btn" href="?{% if f.etapa %}etapa={{ f.etapa }}{% endif %}">Limpiar</a>{% endif %}
+</form>
+<div class="card" style="padding:0">
+  <div class="tbl-wrap"><table class="tabla-clientes">
+    <thead><tr><th>#</th><th>Cliente</th><th>Contacto</th><th>Canal</th><th>Categoría</th><th>Etapa</th><th class="num">Valor</th><th>Responsable</th><th>Registrado</th><th></th></tr></thead>
+    <tbody>
+    {% for o in pagina %}
+      <tr>
+        <td class="nowrap"><a class="codigo" href="{% url 'crm:oportunidad' o.pk %}">#{{ o.pk|stringformat:"04d" }}</a></td>
+        <td><a class="cli" href="{% url 'crm:oportunidad' o.pk %}"><b>{{ o.contacto.empresa|default:o.contacto.nombre }}</b></a>
+          {% if o.contacto.empresa %}<div class="muted small">{{ o.contacto.nombre }}</div>{% endif %}
+          {% if o.etiquetas.all %}<div class="tags" style="margin-top:4px">{% for e in o.etiquetas.all %}<span class="tag c-{{ e.color }}">{{ e.nombre }}</span>{% endfor %}</div>{% endif %}</td>
+        <td class="nowrap small">{{ o.contacto.telefono|tel }}{% if o.contacto.email %}<div class="muted">{{ o.contacto.email }}</div>{% endif %}</td>
+        <td class="nowrap"><i class="dot ch-{{ o.canal }}"></i> {{ o.get_canal_display }}</td>
+        <td class="small">{{ o.servicio }}{% if o.equipo %}<div class="muted">{{ o.equipo }}</div>{% endif %}<div class="muted">{{ o.get_sede_display }}</div></td>
+        <td><span class="etapa-chip e-{{ o.etapa }}">{{ o.get_etapa_display }}</span></td>
+        <td class="num">{{ o.valor|dinero }}</td>
+        <td class="nowrap">{{ o.responsable|nombre }}</td>
+        <td class="nowrap small muted">{{ o.creado|date:"d M Y" }}</td>
+        <td class="nowrap acciones-fila">
+          {% if o.contacto.telefono %}<button type="button" class="btn sm wa wa-rapido" title="Abrir WhatsApp con el mensaje predeterminado"
+            data-wa="{{ o.contacto.telefono|tel_wa }}" data-texto="{{ o.wa_texto }}" data-resp="{{ o.wa_id|default:'' }}" data-log="{% url 'crm:oportunidad_whatsapp' o.pk %}">{% wa_ico %}</button>{% endif %}
+          <a class="btn sm" href="{% url 'crm:oportunidad' o.pk %}">{% ico 'eye' %}Ver</a>
+        </td>
+      </tr>
+    {% empty %}<tr><td colspan="10"><div class="empty">No hay clientes con esos filtros. <a href="{% url 'crm:cliente_nuevo' %}">Registrar cliente</a></div></td></tr>{% endfor %}
+    </tbody>
+  </table></div>
+  {% if pagina.has_other_pages %}
+  <div class="pager">
+    {% if pagina.has_previous %}<a class="btn sm" href="?{{ params }}&page={{ pagina.previous_page_number }}">Anterior</a>{% endif %}
+    <span class="muted">Página {{ pagina.number }} de {{ pagina.paginator.num_pages }}</span>
+    {% if pagina.has_next %}<a class="btn sm" href="?{{ params }}&page={{ pagina.next_page_number }}">Siguiente</a>{% endif %}
+  </div>{% endif %}
+</div>
+{% endblock %}

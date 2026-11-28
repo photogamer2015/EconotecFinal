@@ -1,0 +1,30 @@
+{% extends "crm/base.html" %}
+{% load crm_tags %}
+{% block title %}Usuarios · CRM Econotec{% endblock %}
+{% block crumb %}Administración{% endblock %}
+{% block h1 %}Usuarios y roles{% endblock %}
+{% block content %}
+<div class="card"><h3>Equipo comercial</h3>
+  <p class="sub">Son los mismos usuarios de Econotec: el administrador y las asesoras (incluida la Asistente de caja). Las cuentas, contraseñas y sedes se manejan en Econotec; aquí solo se define el rol dentro del CRM. Los técnicos no entran al CRM.</p>
+  <div class="tbl-wrap"><table>
+    <thead><tr><th>Nombre</th><th>Rol en el CRM</th><th>Clientes automáticos</th><th class="num">Abiertas</th><th></th></tr></thead>
+    <tbody>{% for u in lista %}
+      <tr><td><div style="display:flex;gap:8px;align-items:center"><div class="avatar sm">{{ u|iniciales }}</div><div>{{ u|nombre }}<div class="muted" style="font-size:11.5px">{{ u.username }}{% if u.email %} · {{ u.email }}{% endif %}</div></div></div></td>
+      <td class="nowrap">{{ u.rol_crm_nombre }}</td>
+      <td>{% if u.recibe %}<span class="chip ok">Sí</span>{% else %}<span class="muted">—</span>{% endif %}</td>
+      <td class="num">{{ u.abiertas }}</td>
+      <td class="num">{% if not u.is_superuser %}<a class="btn sm" href="{% url 'crm:usuario_editar' u.pk %}">{% ico 'edit' %}Editar</a>{% endif %}</td></tr>
+    {% empty %}<tr><td colspan="5" class="muted">No hay asesoras activas. Agrégalas al grupo «Asesores» en Econotec.</td></tr>
+    {% endfor %}</tbody>
+  </table></div>
+</div>
+<div class="card"><h3>Matriz de permisos</h3><p class="sub">Tres roles</p>
+  <div class="tbl-wrap"><table>
+    <thead><tr><th>Permiso</th><th>Administrador</th><th>Supervisora comercial</th><th>Asesora comercial</th></tr></thead>
+    <tbody>{% for p, a, g, e in permisos %}<tr><td>{{ p }}</td>
+      <td>{% if a %}<span class="chip ok">Sí</span>{% else %}<span class="muted">—</span>{% endif %}</td>
+      <td>{% if g %}<span class="chip ok">Sí</span>{% else %}<span class="muted">—</span>{% endif %}</td>
+      <td>{% if e %}<span class="chip ok">Sí</span>{% else %}<span class="muted">—</span>{% endif %}</td></tr>{% endfor %}</tbody>
+  </table></div>
+</div>
+{% endblock %}

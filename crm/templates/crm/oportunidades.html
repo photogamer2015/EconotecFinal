@@ -1,0 +1,35 @@
+{% extends "crm/base.html" %}
+{% load crm_tags %}
+{% block title %}Pipelines · CRM Econotec{% endblock %}
+{% block h1 %}Pipelines{% endblock %}
+{% block acciones %}<a class="btn pri" href="{% url 'crm:cliente_nuevo' %}">{% ico 'user-plus' %}Registrar cliente</a>{% endblock %}
+{% block content %}
+<nav class="tabs" aria-label="Pipeline por categoría">
+  {% for p in pipelines %}<a class="tab {% if p.clave == pipeline.clave %}on{% endif %}" href="?pipeline={{ p.clave }}{% if etiqueta %}&etiqueta={{ etiqueta }}{% endif %}{% if q %}&q={{ q|urlencode }}{% endif %}">{{ p.nombre }}<span class="n">{{ p.n }}</span></a>{% endfor %}
+</nav>
+<form class="toolbar" method="get">
+  <input type="hidden" name="pipeline" value="{{ pipeline.clave }}">
+  <input name="q" value="{{ q }}" placeholder="Buscar empresa, contacto o categoría" aria-label="Buscar">
+  <select name="etiqueta" aria-label="Etiqueta" onchange="this.form.submit()"><option value="">Todas las etiquetas</option>{% for e in etiquetas %}<option value="{{ e.pk }}" {% if etiqueta == e.pk|stringformat:"s" %}selected{% endif %}>{{ e.nombre }}</option>{% endfor %}</select>
+  <button class="btn">Buscar</button>{% if q or etiqueta %}<a class="btn" href="?pipeline={{ pipeline.clave }}">Limpiar</a>{% endif %}
+  <span class="grow"></span><span class="muted small">Arrastra una tarjeta para cambiar su etapa. Cada cambio queda en la bitácora y avisa al administrador.</span>
+</form>
+<div class="board" id="board" data-mover="{% url 'crm:oportunidad_mover' 0 %}">
+  {% for col in columnas %}
+  <div class="col" data-etapa="{{ col.clave }}">
+    <div class="col-h">{% if col.clave == 'ganado' %}<span class="chip ok">{{ col.nombre }}</span>{% elif col.clave == 'perdido' %}<span class="chip bad">Perdido</span>{% else %}<span class="etapa-dot e-{{ col.clave }}"></span>{{ col.nombre }}{% endif %}<span class="sum">{{ col.items|length }} · {{ col.total|dinero }}</span></div>
+    {% for o in col.items %}
+    <a class="deal" draggable="true" data-id="{{ o.pk }}" href="{% url 'crm:oportunidad' o.pk %}">
+      <span class="n">{{ o.contacto.empresa|default:o.contacto.nombre }}</span>
+      {% if o.equipo %}<span class="row">{{ o.equipo }}</span>{% elif o.contacto.empresa %}<span class="row">{{ o.contacto.nombre }}</span>{% endif %}
+      {% if pipeline.clave == "" %}<span class="row"><span class="chip">{{ o.servicio }}</span></span>{% endif %}
+      {% if o.etiquetas.all %}<span class="tags">{% for e in o.etiquetas.all %}<span class="tag c-{{ e.color }}">{{ e.nombre }}</span>{% endfor %}</span>{% endif %}
+      <span class="row"><i class="dot ch-{{ o.canal }}"></i>{{ o.get_canal_display }}<span class="amt">{{ o.valor|dinero }}</span></span>
+      <span class="row">{{ o.responsable|nombre }}</span>
+    </a>
+    {% empty %}<div class="col-empty">Sin oportunidades</div>
+    {% endfor %}
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}

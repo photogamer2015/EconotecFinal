@@ -20,5 +20,8 @@ urlpatterns = [
     path('admin/login/', views_auth.login_con_sede),
     path('admin/', admin.site.urls),
 
+    # CRM comercial: clientes, pipelines, etiquetas, chats de WhatsApp y seguimientos
+    path('crm/', include('crm.urls')),
+
     path('', include('econotec.urls')),
 ]

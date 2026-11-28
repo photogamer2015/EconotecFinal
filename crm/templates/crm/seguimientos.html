@@ -1,0 +1,34 @@
+{% extends "crm/base.html" %}
+{% load crm_tags %}
+{% block title %}Seguimientos · CRM Econotec{% endblock %}
+{% block h1 %}Seguimientos{% endblock %}
+{% block acciones %}<a class="btn pri" href="{% url 'crm:seguimiento_nuevo' %}">{% ico 'plus' %}Agendar seguimiento</a>{% endblock %}
+{% block content %}
+<div class="grid g21">
+  <div class="card">
+    <div class="toolbar" style="margin-bottom:12px">
+      <a class="btn sm" href="?anio={{ prev.anio }}&mes={{ prev.mes }}" aria-label="Mes anterior">‹</a>
+      <h3 style="margin:0">{{ titulo_mes }}</h3>
+      <a class="btn sm" href="?anio={{ next.anio }}&mes={{ next.mes }}" aria-label="Mes siguiente">›</a>
+      <span class="grow"></span>
+      <span class="legend"><span><i class="dot" style="background:var(--success)"></i>Llamada</span><span><i class="dot" style="background:var(--brand)"></i>Reunión</span><span><i class="dot" style="background:var(--warning)"></i>Correo</span></span>
+    </div>
+    <div class="tbl-wrap"><div class="cal">
+      <div class="dow">Lun</div><div class="dow">Mar</div><div class="dow">Mié</div><div class="dow">Jue</div><div class="dow">Vie</div><div class="dow">Sáb</div><div class="dow">Dom</div>
+      {% for sem in semanas %}{% for c in sem %}
+        {% if c.dia %}<div class="{% if c.hoy %}hoy{% endif %}"><span class="d">{{ c.dia }}</span>{% for s in c.items %}<span class="ev {{ s.tipo }}{% if s.completado %} hecho{% endif %}" title="{{ s.fecha_hora|time:'H:i' }} · {{ s.titulo }} · {{ s.responsable|nombre }}">{{ s.fecha_hora|time:"H:i" }} {{ s.titulo }}</span>{% endfor %}</div>
+        {% else %}<div class="off"></div>{% endif %}
+      {% endfor %}{% endfor %}
+    </div></div>
+  </div>
+  <div class="card"><h3>Pendientes</h3><p class="sub">Marca como hecho al completar</p>
+    {% for s in pendientes %}
+    <div class="rem"><button type="button" data-url="{% url 'crm:seguimiento_completar' s.pk %}" aria-label="Marcar como hecho"></button>
+      <div><div class="tx">{% if s.oportunidad_id %}<a href="{% url 'crm:oportunidad' s.oportunidad_id %}">{{ s.titulo }}</a>{% else %}{{ s.titulo }}{% endif %}</div>
+      <div class="w">{{ s.fecha_hora|date:"D d M H:i" }} · {{ s.responsable|nombre }} {% if s.vencido %}<span class="chip bad">Vencido</span>{% endif %}</div></div></div>
+    {% empty %}<p class="muted">No tienes seguimientos pendientes.</p>{% endfor %}
+    {% if hechos %}<h3 style="margin-top:16px">Completados recientes</h3>
+    {% for s in hechos %}<div class="rem done"><button type="button" data-url="{% url 'crm:seguimiento_completar' s.pk %}" aria-label="Marcar como pendiente"></button><div><div class="tx">{{ s.titulo }}</div><div class="w">{{ s.fecha_hora|date:"d M H:i" }} · {{ s.responsable|nombre }}</div></div></div>{% endfor %}{% endif %}
+  </div>
+</div>
+{% endblock %}

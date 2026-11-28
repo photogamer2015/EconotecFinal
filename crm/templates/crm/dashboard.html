@@ -1,0 +1,64 @@
+{% extends "crm/base.html" %}
+{% load crm_tags %}
+{% block title %}Resultados · CRM Econotec{% endblock %}
+{% block h1 %}Resultados{% endblock %}
+{% block acciones %}<a class="btn pri" href="{% url 'crm:cliente_nuevo' %}">{% ico 'user-plus' %}Registrar cliente</a>{% endblock %}
+{% block content %}
+<div class="grid g4">
+  <div class="card kpi"><div class="lbl">Clientes en proceso</div><div class="val">{{ m.leads_activos }}</div>
+    <div class="delta {% if m.variacion is not None and m.variacion < 0 %}down{% else %}up{% endif %}">{% if m.variacion is not None %}{% if m.variacion >= 0 %}+{% endif %}{{ m.variacion }}% leads vs. mes anterior{% else %}{{ m.leads_mes }} nuevos este mes{% endif %}</div></div>
+  <div class="card kpi"><div class="lbl">Tasa de efectividad</div><div class="val">{{ m.efectividad }}%</div><div class="delta muted">{{ m.ganadas_mes }} equipos ingresados de {{ m.cerradas_mes }} cerrados este mes</div></div>
+  <div class="card kpi"><div class="lbl">Pipeline abierto</div><div class="val">{{ m.pipeline|dinero }}</div><div class="delta muted">Valor estimado de cotizaciones abiertas</div></div>
+  <div class="card kpi"><div class="lbl">Seguimientos pendientes</div><div class="val">{{ pendientes }}</div><div class="delta {% if vencidos %}down{% else %}up{% endif %}">{% if vencidos %}{{ vencidos }} vencidos{% else %}Ninguno vencido{% endif %}</div></div>
+</div>
+
+<div class="grid g21">
+  <div class="card">
+    <h3>Leads y cierres por mes</h3><p class="sub">Últimos 6 meses · todos los canales</p>
+    <div id="lineChart"></div>
+    <div class="legend"><span><i class="sw"></i>Leads recibidos</span><span><i class="sw dash"></i>Equipos ingresados</span></div>
+  </div>
+  <div class="card">
+    <h3>Embudo comercial</h3><p class="sub">Oportunidades que alcanzaron cada etapa</p>
+    <div class="funnel">
+      {% with base=m.embudo.0.n %}{% for e in m.embudo %}
+        <div class="f-bar" style="width:{% if base %}{% widthratio e.n base 100 %}{% else %}0{% endif %}%">{{ e.etapa }} · {{ e.n }}</div>
+      {% endfor %}{% endwith %}
+    </div>
+  </div>
+</div>
+
+<div class="grid g2">
+  <div class="card"><h3>Origen de los leads</h3><p class="sub">Canales integrados al CRM</p>
+    <div class="bars">
+      {% with top=m.por_canal.0.n %}{% for c in m.por_canal %}
+      <div class="bar-row"><span style="display:flex;align-items:center;gap:6px"><i class="dot ch-{{ c.clave }}"></i>{{ c.canal }}</span><div class="bar-track"><div class="bar-fill" style="width:{% widthratio c.n top 100 %}%"></div></div><span class="num">{{ c.n }}</span></div>
+      {% empty %}<p class="muted">Aún no hay leads.</p>{% endfor %}{% endwith %}
+    </div>
+  </div>
+  <div class="card"><h3>Próximos seguimientos</h3><p class="sub"><a href="{% url 'crm:seguimientos' %}">Ver calendario</a></p>
+    <div class="timeline">
+      {% for s in proximos %}
+      <div class="tl"><span class="when">{{ s.fecha_hora|date:"d M H:i" }}</span><span>{{ s.titulo }} {% if s.vencido %}<span class="chip bad">Vencido</span>{% endif %}</span></div>
+      {% empty %}<p class="muted">No hay seguimientos pendientes.</p>{% endfor %}
+    </div>
+  </div>
+</div>
+
+{% if equipo %}
+<div class="card"><h3>Desempeño por asesora</h3><p class="sub">Mes en curso</p>
+  <div class="tbl-wrap"><table>
+    <thead><tr><th>Asesora</th><th class="num">Abiertas</th><th class="num">Ingresados</th><th class="num">Efectividad</th><th class="num">Monto</th><th class="num">Actividades</th></tr></thead>
+    <tbody>{% for e in equipo %}<tr><td>{{ e.usuario|nombre }}</td><td class="num">{{ e.abiertas }}</td><td class="num">{{ e.ganadas }}</td><td class="num">{{ e.efectividad }}%</td><td class="num">{{ e.monto|dinero }}</td><td class="num">{{ e.actividades }}</td></tr>
+    {% empty %}<tr><td colspan="6" class="muted">Agrega asesoras en Econotec (grupo «Asesores») para ver su desempeño.</td></tr>{% endfor %}</tbody>
+  </table></div>
+</div>
+{% endif %}
+
+<div class="card"><h3>Última actividad</h3><p class="sub"><a href="{% url 'crm:bitacora' %}">Ver bitácora completa</a></p>
+  <div class="timeline">{% for a in ultimas %}
+    <div class="tl"><span class="when">{{ a.fecha|date:"d M H:i" }}</span><span><b>{{ a.contacto.empresa|default:a.contacto.nombre }}</b> · {{ a.get_tipo_display }} — {{ a.detalle|truncatechars:120 }} <span class="muted">({{ a.usuario|nombre }})</span></span></div>
+  {% empty %}<p class="muted">Sin actividad todavía.</p>{% endfor %}</div>
+</div>
+{{ graficos|json_script:"graficos-data" }}
+{% endblock %}
