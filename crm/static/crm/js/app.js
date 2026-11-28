@@ -201,7 +201,7 @@
     const base = Number(inbox.dataset.ultimo || 0);
     const ms = $("#msgs"); if (ms) ms.scrollTop = ms.scrollHeight;
     setInterval(async () => {
-      const ta = $(".reply textarea");
+      const ta = $(".wb-reply textarea") || $(".reply textarea");
       if (ta && ta.value.trim()) return; // no recargar si el asesor está escribiendo
       try {
         const r = await fetch(inbox.dataset.estado);

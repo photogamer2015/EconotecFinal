@@ -136,3 +136,44 @@ class WhatsAppTests(BaseCRM):
         self.assertEqual(r.status_code, 200)
         self.assertTrue(Contacto.objects.filter(telefono="593993333333", nombre="Jorge").exists())
         env.assert_called_once()
+
+
+class BandejaTests(BaseCRM):
+    def setUp(self):
+        Perfil.objects.filter(user=self.asesora2).update(recibe_leads=False)
+        self.conv, self.op, _ = services.registrar_entrante(Canal.WHATSAPP, "Rosa", "hola", telefono="0992222222")
+        self.entrar(self.admin)
+
+    def test_chat_asignado_a_la_responsable_y_filtros(self):
+        self.assertEqual(self.conv.asignado, self.asesora)
+        url = reverse("crm:bandeja")
+        for f in ["", "mia", "sin_asignar", "sin_responder", "seguimiento", "no_leido"]:
+            self.assertEqual(self.client.get(url, {"f": f, "modo": "bot"}).status_code, 200, f)
+        r = self.client.get(url, {"f": "sin_responder"})
+        self.assertContains(r, "Rosa")
+        self.assertContains(r, "El bot está activo")
+
+    def test_acciones(self):
+        url = reverse("crm:bandeja_accion", args=[self.conv.pk])
+        self.client.post(url, {"accion": "asignar", "usuario": self.asesora2.pk})
+        self.client.post(url, {"accion": "seguimiento"})
+        self.client.post(url, {"accion": "bot"})
+        self.client.post(url, {"accion": "etiquetas", "nueva": "Consola"})
+        self.client.post(url, {"accion": "etapa", "etapa": "propuesta"})
+        self.conv.refresh_from_db()
+        self.op.refresh_from_db()
+        self.assertEqual(self.conv.asignado, self.asesora2)
+        self.assertTrue(self.conv.seguimiento)
+        self.assertFalse(self.conv.bot_activo)
+        self.assertEqual(list(self.op.etiquetas.values_list("nombre", flat=True)), ["Consola"])
+        self.assertEqual(self.op.etapa, "propuesta")
+        r = self.client.get(reverse("crm:bandeja"), {"f": "seguimiento", "modo": "humano"})
+        self.assertContains(r, "Rosa")
+
+    def test_responder_por_wa_me_asigna_y_pausa_bot(self):
+        Conversacion.objects.filter(pk=self.conv.pk).update(asignado=None)
+        r = self.client.post(reverse("crm:bandeja_conv", args=[self.conv.pk]), {"texto": "Hola Rosa", "via": "wa"})
+        self.assertEqual(r.status_code, 302)
+        self.conv.refresh_from_db()
+        self.assertEqual(self.conv.asignado, self.admin)
+        self.assertFalse(self.conv.bot_activo)

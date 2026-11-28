@@ -180,6 +180,11 @@ class Conversacion(models.Model):
         max_length=40, null=True, blank=True, unique=True, help_text="Identifica al visitante del chat web."
     )
     ultimo_mensaje = models.DateTimeField(default=timezone.now, db_index=True)
+    asignado = models.ForeignKey(
+        User, null=True, blank=True, on_delete=models.SET_NULL, related_name="crm_conversaciones",
+        help_text="Asesora que atiende este chat (sin asignar si está vacío).",
+    )
+    seguimiento = models.BooleanField(default=False, help_text="Marcado con estrella para darle seguimiento.")
 
     class Meta:
         ordering = ["-ultimo_mensaje"]

@@ -241,6 +241,9 @@ def registrar_entrante(
                 [op.responsable], None, NT.MENSAJE,
                 f"{empresa_o_nombre(contacto)} escribió por {Canal(canal).label}: {texto[:120]}", url_conv,
             )
+    if conv.asignado_id is None and op is not None and op.responsable_id:
+        conv.asignado_id = op.responsable_id  # el chat lo atiende la responsable del cliente
+        conv.save(update_fields=["asignado"])
     return conv, op, creada
 
 

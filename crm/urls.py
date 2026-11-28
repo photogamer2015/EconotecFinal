@@ -28,6 +28,7 @@ urlpatterns = [
     path("chats/", views.bandeja, name="bandeja"),
     path("chats/<int:pk>/", views.bandeja, name="bandeja_conv"),
     path("chats/<int:pk>/bot/", views.bandeja_bot, name="bandeja_bot"),
+    path("chats/<int:pk>/accion/", views.bandeja_accion, name="bandeja_accion"),
     path("chats/estado/", views.bandeja_estado, name="bandeja_estado"),
     path("whatsapp/respuestas/nueva/", views_config.respuesta_editar, name="respuesta_nueva"),
     path("whatsapp/respuestas/<int:pk>/", views_config.respuesta_editar, name="respuesta_editar"),

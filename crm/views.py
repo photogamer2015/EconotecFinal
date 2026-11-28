@@ -536,23 +536,83 @@ def _ultimo_mensaje_id(user):
     ) or 0
 
 
+FILTROS_CHAT = [
+    ("todo", "Todo", "users"),
+    ("mia", "Mi bandeja", "inbox"),
+    ("sin_asignar", "Sin asignar", "user-x"),
+    ("sin_responder", "Sin responder", "reply"),
+    ("seguimiento", "Seguimiento", "star"),
+    ("no_leido", "No leído", "mail"),
+]
+MODOS_CHAT = [("", "Todos"), ("humano", "Humano"), ("bot", "Bot")]
+
+
+def _chats_base(user):
+    """Chats de WhatsApp visibles con su último mensaje (texto, si entró y si fue del bot)."""
+    from django.db.models import OuterRef, Subquery
+
+    from .models import Mensaje
+
+    ult = Mensaje.objects.filter(conversacion=OuterRef("pk")).order_by("-fecha", "-id")
+    return (
+        conversaciones_visibles(user).filter(canal=Canal.WHATSAPP)
+        .select_related("contacto", "asignado")
+        .annotate(
+            ult_texto=Subquery(ult.values("texto")[:1]),
+            ult_entrante=Subquery(ult.values("entrante")[:1]),
+            ult_bot=Subquery(ult.values("bot")[:1]),
+        )
+    )
+
+
+def _filtrar_chats(qs, filtro, user):
+    return {
+        "mia": lambda: qs.filter(asignado=user),
+        "sin_asignar": lambda: qs.filter(asignado__isnull=True),
+        "sin_responder": lambda: qs.filter(ult_entrante=True),
+        "seguimiento": lambda: qs.filter(seguimiento=True),
+        "no_leido": lambda: qs.filter(no_leidos__gt=0),
+    }.get(filtro, lambda: qs)()
+
+
+def _params_chat(request):
+    """Filtro, modo y búsqueda actuales, para no perderlos al cambiar de chat."""
+    from urllib.parse import urlencode
+
+    p = {k: request.GET.get(k, "").strip() for k in ("f", "modo", "q")}
+    return p, urlencode({k: v for k, v in p.items() if v})
+
+
 @crm_requerido
 def bandeja(request, pk=None):
-    """Conversaciones de WhatsApp: lo que escribe el cliente, lo que respondió el bot y la asesora."""
+    """Bandeja de WhatsApp (estilo Whapify): filtros, Humano/Bot, chat y panel del cliente."""
     from . import whatsapp_api, whatsapp_qr
+    from .roles import usuarios_crm
 
-    convs = conversaciones_visibles(request.user).filter(canal=Canal.WHATSAPP).select_related("contacto")
+    p, params = _params_chat(request)
+    base = _chats_base(request.user)
+    conteos = {clave: _filtrar_chats(base, clave, request.user).count() for clave, _, _ in FILTROS_CHAT}
+    convs = _filtrar_chats(base, p["f"], request.user)
+    if p["modo"] == "humano":
+        convs = convs.filter(bot_activo=False)
+    elif p["modo"] == "bot":
+        convs = convs.filter(bot_activo=True)
+    if p["q"]:
+        convs = convs.filter(Q(contacto__nombre__icontains=p["q"]) | Q(contacto__telefono__icontains=p["q"])
+                             | Q(contacto__empresa__icontains=p["q"]))
+
     activa = None
     if pk:
-        activa = convs.filter(pk=pk).first()
+        activa = base.filter(pk=pk).first()
         if activa is None:
             return redirect("crm:bandeja")
-    else:
+    elif request.method == "GET":
         activa = convs.first()
-    if activa and activa.no_leidos:
+    if activa and activa.no_leidos and request.method == "GET":
         activa.no_leidos = 0
         activa.save(update_fields=["no_leidos"])
 
+    volver = reverse("crm:bandeja_conv", args=[activa.pk]) + (f"?{params}" if params else "") if activa else ""
     if request.method == "POST" and activa:
         texto = request.POST.get("texto", "").strip()
         if texto:
@@ -561,39 +621,110 @@ def bandeja(request, pk=None):
             ok, estado = services.responder_conversacion(
                 activa, request.user, texto, int(rid) if rid.isdigit() else None, enviar_qr=not por_wa_me
             )
+            if activa.asignado_id is None:  # quien responde se queda con el chat
+                activa.asignado = request.user
+                activa.save(update_fields=["asignado"])
             if ok and por_wa_me:
                 messages.success(request, "Se abrió WhatsApp con tu mensaje: solo toca Enviar. Quedó en el historial y el bot se pausó.")
-            elif ok:
-                messages.success(request, "Mensaje enviado por WhatsApp. El bot quedó pausado en este chat.")
-            else:
+            elif not ok:
                 messages.warning(request, f"Quedó en el historial, pero no se envió: {estado}.")
-        return redirect("crm:bandeja_conv", pk=activa.pk)
+        return redirect(volver)
 
-    op = activa.contacto.oportunidades.filter(etapa__in=Oportunidad.ETAPAS_ABIERTAS).first() if activa else None
+    op = None
+    if activa:
+        op = (activa.contacto.oportunidades.filter(etapa__in=Oportunidad.ETAPAS_ABIERTAS).first()
+              or activa.contacto.oportunidades.first())
     wa = ({"estado": "conectado", "numero": "API oficial"} if whatsapp_api.activo()
           else whatsapp_qr.estado() if whatsapp_qr.activo() else {"estado": "apagado"})
+    primer = activa.mensajes.order_by("fecha").first() if activa else None
     return render(request, "crm/bandeja.html", {
-        "convs": convs[:100],
+        "convs": convs[:150],
         "activa": activa,
         "mensajes_conv": activa.mensajes.select_related("autor") if activa else [],
         "op": op,
+        "primer_mensaje": primer,
+        "total_mensajes": activa.mensajes.count() if activa else 0,
         "ultimo_id": _ultimo_mensaje_id(request.user),
         "wa": wa,
         "envio_directo": wa.get("estado") == "conectado",
         "plantillas": services.plantillas_para(activa.contacto, op, request.user) if activa else [],
+        "filtros": [(c, n, i, conteos[c]) for c, n, i in FILTROS_CHAT],
+        "modos": MODOS_CHAT,
+        "p": p,
+        "params": params,
+        "asesoras": usuarios_crm(),
+        "etiquetas_todas": Etiqueta.objects.all(),
+        "etiquetas_op": set(op.etiquetas.values_list("pk", flat=True)) if op else set(),
+        "etapas": Oportunidad.Etapa.choices,
+        "cliente_eco": services.enlazar_cliente_econotec(activa.contacto) if activa else None,
     })
 
 
 @crm_requerido
 @require_POST
+def bandeja_accion(request, pk):
+    """Acciones del chat: asignar, seguimiento (estrella), pausar/activar bot, etiquetas y etapa."""
+    conv = get_object_or_404(conversaciones_visibles(request.user).select_related("contacto"), pk=pk)
+    accion = request.POST.get("accion", "")
+    _, params = _params_chat(request)
+    volver = reverse("crm:bandeja_conv", args=[conv.pk]) + (f"?{params}" if params else "")
+    op = (conv.contacto.oportunidades.filter(etapa__in=Oportunidad.ETAPAS_ABIERTAS).first()
+          or conv.contacto.oportunidades.first())
+
+    if accion == "asignar":
+        from .roles import usuarios_crm
+
+        uid = request.POST.get("usuario", "")
+        nuevo = usuarios_crm().filter(pk=uid).first() if uid.isdigit() else None
+        if nuevo != conv.asignado:
+            conv.asignado = nuevo
+            conv.save(update_fields=["asignado"])
+            texto = f"Chat asignado a {notif.nombre(nuevo)}." if nuevo else "Chat sin asignar."
+            Actividad.objects.create(oportunidad=op, contacto=conv.contacto, usuario=request.user,
+                                     tipo=Actividad.Tipo.SISTEMA, detalle=texto)
+            if nuevo:
+                notif.notificar(request.user, NT.ASIGNACION,
+                                f"{notif.nombre(request.user)} te asignó el chat de {conv.contacto.nombre}.",
+                                reverse("crm:bandeja_conv", args=[conv.pk]), tambien=[nuevo])
+            messages.success(request, texto)
+    elif accion == "seguimiento":
+        conv.seguimiento = not conv.seguimiento
+        conv.save(update_fields=["seguimiento"])
+    elif accion == "bot":
+        conv.bot_activo = not conv.bot_activo
+        conv.bot_estado = ""
+        conv.save(update_fields=["bot_activo", "bot_estado"])
+        messages.success(request, "Bot activado: responderá los próximos mensajes." if conv.bot_activo
+                         else "Bot pausado: este chat lo atiende una asesora.")
+    elif accion == "etiquetas" and op:
+        antes = set(op.etiquetas.values_list("nombre", flat=True))
+        ids = [int(i) for i in request.POST.getlist("etiquetas") if i.isdigit()]
+        nueva = request.POST.get("nueva", "").strip()[:40]
+        if nueva:
+            e = Etiqueta.objects.filter(nombre__iexact=nueva).first() or Etiqueta.objects.create(
+                nombre=nueva, color=request.POST.get("color") or "azul", creado_por=request.user)
+            ids.append(e.pk)
+        op.etiquetas.set(Etiqueta.objects.filter(pk__in=ids))
+        despues = set(op.etiquetas.values_list("nombre", flat=True))
+        if antes != despues:
+            cambio = ", ".join([f"+{n}" for n in sorted(despues - antes)] + [f"−{n}" for n in sorted(antes - despues)])
+            Actividad.objects.create(oportunidad=op, usuario=request.user, tipo=Actividad.Tipo.SISTEMA,
+                                     detalle=f"Etiquetas: {cambio}.")
+    elif accion == "etapa" and op and puede_ver_oportunidad(request.user, op):
+        etapa = request.POST.get("etapa", "")
+        if etapa in Oportunidad.Etapa.values:
+            services.cambiar_etapa(op, etapa, request.user)
+    return redirect(volver)
+
+
+@crm_requerido
+@require_POST
 def bandeja_bot(request, pk):
-    """Activa o pausa el bot en una conversación."""
+    """Compatibilidad: activa o pausa el bot en una conversación."""
     conv = get_object_or_404(conversaciones_visibles(request.user), pk=pk)
     conv.bot_activo = not conv.bot_activo
     conv.bot_estado = ""
     conv.save(update_fields=["bot_activo", "bot_estado"])
-    messages.success(request, "Bot activado: responderá los próximos mensajes." if conv.bot_activo
-                     else "Bot pausado: este chat lo atiende un asesor.")
     return redirect("crm:bandeja_conv", pk=conv.pk)
 
 

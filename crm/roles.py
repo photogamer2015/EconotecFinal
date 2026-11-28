@@ -139,7 +139,7 @@ def conversaciones_visibles(user, qs=None):
         return qs
     if not puede_entrar(user):
         return qs.none()
-    return qs.filter(contacto__oportunidades__responsable=user).distinct()
+    return qs.filter(Q(asignado=user) | Q(contacto__oportunidades__responsable=user)).distinct()
 
 
 def puede_ver_oportunidad(user, op):
