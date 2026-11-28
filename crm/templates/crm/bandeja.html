@@ -9,7 +9,7 @@
   {% elif wa.estado == 'esperando_qr' %}<a class="chip warn" href="{% url 'crm:whatsapp_conexion' %}">Falta escanear el QR</a>
   {% else %}<a class="chip bad" href="{% url 'crm:whatsapp_conexion' %}">WhatsApp desconectado</a>{% endif %}
   <span class="grow"></span>
-  <span class="muted small">Los mensajes llegan solos. El bot responde hasta que un asesor contesta o el cliente pide un asesor.</span>
+  <span class="muted small">{% if wa.estado == 'conectado' %}Los mensajes llegan solos. El bot responde hasta que una asesora contesta o el cliente pide un asesor.{% else %}Conecta tu número escaneando el QR en «Conexión»: los mensajes llegarán solos y EconoBot responderá. Mientras tanto, tus respuestas se abren en WhatsApp.{% endif %}</span>
 </div>
 <div class="card inbox" id="inbox" data-estado="{% url 'crm:bandeja_estado' %}" data-ultimo="{{ ultimo_id }}">
   <div class="conv-list">
@@ -19,7 +19,7 @@
       <div class="body"><div class="nm">{{ c.contacto.nombre }}</div><div class="prev">{% if c.bot_activo %}Bot atendiendo{% else %}Atiende un asesor{% endif %}{% if c.contacto.empresa %} · {{ c.contacto.empresa }}{% endif %}</div></div>
       <div class="meta">{{ c.ultimo_mensaje|date:"d M H:i" }}{% if c.no_leidos %}<br><span class="chip" style="margin-top:4px">{{ c.no_leidos }}</span>{% endif %}</div>
     </a>
-    {% empty %}<div class="empty">Todavía no hay chats. Cuando alguien escriba al WhatsApp vinculado, aparecerá aquí y el bot le responderá.</div>{% endfor %}
+    {% empty %}<div class="empty">Todavía no hay chats. Cuando alguien escriba a tu WhatsApp vinculado, aparecerá aquí y EconoBot le responderá. Los chats que abras desde la ficha de un cliente también se ven aquí.</div>{% endfor %}
   </div>
   {% if activa %}
   <div class="thread">
@@ -39,11 +39,12 @@
       <div class="msg {% if not m.entrante %}out{% endif %}{% if m.bot %} bot{% endif %}">{{ m.texto }}<span class="t">{{ m.fecha|date:"d M H:i" }}{% if not m.entrante %} · {% if m.bot %}EconoBot{% else %}{{ m.autor|nombre }}{% endif %}{% if m.estado_envio|slice:":5" == "error" %} · {{ m.estado_envio }}{% endif %}{% endif %}</span></div>
       {% endfor %}
     </div>
-    <form class="reply col" method="post">{% csrf_token %}
+    <form class="reply col" method="post" id="replyForm" data-wa="{{ activa.contacto.telefono }}" data-directo="{% if envio_directo %}1{% endif %}">{% csrf_token %}
       <input type="hidden" name="respuesta" id="respId">
+      <input type="hidden" name="via" value="">
       {% if plantillas %}<select id="plantillas" aria-label="Mensajes predeterminados"><option value="">Mensajes predeterminados…</option>{% for p in plantillas %}<option value="{{ p.id }}">{{ p.titulo }}</option>{% endfor %}</select>{% endif %}
       <div class="reply-row">
-        <textarea name="texto" placeholder="Escribe tu respuesta… (al enviar, el bot se pausa en este chat)" aria-label="Respuesta" required></textarea>
+        <textarea name="texto" placeholder="{% if envio_directo %}Escribe tu respuesta… (al enviar, el bot se pausa en este chat){% else %}Escribe tu respuesta… se abre WhatsApp con el mensaje listo (el QR no está conectado){% endif %}" aria-label="Respuesta" required></textarea>
         <button class="btn wa">{% wa_ico %}Enviar</button>
       </div>
     </form>

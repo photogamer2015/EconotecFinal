@@ -106,8 +106,10 @@ def integraciones(request):
             "detalle": "El número se vincula escaneando un QR, como WhatsApp Web. Los mensajes llegan solos a «Chats de WhatsApp» "
                        "y el bot responde. No usa la API de Meta: pensado para pocos mensajes.",
             "url": "",
-            "falta": "Pon WA_QR_ACTIVO=True y WA_QR_TOKEN en .env, arranca whatsapp_qr/ (npm start) y escanea el QR en «Conexión»."
-                     if not whatsapp_qr.activo() else "Escanea el QR en «Conexión» (o abre Iniciar Demo si el programa no está corriendo).",
+            "falta": "Quita WA_QR_ACTIVO=False del .env para encenderlo."
+                     if not whatsapp_qr.activo() else "Escanea el QR en «Conexión» con el celular de la empresa "
+                     "(si dice que el programa no está abierto: servicio econotec-whatsapp en el servidor, "
+                     "o whatsapp_qr/Iniciar WhatsApp.command en la Mac).",
             "config": reverse("crm:whatsapp_conexion"),
         },
         {

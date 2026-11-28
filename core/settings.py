@@ -84,9 +84,17 @@ if not EMAIL_BACKEND:
 # WhatsApp sin API: el CRM abre los chats con enlaces wa.me (no necesita nada).
 WHATSAPP_NUMERO = env('WHATSAPP_NUMERO', default='')
 # Bot por código QR (carpeta whatsapp_qr/, Node.js): WA_QR_ACTIVO=True y una clave larga en WA_QR_TOKEN.
-WA_QR_ACTIVO = env.bool('WA_QR_ACTIVO', default=False)
+# Encendido por defecto: el CRM muestra los chats y el bot responde en cuanto el puente
+# (whatsapp_qr/, npm start) está abierto y el QR escaneado. WA_QR_ACTIVO=False lo apaga.
+WA_QR_ACTIVO = env.bool('WA_QR_ACTIVO', default=True)
 WA_QR_URL = env('WA_QR_URL', default='http://127.0.0.1:3010')
+# Clave compartida con el puente. Si no se define, ambos la derivan de SECRET_KEY
+# (el puente lee el mismo .env), así no hay que configurar nada.
 WA_QR_TOKEN = env('WA_QR_TOKEN', default='')
+if not WA_QR_TOKEN:
+    import hashlib as _hashlib
+    import hmac as _hmac
+    WA_QR_TOKEN = _hmac.new(SECRET_KEY.encode(), b'econotec-whatsapp-qr', _hashlib.sha256).hexdigest()
 # WhatsApp Business API oficial (Meta Cloud API). Vacío = sin conectar; el CRM sigue con wa.me / QR.
 WA_API_TOKEN = env('WA_API_TOKEN', default='')
 WA_API_PHONE_ID = env('WA_API_PHONE_ID', default='')
@@ -102,6 +110,10 @@ IMAP_PASSWORD = env('IMAP_PASSWORD', default=EMAIL_HOST_PASSWORD)
 
 DEFAULT_ALLOWED_HOSTS = ['127.0.0.1', 'localhost']
 ALLOWED_HOSTS = env.list('ALLOWED_HOSTS', default=DEFAULT_ALLOWED_HOSTS)
+# El puente de WhatsApp (mismo servidor) llama al CRM por 127.0.0.1.
+for _local in ('127.0.0.1', 'localhost'):
+    if _local not in ALLOWED_HOSTS and '*' not in ALLOWED_HOSTS:
+        ALLOWED_HOSTS.append(_local)
 
 # Solo orígenes concretos configurados por el administrador.
 DEFAULT_CSRF_TRUSTED_ORIGINS = []
@@ -144,6 +156,8 @@ SESSION_COOKIE_SAMESITE = 'Lax'
 SESSION_COOKIE_SECURE = not DEBUG
 CSRF_COOKIE_SECURE = not DEBUG
 SECURE_SSL_REDIRECT = not DEBUG
+# El puente local de WhatsApp entra por http://127.0.0.1 (no sale a internet).
+SECURE_REDIRECT_EXEMPT = [r'^crm/api/whatsapp/qr/']
 SECURE_HSTS_SECONDS = 31536000 if not DEBUG else 0
 SECURE_HSTS_INCLUDE_SUBDOMAINS = env.bool('SECURE_HSTS_INCLUDE_SUBDOMAINS', default=False)
 SECURE_HSTS_PRELOAD = env.bool('SECURE_HSTS_PRELOAD', default=False)

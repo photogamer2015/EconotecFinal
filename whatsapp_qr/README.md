@@ -7,12 +7,21 @@ Programa pequeño en Node.js que se vincula al número de WhatsApp escaneando un
 > puente deja de ser necesario. Ver `crm/whatsapp_api.py`.
 
 ## Activarlo
-1. Instala Node.js 18 o superior (`brew install node` en Mac).
-2. En el `.env` de Econotec: `WA_QR_ACTIVO=True` y `WA_QR_TOKEN=` con una clave larga.
-   Si Econotec no corre en `http://127.0.0.1:8000`, define también `CRM_URL=` (p. ej. `http://127.0.0.1:8000`).
-3. `cd whatsapp_qr && npm install && npm start` (el QR también sale en la terminal).
-4. En el CRM: **Ajustes de WhatsApp → Conexión** y escanea el QR con el celular
-   (WhatsApp → Dispositivos vinculados → Vincular un dispositivo). Solo la primera vez: la sesión queda en `.wwebjs_auth/`.
+Viene **encendido**: no hay que poner claves. La clave entre Econotec y este programa sale sola de `SECRET_KEY`
+(o de `WA_QR_TOKEN` si la defines). Para apagarlo: `WA_QR_ACTIVO=False` en `.env`.
+
+**En el servidor**: `scripts/aws_update.sh` lo instala y lo deja corriendo como servicio `econotec-whatsapp`
+(necesita Node.js 18+ y las librerías de Chrome: `sudo apt install nodejs npm` y, si Chrome no abre,
+`sudo apt install -y libnss3 libatk1.0-0 libatk-bridge2.0-0 libcups2 libdrm2 libxkbcommon0 libxcomposite1 libxdamage1 libxrandr2 libgbm1 libasound2 libpango-1.0-0`).
+Registro: `sudo journalctl -u econotec-whatsapp -f`.
+
+**En la Mac**: doble clic en `Iniciar WhatsApp.command` (la primera vez instala lo necesario).
+
+Luego, en el CRM: **Ajustes de WhatsApp → Conexión** y escanea el QR con el celular de la empresa
+(WhatsApp → Dispositivos vinculados → Vincular un dispositivo). Solo la primera vez: la sesión queda en `.wwebjs_auth/`.
+
+Dónde busca a Econotec: `CRM_URL` o `SISTEMA_URL` del `.env`; si no hay, `https://econosystem.cc` con `DEBUG=False`
+y `http://127.0.0.1:8000` en la Mac.
 
 ## Qué hace
 - Responde solo a chats individuales que escriben primero (no grupos, estados ni difusiones).

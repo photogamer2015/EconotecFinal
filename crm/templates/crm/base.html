@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="csrf-token" content="{{ csrf_token }}">
-{% if wa_qr_activo %}<meta name="wa-qr" content="1">{% endif %}
+{% if wa_envio_directo %}<meta name="wa-qr" content="1">{% endif %}
 <title>{% block title %}CRM Econotec{% endblock %}</title>
 {% include "crm/_tema.html" %}
 <link rel="icon" type="image/jpeg" href="{% static 'logo.jpg' %}">
@@ -22,7 +22,7 @@
         <div class="nav-label">CRM comercial</div>
         <a href="{% url 'crm:dashboard' %}" class="{% if u == 'dashboard' %}on{% endif %}">{% ico 'home' %}<span>Resultados</span></a>
         <a href="{% url 'crm:clientes' %}" class="{% if 'cliente' in u %}on{% endif %}">{% ico 'users' %}<span>Clientes</span></a>
-        {% if wa_chats_activo %}<a href="{% url 'crm:bandeja' %}" class="{% if 'bandeja' in u %}on{% endif %}">{% wa_ico %}<span>Chats de WhatsApp</span>{% if nav_chats %}<span class="cnt">{{ nav_chats }}</span>{% endif %}</a>{% endif %}
+        <a href="{% url 'crm:bandeja' %}" class="{% if 'bandeja' in u %}on">{% wa_ico %}<span>Chats de WhatsApp</span>{% if nav_chats %}<span class="cnt">{{ nav_chats }}</span>{% endif %}</a>{% endif %}
         <a href="{% url 'crm:oportunidades' %}" class="{% if u == 'oportunidades' %}on{% endif %}">{% ico 'pipe' %}<span>Pipelines</span></a>
         <a href="{% url 'crm:etiquetas' %}" class="{% if 'etiqueta' in u %}on{% endif %}">{% ico 'tag' %}<span>Etiquetas</span></a>
         <a href="{% url 'crm:bitacora' %}" class="{% if u == 'bitacora' or u == 'actividad_nueva' %}on{% endif %}">{% ico 'log' %}<span>Bitácora</span></a>

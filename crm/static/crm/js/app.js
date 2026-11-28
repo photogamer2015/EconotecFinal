@@ -186,6 +186,15 @@
   });
 
 
+  // ---------- Chats de WhatsApp: sin QR conectado, la respuesta se abre en WhatsApp (wa.me) ----------
+  const rf = $("#replyForm");
+  if (rf) rf.addEventListener("submit", () => {
+    const t = rf.texto.value.trim();
+    if (!t || rf.dataset.directo === "1") return;
+    rf.via.value = "wa";
+    window.open(waLink(rf.dataset.wa, t), "_blank", "noopener");
+  });
+
   // ---------- Chats de WhatsApp: se actualiza sola cuando llega un mensaje ----------
   const inbox = $("#inbox");
   if (inbox) {

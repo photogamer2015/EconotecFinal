@@ -556,22 +556,30 @@ def bandeja(request, pk=None):
     if request.method == "POST" and activa:
         texto = request.POST.get("texto", "").strip()
         if texto:
-            ok, estado = services.responder_conversacion(activa, request.user, texto)
-            if ok:
+            rid = request.POST.get("respuesta", "")
+            por_wa_me = request.POST.get("via") == "wa"
+            ok, estado = services.responder_conversacion(
+                activa, request.user, texto, int(rid) if rid.isdigit() else None, enviar_qr=not por_wa_me
+            )
+            if ok and por_wa_me:
+                messages.success(request, "Se abrió WhatsApp con tu mensaje: solo toca Enviar. Quedó en el historial y el bot se pausó.")
+            elif ok:
                 messages.success(request, "Mensaje enviado por WhatsApp. El bot quedó pausado en este chat.")
             else:
                 messages.warning(request, f"Quedó en el historial, pero no se envió: {estado}.")
         return redirect("crm:bandeja_conv", pk=activa.pk)
 
     op = activa.contacto.oportunidades.filter(etapa__in=Oportunidad.ETAPAS_ABIERTAS).first() if activa else None
+    wa = ({"estado": "conectado", "numero": "API oficial"} if whatsapp_api.activo()
+          else whatsapp_qr.estado() if whatsapp_qr.activo() else {"estado": "apagado"})
     return render(request, "crm/bandeja.html", {
         "convs": convs[:100],
         "activa": activa,
         "mensajes_conv": activa.mensajes.select_related("autor") if activa else [],
         "op": op,
         "ultimo_id": _ultimo_mensaje_id(request.user),
-        "wa": ({"estado": "conectado", "numero": "API oficial"} if whatsapp_api.activo()
-               else whatsapp_qr.estado() if whatsapp_qr.activo() else {"estado": "apagado"}),
+        "wa": wa,
+        "envio_directo": wa.get("estado") == "conectado",
         "plantillas": services.plantillas_para(activa.contacto, op, request.user) if activa else [],
     })
 

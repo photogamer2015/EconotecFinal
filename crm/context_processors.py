@@ -28,4 +28,8 @@ def crm_global(request):
         "wa_qr_activo": whatsapp_qr.activo(),
         "wa_api_activo": whatsapp_api.activo(),
         "wa_chats_activo": whatsapp_qr.activo() or whatsapp_api.activo(),
+        # Mensajes salen solos desde el CRM (API oficial, o QR vinculado y conectado); si no, se abre wa.me.
+        "wa_envio_directo": lambda: whatsapp_api.activo() or (
+            whatsapp_qr.activo() and whatsapp_qr.estado().get("estado") == "conectado"
+        ),
     }

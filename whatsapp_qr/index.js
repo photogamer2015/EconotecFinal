@@ -28,14 +28,18 @@ function leerEnv(archivo) {
   return vars;
 }
 const ENV = { ...leerEnv(path.join(__dirname, "..", ".env")), ...process.env };
-const TOKEN = ENV.WA_QR_TOKEN || "";
-const CRM_URL = (ENV.CRM_URL || "http://127.0.0.1:8000").replace(/\/$/, "");
+// Misma clave que usa Django: WA_QR_TOKEN del .env o, si no está, derivada de SECRET_KEY (core/settings.py).
+const SECRET_KEY = ENV.SECRET_KEY || "django-insecure-econotec-dev-key-cambiar-en-produccion-xxxxxxxx";
+const TOKEN = ENV.WA_QR_TOKEN || require("crypto").createHmac("sha256", SECRET_KEY).update("econotec-whatsapp-qr").digest("hex");
+// Dónde está Econotec: CRM_URL o SISTEMA_URL del .env; en producción (DEBUG=False) econosystem.cc; en la Mac, runserver.
+const PRODUCCION = String(ENV.DEBUG || "").toLowerCase() === "false";
+const CRM_URL = (ENV.CRM_URL || ENV.SISTEMA_URL || (PRODUCCION ? "https://econosystem.cc" : "http://127.0.0.1:8000")).replace(/\/$/, "");
 const PUERTO = Number(new URL(ENV.WA_QR_URL || "http://127.0.0.1:3010").port || 3010);
 const MAPA = path.join(__dirname, "mapa.json"); // número → chat de WhatsApp (para responder al chat correcto)
 
-if (!TOKEN) {
-  console.error("Falta WA_QR_TOKEN en el .env de Econotec. Escribe una clave larga, por ejemplo WA_QR_TOKEN=econotec-bot-una-clave-larga");
-  process.exit(1);
+if (["false", "0", "no"].includes(String(ENV.WA_QR_ACTIVO || "").toLowerCase())) {
+  console.error("WA_QR_ACTIVO=False en el .env: el bot de WhatsApp por QR está apagado.");
+  process.exit(0);
 }
 
 let estado = "iniciando";
@@ -52,11 +56,18 @@ const espera = ms => new Promise(r => setTimeout(r, ms));
 // ---------- Cliente de WhatsApp ----------
 // WA_QR_VISIBLE=True en .env abre la ventana de Chrome (útil si el modo oculto no carga WhatsApp Web)
 const VISIBLE = String(ENV.WA_QR_VISIBLE || "").toLowerCase() === "true";
+// Chrome a usar: CHROME_PATH del .env, o el instalado en el equipo; si no hay, el que descarga puppeteer.
+const CHROME = [
+  ENV.CHROME_PATH,
+  "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+  "/usr/bin/google-chrome", "/usr/bin/google-chrome-stable", "/usr/bin/chromium", "/usr/bin/chromium-browser", "/snap/bin/chromium",
+].find(p => p && fs.existsSync(p));
 const client = new Client({
   authStrategy: new LocalAuth({ dataPath: path.join(__dirname, ".wwebjs_auth") }),
   authTimeoutMs: 180000, // la primera carga de WhatsApp Web puede tardar más de 30 s
   puppeteer: {
     headless: !VISIBLE,
+    ...(CHROME ? { executablePath: CHROME } : {}),
     protocolTimeout: 300000,
     args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage", "--disable-gpu"],
   },

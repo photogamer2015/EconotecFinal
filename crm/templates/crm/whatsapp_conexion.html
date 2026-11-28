@@ -7,10 +7,7 @@
 {% if not activo %}
 <div class="card">
   <h3>El bot de WhatsApp por QR está apagado</h3>
-  <p class="sub">Para activarlo, en el archivo <code>.env</code> del proyecto pon:</p>
-  <pre class="snippet">WA_QR_ACTIVO=True
-WA_QR_TOKEN=una-clave-larga-que-inventes</pre>
-  <p class="muted small">Luego cierra y vuelve a abrir <b>Iniciar Demo.command</b>: arranca solo el programa del QR (carpeta <code>whatsapp_qr</code>).</p>
+  <p class="sub">En el archivo <code>.env</code> está <code>WA_QR_ACTIVO=False</code>. Bórralo (o ponlo en True) y reinicia Econotec para encenderlo.</p>
 </div>
 {% else %}
 <div class="grid g21">
@@ -30,7 +27,7 @@ WA_QR_TOKEN=una-clave-larga-que-inventes</pre>
     <h3 style="margin-top:16px">A tener en cuenta</h3>
     <ul class="small">
       <li>No es la API oficial de Meta: funciona como WhatsApp Web. Úsalo con pocos mensajes y solo respondiendo a quien escribe primero; WhatsApp puede bloquear números que envían mucho.</li>
-      <li>El computador donde corre debe estar encendido y el celular con internet.</li>
+      <li>El servidor (o la Mac) donde corre debe estar encendido y el celular con internet.</li>
       <li>El bot responde a <b>todos los chats individuales</b> de ese número (no a grupos). Lo ideal es un número solo para ventas.</li>
       <li>Para cambiar de número: en el celular, cierra la sesión del dispositivo vinculado; aparecerá un QR nuevo.</li>
     </ul>
@@ -48,8 +45,8 @@ WA_QR_TOKEN=una-clave-larga-que-inventes</pre>
     conectado: ["WhatsApp conectado", "El bot está respondiendo los mensajes que llegan."],
     esperando_qr: ["Escanea el código QR", "Abre WhatsApp en el celular → Dispositivos vinculados → Vincular un dispositivo."],
     iniciando: ["Iniciando WhatsApp…", "Espera unos segundos; aparecerá el código QR."],
-    desconectado: ["WhatsApp se desconectó", "Se está reconectando. Si no vuelve, cierra y abre Iniciar Demo."],
-    sin_conexion: ["El programa del QR no está abierto", "Abre Iniciar Demo.command (o en la carpeta whatsapp_qr: npm start)."],
+    desconectado: ["WhatsApp se desconectó", "Se está reconectando solo. Si no vuelve, reinicia el programa del QR."],
+    sin_conexion: ["El programa del QR no está abierto", "En la Mac: doble clic en whatsapp_qr/Iniciar WhatsApp.command. En el servidor: sudo systemctl restart econotec-whatsapp."],
   };
   async function revisar() {
     try {
