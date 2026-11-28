@@ -1,0 +1,26 @@
+{% extends "crm/base.html" %}
+{% load crm_tags %}
+{% block title %}Etiquetas · CRM Econotec{% endblock %}
+{% block h1 %}Etiquetas{% endblock %}
+{% block content %}
+<div class="grid g21">
+  <div class="card"><h3>Etiquetas del equipo</h3><p class="sub">Úsalas para marcar oportunidades (VIP, urgente, licitación…) y filtrar los pipelines.</p>
+    <div class="tbl-wrap"><table>
+      <thead><tr><th>Etiqueta</th><th class="num">Abiertas</th><th class="num">Total</th><th></th></tr></thead>
+      <tbody>{% for e in lista %}
+        <tr><td><span class="tag c-{{ e.color }}">{{ e.nombre }}</span></td>
+          <td class="num"><a href="{% url 'crm:oportunidades' %}?etiqueta={{ e.pk }}">{{ e.abiertas }}</a></td><td class="num">{{ e.n }}</td>
+          <td class="num">{% if puede_editar %}<a class="btn sm" href="{% url 'crm:etiqueta_editar' e.pk %}">{% ico 'edit' %}Editar</a>{% endif %}</td></tr>
+      {% empty %}<tr><td colspan="4" class="muted">Aún no hay etiquetas. Crea la primera a la derecha.</td></tr>{% endfor %}</tbody>
+    </table></div>
+  </div>
+  <div class="card"><h3>Nueva etiqueta</h3><p class="sub">Cualquier persona del equipo puede crearlas. Editar o borrar: administrador o gerente.</p>
+    <form method="post" class="form" novalidate>{% csrf_token %}
+      <div class="field"><label for="{{ form.nombre.id_for_label }}">Nombre</label>{{ form.nombre }}{{ form.nombre.errors }}</div>
+      <div class="field"><span class="lbl">Color</span>
+        <div class="tag-pick">{% for c in form.color %}<label class="tag pick c-{{ c.data.value }}">{{ c.tag }}{{ c.choice_label }}</label>{% endfor %}</div></div>
+      <div class="acts"><button class="btn pri">{% ico 'plus' %}Crear etiqueta</button></div>
+    </form>
+  </div>
+</div>
+{% endblock %}

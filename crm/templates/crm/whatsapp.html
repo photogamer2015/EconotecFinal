@@ -1,0 +1,103 @@
+{% extends "crm/base.html" %}
+{% load crm_tags %}
+{% block title %}Ajustes de WhatsApp · CRM Econotec{% endblock %}
+{% block crumb %}Administración{% endblock %}
+{% block h1 %}Ajustes de WhatsApp{% endblock %}
+{% block content %}
+<div class="card como">
+  <div class="card-h"><h3>{% wa_ico %} WhatsApp Business API (oficial)</h3><span class="grow"></span>
+    {% if wa_api_activo %}<span class="chip ok">Conectada</span>{% else %}<span class="chip pend">Ya mismo se conecta</span>{% endif %}
+    <a class="btn sm" href="{% url 'crm:integraciones' %}">{% ico 'plug' %}Ver cómo conectar</a></div>
+  <p class="muted small" style="margin:6px 0 0">{% if wa_api_activo %}Los mensajes llegan solos a <i>Chats de WhatsApp</i>, EconoBot responde y las asesoras contestan desde el CRM sin abrir WhatsApp.{% else %}La API oficial de Meta ya está lista en el sistema; solo falta poner sus claves. Mientras tanto WhatsApp funciona igual: las asesoras abren el chat de cada cliente con un clic y el mensaje listo (wa.me), y si se vincula el QR, EconoBot responde solo.{% endif %}</p>
+</div>
+
+<div class="card como">
+  <div class="card-h"><h3>{% wa_ico %} EconoBot por código QR (sin API)</h3><span class="grow"></span>
+    {% if not wa_activo %}<span class="chip">Apagado</span>
+    {% elif wa.estado == 'conectado' %}<span class="chip ok">Conectado{% if wa.numero %} · +{{ wa.numero }}{% endif %}</span>
+    {% elif wa.estado == 'esperando_qr' %}<span class="chip warn">Falta escanear el QR</span>
+    {% else %}<span class="chip bad">Desconectado</span>{% endif %}
+    <a class="btn sm" href="{% url 'crm:whatsapp_conexion' %}">{% ico 'plug' %}Conexión</a>
+    {% if wa_activo %}<a class="btn sm" href="{% url 'crm:bandeja' %}">Ver chats</a>{% endif %}</div>
+  <ol class="pasos">
+    <li><b>Llega un mensaje</b> al WhatsApp vinculado: se crea el cliente y su oportunidad, asignada a una asesora.</li>
+    <li><b>El bot responde solo</b>: bienvenida con el menú de categorías, respuestas por palabra clave (precios, horario, pagos…), anota el equipo y la falla («laptop HP, no prende») y agenda una llamada si el cliente dice «sí».</li>
+    <li><b>Pasa a una asesora</b> cuando el cliente escribe «asesor» o cuando una asesora responde desde <i>Chats de WhatsApp</i>: el bot se calla en ese chat.</li>
+  </ol>
+  <p class="muted small" style="margin:6px 0 0">Sin el QR conectado, las asesoras siguen abriendo cada chat con un clic (enlace wa.me) como antes.</p>
+</div>
+
+<div class="grid g2">
+  <div class="card"><h3>{% wa_ico %} Número y botón de la página</h3><p class="sub">Los cambios se aplican al instante.</p>
+    <form method="post" class="form" novalidate>{% csrf_token %}
+      {% for f in form %}
+      <div class="field"><label for="{{ f.id_for_label }}">{{ f.label|capfirst }}</label>{{ f }}
+        {% if f.help_text %}<small class="help">{{ f.help_text }}</small>{% endif %}{{ f.errors }}</div>{% endfor %}
+      <div class="acts"><button class="btn pri">Guardar</button></div>
+    </form>
+  </div>
+  <div class="grid">
+    <div class="card"><h3>Así le llega a un cliente</h3><p class="sub">Mensaje predeterminado al abrir su chat desde el CRM:</p>
+      {% if ejemplo_cliente %}<div class="msg out" style="max-width:100%">{{ ejemplo_cliente }}</div>
+      {% else %}<div class="flash"><div class="warning">No hay mensaje predeterminado. Crea uno abajo y márcalo como predeterminado.</div></div>{% endif %}
+    </div>
+    <div class="card"><h3>Botón de la página web</h3>
+      {% if link_prueba %}<p class="sub">Lo que el cliente ve escrito cuando toca el botón verde de la página:</p>
+      <div class="msg out" style="max-width:100%">{{ ejemplo }}</div>
+      <div style="margin-top:10px"><a class="btn wa" href="{{ link_prueba }}" target="_blank" rel="noopener">{% wa_ico %}Abrir WhatsApp de prueba</a></div>
+      {% else %}<div class="flash"><div class="warning">Falta el número de WhatsApp de la empresa: escríbelo a la izquierda para activar el botón.</div></div>{% endif %}
+      <p class="sub" style="margin:14px 0 6px">Código para pegar antes de <code>&lt;/body&gt;</code> (agrega el dominio a <code>CORS_FORM_ORIGINS</code> en <code>.env</code>):</p>
+      <pre class="snippet" id="snipBoton">&lt;script src="{{ base }}{% url 'crm:widget_js' %}" defer&gt;&lt;/script&gt;</pre>
+      <div style="margin-top:8px"><button class="btn sm" type="button" data-copy="#snipBoton">Copiar</button></div>
+    </div>
+  </div>
+</div>
+
+<div class="card" id="respuestas">
+  <div class="card-h"><h3>Mensajes predeterminados</h3><span class="grow"></span><a class="btn pri sm" href="{% url 'crm:respuesta_nueva' %}">{% ico 'plus' %}Nuevo mensaje</a></div>
+  <p class="sub">Aparecen al tocar «Enviar por WhatsApp». El marcado como predeterminado se carga primero. Variables: <code>{nombre}</code> <code>{empresa}</code> <code>{servicio}</code> <code>{asesor}</code> <code>{horario}</code></p>
+  <div class="tbl-wrap"><table>
+    <thead><tr><th>Mensaje</th><th>Texto</th><th class="num">Usos</th><th>Estado</th><th></th></tr></thead>
+    <tbody>{% for r in respuestas %}
+      <tr><td class="nowrap"><b>{{ r.titulo }}</b>{% if r.predeterminada %}<div><span class="chip ok" style="margin-top:4px">{% ico 'check' %}Predeterminado</span></div>{% endif %}</td>
+        <td class="muted" style="min-width:280px">{{ r.texto|truncatechars:140 }}</td>
+        <td class="num">{{ r.usos }}</td>
+        <td>{% if r.activa %}<span class="chip ok">Activo</span>{% else %}<span class="chip">Pausado</span>{% endif %}</td>
+        <td class="num"><a class="btn sm" href="{% url 'crm:respuesta_editar' r.pk %}">{% ico 'edit' %}Editar</a></td></tr>
+    {% empty %}<tr><td colspan="5" class="muted">No hay mensajes todavía.</td></tr>{% endfor %}</tbody>
+  </table></div>
+</div>
+
+<div class="card" id="respuestas-bot">
+  <div class="card-h"><h3>{% ico 'robot' %} Respuestas automáticas del bot</h3><span class="grow"></span><a class="btn pri sm" href="{% url 'crm:respuesta_nueva' %}">{% ico 'plus' %}Nueva respuesta</a></div>
+  <p class="sub">Si el mensaje del cliente contiene una de las palabras clave, el bot responde con ese texto. Las categorías de abajo también tienen palabras clave: «laptop», «impresora», «celular»…</p>
+  <form method="get" class="toolbar" style="margin-bottom:10px">
+    <input name="probar" value="{{ request.GET.probar }}" placeholder="Prueba el bot: escribe un mensaje de ejemplo" aria-label="Mensaje de prueba" style="flex:1;min-width:220px">
+    <button class="btn sm">Probar</button>
+  </form>
+  {% if prueba_bot %}<div class="flash"><div class="success"><b>{{ prueba_bot.motivo|default:"Respuesta del bot" }}</b></div></div><div class="msg out" style="max-width:100%;margin:8px 0 14px">{{ prueba_bot.texto }}</div>{% endif %}
+  <div class="tbl-wrap"><table>
+    <thead><tr><th>Respuesta</th><th>Palabras clave</th><th class="num">Usos</th><th>Estado</th><th></th></tr></thead>
+    <tbody>{% for r in respuestas_bot %}
+      <tr><td class="nowrap"><b>{{ r.titulo }}</b></td><td class="muted small" style="min-width:220px">{{ r.palabras_clave|truncatechars:90 }}</td>
+        <td class="num">{{ r.usos }}</td>
+        <td>{% if r.activa %}<span class="chip ok">Activa</span>{% else %}<span class="chip">Pausada</span>{% endif %}</td>
+        <td class="num"><a class="btn sm" href="{% url 'crm:respuesta_editar' r.pk %}">{% ico 'edit' %}Editar</a></td></tr>
+    {% empty %}<tr><td colspan="5" class="muted">No hay respuestas del bot.</td></tr>{% endfor %}</tbody>
+  </table></div>
+</div>
+
+<div class="card" id="categorias">
+  <div class="card-h"><h3>Categorías (pipelines)</h3><span class="grow"></span><a class="btn pri sm" href="{% url 'crm:categoria_nueva' %}">{% ico 'plus' %}Nueva categoría</a></div>
+  <p class="sub">Cada categoría es una pestaña en Pipelines y una opción al registrar un cliente.</p>
+  <div class="tbl-wrap"><table>
+    <thead><tr><th>#</th><th>Categoría</th><th>Palabras clave del bot</th><th>Estado</th><th></th></tr></thead>
+    <tbody>{% for c in categorias %}
+      <tr><td class="num">{{ forloop.counter }}</td><td><b>{{ c.nombre }}</b></td>
+        <td class="muted small">{{ c.palabras_clave|truncatechars:70|default:"—" }}</td>
+        <td>{% if c.activa %}<span class="chip ok">Activa</span>{% else %}<span class="chip">Inactiva</span>{% endif %}</td>
+        <td class="num"><a class="btn sm" href="{% url 'crm:categoria_editar' c.pk %}">{% ico 'edit' %}Editar</a></td></tr>
+    {% endfor %}</tbody>
+  </table></div>
+</div>
+{% endblock %}

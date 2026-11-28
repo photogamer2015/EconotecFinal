@@ -80,6 +80,26 @@ if not EMAIL_BACKEND:
         else 'django.core.mail.backends.console.EmailBackend'
     )
 
+# ── CRM comercial (/crm/) ──────────
+# WhatsApp sin API: el CRM abre los chats con enlaces wa.me (no necesita nada).
+WHATSAPP_NUMERO = env('WHATSAPP_NUMERO', default='')
+# Bot por código QR (carpeta whatsapp_qr/, Node.js): WA_QR_ACTIVO=True y una clave larga en WA_QR_TOKEN.
+WA_QR_ACTIVO = env.bool('WA_QR_ACTIVO', default=False)
+WA_QR_URL = env('WA_QR_URL', default='http://127.0.0.1:3010')
+WA_QR_TOKEN = env('WA_QR_TOKEN', default='')
+# WhatsApp Business API oficial (Meta Cloud API). Vacío = sin conectar; el CRM sigue con wa.me / QR.
+WA_API_TOKEN = env('WA_API_TOKEN', default='')
+WA_API_PHONE_ID = env('WA_API_PHONE_ID', default='')
+WA_API_VERIFY_TOKEN = env('WA_API_VERIFY_TOKEN', default='')
+WA_API_APP_SECRET = env('WA_API_APP_SECRET', default='')
+# Formulario de la página web → crea clientes en el CRM.
+WEB_FORM_TOKEN = env('WEB_FORM_TOKEN', default='')
+CORS_FORM_ORIGINS = env.list('CORS_FORM_ORIGINS', default=[])
+# Lectura de la bandeja de correo comercial (manage.py leer_correos).
+IMAP_HOST = env('IMAP_HOST', default='')
+IMAP_USER = env('IMAP_USER', default=EMAIL_HOST_USER)
+IMAP_PASSWORD = env('IMAP_PASSWORD', default=EMAIL_HOST_PASSWORD)
+
 DEFAULT_ALLOWED_HOSTS = ['127.0.0.1', 'localhost']
 ALLOWED_HOSTS = env.list('ALLOWED_HOSTS', default=DEFAULT_ALLOWED_HOSTS)
 
@@ -98,6 +118,7 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'econotec',
+    'crm',
 ]
 
 MIDDLEWARE = [
@@ -152,6 +173,7 @@ TEMPLATES = [
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
                 'econotec.context_processors.roles',
+                'crm.context_processors.crm_global',
             ],
         },
     },

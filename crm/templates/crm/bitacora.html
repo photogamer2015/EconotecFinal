@@ -1,0 +1,32 @@
+{% extends "crm/base.html" %}
+{% load crm_tags %}
+{% block title %}Bitácora · CRM Econotec{% endblock %}
+{% block h1 %}Bitácora{% endblock %}
+{% block acciones %}<a class="btn" href="?{{ params }}{% if params %}&{% endif %}exportar=csv">{% ico 'download' %}Exportar CSV</a><a class="btn pri" href="{% url 'crm:actividad_nueva' %}">{% ico 'plus' %}Registrar actividad</a>{% endblock %}
+{% block content %}
+<form class="toolbar" method="get">
+  <input name="q" value="{{ f.q }}" placeholder="Buscar empresa o detalle" aria-label="Buscar">
+  <select name="tipo" aria-label="Tipo"><option value="">Todos los tipos</option>{% for v, n in tipos %}<option value="{{ v }}" {% if f.tipo == v %}selected{% endif %}>{{ n }}</option>{% endfor %}</select>
+  <label class="muted" style="font-size:12px">Desde <input type="date" name="desde" value="{{ f.desde }}"></label>
+  <label class="muted" style="font-size:12px">Hasta <input type="date" name="hasta" value="{{ f.hasta }}"></label>
+  <button class="btn">Filtrar</button>
+</form>
+<div class="card" style="padding:0">
+  <div class="tbl-wrap"><table>
+    <thead><tr><th>Fecha y hora</th><th>Tipo</th><th>Empresa</th><th>Detalle</th><th>Responsable</th><th>Resultado</th></tr></thead>
+    <tbody>
+    {% for a in pagina %}
+      <tr><td class="nowrap" style="font-variant-numeric:tabular-nums">{{ a.fecha|date:"d/m/Y H:i" }}</td><td class="nowrap">{{ a.get_tipo_display }}</td>
+      <td class="nowrap">{% if a.oportunidad_id %}<a href="{% url 'crm:oportunidad' a.oportunidad_id %}"><b>{{ a.contacto.empresa|default:a.contacto.nombre }}</b></a>{% else %}<b>{{ a.contacto.empresa|default:a.contacto.nombre|default:"—" }}</b>{% endif %}</td>
+      <td style="min-width:260px">{{ a.detalle }}</td><td class="nowrap">{{ a.usuario|nombre }}</td><td><span class="chip {{ a.resultado|clase_resultado }}">{{ a.get_resultado_display }}</span></td></tr>
+    {% empty %}<tr><td colspan="6" class="muted">Sin resultados.</td></tr>{% endfor %}
+    </tbody>
+  </table></div>
+  {% if pagina.has_other_pages %}
+  <div class="pager">
+    {% if pagina.has_previous %}<a class="btn sm" href="?{{ params }}&page={{ pagina.previous_page_number }}">Anterior</a>{% endif %}
+    <span class="muted">Página {{ pagina.number }} de {{ pagina.paginator.num_pages }}</span>
+    {% if pagina.has_next %}<a class="btn sm" href="?{{ params }}&page={{ pagina.next_page_number }}">Siguiente</a>{% endif %}
+  </div>{% endif %}
+</div>
+{% endblock %}

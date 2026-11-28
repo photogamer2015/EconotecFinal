@@ -1,0 +1,52 @@
+{% extends "crm/base.html" %}
+{% load crm_tags %}
+{% block title %}Integraciones · CRM Econotec{% endblock %}
+{% block crumb %}Administración{% endblock %}
+{% block h1 %}Integraciones{% endblock %}
+{% block content %}
+<div class="grid g2">
+  {% for i in estado %}
+  <div class="card">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><i class="dot ch-{{ i.clave }}" style="width:12px;height:12px"></i><h3 style="margin:0">{{ i.nombre }}</h3><span class="grow"></span>
+      {% if i.ok %}<span class="chip ok">Conectado</span>{% elif i.pendiente %}<span class="chip pend">Ya mismo se conecta</span>{% else %}<span class="chip warn">Pendiente</span>{% endif %}</div>
+    <p class="muted" style="margin:6px 0 10px">{{ i.detalle }}</p>
+    {% if i.url %}<code class="url">{{ i.url }}</code>{% endif %}
+    {% if not i.ok %}<p style="font-size:12.5px;margin:8px 0 0"><b>{% if i.pendiente %}Para conectarla:{% else %}Falta:{% endif %}</b> {{ i.falta }}</p>{% endif %}
+    {% if i.config %}<p style="margin:10px 0 0"><a class="btn sm" href="{{ i.config }}">Configurar botón, bot y respuestas</a></p>{% endif %}
+  </div>
+  {% endfor %}
+</div>
+
+<div class="card"><h3>Probar el flujo</h3><p class="sub">Crea un cliente de prueba como si hubiera llegado por un canal. Se asigna por rotación a la asesora con menos oportunidades abiertas.</p>
+  <form method="post" action="{% url 'crm:simular_entrante' %}" class="toolbar">{% csrf_token %}
+    <select name="canal" aria-label="Canal"><option value="whatsapp">Botón de WhatsApp</option><option value="web">Página web</option><option value="correo">Correo</option></select>
+    <button class="btn pri">{% ico 'bolt' %}Simular cliente entrante</button>
+  </form>
+</div>
+
+<div class="card"><h3>Código para el formulario de contacto (opcional)</h3><p class="sub">Pegar en el sitio. Reemplaza TU_TOKEN por el valor de WEB_FORM_TOKEN y agrega el dominio del sitio a CORS_FORM_ORIGINS.</p>
+<pre class="snippet" id="snip">&lt;form id="contacto-econotec"&gt;
+  &lt;input name="nombre" placeholder="Nombre" required&gt;
+  &lt;input name="telefono" placeholder="WhatsApp"&gt;
+  &lt;input name="email" type="email" placeholder="Correo"&gt;
+  &lt;select name="servicio"&gt;{% for c in categorias %}&lt;option&gt;{{ c }}&lt;/option&gt;{% endfor %}&lt;/select&gt;
+  &lt;textarea name="mensaje" placeholder="¿Qué le pasa a su equipo?"&gt;&lt;/textarea&gt;
+  &lt;input name="website" style="display:none" tabindex="-1" autocomplete="off"&gt;
+  &lt;button&gt;Enviar&lt;/button&gt;
+&lt;/form&gt;
+&lt;script&gt;
+document.getElementById('contacto-econotec').addEventListener('submit', async e =&gt; {
+  e.preventDefault();
+  const datos = Object.fromEntries(new FormData(e.target));
+  const r = await fetch('{{ base }}{% url "crm:api_web" %}', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json', 'X-CRM-Token': 'TU_TOKEN'},
+    body: JSON.stringify(datos)
+  });
+  e.target.innerHTML = r.ok ? '&lt;p&gt;¡Gracias! Una asesora de Econotec le contactará pronto.&lt;/p&gt;' : '&lt;p&gt;No se pudo enviar, escríbanos por WhatsApp.&lt;/p&gt;';
+});
+&lt;/script&gt;</pre>
+<div style="margin-top:10px"><button class="btn sm" type="button" data-copy="#snip">Copiar</button></div>
+</div>
+
+{% endblock %}

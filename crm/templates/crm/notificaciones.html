@@ -1,0 +1,37 @@
+{% extends "crm/base.html" %}
+{% load crm_tags %}
+{% block title %}Notificaciones · CRM Econotec{% endblock %}
+{% block h1 %}Notificaciones{% endblock %}
+{% block acciones %}{% if sin_leer %}<form method="post" action="{% url 'crm:notificaciones_leidas' %}" class="m0">{% csrf_token %}<button class="btn">{% ico 'check' %}Marcar todo como leído ({{ sin_leer }})</button></form>{% endif %}{% endblock %}
+{% block content %}
+{% if aviso_form %}
+<div class="card aviso-card"><h3>📢 Aviso general</h3><p class="sub">Le llega a todo el equipo en la campana de notificaciones.</p>
+  <form method="post" action="{% url 'crm:aviso_general' %}" class="reply-row">{% csrf_token %}
+    <textarea name="texto" maxlength="400" placeholder="Ej.: Mañana reunión comercial a las 9:00 en la oficina." aria-label="Aviso" required></textarea>
+    <button class="btn pri">Enviar a todos</button>
+  </form>
+</div>
+{% endif %}
+<form class="toolbar" method="get">
+  <select name="estado" aria-label="Estado" onchange="this.form.submit()"><option value="">Todas</option><option value="sin_leer" {% if f.estado == 'sin_leer' %}selected{% endif %}>Sin leer</option></select>
+  <select name="tipo" aria-label="Tipo" onchange="this.form.submit()"><option value="">Todos los tipos</option>{% for v, n in tipos %}<option value="{{ v }}" {% if f.tipo == v %}selected{% endif %}>{{ n }}</option>{% endfor %}</select>
+  <span class="grow"></span><span class="muted small">{% if es_admin %}Como administrador recibes aviso de todos los cambios del equipo.{% else %}Aquí te llega lo que afecta a tus clientes y los avisos generales.{% endif %}</span>
+</form>
+<div class="card" style="padding:0">
+  <div class="notif-list">
+    {% for n in pagina %}
+    <a class="notif {% if not n.leida %}nueva{% endif %}" href="{% url 'crm:notificacion_ir' n.pk %}">
+      <span class="n-ico t-{{ n.tipo }}">{% if n.tipo == 'aviso' %}📢{% elif n.tipo == 'lead' %}★{% elif n.tipo == 'etapa' %}⇄{% elif n.tipo == 'etiqueta' %}#{% elif n.tipo == 'mensaje' %}✉{% elif n.tipo == 'seguimiento' %}◷{% elif n.tipo == 'usuario' %}☺{% elif n.tipo == 'config' %}⚙{% else %}•{% endif %}</span>
+      <span class="n-body"><span class="n-txt">{{ n.texto }}</span><span class="n-meta">{{ n.get_tipo_display }} · {{ n.fecha|date:"d M Y H:i" }}</span></span>
+      {% if not n.leida %}<span class="n-dot" aria-label="Sin leer"></span>{% endif %}
+    </a>
+    {% empty %}<div class="empty">No hay notificaciones.</div>{% endfor %}
+  </div>
+  {% if pagina.has_other_pages %}
+  <div class="pager">
+    {% if pagina.has_previous %}<a class="btn sm" href="?{{ params }}&page={{ pagina.previous_page_number }}">Anterior</a>{% endif %}
+    <span class="muted">Página {{ pagina.number }} de {{ pagina.paginator.num_pages }}</span>
+    {% if pagina.has_next %}<a class="btn sm" href="?{{ params }}&page={{ pagina.next_page_number }}">Siguiente</a>{% endif %}
+  </div>{% endif %}
+</div>
+{% endblock %}

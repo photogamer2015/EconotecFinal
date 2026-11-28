@@ -1,0 +1,85 @@
+{% load static crm_tags %}<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="csrf-token" content="{{ csrf_token }}">
+{% if wa_qr_activo %}<meta name="wa-qr" content="1">{% endif %}
+<title>{% block title %}CRM Econotec{% endblock %}</title>
+{% include "crm/_tema.html" %}
+<link rel="icon" type="image/jpeg" href="{% static 'logo.jpg' %}">
+<meta name="theme-color" content="#192324">
+<link rel="stylesheet" href="{% static 'crm/css/app.css' %}">
+</head>
+<body>
+{% with u=request.resolver_match.url_name %}
+<div class="app">
+  <aside class="side" id="side">
+    <a class="logo-plate" href="{% url 'crm:dashboard' %}"><img src="{% static 'logo.jpg' %}" alt="Econotec"><span><b>ECONOTEC <span class="tag-crm">CRM</span></b><small>Reparación de Tecnología</small></span></a>
+    <a class="side-back" href="{% url 'econotec:bienvenida' %}">← Volver a Econotec</a>
+    <nav class="nav">
+      <div class="nav-group">
+        <div class="nav-label">CRM comercial</div>
+        <a href="{% url 'crm:dashboard' %}" class="{% if u == 'dashboard' %}on{% endif %}">{% ico 'home' %}<span>Resultados</span></a>
+        <a href="{% url 'crm:clientes' %}" class="{% if 'cliente' in u %}on{% endif %}">{% ico 'users' %}<span>Clientes</span></a>
+        {% if wa_chats_activo %}<a href="{% url 'crm:bandeja' %}" class="{% if 'bandeja' in u %}on{% endif %}">{% wa_ico %}<span>Chats de WhatsApp</span>{% if nav_chats %}<span class="cnt">{{ nav_chats }}</span>{% endif %}</a>{% endif %}
+        <a href="{% url 'crm:oportunidades' %}" class="{% if u == 'oportunidades' %}on{% endif %}">{% ico 'pipe' %}<span>Pipelines</span></a>
+        <a href="{% url 'crm:etiquetas' %}" class="{% if 'etiqueta' in u %}on{% endif %}">{% ico 'tag' %}<span>Etiquetas</span></a>
+        <a href="{% url 'crm:bitacora' %}" class="{% if u == 'bitacora' or u == 'actividad_nueva' %}on{% endif %}">{% ico 'log' %}<span>Bitácora</span></a>
+        <a href="{% url 'crm:seguimientos' %}" class="{% if 'seguimiento' in u %}on{% endif %}">{% ico 'cal' %}<span>Seguimientos</span>{% if nav_pendientes %}<span class="cnt">{{ nav_pendientes }}</span>{% endif %}</a>
+        <a href="{% url 'crm:notificaciones' %}" class="{% if 'notificacion' in u %}on{% endif %}">{% ico 'bell' %}<span>Notificaciones</span>{% if nav_notif %}<span class="cnt" data-notif-cnt>{{ nav_notif }}</span>{% endif %}</a>
+      </div>
+      {% if es_supervisor %}
+      <div class="nav-group">
+        <div class="nav-label">Administración</div>
+        <a href="{% url 'crm:whatsapp' %}" class="{% if u == 'whatsapp' or 'respuesta' in u or 'categoria' in u %}on{% endif %}">{% wa_ico %}<span>Ajustes de WhatsApp</span></a>
+        {% if es_admin %}<a href="{% url 'crm:usuarios' %}" class="{% if 'usuario' in u %}on{% endif %}">{% ico 'shield' %}<span>Usuarios y roles</span></a>{% endif %}
+        <a href="{% url 'crm:integraciones' %}" class="{% if u == 'integraciones' %}on{% endif %}">{% ico 'plug' %}<span>Integraciones</span></a>
+      </div>
+      {% endif %}
+    </nav>
+    <div class="side-foot">
+      <span>CRM Econotec · v1.0</span>
+    </div>
+  </aside>
+  <div class="scrim" id="scrim" hidden></div>
+  <div class="main">
+    <header class="top">
+      <button class="menu-btn" id="menuBtn" aria-label="Abrir menú">☰</button>
+      <div class="titulo"><div class="crumb">{% block crumb %}CRM comercial{% endblock %}</div><h1>{% block h1 %}{% endblock %}</h1></div>
+      <div class="grow"></div>
+      {% block acciones %}{% endblock %}
+      <div class="pop-wrap">
+        <button class="icon-btn" id="temaBtn" type="button" aria-label="Tema claro u oscuro" aria-haspopup="true" aria-expanded="false" title="Tema">
+          <span class="solo-claro">{% ico 'sun' %}</span><span class="solo-oscuro">{% ico 'moon' %}</span>
+        </button>
+        <div class="pop tema-pop" id="temaPop" hidden role="menu">
+          <button type="button" role="menuitemradio" data-tema="light">{% ico 'sun' %}Claro</button>
+          <button type="button" role="menuitemradio" data-tema="dark">{% ico 'moon' %}Oscuro</button>
+          <button type="button" role="menuitemradio" data-tema="auto">{% ico 'monitor' %}Según el sistema</button>
+        </div>
+      </div>
+      <div class="pop-wrap">
+        <button class="icon-btn" id="bellBtn" type="button" aria-label="Notificaciones" aria-haspopup="true" aria-expanded="false" data-estado="{% url 'crm:notificaciones_estado' %}" data-leidas="{% url 'crm:notificaciones_leidas' %}">
+          {% ico 'bell' %}<span class="bell-cnt" id="bellCnt" {% if not nav_notif %}hidden{% endif %}>{{ nav_notif }}</span>
+        </button>
+        <div class="pop bell-pop" id="bellPop" hidden>
+          <div class="bell-h"><b>Notificaciones</b><button type="button" class="link" id="bellLeer">Marcar todo leído</button></div>
+          <div class="bell-list" id="bellList"><p class="muted" style="padding:14px;margin:0">Cargando…</p></div>
+          <a class="bell-all" href="{% url 'crm:notificaciones' %}">Ver todas</a>
+        </div>
+      </div>
+      <div class="who"><div class="txt">{{ request.user|nombre }}<small>{% if es_admin %}Administrador{% elif es_supervisor %}Supervisora comercial{% else %}Asesora comercial{% endif %}{% if sede_actual_display %} · {{ sede_actual_display }}{% endif %}</small></div><div class="avatar">{{ request.user|iniciales }}</div></div>
+    </header>
+    <main class="content">
+      {% if messages %}<div class="flash">{% for m in messages %}<div class="{{ m.tags }}">{{ m }}</div>{% endfor %}</div>{% endif %}
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+</div>
+<div class="toasts" id="toasts" aria-live="polite"></div>
+{% endwith %}
+<script src="{% static 'crm/js/app.js' %}"></script>
+{% block scripts %}{% endblock %}
+</body>
+</html>
